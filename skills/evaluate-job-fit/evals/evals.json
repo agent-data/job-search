@@ -1,0 +1,37 @@
+{
+  "skill_name": "evaluate-job-fit",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Using the brief in evals/files/brief.md, evaluate the posting in evals/files/posting-strong.md.",
+      "files": ["evals/files/brief.md", "evals/files/posting-strong.md"],
+      "expectations": [
+        "Judges relevant: true",
+        "Assigns match: strong",
+        "Reasoning cites IC role, remote-US, LLM/Python, and startup fit",
+        "Outputs no numeric score or category weights"
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "Using the brief in evals/files/brief.md, evaluate the posting in evals/files/posting-dealbreaker.md.",
+      "files": ["evals/files/brief.md", "evals/files/posting-dealbreaker.md"],
+      "expectations": [
+        "Judges relevant: false",
+        "match is null",
+        "dealbreakers_hit names the onsite-outside-SF-Bay violation",
+        "Does not invent unstated facts"
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "Using the brief in evals/files/brief.md, evaluate the posting in evals/files/posting-unknown-remote.md.",
+      "files": ["evals/files/brief.md", "evals/files/posting-unknown-remote.md"],
+      "expectations": [
+        "Does NOT auto-reject despite remote policy being unstated",
+        "Sets needs_human_check: true with a clear question about remote/location",
+        "Lists location/remote under unknowns rather than counting it against the posting"
+      ]
+    }
+  ]
+}
