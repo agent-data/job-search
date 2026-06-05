@@ -10,8 +10,7 @@ Judge ONE job posting against the user's prose Job Preferences Brief. Output is 
 relevance judgment** — never a numeric score, never category weights.
 
 ## Inputs
-- The brief: read `config.yaml:workspace.preferences_path` in the workspace (default `preferences.md`).
-  If a posting is supplied without a workspace, accept a brief pasted by the user.
+- The brief: resolve the active workspace with `python3 "$OS" resolve` (bundled `scripts/osctl.py`, resolved from this skill's own dir) and read its `config.yaml:workspace.preferences_path` (default `preferences.md`); `--workspace <path>` overrides. If a posting is supplied without a workspace (resolve reports `first_run`), accept a brief pasted by the user.
 - The posting: a pasted job description, a saved `source_id` from `jobs.jsonl`, or a `source_url`+`posting_id`
   pair to read fresh via agent-data `get-posting` (see `references/agent-data-contract.md`; disclose that this
   reads one posting before doing it).
