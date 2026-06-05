@@ -32,7 +32,7 @@ location and use it below as `$STATE` — never assume the current directory con
 1. **Search (one metered call per enabled query).** For each `queries[]` with `enabled:true`, call `search-jobs`
    with `--keywords` (+ `--location`, `--limit`) and `--fields id,source_id,source_url,title,company_name,location_display,salary_display,posted_at,detail_available,source`.
    - `502 search_failed` (retryable) → retry up to 3× with backoff; on give-up record the error and continue.
-     **Two consecutive 502s across queries → E-UPSTREAM-STRETCH: stop searching.**
+     **Two consecutive queries that fail entirely (all retries exhausted) → E-UPSTREAM-STRETCH: stop searching the rest.**
    - `422`/`400 unsupported_field` → E-BAD-QUERY (name the bad param from `details[].loc`), skip that query.
    - A quota/limit/payment failure (see errors.md detection) → E-QUOTA (HALT, exit 1).
 2. **Dedup (free).** `python3 "$STATE" known-ids --jobs <workspace>/jobs.jsonl` → the known set.
