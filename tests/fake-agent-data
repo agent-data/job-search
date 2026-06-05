@@ -2,7 +2,8 @@
 """fake-agent-data — a PATH shim that mimics `agent-data` for tests. No network, no credits.
 
 Scenario via env JOBSEARCH_TEST_SCENARIO (default "happy"); fixtures dir via JOBSEARCH_FIXTURES.
-Scenarios: happy | zero-empty | stretch | invalid-pair | degraded | quota.
+Scenarios: happy | zero-empty | stretch | quota | invalid-pair | detail-fetch-failed | degraded | down.
+Error-injection scenarios reuse the "happy" fixtures (fallback) for any data they don't override.
 JOBSEARCH_TEST_NOAUTH=1 makes whoami report unauthenticated.
 """
 import json, os, sys
@@ -22,8 +23,14 @@ def err(code, message, retryable):  # error envelope to stderr, exit 1
 
 
 def fixture(name):
-    with open(os.path.join(FIX, SCEN, name), encoding="utf-8") as f:
-        return json.load(f)
+    # Try the scenario's own fixture, else fall back to "happy" (so error-injection
+    # scenarios reuse happy's data); a truly missing fixture yields a clean JSON error.
+    for scen in (SCEN, "happy"):
+        path = os.path.join(FIX, scen, name)
+        if os.path.exists(path):
+            with open(path, encoding="utf-8") as f:
+                return json.load(f)
+    err("fixture_not_found", f"no fixture {name!r} for scenario {SCEN!r} (no happy fallback)", False)
 
 
 def main(argv):
@@ -36,7 +43,7 @@ def main(argv):
         slug = argv[2] if len(argv) > 2 else ""
         if slug == "status":
             if SCEN == "down":
-                err("service_unreachable", "status route unreachable", True)
+                err("service_unreachable", "status route unreachable", False)
             out({"status": "degraded" if SCEN == "degraded" else "ok"})
         if slug == "search-jobs":
             if SCEN == "stretch":
@@ -47,6 +54,8 @@ def main(argv):
         if slug == "get-posting":
             if SCEN == "invalid-pair":
                 err("invalid_pair", "posting_id/source_url mismatch", False)
+            if SCEN == "detail-fetch-failed":
+                err("detail_fetch_failed", "upstream detail fetch failed", True)
             out(fixture("get-posting.json"))
     err("unsupported", f"unhandled args: {argv}", False)
 

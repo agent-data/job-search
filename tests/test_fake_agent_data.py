@@ -31,3 +31,21 @@ def test_search_502_on_stretch_scenario():
     r = shim(["call", LISTING, "search-jobs", "--keywords", "x"], scenario="stretch")
     assert r.returncode != 0
     assert json.loads(r.stderr)["error"]["retryable"] is True
+
+def test_status_down_halts_non_retryable():
+    r = shim(["call", LISTING, "status"], scenario="down")
+    assert r.returncode != 0
+    assert json.loads(r.stderr)["error"]["retryable"] is False
+
+def test_get_posting_detail_fetch_failed_is_retryable():
+    r = shim(["call", LISTING, "get-posting", "--posting_id", "jp_x", "--source_url", "u"],
+             scenario="detail-fetch-failed")
+    assert r.returncode != 0
+    body = json.loads(r.stderr)["error"]
+    assert body["code"] == "detail_fetch_failed" and body["retryable"] is True
+
+def test_error_scenario_reuses_happy_search_fixture():
+    # 'degraded' has no own search-jobs fixture; it must fall back to happy's 2-result fixture
+    r = shim(["call", LISTING, "search-jobs", "--keywords", "x"], scenario="degraded")
+    assert r.returncode == 0
+    assert len(json.loads(r.stdout)["data"]["results"]) == 2
