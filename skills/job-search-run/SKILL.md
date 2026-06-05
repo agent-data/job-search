@@ -59,7 +59,7 @@ never assume the current working directory contains `scripts/`.
 
 ## Run health & exit codes
 Every digest starts with a **Run health** line (`healthy | partial | degraded | blocked`). HALT paths
-(E-NO-CONFIG, E-NO-AUTH, E-CONFIG-VERSION, E-NO-PREFERENCES, E-SERVICE-DOWN, E-QUOTA) exit non-zero so a schedule
+(E-NO-AGENT-DATA, E-NO-CONFIG, E-NO-AUTH, E-CONFIG-VERSION, E-NO-PREFERENCES, E-SERVICE-DOWN, E-QUOTA) exit non-zero so a schedule
 surfaces them; if `notify.desktop_notify_on_block` is true, fire one desktop notification on a blocked run.
 Successful/partial runs exit 0.
 
