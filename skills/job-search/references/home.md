@@ -50,9 +50,10 @@ What next? Just tell me:
 Notes on each part:
 
 - **Status line.** Workspace path; brief age from `preferences.md:created_at`; schedule from
-  `schedule-status` (on + mechanism, or off); last-run health from the newest `runs/*.json` `run_health`
-  (or the latest digest's Run health line). Run health is one of `healthy | partial (N errors) | degraded
-  (LinkedIn flaky) | blocked (action needed)`.
+  `schedule-status` (on + mechanism, or off) — the **frequency** to render (e.g. "daily" in "daily via cron")
+  comes from `config.yaml:schedule.frequency`, since `schedule-status` carries only on/off + mechanism;
+  last-run health from the newest `runs/*.json` `run_health` (or the latest digest's Run health line). Run
+  health is one of `healthy | partial (N errors) | degraded (LinkedIn flaky) | blocked (action needed)`.
 - **Latest digest.** Read the newest `reports/<date>-digest.md`; show its date and reproduce its **counts
   line** (the `N new · S strong · M moderate · W weak · F filtered out · n searches · m detail reads` line —
   see the digest format in `conventions.md`). If there are no digests yet, say "No runs yet — want me to run
