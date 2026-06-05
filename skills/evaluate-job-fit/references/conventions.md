@@ -89,7 +89,7 @@ Run health: healthy
 ## Filtered out (not relevant): 3
 <one line each: title — company — why rejected>
 
-<footnotes: stale detail links, partial failures, brief-age nudge>
+<footnotes: stale detail links, partial failures, unidentifiable (null source_id) rows, brief-age nudge>
 ```
 Strong first. Always show the Run health line and the counts. Run health is one of `healthy` |
 `partial (N errors)` | `degraded (LinkedIn flaky)` | `blocked (action needed)`. If blocked, replace the body
