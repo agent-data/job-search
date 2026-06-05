@@ -73,7 +73,7 @@ a stale brief be flagged.
 ```
 # Job search digest — <date>
 Run health: healthy
-9 new postings · 3 strong · 2 moderate · 1 weak · 3 filtered out · spent <n> search + <m> detail reads
+9 new postings · 3 strong · 2 moderate · 1 weak · 3 filtered out · <n> searches · <m> detail reads
 
 ## Strong matches
 - **<title>** — <company> — <location>

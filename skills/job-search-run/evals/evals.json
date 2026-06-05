@@ -1,6 +1,6 @@
 {
   "skill_name": "job-search-run",
-  "harness": "Each case: run skills/job-search-run/evals/files/setup-workspace.sh <tmp> to build a workspace + _bin/agent-data shim symlink. Prepend <tmp>/_bin to PATH and export JOBSEARCH_FIXTURES=<repo>/tests/fixtures and JOBSEARCH_TEST_SCENARIO=<scenario> (plus the per-case tweak), so the run skill's `agent-data` calls hit the fake shim (no real credits). Then run /job-search-run against <tmp> and inspect <tmp>/reports/<date>-digest.md, <tmp>/jobs.jsonl, and the exit code.",
+  "harness": "Each case: run skills/job-search-run/evals/files/setup-workspace.sh <tmp> to build a workspace + _bin/agent-data shim symlink. Prepend <tmp>/_bin to PATH and export JOBSEARCH_FIXTURES=<repo>/tests/fixtures and JOBSEARCH_TEST_SCENARIO=<scenario> (plus the per-case tweak), so the run skill's `agent-data` calls hit the fake shim (no real credits). Then run /job-search-run against <tmp> and inspect <tmp>/reports/<date>-digest.md, <tmp>/jobs.jsonl, and the exit code. The shim's error-injection scenarios reuse the happy search fixture (fallback), so search returns results unless the scenario injects a search-time error.",
   "evals": [
     {
       "id": 1,
@@ -41,7 +41,7 @@
       "scenario": "stretch",
       "prompt": "Same harness but JOBSEARCH_TEST_SCENARIO=stretch (every search-jobs returns a retryable 502). Run job-search-run and show the digest.",
       "expectations": [
-        "Retries the 502 with backoff, then stops searching after two consecutive failures (E-UPSTREAM-STRETCH)",
+        "Retries the 502 with backoff, then stops searching after two consecutive failed queries (E-UPSTREAM-STRETCH)",
         "Digest says LinkedIn was unreachable and the next run will retry (Run health: degraded or partial)",
         "Does not crash; distinguishes this from a 'genuinely no new jobs' run"
       ]
@@ -54,6 +54,56 @@
         "Takes the E-NO-PREFERENCES path: names the fix (/job-preference-interview, or point preferences_path at a brief)",
         "Spends nothing (no agent-data data calls)",
         "Exits non-zero"
+      ]
+    },
+    {
+      "id": 6,
+      "scenario": "quota",
+      "prompt": "Same harness but JOBSEARCH_TEST_SCENARIO=quota (the first metered search-jobs is rejected for quota, retryable:false). Run job-search-run and show the digest.",
+      "expectations": [
+        "Surfaces E-QUOTA in plain language (lower schedule.frequency, e.g. daily instead of hourly, or upgrade your agent-data plan) — NO credit/dollar math",
+        "Does not retry the quota error (retryable:false)",
+        "Halts and exits non-zero; existing matches in jobs.jsonl are left intact"
+      ]
+    },
+    {
+      "id": 7,
+      "scenario": "down",
+      "prompt": "Same harness but JOBSEARCH_TEST_SCENARIO=down (the free status probe is unreachable). Run job-search-run and show the digest.",
+      "expectations": [
+        "The status probe failure → E-SERVICE-DOWN; writes a 'service down' digest (Run health: blocked)",
+        "Does NOT call search-jobs or get-posting (halts at the status gate)",
+        "Exits non-zero"
+      ]
+    },
+    {
+      "id": 8,
+      "scenario": "invalid-pair",
+      "prompt": "Same harness but JOBSEARCH_TEST_SCENARIO=invalid-pair (search returns the happy results via fallback, but every get-posting returns 400 invalid_pair, retryable:false). Run job-search-run and show the digest + jobs.jsonl.",
+      "expectations": [
+        "Does NOT retry invalid_pair (not retryable); falls back to a summary-only judgment for that posting",
+        "Adds a footnote like 'detail link expired / judged from summary'",
+        "Still writes evaluated events (with detail_read:false for the affected posting); the run completes and exits 0"
+      ]
+    },
+    {
+      "id": 9,
+      "scenario": "degraded",
+      "prompt": "Same harness but JOBSEARCH_TEST_SCENARIO=degraded (status returns 'degraded'; search returns the happy results via fallback). Run job-search-run and show the digest.",
+      "expectations": [
+        "Sets Run health: degraded and notes LinkedIn is flaky in the digest",
+        "Caps detail reads aggressively this run (about 2) rather than reading every relevant posting",
+        "Still produces matches and exits 0 (partial/degraded, not a HALT)"
+      ]
+    },
+    {
+      "id": 10,
+      "scenario": "happy, all results already known (zero-results sub-case 3a)",
+      "prompt": "Same harness, JOBSEARCH_TEST_SCENARIO=happy, but BEFORE running, pre-seed <tmp>/jobs.jsonl with prior evaluated events for both happy source_ids by running `python3 <repo>/scripts/state.py append --jobs <tmp>/jobs.jsonl --event '{\"event\":\"evaluated\",\"source_id\":\"1001\",\"status\":\"new\"}'` and the same for source_id 1002. Then run job-search-run.",
+      "expectations": [
+        "Dedup finds BOTH search results already known → no NEW postings",
+        "Reassuring message: 'No NEW postings — all already in your database' (NOT an error, NOT 'broaden keywords')",
+        "Spends no get-posting calls; writes no duplicate evaluated events; Run health healthy; exits 0"
       ]
     }
   ]
