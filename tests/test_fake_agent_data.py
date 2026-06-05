@@ -1,0 +1,33 @@
+# tests/test_fake_agent_data.py
+import json, os, subprocess, pathlib
+SHIM = str(pathlib.Path(__file__).resolve().parent / "fake-agent-data")
+LISTING = "f9a6ec16-0bfd-44d8-b3ee-073776745ee7"
+
+def shim(args, scenario="happy", extra_env=None):
+    env = dict(os.environ, JOBSEARCH_TEST_SCENARIO=scenario,
+               JOBSEARCH_FIXTURES=str(pathlib.Path(SHIM).parent / "fixtures"))
+    if extra_env:
+        env.update(extra_env)
+    return subprocess.run([SHIM, *args], capture_output=True, text=True, env=env)
+
+def test_whoami_authed_by_default():
+    r = shim(["whoami"])
+    assert r.returncode == 0 and json.loads(r.stdout)["api_key_set"] is True
+
+def test_whoami_unauth_when_env_set():
+    r = shim(["whoami"], extra_env={"JOBSEARCH_TEST_NOAUTH": "1"})
+    assert json.loads(r.stdout)["api_key_set"] is False
+
+def test_status_ok_by_default():
+    r = shim(["call", LISTING, "status"])
+    assert json.loads(r.stdout)["status"] == "ok"
+
+def test_search_returns_fixture():
+    r = shim(["call", LISTING, "search-jobs", "--keywords", "AI engineer"])
+    assert r.returncode == 0
+    assert len(json.loads(r.stdout)["data"]["results"]) >= 1
+
+def test_search_502_on_stretch_scenario():
+    r = shim(["call", LISTING, "search-jobs", "--keywords", "x"], scenario="stretch")
+    assert r.returncode != 0
+    assert json.loads(r.stderr)["error"]["retryable"] is True

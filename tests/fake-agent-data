@@ -1,0 +1,55 @@
+#!/usr/bin/env python3
+"""fake-agent-data — a PATH shim that mimics `agent-data` for tests. No network, no credits.
+
+Scenario via env JOBSEARCH_TEST_SCENARIO (default "happy"); fixtures dir via JOBSEARCH_FIXTURES.
+Scenarios: happy | zero-empty | stretch | invalid-pair | degraded | quota.
+JOBSEARCH_TEST_NOAUTH=1 makes whoami report unauthenticated.
+"""
+import json, os, sys
+
+SCEN = os.environ.get("JOBSEARCH_TEST_SCENARIO", "happy")
+FIX = os.environ.get("JOBSEARCH_FIXTURES", "")
+
+
+def out(obj):  # JSON to stdout, exit 0
+    print(json.dumps(obj)); sys.exit(0)
+
+
+def err(code, message, retryable):  # error envelope to stderr, exit 1
+    print(json.dumps({"error": {"code": code, "message": message, "retryable": retryable,
+                                "param": None, "request_id": "req_fake", "source": "fake"}}), file=sys.stderr)
+    sys.exit(1)
+
+
+def fixture(name):
+    with open(os.path.join(FIX, SCEN, name), encoding="utf-8") as f:
+        return json.load(f)
+
+
+def main(argv):
+    if not argv:
+        err("usage", "no command", False)
+    if argv[0] == "whoami":
+        out({"api_key_set": os.environ.get("JOBSEARCH_TEST_NOAUTH") != "1",
+             "api_key_source": "config", "base_url": "https://example.test"})
+    if argv[0] == "call":
+        slug = argv[2] if len(argv) > 2 else ""
+        if slug == "status":
+            if SCEN == "down":
+                err("service_unreachable", "status route unreachable", True)
+            out({"status": "degraded" if SCEN == "degraded" else "ok"})
+        if slug == "search-jobs":
+            if SCEN == "stretch":
+                err("search_failed", "upstream fetch failed", True)
+            if SCEN == "quota":
+                err("quota_exceeded", "monthly API limit reached", False)
+            out(fixture("search-jobs.json"))
+        if slug == "get-posting":
+            if SCEN == "invalid-pair":
+                err("invalid_pair", "posting_id/source_url mismatch", False)
+            out(fixture("get-posting.json"))
+    err("unsupported", f"unhandled args: {argv}", False)
+
+
+if __name__ == "__main__":
+    main(sys.argv[1:])
