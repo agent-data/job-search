@@ -29,7 +29,7 @@ notify:
   digest_path_template: "reports/{date}-digest.md"
   desktop_notify_on_block: true
 ```
-`run_id` format: UTC timestamp `YYYY-MM-DDTHH-MM-SSZ`. `<date>` for digests: `YYYY-MM-DD` (local tz).
+`run_id` format: UTC timestamp `YYYY-MM-DDTHH-MM-SSZ` (hyphens, not colons, in the time component — safe as a filename on every platform). `<date>` for digests: `YYYY-MM-DD` (local tz).
 
 ## jobs.jsonl — append-only events (one JSON object per line)
 Current state = fold by `source_id`, last-write-wins per field. Two event types:
@@ -66,7 +66,7 @@ a stale brief be flagged.
 - **match**: `strong` (hits must-haves + most strong preferences) | `moderate` (solid, some gaps) |
   `weak` (relevant but thin) | `null` (when not relevant).
 - **unknowns**: brief criteria the posting doesn't address ("not stated"). NEVER counted against a posting.
-- **needs_human_check**: true when a must-have/dealbreaker can't be confirmed from the posting (state the question).
+- **needs_human_check**: true when a must-have/dealbreaker can't be confirmed from the posting. When true, write the specific question to resolve into the `reasoning` field (e.g. "Remote policy not stated — confirm before applying").
 - **dealbreakers_hit**: list of must-haves/dealbreakers observably violated.
 
 ## Digest format (reports/<date>-digest.md)
@@ -91,5 +91,6 @@ Run health: healthy
 
 <footnotes: stale detail links, partial failures, brief-age nudge>
 ```
-Strong first. Always show the Run health line and the counts. If blocked, replace the body with the named
-error's cause+fix (see `errors.md`).
+Strong first. Always show the Run health line and the counts. Run health is one of `healthy` |
+`partial (N errors)` | `degraded (LinkedIn flaky)` | `blocked (action needed)`. If blocked, replace the body
+with the named error's cause+fix (see `errors.md`).

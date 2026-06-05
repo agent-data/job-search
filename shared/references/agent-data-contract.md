@@ -21,7 +21,7 @@ rate. Does not consume the fetch budget. A fresh service is `ok` by default.
 ```
 agent-data call f9a6ec16-0bfd-44d8-b3ee-073776745ee7 search-jobs \
   --keywords "<required>" [--location "<optional>"] [--limit <1-100, default 20>] \
-  --fields id,source_id,source_url,title,company_name,location_display,salary_display,posted_at,detail_available
+  --fields id,source_id,source_url,title,company_name,location_display,salary_display,posted_at,detail_available,source
 ```
 - **No pagination** (LinkedIn has no stable cursor); re-running may reorder. Vary keywords/location for breadth.
 - **Returns** `data.results[]`, each row (all nullable): `id` (`jp_…`), `source_id`, `source_url`, `title`,
@@ -46,9 +46,9 @@ agent-data call f9a6ec16-0bfd-44d8-b3ee-073776745ee7 get-posting \
 
 ## Error envelope (all routes)
 ```json
-{"error": {"code": "...", "message": "...", "param": "...", "request_id": "...", "retryable": true, "source": "...", "details": []}}
+{"error": {"code": "...", "message": "...", "param": "...", "request_id": "...", "retryable": true, "source": "...", "details?": [...]}}
 ```
-**Branch retries on the `retryable` boolean, not on parsing `code`.** Retry only `retryable:true` (the 502s):
+(`details` is present on `422 invalid_request`; it may be absent on other errors.) **Branch retries on the `retryable` boolean, not on parsing `code`.** Retry only `retryable:true` (the 502s):
 up to 3 attempts, exponential backoff with jitter (~1s, 3s, 7s). Never retry `invalid_pair` / `invalid_request`
 / `unsupported_field`. If two consecutive `search-jobs` calls return 502, stop searching this run
 (LinkedIn stretch-outage) — see `errors.md` (E-UPSTREAM-STRETCH).
