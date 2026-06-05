@@ -1,9 +1,9 @@
 # Workspace conventions & file contracts
 
-The **workspace** (default `~/job-search/`) is PRIVATE per-user data — never committed to a public repo.
+The **workspace** (default the hidden `~/.job-search/`; an existing visible `~/job-search/` is **adopted**, not replaced — see `internals.md`) is PRIVATE per-user data — never committed to a public repo.
 
 ```
-~/job-search/
+~/.job-search/
   config.yaml                # queries + schedule (human terms only; NO budgets/score thresholds)
   preferences.md             # Job Preferences Brief — prose only
   resumes/master.md          # base resume; resumes/tailored/ for generated ones (Plan C)
@@ -12,6 +12,7 @@ The **workspace** (default `~/job-search/`) is PRIVATE per-user data — never c
   reports/<date>-digest.md   # human digest per run
   .gitignore                 # deny-all (from templates/workspace.gitignore)
 ```
+**Discovery & OS state:** skills never hard-code the workspace path — they resolve it with `osctl.py resolve` (registry → `~/.job-search/` → legacy `~/job-search/` → first-run). The registry and the discovery/first-run/scheduling rules live in `internals.md`.
 
 ## config.yaml
 ```yaml

@@ -7,14 +7,11 @@ set -euo pipefail
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$REPO"
 
-# 1) Sync shared references into each skill that has a references/ dir (or should).
+# 1) Sync shared references AND bundle the helper scripts into every skill (self-contained loose mode).
 for skill in skills/*/; do
-  mkdir -p "${skill}references"
+  mkdir -p "${skill}references" "${skill}scripts"
   cp shared/references/*.md "${skill}references/"
+  cp scripts/state.py scripts/osctl.py "${skill}scripts/"
 done
 
-# 2) Bundle state.py into the skills that invoke it (currently: job-search-run).
-mkdir -p skills/job-search-run/scripts
-cp scripts/state.py skills/job-search-run/scripts/state.py
-
-echo "build: synced references into $(ls -d skills/*/ | wc -l | tr -d ' ') skill(s); bundled state.py into job-search-run"
+echo "build: synced references + bundled state.py/osctl.py into $(ls -d skills/*/ | wc -l | tr -d ' ') skill(s)"
