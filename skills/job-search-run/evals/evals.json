@@ -1,0 +1,60 @@
+{
+  "skill_name": "job-search-run",
+  "harness": "Each case: run skills/job-search-run/evals/files/setup-workspace.sh <tmp> to build a workspace + _bin/agent-data shim symlink. Prepend <tmp>/_bin to PATH and export JOBSEARCH_FIXTURES=<repo>/tests/fixtures and JOBSEARCH_TEST_SCENARIO=<scenario> (plus the per-case tweak), so the run skill's `agent-data` calls hit the fake shim (no real credits). Then run /job-search-run against <tmp> and inspect <tmp>/reports/<date>-digest.md, <tmp>/jobs.jsonl, and the exit code.",
+  "evals": [
+    {
+      "id": 1,
+      "scenario": "happy",
+      "prompt": "Build a temp workspace + shim (setup-workspace.sh), PATH=<tmp>/_bin:$PATH, JOBSEARCH_TEST_SCENARIO=happy, JOBSEARCH_FIXTURES=<repo>/tests/fixtures. Run job-search-run against <tmp>. Show the digest and jobs.jsonl.",
+      "expectations": [
+        "Calls `agent-data ... status` before any search-jobs call",
+        "Writes reports/<date>-digest.md whose Run health line is 'healthy'",
+        "Surfaces the Acme Senior AI Engineer (Remote US) as a strong (or moderate) match, grouped before weaker ones",
+        "Judges the onsite-Austin ML role as not relevant (dealbreaker) and counts it under 'filtered out'",
+        "Appends one evaluated event per new posting to jobs.jsonl via state.py, deduped by source_id, carrying provenance (title/company/source_url) + judgment (relevant/match/reasoning)",
+        "Output contains no numeric score, no category weights, and no dollar/credit cost figures",
+        "Exits 0"
+      ]
+    },
+    {
+      "id": 2,
+      "scenario": "zero-empty",
+      "prompt": "Same harness but JOBSEARCH_TEST_SCENARIO=zero-empty. Run job-search-run and show the digest.",
+      "expectations": [
+        "Recognizes the literally-zero-results case and suggests broadening keywords or checking status",
+        "Spends no get-posting calls",
+        "Exits 0 (a normal, non-error outcome)"
+      ]
+    },
+    {
+      "id": 3,
+      "scenario": "happy + noauth",
+      "prompt": "Same harness, JOBSEARCH_TEST_SCENARIO=happy, but also export JOBSEARCH_TEST_NOAUTH=1 (whoami reports unauthenticated). Run job-search-run.",
+      "expectations": [
+        "Stops at preflight with the E-NO-AUTH message (export AGENT_DATA_API_KEY + verify with whoami)",
+        "Does NOT call search-jobs; pulls nothing",
+        "Exits non-zero"
+      ]
+    },
+    {
+      "id": 4,
+      "scenario": "stretch",
+      "prompt": "Same harness but JOBSEARCH_TEST_SCENARIO=stretch (every search-jobs returns a retryable 502). Run job-search-run and show the digest.",
+      "expectations": [
+        "Retries the 502 with backoff, then stops searching after two consecutive failures (E-UPSTREAM-STRETCH)",
+        "Digest says LinkedIn was unreachable and the next run will retry (Run health: degraded or partial)",
+        "Does not crash; distinguishes this from a 'genuinely no new jobs' run"
+      ]
+    },
+    {
+      "id": 5,
+      "scenario": "happy, no preferences.md",
+      "prompt": "Same harness, JOBSEARCH_TEST_SCENARIO=happy, but delete <tmp>/preferences.md after setup. Run job-search-run.",
+      "expectations": [
+        "Takes the E-NO-PREFERENCES path: names the fix (/job-preference-interview, or point preferences_path at a brief)",
+        "Spends nothing (no agent-data data calls)",
+        "Exits non-zero"
+      ]
+    }
+  ]
+}
