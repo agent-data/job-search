@@ -13,9 +13,9 @@ the exact cause+fix wording), and `references/conventions.md` (file schemas + di
 
 Workspace = the current directory unless `--workspace <path>` is given (a scheduled run's cwd is the
 workspace, NOT the repo). The job source listing id is `f9a6ec16-0bfd-44d8-b3ee-073776745ee7`.
-Deterministic db ops use `state.py`, bundled in the job-search-os repo at `scripts/state.py` (i.e.
-`../../scripts/state.py` relative to THIS skill directory). Resolve its absolute path from the skill's own
-location and use it below as `$STATE` — never assume the current directory contains `scripts/`.
+Deterministic db ops use `state.py`, bundled WITH this skill at `scripts/state.py` (inside this skill's
+own directory). Resolve its absolute path from the skill's own location and use it below as `$STATE` —
+never assume the current working directory contains `scripts/`.
 
 **Retries:** branch only on the error envelope's `retryable` boolean (`true` → retry with backoff up to 3×;
 `false` → never retry), not on the error `code` string — see `references/agent-data-contract.md`.
