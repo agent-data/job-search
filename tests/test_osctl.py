@@ -1,5 +1,5 @@
 # tests/test_osctl.py
-import json, subprocess, sys, pathlib
+import json, os, subprocess, sys, pathlib
 SCRIPT = str(pathlib.Path(__file__).resolve().parent.parent / "scripts" / "osctl.py")
 
 def run(args, **kw):
@@ -55,3 +55,38 @@ def test_malformed_registry_is_clean_error_not_traceback(tmp_path):
     r = run(["resolve", "--registry", str(reg)])
     assert r.returncode == 1
     assert "Traceback" not in r.stderr and "not valid JSON" in r.stderr
+
+
+def test_resolve_ignores_registry_without_active_workspace_key(tmp_path):
+    reg = tmp_path / "reg.json"
+    reg.write_text('{"version": 1}')
+    dw = tmp_path / ".job-search"; dw.mkdir(); (dw / "config.yaml").write_text("version: 1\n")
+    out = json.loads(run(["resolve", "--registry", str(reg),
+                          "--default-workspace", str(dw),
+                          "--legacy-workspace", str(tmp_path / "job-search")]).stdout)
+    assert out["source"] == "default"
+
+
+def test_resolve_registry_points_to_uninitialized_workspace_is_first_run(tmp_path):
+    ws = tmp_path / "ws"; ws.mkdir()   # registered but no config.yaml yet
+    reg = tmp_path / "reg.json"
+    run(["set-active", "--registry", str(reg), "--workspace", str(ws)])
+    out = json.loads(run(["resolve", "--registry", str(reg)]).stdout)
+    assert out["source"] == "registry" and out["first_run"] is True and out["workspace"] == str(ws.resolve())
+
+
+def test_set_active_with_bare_registry_filename_is_clean(tmp_path):
+    ws = tmp_path / "ws"; ws.mkdir()
+    r = run(["set-active", "--registry", "reg.json", "--workspace", str(ws)], cwd=tmp_path)
+    assert r.returncode == 0
+    assert (tmp_path / "reg.json").exists()
+    assert "Traceback" not in r.stderr
+
+
+def test_resolve_uses_env_registry_override(tmp_path):
+    ws = tmp_path / "custom"; ws.mkdir(); (ws / "config.yaml").write_text("version: 1\n")
+    reg = tmp_path / "reg.json"
+    env = {**os.environ, "JOBSEARCH_OS_REGISTRY": str(reg)}
+    run(["set-active", "--workspace", str(ws)], env=env)   # no --registry flag; resolves via env
+    out = json.loads(run(["resolve"], env=env).stdout)
+    assert out["source"] == "registry" and out["workspace"] == str(ws.resolve())
