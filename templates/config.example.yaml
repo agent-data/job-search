@@ -1,0 +1,14 @@
+version: 1
+workspace:
+  preferences_path: "preferences.md"
+  master_resume_path: "resumes/master.md"
+queries:
+  - { id: "ai-eng-remote",  keywords: "AI engineer",          location: "United States",         limit: 25, enabled: true }
+  - { id: "ml-platform-sf", keywords: "ML platform engineer", location: "San Francisco Bay Area", limit: 25, enabled: true }
+schedule:
+  frequency: "daily"           # hourly | every-2-hours | every-6-hours | daily | weekly
+  time: "08:00"                # used for daily/weekly
+  timezone: "America/Los_Angeles"
+notify:
+  digest_path_template: "reports/{date}-digest.md"
+  desktop_notify_on_block: true
