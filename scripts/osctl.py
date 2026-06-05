@@ -11,7 +11,7 @@ Path defaults can be redirected for tests/evals without touching real data, via 
   registry:  --registry  >  $JOBSEARCH_OS_REGISTRY  >  $XDG_CONFIG_HOME/job-search-os/config.json  >  ~/.config/...
   workspaces: --default-workspace/--legacy-workspace  >  derived from $JOBSEARCH_OS_HOME  >  ~
 """
-import argparse, json, os, sys
+import argparse, html, json, os, sys
 from datetime import datetime, timezone
 
 REGISTRY_VERSION = 1
@@ -144,7 +144,7 @@ def cron_schedule(frequency, time_str):
 
 def cron_line(frequency, time_str, workspace):
     ws = workspace or default_workspace()
-    return f'{cron_schedule(frequency, time_str)} cd {ws} && claude -p "/job-search-run" >> {ws}/runs/cron.log 2>&1'
+    return f'{cron_schedule(frequency, time_str)} cd "{ws}" && claude -p "/job-search-run" >> "{ws}/runs/cron.log" 2>&1'
 
 
 def cmd_schedule_line(args):
@@ -164,7 +164,7 @@ PLIST = """<?xml version="1.0" encoding="UTF-8"?>
   <key>ProgramArguments</key>
   <array>
     <string>/bin/bash</string><string>-lc</string>
-    <string>cd {ws} &amp;&amp; claude -p "/job-search-run" >> {ws}/runs/cron.log 2>&amp;1</string>
+    <string>cd "{ws}" &amp;&amp; claude -p "/job-search-run" >> "{ws}/runs/cron.log" 2>&amp;1</string>
   </array>
   <key>StartCalendarInterval</key><dict>{cal}</dict>
   <key>RunAtLoad</key><false/>
@@ -173,10 +173,10 @@ PLIST = """<?xml version="1.0" encoding="UTF-8"?>
 
 
 def launchd_cal(frequency, time_str):
-    hh, mm = (time_str or "08:00").split(":")
-    h, m = int(hh), int(mm)
     if frequency == "hourly":
         return "<key>Minute</key><integer>0</integer>"
+    hh, mm = (time_str or "08:00").split(":")
+    h, m = int(hh), int(mm)
     if frequency == "daily":
         return f"<key>Hour</key><integer>{h}</integer><key>Minute</key><integer>{m}</integer>"
     if frequency == "weekly":
@@ -186,7 +186,8 @@ def launchd_cal(frequency, time_str):
 
 def cmd_launchd_plist(args):
     try:
-        print(PLIST.format(ws=(args.workspace or default_workspace()), cal=launchd_cal(args.frequency, args.time)))
+        ws = args.workspace or default_workspace()
+        print(PLIST.format(ws=html.escape(ws), cal=launchd_cal(args.frequency, args.time)))
     except ValueError as e:
         print(f"launchd-plist failed: {e}", file=sys.stderr)
         return 1
@@ -211,7 +212,7 @@ def main(argv=None):
     sl = sub.add_parser("schedule-line", help="emit the cron line for a frequency")
     sl.add_argument("--frequency", required=True)
     sl.add_argument("--time", default="08:00")
-    sl.add_argument("--timezone")
+    sl.add_argument("--timezone", help="accepted for compatibility; cron uses the system timezone")
     sl.add_argument("--workspace")
     sl.set_defaults(func=cmd_schedule_line)
 

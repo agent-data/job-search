@@ -96,7 +96,7 @@ def test_resolve_uses_env_registry_override(tmp_path):
 def test_schedule_line_daily_uses_time_and_workspace(tmp_path):
     line = run(["schedule-line", "--frequency", "daily", "--time", "08:00", "--workspace", "/ws"]).stdout.strip()
     assert line.startswith("0 8 * * * ")
-    assert 'cd /ws && claude -p "/job-search-run" >> /ws/runs/cron.log 2>&1' in line
+    assert 'cd "/ws" && claude -p "/job-search-run" >> "/ws/runs/cron.log" 2>&1' in line
 
 def test_schedule_line_hourly(tmp_path):
     assert run(["schedule-line", "--frequency", "hourly", "--workspace", "/ws"]).stdout.strip().startswith("0 * * * * ")
@@ -141,3 +141,43 @@ def test_set_active_preserves_scheduling(tmp_path):
     run(["set-scheduled", "--registry", str(reg), "--mechanism", "cron", "--set-at", "2026-06-05T08:00:00+00:00"])
     run(["set-active", "--registry", str(reg), "--workspace", str(ws)])
     assert json.loads(reg.read_text())["scheduling"]["mechanism"] == "cron"
+
+
+def test_schedule_line_quotes_workspace_with_space(tmp_path):
+    line = run(["schedule-line", "--frequency", "hourly", "--workspace", "/Users/jane doe/.job-search"]).stdout.strip()
+    assert 'cd "/Users/jane doe/.job-search"' in line
+
+
+def test_schedule_line_malformed_time_is_clean_error(tmp_path):
+    r = run(["schedule-line", "--frequency", "daily", "--time", "8", "--workspace", "/ws"])
+    assert r.returncode == 1
+    assert "Traceback" not in r.stderr
+
+
+def test_launchd_plist_hourly_ignores_time(tmp_path):
+    out = run(["launchd-plist", "--frequency", "hourly", "--time", "whatever", "--workspace", "/ws"]).stdout
+    assert "<key>Minute</key><integer>0</integer>" in out
+
+
+def test_launchd_plist_weekly_has_weekday(tmp_path):
+    out = run(["launchd-plist", "--frequency", "weekly", "--time", "09:30", "--workspace", "/ws"]).stdout
+    assert "<key>Weekday</key><integer>1</integer>" in out and "<integer>9</integer>" in out
+
+
+def test_launchd_plist_unsupported_frequency_errors(tmp_path):
+    r = run(["launchd-plist", "--frequency", "every-2-hours", "--workspace", "/ws"])
+    assert r.returncode == 1 and "use cron" in r.stderr
+
+
+def test_launchd_plist_escapes_ampersand_in_workspace(tmp_path):
+    import xml.etree.ElementTree as ET
+    out = run(["launchd-plist", "--frequency", "daily", "--workspace", "/a&b/.job-search"]).stdout
+    ET.fromstring(out)   # must be well-formed XML (raises if not)
+
+
+def test_set_scheduled_defaults_set_at_to_utc_now(tmp_path):
+    import re
+    reg = tmp_path / "reg.json"
+    out = json.loads(run(["set-scheduled", "--registry", str(reg), "--mechanism", "cron"]).stdout)
+    assert out["installed"] is True and out["mechanism"] == "cron"
+    assert re.match(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\+00:00", out["set_at"])
