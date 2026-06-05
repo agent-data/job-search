@@ -99,6 +99,34 @@ def cmd_set_active(args):
     return 0
 
 
+def cmd_schedule_status(args):
+    try:
+        reg = read_registry(registry_path(args.registry)) or {}
+        print(json.dumps(reg.get("scheduling") or {"installed": False, "mechanism": None, "set_at": None}))
+    except ValueError as e:
+        print(f"schedule-status failed: {e}", file=sys.stderr)
+        return 1
+    return 0
+
+
+def cmd_set_scheduled(args):
+    try:
+        path = registry_path(args.registry)
+        reg = read_registry(path) or {"version": REGISTRY_VERSION}
+        reg["version"] = REGISTRY_VERSION
+        reg["scheduling"] = {
+            "installed": True,
+            "mechanism": args.mechanism,
+            "set_at": args.set_at or datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        }
+        write_registry(path, reg)
+        print(json.dumps(reg["scheduling"]))
+    except ValueError as e:
+        print(f"set-scheduled failed: {e}", file=sys.stderr)
+        return 1
+    return 0
+
+
 CRON = {"hourly": "0 * * * *", "every-2-hours": "0 */2 * * *", "every-6-hours": "0 */6 * * *"}
 
 
@@ -192,6 +220,16 @@ def main(argv=None):
     lp.add_argument("--time", default="08:00")
     lp.add_argument("--workspace")
     lp.set_defaults(func=cmd_launchd_plist)
+
+    ss = sub.add_parser("schedule-status", help="print the scheduling marker as JSON")
+    ss.add_argument("--registry")
+    ss.set_defaults(func=cmd_schedule_status)
+
+    sd = sub.add_parser("set-scheduled", help="record that scheduling was installed")
+    sd.add_argument("--mechanism", required=True, choices=["cron", "launchd", "loop"])
+    sd.add_argument("--set-at")
+    sd.add_argument("--registry")
+    sd.set_defaults(func=cmd_set_scheduled)
 
     args = p.parse_args(argv)
     return args.func(args)

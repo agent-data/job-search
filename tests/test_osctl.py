@@ -115,3 +115,29 @@ def test_schedule_line_unknown_frequency_errors(tmp_path):
 def test_launchd_plist_daily_has_calendar_and_log(tmp_path):
     out = run(["launchd-plist", "--frequency", "daily", "--time", "08:00", "--workspace", "/ws"]).stdout
     assert "StartCalendarInterval" in out and "<integer>8</integer>" in out and "/ws/runs/cron.log" in out
+
+
+# --- schedule-status / set-scheduled ---
+def test_schedule_status_default_not_installed(tmp_path):
+    out = json.loads(run(["schedule-status", "--registry", str(tmp_path / "absent.json")]).stdout)
+    assert out == {"installed": False, "mechanism": None, "set_at": None}
+
+def test_set_scheduled_roundtrip_and_preserves_active(tmp_path):
+    ws = tmp_path / "ws"
+    ws.mkdir()
+    reg = tmp_path / "reg.json"
+    run(["set-active", "--registry", str(reg), "--workspace", str(ws)])
+    run(["set-scheduled", "--registry", str(reg), "--mechanism", "launchd", "--set-at", "2026-06-05T08:00:00+00:00"])
+    data = json.loads(reg.read_text())
+    assert data["active_workspace"] == str(ws.resolve())
+    assert data["scheduling"] == {"installed": True, "mechanism": "launchd", "set_at": "2026-06-05T08:00:00+00:00"}
+    out = json.loads(run(["schedule-status", "--registry", str(reg)]).stdout)
+    assert out["installed"] is True and out["mechanism"] == "launchd"
+
+def test_set_active_preserves_scheduling(tmp_path):
+    ws = tmp_path / "ws"
+    ws.mkdir()
+    reg = tmp_path / "reg.json"
+    run(["set-scheduled", "--registry", str(reg), "--mechanism", "cron", "--set-at", "2026-06-05T08:00:00+00:00"])
+    run(["set-active", "--registry", str(reg), "--workspace", str(ws)])
+    assert json.loads(reg.read_text())["scheduling"]["mechanism"] == "cron"
