@@ -1,0 +1,76 @@
+{
+  "skill_name": "job-search",
+  "harness": "Each case: run skills/job-search/evals/files/setup-onboarding.sh <tmp> to build a FIRST-RUN sandbox (only a _bin/agent-data shim symlink). Then export PATH=<tmp>/_bin:$PATH, JOBSEARCH_FIXTURES=<repo>/tests/fixtures, JOBSEARCH_TEST_SCENARIO=happy, JOBSEARCH_OS_REGISTRY=<tmp>/registry.json, JOBSEARCH_OS_HOME=<tmp> (so the registry + the default ~/.job-search and legacy ~/job-search workspaces resolve UNDER <tmp> — real ~/.config, ~/.job-search, ~/job-search are never touched; the shim's agent-data calls hit the fake — zero real credits), plus any per-case tweak in the prompt. Invoke /job-search; it routes via `python3 scripts/osctl.py resolve` and then follows references/onboarding.md (first_run:true) or references/home.md (first_run:false). Answer its interview/queries/frequency/scheduling questions with the canned answers in each case's prompt. SCHEDULING INSTALLS ARE STUBBED: NEVER run crontab/launchctl or write ~/Library/LaunchAgents — verify scheduling ONLY via `python3 scripts/osctl.py schedule-line ...` (inspect the emitted cron line) and, on a yes, `python3 scripts/osctl.py set-scheduled --registry <tmp>/registry.json --mechanism cron` (writes the registry marker). For the sample-run sub-step, ACTUALLY run job-search-run against the temp workspace (its agent-data calls hit the shim; resolve finds the temp workspace) so a real shim-backed digest is produced. Inspect <tmp>/.job-search/ (config.yaml, preferences.md, jobs.jsonl, runs/, reports/<date>-digest.md, .gitignore), <tmp>/registry.json, and the printed home view. Clean up <tmp> (rm -rf) after each case. No numeric scores, no category weights, no credit/dollar math anywhere in any output.",
+  "evals": [
+    {
+      "id": 1,
+      "scenario": "first-run happy",
+      "prompt": "Fresh sandbox (setup-onboarding.sh), env as in harness, JOBSEARCH_TEST_SCENARIO=happy. Invoke /job-search (resolve returns first_run:true, source:none). Canned answers — interview a few prefs: situation='passively looking'; role='senior AI engineer, individual contributor, NOT management'; location='remote in the US, or SF Bay onsite'. When asked for the search: keywords='AI engineer', location='United States'. Frequency: 'daily'. Scheduling: 'yes, cron'. Complete onboarding end-to-end.",
+      "expectations": [
+        "Checks prerequisites first — runs `agent-data whoami` (free) BEFORE any search-jobs / metered call",
+        "Creates <tmp>/.job-search/ containing config.yaml, preferences.md, an (initially empty) jobs.jsonl, .gitignore (deny-all), and runs/ + reports/ directories",
+        "preferences.md is prose with the five sections (Summary, Must-haves/dealbreakers, Strong preferences, Nice-to-haves, Red flags) and a created_at line; the IC-not-management dealbreaker appears — NO numbers/weights",
+        "Writes the registry at <tmp>/registry.json with active_workspace = <tmp>/.job-search (via osctl set-active)",
+        "config.yaml has at least one queries[] entry (keywords 'AI engineer', location 'United States', enabled:true) and schedule.frequency: daily; version stays 1; no budget/cost/score field added",
+        "Runs a real sample job-search-run against <tmp>/.job-search and surfaces the Acme 'Senior AI Engineer (Remote US)' as a STRONG match in the digest, framed as found seconds ago",
+        "Records the scheduling marker (osctl set-scheduled --mechanism cron → schedule-status now installed:true, mechanism:cron) AND prints the verbatim copy-paste fallback block (OPTION A cron / OPTION B loop)",
+        "Prints the home view at the end (status line · latest digest · pipeline · quick actions)",
+        "NO numeric score, NO category weights, NO credit/dollar/budget math anywhere in the output"
+      ]
+    },
+    {
+      "id": 2,
+      "scenario": "first-run, import a brief",
+      "prompt": "Fresh sandbox, env as in harness, JOBSEARCH_TEST_SCENARIO=happy. Invoke /job-search (first_run:true). When asked interview-or-import, answer 'I have a brief' and paste a short prose brief, e.g.: '# Job Preferences Brief\\n**Summary:** Backend engineer wanting data-intensive systems work, remote-first, sane on-call.\\n## Must-haves / dealbreakers\\n- Backend/platform engineering (not frontend).\\n- Remote within the US.\\n## Strong preferences\\n- Go or Rust; distributed systems.\\n## Nice-to-haves\\n- Open-source culture.\\n## Red flags\\n- Permanent crunch.'. For the search: keywords='backend engineer', location='United States'. Frequency: 'weekly'. Scheduling: 'no'. Complete onboarding.",
+      "expectations": [
+        "Does NOT run the question-by-question interview (takes the import path)",
+        "preferences.md at <tmp>/.job-search/preferences.md is the pasted prose (its Summary + sections preserved), with a created_at line; no numeric rubric introduced",
+        "Still configures a queries[] entry (keywords 'backend engineer') and schedule.frequency: weekly in config.yaml; version stays 1",
+        "Runs the real sample job-search-run and produces a digest (shim-backed)",
+        "Prints the verbatim copy-paste fallback block (scheduling was declined)",
+        "Does NOT set the scheduling marker (set-scheduled NOT called; schedule-status stays installed:false) because the user declined",
+        "Writes the registry with active_workspace = <tmp>/.job-search",
+        "NO numbers/weights/credit math anywhere"
+      ]
+    },
+    {
+      "id": 3,
+      "scenario": "first-run, not authenticated",
+      "prompt": "Fresh sandbox, env as in harness, JOBSEARCH_TEST_SCENARIO=happy, and ALSO export JOBSEARCH_TEST_NOAUTH=1 (so `agent-data whoami` reports api_key_set:false). Invoke /job-search (first_run:true).",
+      "expectations": [
+        "Stops at the prerequisites step with E-NO-AUTH, naming the fix (export AGENT_DATA_API_KEY=mtk_… or save to ~/.agent-data/config.json, then re-verify with `agent-data whoami`)",
+        "Creates NO workspace — <tmp>/.job-search does NOT exist (no config.yaml/preferences.md/jobs.jsonl written)",
+        "Writes NO registry — <tmp>/registry.json does NOT exist (set-active not called)",
+        "Pulls nothing: never calls search-jobs or get-posting; no digest produced",
+        "Does not invent a fit score or mention credits"
+      ]
+    },
+    {
+      "id": 4,
+      "scenario": "returning-user home",
+      "prompt": "PRE-SEED before invoking (no /job-search yet): run setup-onboarding.sh <tmp>; create <tmp>/.job-search from templates (cp templates/config.example.yaml → config.yaml, templates/preferences.example.md → preferences.md, templates/workspace.gitignore → .gitignore, mkdir runs reports, : > jobs.jsonl); append two evaluated events to <tmp>/.job-search/jobs.jsonl via `python3 scripts/state.py append` — one with status:new (e.g. source_id 1001, the Acme Senior AI Engineer, relevant:true match:strong) and one with status:interested (e.g. source_id 1002); write a sample <tmp>/.job-search/reports/2026-06-05-digest.md with a Run health: healthy line and a counts line; then `python3 scripts/osctl.py set-active --registry <tmp>/registry.json --workspace <tmp>/.job-search`. Now invoke /job-search (resolve returns first_run:false, source:registry). Env as in harness.",
+      "expectations": [
+        "Does NOT onboard — no interview, no workspace creation, no template copy, no preferences re-write",
+        "Renders the home: a status line (workspace path · brief age · schedule on/off · last run health)",
+        "Shows the latest digest summary (date 2026-06-05 + its counts line)",
+        "Shows pipeline counts folded from jobs.jsonl: 1 new, 1 interested",
+        "Offers conversational quick actions (run a search now / add a query / change frequency / update preferences / change schedule / show latest digest)",
+        "NO numeric score, NO weights, NO credit/dollar math"
+      ]
+    },
+    {
+      "id": 5,
+      "scenario": "never-clobber adoption of a legacy workspace",
+      "prompt": "PRE-SEED a LEGACY workspace at <tmp>/job-search (legacy resolves there because JOBSEARCH_OS_HOME=<tmp>) with SENTINEL content, and do NOT write a registry: run setup-onboarding.sh <tmp>; mkdir -p <tmp>/job-search; write <tmp>/job-search/config.yaml (valid: version:1, workspace block, ONE queries[] entry, a schedule block); write <tmp>/job-search/preferences.md whose body contains the exact string SENTINEL-PREFS; write <tmp>/job-search/jobs.jsonl with exactly one evaluated event whose JSON contains the exact string SENTINEL-JOB (and a source_id). Do NOT create runs/ or reports/. Capture the byte contents of preferences.md and jobs.jsonl BEFORE invoking. Then invoke /job-search (resolve returns first_run:false, source:legacy). Env as in harness.",
+      "expectations": [
+        "Adopts the legacy workspace: writes the registry so active_workspace = <tmp>/job-search (osctl set-active); tells the user 'Found an existing workspace at <tmp>/job-search — using it'",
+        "preferences.md STILL contains SENTINEL-PREFS and is BYTE-FOR-BYTE unchanged (diff of pre/post bytes is empty — never overwritten)",
+        "jobs.jsonl STILL contains SENTINEL-JOB and is BYTE-FOR-BYTE unchanged (diff of pre/post bytes is empty)",
+        "config.yaml is NOT overwritten",
+        "Only the MISSING runs/ and reports/ directories are additively created",
+        "Shows the home view (does NOT start a fresh interview, does NOT re-scaffold a new ~/.job-search)",
+        "NO numbers/weights/credit math"
+      ]
+    }
+  ]
+}
