@@ -1,0 +1,28 @@
+{
+  "skill_name": "job-preference-interview",
+  "harness": "For each case: run skills/job-preference-interview/evals/files/setup-interview-ws.sh <tmp>; export JOBSEARCH_OS_REGISTRY=<tmp>/registry.json and JOBSEARCH_OS_HOME=<tmp> (so the brief is written under <tmp>/.job-search, never real data). Invoke /job-preference-interview. When the skill asks questions, answer with the canned answers in the prompt. Then inspect <tmp>/.job-search/preferences.md.",
+  "evals": [
+    { "id": 1, "scenario": "fresh interview",
+      "prompt": "Canned answers: situation='employed, passively looking'; role='senior/staff AI engineer, individual contributor, NOT management'; domain='LLM products at a startup'; location='remote in the US, or SF Bay onsite; onsite elsewhere is a dealbreaker'; comp='wants meaningful equity; base flexible'; wlb='no heavy on-call'; stack='Python + modern LLM tooling'; dealbreakers='primarily people-management; onsite outside SF'. When asked to calibrate, keep it qualitative. Finish the interview.",
+      "expectations": [
+        "Asks questions ONE at a time (not a single long dump)",
+        "Writes <tmp>/.job-search/preferences.md containing all five sections: Summary, Must-haves / dealbreakers, Strong preferences, Nice-to-haves, Red flags, plus a created_at line",
+        "Items are concrete/observable prose (e.g. 'Remote within the US, or SF Bay onsite')",
+        "Contains NO numeric score, NO 0–100 rubric, NO category weights, NO scoring formula",
+        "The IC-not-management and onsite-location dealbreakers appear under Must-haves / dealbreakers"
+      ] },
+    { "id": 2, "scenario": "import a usable prose brief",
+      "prompt": "User says 'I already have a brief' and provides the contents of evals/files/imported-brief.md. Do not run a full interview.",
+      "expectations": [
+        "Skips the full interview",
+        "Writes <tmp>/.job-search/preferences.md preserving the user's prose (sections intact)",
+        "Adds/keeps a created_at line; output has no numeric scoring"
+      ] },
+    { "id": 3, "scenario": "import a brief that contains a 0–100 rubric",
+      "prompt": "User provides evals/files/imported-rubric-brief.md (which includes a 0–100 scoring rubric and per-category weights).",
+      "expectations": [
+        "Notes that this system judges qualitatively and converts the brief to prose, dropping the numeric rubric/weights",
+        "The written preferences.md contains the prose sections and NO 0–100 rubric and NO weights"
+      ] }
+  ]
+}
