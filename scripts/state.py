@@ -36,12 +36,32 @@ def cmd_known_ids(args):
     return 0
 
 
+def append_event(path, event):
+    if not isinstance(event, dict) or not event.get("source_id"):
+        raise ValueError("event must be a JSON object with a non-empty source_id")
+    with open(path, "a", encoding="utf-8") as f:
+        f.write(json.dumps(event) + "\n")
+
+
+def cmd_append(args):
+    try:
+        append_event(args.jobs, json.loads(args.event))
+    except (ValueError, json.JSONDecodeError) as e:
+        print(f"append failed: {e}", file=sys.stderr)
+        return 1
+    return 0
+
+
 def main(argv=None):
     p = argparse.ArgumentParser(description="jobs.jsonl operations")
     sub = p.add_subparsers(dest="cmd", required=True)
     k = sub.add_parser("known-ids", help="print one source_id per line (deduped)")
     k.add_argument("--jobs", required=True)
     k.set_defaults(func=cmd_known_ids)
+    a = sub.add_parser("append", help="append one event (must include source_id)")
+    a.add_argument("--jobs", required=True)
+    a.add_argument("--event", required=True, help="JSON object")
+    a.set_defaults(func=cmd_append)
     args = p.parse_args(argv)
     return args.func(args)
 
