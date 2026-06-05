@@ -1,6 +1,6 @@
 {
   "skill_name": "job-search-run",
-  "harness": "Each case: run skills/job-search-run/evals/files/setup-workspace.sh <tmp> to build a workspace + _bin/agent-data shim symlink. Prepend <tmp>/_bin to PATH and export JOBSEARCH_FIXTURES=<repo>/tests/fixtures and JOBSEARCH_TEST_SCENARIO=<scenario> (plus the per-case tweak), so the run skill's `agent-data` calls hit the fake shim (no real credits). Then run /job-search-run against <tmp> and inspect <tmp>/reports/<date>-digest.md, <tmp>/jobs.jsonl, and the exit code. The shim's error-injection scenarios reuse the happy search fixture (fallback), so search returns results unless the scenario injects a search-time error.",
+  "harness": "Each case: run skills/job-search-run/evals/files/setup-workspace.sh <tmp> to build a workspace + _bin/agent-data shim symlink. Prepend <tmp>/_bin to PATH and export JOBSEARCH_FIXTURES=<repo>/tests/fixtures and JOBSEARCH_TEST_SCENARIO=<scenario> (plus the per-case tweak), so the run skill's `agent-data` calls hit the fake shim (no real credits). Then run /job-search-run --workspace <tmp> (the override path, so discovery is bypassed for these workspace-provided cases) and inspect <tmp>/reports/<date>-digest.md, <tmp>/jobs.jsonl, and the exit code. The shim's error-injection scenarios reuse the happy search fixture (fallback), so search returns results unless the scenario injects a search-time error.",
   "evals": [
     {
       "id": 1,
@@ -104,6 +104,16 @@
         "Dedup finds BOTH search results already known → no NEW postings",
         "Reassuring message: 'No NEW postings — all already in your database' (NOT an error, NOT 'broaden keywords')",
         "Spends no get-posting calls; writes no duplicate evaluated events; Run health healthy; exits 0"
+      ]
+    },
+    {
+      "id": 11,
+      "scenario": "first-run, no workspace (headless)",
+      "prompt": "Do NOT create a workspace. Export JOBSEARCH_OS_REGISTRY=<tmp>/absent.json and JOBSEARCH_OS_HOME=<tmp> (empty), PATH=<tmp>/_bin:$PATH with the shim, JOBSEARCH_TEST_SCENARIO=happy. Run /job-search-run with NO --workspace.",
+      "expectations": [
+        "resolve reports first_run -> E-NO-CONFIG naming /job-search; does NOT prompt (headless)",
+        "Makes no search-jobs/get-posting calls",
+        "Exits non-zero"
       ]
     }
   ]

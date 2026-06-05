@@ -11,8 +11,7 @@ Run ONE headless job-search pass over the workspace. Free gates before metered c
 Read `references/agent-data-contract.md` (CLI + routes + retry rules), `references/errors.md` (every E-* with
 the exact cause+fix wording), and `references/conventions.md` (file schemas + digest format) — follow them exactly.
 
-Workspace = the current directory unless `--workspace <path>` is given (a scheduled run's cwd is the
-workspace, NOT the repo). The job source listing id is `f9a6ec16-0bfd-44d8-b3ee-073776745ee7`.
+Resolve the workspace with `python3 "$OS" resolve` (bundled `scripts/osctl.py`; registry → `~/.job-search/` → legacy `~/job-search/`) UNLESS `--workspace <path>` is given, which overrides. Resolve `$OS` (and `$STATE`) from this skill's own directory (e.g. `${CLAUDE_SKILL_DIR}/scripts/...` as a plugin) — never assume cwd. This run is HEADLESS: never prompt. If `resolve` reports `first_run` (no workspace/config yet) → E-NO-CONFIG naming `/job-search` (HALT, exit 1); onboarding is interactive and lives in the `job-search` skill, not here. The job source listing id is `f9a6ec16-0bfd-44d8-b3ee-073776745ee7`.
 Deterministic db ops use `state.py`, bundled WITH this skill at `scripts/state.py` (inside this skill's
 own directory). Resolve its absolute path from the skill's own location and use it below as `$STATE` —
 never assume the current working directory contains `scripts/`.
@@ -22,6 +21,7 @@ never assume the current working directory contains `scripts/`.
 
 ## Loop
 0. **Preflight (free).**
+   - `agent-data` not found on PATH → E-NO-AGENT-DATA (HALT, exit 1).
    - No `config.yaml` → E-NO-CONFIG (HALT, exit 1).
    - `agent-data whoami`; `api_key_set:false` → E-NO-AUTH (HALT, exit 1).
    - `config.yaml` `version` major unknown → E-CONFIG-VERSION (HALT, exit 1).
