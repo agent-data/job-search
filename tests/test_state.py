@@ -45,3 +45,25 @@ def test_append_rejects_missing_source_id(tmp_path):
     assert r.returncode != 0
     assert "source_id" in (r.stderr + r.stdout)
     assert not jobs.exists()  # nothing written on rejection
+
+# append to tests/test_state.py
+
+def test_fold_last_write_wins_preserves_fields(tmp_path):
+    jobs = tmp_path / "jobs.jsonl"
+    write_jsonl(jobs, [
+        {"event": "evaluated", "source_id": "444", "title": "Eng", "status": "new", "match": "weak"},
+        {"event": "status_changed", "source_id": "444", "status": "interested"},  # overrides status only
+    ])
+    r = run(["fold", "--jobs", str(jobs)])
+    assert r.returncode == 0
+    state = json.loads(r.stdout)
+    assert len(state) == 1
+    rec = state[0]
+    assert rec["status"] == "interested"   # last write wins
+    assert rec["title"] == "Eng"            # untouched field preserved
+    assert rec["match"] == "weak"
+
+def test_fold_empty_is_empty_array(tmp_path):
+    r = run(["fold", "--jobs", str(tmp_path / "nope.jsonl")])
+    assert r.returncode == 0
+    assert json.loads(r.stdout) == []

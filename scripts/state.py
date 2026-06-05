@@ -52,6 +52,24 @@ def cmd_append(args):
     return 0
 
 
+def fold(events):
+    state = {}  # source_id -> merged record (insertion order preserved by dict)
+    for e in events:
+        sid = e.get("source_id")
+        if not sid:
+            continue
+        rec = state.setdefault(sid, {})
+        for k, v in e.items():
+            if k != "event":
+                rec[k] = v  # later events override present keys
+    return list(state.values())
+
+
+def cmd_fold(args):
+    print(json.dumps(fold(read_events(args.jobs))))
+    return 0
+
+
 def main(argv=None):
     p = argparse.ArgumentParser(description="jobs.jsonl operations")
     sub = p.add_subparsers(dest="cmd", required=True)
@@ -62,6 +80,9 @@ def main(argv=None):
     a.add_argument("--jobs", required=True)
     a.add_argument("--event", required=True, help="JSON object")
     a.set_defaults(func=cmd_append)
+    f = sub.add_parser("fold", help="print current state as a JSON array (folded by source_id)")
+    f.add_argument("--jobs", required=True)
+    f.set_defaults(func=cmd_fold)
     args = p.parse_args(argv)
     return args.func(args)
 
