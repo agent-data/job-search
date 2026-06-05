@@ -9,7 +9,8 @@
         "Writes <tmp>/.job-search/preferences.md containing all five sections: Summary, Must-haves / dealbreakers, Strong preferences, Nice-to-haves, Red flags, plus a created_at line",
         "Items are concrete/observable prose (e.g. 'Remote within the US, or SF Bay onsite')",
         "Contains NO numeric score, NO 0–100 rubric, NO category weights, NO scoring formula",
-        "The IC-not-management and onsite-location dealbreakers appear under Must-haves / dealbreakers"
+        "The IC-not-management and onsite-location dealbreakers appear under Must-haves / dealbreakers",
+        "Ends with a 'How to use this' line stating Claude judges relevant/not + weak/moderate/strong with reasoning and 'No score.'"
       ] },
     { "id": 2, "scenario": "import a usable prose brief",
       "prompt": "User says 'I already have a brief' and provides the contents of evals/files/imported-brief.md. Do not run a full interview.",
@@ -22,7 +23,8 @@
       "prompt": "User provides evals/files/imported-rubric-brief.md (which includes a 0–100 scoring rubric and per-category weights).",
       "expectations": [
         "Notes that this system judges qualitatively and converts the brief to prose, dropping the numeric rubric/weights",
-        "The written preferences.md contains the prose sections and NO 0–100 rubric and NO weights"
+        "The written preferences.md contains the prose sections and NO 0–100 rubric and NO weights",
+        "Writes <tmp>/.job-search/preferences.md with all five sections (Summary, Must-haves / dealbreakers, Strong preferences, Nice-to-haves, Red flags) and a created_at line"
       ] }
   ]
 }
