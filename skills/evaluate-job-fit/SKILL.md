@@ -18,19 +18,21 @@ relevance judgment** — never a numeric score, never category weights.
 
 ## Method (model inference — read, reason, judge)
 1. Read the brief's **must-haves/dealbreakers, strong preferences, nice-to-haves, red flags**.
-2. Read the posting (summary fields, or the full `description_markdown` when available). Treat any field the
-   posting doesn't mention as **"not stated"** — record it as an unknown, never as a negative.
+2. Read the posting (summary fields — title, company, location, salary display, posted date — or the full
+   `description_markdown` when available). Treat any field the posting doesn't mention as **"not stated"** —
+   record it as an unknown, never as a negative.
 3. Decide, in this order:
    - **A must-have/dealbreaker is clearly violated → `relevant: false`** (a reject). Name what failed in
      `dealbreakers_hit` and the reasoning.
    - **A must-have can't be confirmed from the posting → do NOT reject.** Keep it, set
-     `needs_human_check: true`, and write the exact open question into the `reasoning` field
-     (e.g. "Remote not stated — confirm before applying"). There is no separate question field; the
-     question lives in `reasoning`, per `references/conventions.md`.
+     `needs_human_check: true`, add the unstated must-have to `unknowns`, and write the exact open
+     question into the `reasoning` field (e.g. "Remote not stated — confirm before applying"). There is
+     no separate question field; the question lives in `reasoning`, per `references/conventions.md`.
    - **Otherwise `relevant: true`**, and assign a coarse band:
      - `strong` — hits the must-haves and most strong preferences.
      - `moderate` — solid alignment with some gaps.
      - `weak` — relevant but thin alignment.
+     When torn between two bands, pick the lower one and say why.
 4. Write 1–3 sentences of **reasoning** that cite specifics from the posting against the brief. The reasoning
    carries the weight — there is no number behind it.
 
