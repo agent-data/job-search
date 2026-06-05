@@ -99,6 +99,72 @@ def cmd_set_active(args):
     return 0
 
 
+CRON = {"hourly": "0 * * * *", "every-2-hours": "0 */2 * * *", "every-6-hours": "0 */6 * * *"}
+
+
+def cron_schedule(frequency, time_str):
+    if frequency in CRON:
+        return CRON[frequency]
+    hh, mm = (time_str or "08:00").split(":")
+    h, m = int(hh), int(mm)
+    if frequency == "daily":
+        return f"{m} {h} * * *"
+    if frequency == "weekly":
+        return f"{m} {h} * * 1"   # Monday
+    raise ValueError(f"unknown frequency {frequency!r} (hourly|every-2-hours|every-6-hours|daily|weekly)")
+
+
+def cron_line(frequency, time_str, workspace):
+    ws = workspace or default_workspace()
+    return f'{cron_schedule(frequency, time_str)} cd {ws} && claude -p "/job-search-run" >> {ws}/runs/cron.log 2>&1'
+
+
+def cmd_schedule_line(args):
+    try:
+        print(cron_line(args.frequency, args.time, args.workspace))
+    except ValueError as e:
+        print(f"schedule-line failed: {e}", file=sys.stderr)
+        return 1
+    return 0
+
+
+PLIST = """<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>dev.jobsearchos.run</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/bash</string><string>-lc</string>
+    <string>cd {ws} &amp;&amp; claude -p "/job-search-run" >> {ws}/runs/cron.log 2>&amp;1</string>
+  </array>
+  <key>StartCalendarInterval</key><dict>{cal}</dict>
+  <key>RunAtLoad</key><false/>
+</dict>
+</plist>"""
+
+
+def launchd_cal(frequency, time_str):
+    hh, mm = (time_str or "08:00").split(":")
+    h, m = int(hh), int(mm)
+    if frequency == "hourly":
+        return "<key>Minute</key><integer>0</integer>"
+    if frequency == "daily":
+        return f"<key>Hour</key><integer>{h}</integer><key>Minute</key><integer>{m}</integer>"
+    if frequency == "weekly":
+        return f"<key>Weekday</key><integer>1</integer><key>Hour</key><integer>{h}</integer><key>Minute</key><integer>{m}</integer>"
+    raise ValueError(f"launchd plist supports hourly|daily|weekly; for {frequency!r} use cron")
+
+
+def cmd_launchd_plist(args):
+    try:
+        print(PLIST.format(ws=(args.workspace or default_workspace()), cal=launchd_cal(args.frequency, args.time)))
+    except ValueError as e:
+        print(f"launchd-plist failed: {e}", file=sys.stderr)
+        return 1
+    return 0
+
+
 def main(argv=None):
     p = argparse.ArgumentParser(description="Job Search OS internals (registry, discovery, scheduling)")
     sub = p.add_subparsers(dest="cmd", required=True)
@@ -113,6 +179,19 @@ def main(argv=None):
     s.add_argument("--workspace", required=True)
     s.add_argument("--registry")
     s.set_defaults(func=cmd_set_active)
+
+    sl = sub.add_parser("schedule-line", help="emit the cron line for a frequency")
+    sl.add_argument("--frequency", required=True)
+    sl.add_argument("--time", default="08:00")
+    sl.add_argument("--timezone")
+    sl.add_argument("--workspace")
+    sl.set_defaults(func=cmd_schedule_line)
+
+    lp = sub.add_parser("launchd-plist", help="emit a launchd plist (macOS)")
+    lp.add_argument("--frequency", required=True)
+    lp.add_argument("--time", default="08:00")
+    lp.add_argument("--workspace")
+    lp.set_defaults(func=cmd_launchd_plist)
 
     args = p.parse_args(argv)
     return args.func(args)

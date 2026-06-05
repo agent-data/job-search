@@ -90,3 +90,28 @@ def test_resolve_uses_env_registry_override(tmp_path):
     run(["set-active", "--workspace", str(ws)], env=env)   # no --registry flag; resolves via env
     out = json.loads(run(["resolve"], env=env).stdout)
     assert out["source"] == "registry" and out["workspace"] == str(ws.resolve())
+
+
+# --- schedule-line ---
+def test_schedule_line_daily_uses_time_and_workspace(tmp_path):
+    line = run(["schedule-line", "--frequency", "daily", "--time", "08:00", "--workspace", "/ws"]).stdout.strip()
+    assert line.startswith("0 8 * * * ")
+    assert 'cd /ws && claude -p "/job-search-run" >> /ws/runs/cron.log 2>&1' in line
+
+def test_schedule_line_hourly(tmp_path):
+    assert run(["schedule-line", "--frequency", "hourly", "--workspace", "/ws"]).stdout.strip().startswith("0 * * * * ")
+
+def test_schedule_line_every_6_hours(tmp_path):
+    assert run(["schedule-line", "--frequency", "every-6-hours", "--workspace", "/ws"]).stdout.strip().startswith("0 */6 * * * ")
+
+def test_schedule_line_weekly_monday(tmp_path):
+    assert run(["schedule-line", "--frequency", "weekly", "--time", "09:30", "--workspace", "/ws"]).stdout.strip().startswith("30 9 * * 1 ")
+
+def test_schedule_line_unknown_frequency_errors(tmp_path):
+    r = run(["schedule-line", "--frequency", "fortnightly", "--workspace", "/ws"])
+    assert r.returncode == 1 and "unknown frequency" in r.stderr
+
+# --- launchd-plist ---
+def test_launchd_plist_daily_has_calendar_and_log(tmp_path):
+    out = run(["launchd-plist", "--frequency", "daily", "--time", "08:00", "--workspace", "/ws"]).stdout
+    assert "StartCalendarInterval" in out and "<integer>8</integer>" in out and "/ws/runs/cron.log" in out
