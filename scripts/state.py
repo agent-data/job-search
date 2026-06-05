@@ -11,10 +11,13 @@ def read_events(path):
     try:
         with open(path, encoding="utf-8") as f:
             out = []
-            for line in f:
+            for i, line in enumerate(f, 1):
                 line = line.strip()
                 if line:
-                    out.append(json.loads(line))
+                    try:
+                        out.append(json.loads(line))
+                    except json.JSONDecodeError as exc:
+                        raise ValueError(f"malformed JSON at line {i}: {exc}") from exc
             return out
     except FileNotFoundError:
         return []
@@ -31,8 +34,12 @@ def known_ids(events):
 
 
 def cmd_known_ids(args):
-    for sid in known_ids(read_events(args.jobs)):
-        print(sid)
+    try:
+        for sid in known_ids(read_events(args.jobs)):
+            print(sid)
+    except ValueError as e:
+        print(f"known-ids failed: {e}", file=sys.stderr)
+        return 1
     return 0
 
 
@@ -40,7 +47,7 @@ def append_event(path, event):
     if not isinstance(event, dict) or not event.get("source_id"):
         raise ValueError("event must be a JSON object with a non-empty source_id")
     with open(path, "a", encoding="utf-8") as f:
-        f.write(json.dumps(event) + "\n")
+        f.write(json.dumps(event, ensure_ascii=False) + "\n")
 
 
 def cmd_append(args):
@@ -66,7 +73,11 @@ def fold(events):
 
 
 def cmd_fold(args):
-    print(json.dumps(fold(read_events(args.jobs))))
+    try:
+        print(json.dumps(fold(read_events(args.jobs)), ensure_ascii=False))
+    except ValueError as e:
+        print(f"fold failed: {e}", file=sys.stderr)
+        return 1
     return 0
 
 
@@ -80,7 +91,7 @@ def main(argv=None):
     a.add_argument("--jobs", required=True)
     a.add_argument("--event", required=True, help="JSON object")
     a.set_defaults(func=cmd_append)
-    f = sub.add_parser("fold", help="print current state as a JSON array (folded by source_id)")
+    f = sub.add_parser("fold", help="print current state as a JSON array (folded by source_id; 'event' key stripped from records)")
     f.add_argument("--jobs", required=True)
     f.set_defaults(func=cmd_fold)
     args = p.parse_args(argv)
