@@ -1,0 +1,13 @@
+{
+  "name": "agent-data",
+  "owner": { "name": "agent-data" },
+  "description": "Job Search OS — Claude Code as your job-search operating system.",
+  "plugins": [
+    {
+      "name": "job-search-os",
+      "source": ".",
+      "description": "Onboard with /job-search; qualitative relevance, frequency-not-budget, private local workspace.",
+      "category": "productivity"
+    }
+  ]
+}
