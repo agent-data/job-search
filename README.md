@@ -39,37 +39,9 @@ See a full one in [`examples/sample-digest.md`](examples/sample-digest.md).
 
 ---
 
-## Install (the golden path)
+## Install from source (works today)
 
-In a Claude Code session, add the marketplace and install the plugin:
-
-```
-/plugin marketplace add agent-data/job-search-os
-/plugin install job-search-os@agent-data
-```
-
-Then run:
-
-```
-/job-search
-```
-
-Claude sets up everything by asking you a few questions — it checks the prerequisites, creates your private
-workspace, interviews you to build a preferences brief, helps you pick your search queries and how often to
-run, does a **first live search right then** so you see real matches seconds later, and offers to schedule it.
-
-You don't have to remember the slash command. Natural language works too:
-
-> "set up job search" · "find me jobs" · "check my job search"
-
-If `/job-search` is ever ambiguous with another plugin, the always-unambiguous form is
-`/job-search-os:job-search`.
-
----
-
-## Install (from source)
-
-Cloned the repo instead? Three options, depending on how persistent you want it.
+Clone the repo and pick the option that fits how permanent you want it.
 
 **A — Try it in one session (non-persistent).** Point Claude Code at the cloned repo for this session only:
 
@@ -102,6 +74,38 @@ ln -s "$PWD/skills/job-preference-interview" ~/.claude/skills/job-preference-int
 (Prefer copies that won't change under you? `cp -R` each folder instead of symlinking. After editing anything
 under `shared/references/` or `scripts/`, re-run `./scripts/build.sh` to re-sync the bundled copies — see
 [CONTRIBUTING.md](CONTRIBUTING.md).)
+
+After any of the above, run:
+
+```
+/job-search
+```
+
+Claude sets up everything by asking you a few questions — it checks the prerequisites, creates your private
+workspace, interviews you to build a preferences brief, helps you pick your search queries and how often to
+run, does a **first live search right then** so you see real matches seconds later, and offers to schedule it.
+
+You don't have to remember the slash command. Natural language works too:
+
+> "set up job search" · "find me jobs" · "check my job search"
+
+If `/job-search` is ever ambiguous with another plugin, the always-unambiguous form is
+`/job-search-os:job-search`.
+
+---
+
+## Install from the marketplace (once published)
+
+Once this plugin is published to the agent-data marketplace, install will be a single step — but that
+publication is not live yet, so the commands below will not work today. When it is published, the golden
+one-step path will be:
+
+```
+/plugin marketplace add agent-data/job-search-os
+/plugin install job-search-os@agent-data
+```
+
+Then run `/job-search` as above.
 
 ---
 

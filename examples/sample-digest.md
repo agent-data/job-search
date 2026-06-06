@@ -23,9 +23,9 @@ Run health: healthy
   Mission-aligned (civic tech) and remote, but the listing bundles some front-end build expectations and the level skews junior.  [view](https://example.com/jobs/beacon-civic-ux-product-designer)
 
 ## Filtered out (not relevant): 3
-- **Brand & Marketing Designer** — Lumen Retail — why rejected: visual/brand/marketing design, not product UX (must-have).
-- **Product Designer** — Anvil Systems — why rejected: fully onsite in Austin, TX — outside the PNW (dealbreaker).
-- **Senior Designer (Product + Brand + Front-End)** — Pivot Co — why rejected: "unicorn" listing bundling product + brand + front-end into one seat (red flag / not a product role).
+- Brand & Marketing Designer — Lumen Retail — visual/brand/marketing design, not product UX (must-have).
+- Product Designer — Anvil Systems — fully onsite in Austin, TX — outside the PNW (dealbreaker).
+- Senior Designer (Product + Brand + Front-End) — Pivot Co — "unicorn" listing bundling product + brand + front-end into one seat (red flag / not a product role).
 
 ---
 _Notes:_

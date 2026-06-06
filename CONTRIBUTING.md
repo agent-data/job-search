@@ -39,6 +39,10 @@ python3 -m pytest -q
 #    (run each skill's evals under skills/<skill>/evals/)
 ```
 
+Each skill's evals live in `skills/<skill>/evals/evals.json`, with a `harness` block describing setup; run
+them by asking Claude in a Claude Code session (e.g. "run the evals for job-search-run"), which invokes the
+skill-creator skill against that file.
+
 The eval runs are **credit-free**: they go through the fake-`agent-data` shim in `tests/`, so no metered API
 calls are made and nothing is billed. Keep them that way — if you add a skill or a code path that talks to
 `agent-data`, route the eval through the shim rather than the live CLI.
