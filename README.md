@@ -170,8 +170,10 @@ job-hunting, the postings you've matched, and (later) your resume. It ships with
 
 ## Troubleshooting
 
-Every failure mode is **named and visible** — no silent failures. Blocked headless runs exit non-zero so a
-cron log or desktop notification surfaces them, and every named error tells you the fix. The digest's
+Every failure mode is **named and visible** — no silent failures. Blocked runs never fail silently: each writes a **blocked digest** (the named error + its
+fix as the body), fires a **desktop notification**, and is named in your **home view** the
+next time you run `/job-search`. (A headless `claude -p` run itself exits 0 even when
+blocked — the surfacing is the digest/notification/home, not the shell exit code.) The digest's
 **Run health** line is one of `healthy | partial (N errors) | degraded (LinkedIn flaky) | blocked (action
 needed)`.
 

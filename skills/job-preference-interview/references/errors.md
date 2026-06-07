@@ -1,7 +1,10 @@
 # Named errors (E-*) — cause + fix + what the user sees
 
-Every failure is named and visible (no silent failures). Headless runs that are BLOCKED exit non-zero so a
-cron log/desktop notify shows it. The digest's "Run health" line is one of: `healthy | partial (N errors) |
+Every failure is named and visible (no silent failures). Blocked runs surface three ways — the **blocked digest** (named error as the body), a
+**desktop notification** (`notify.desktop_notify_on_block`), and the **home view** on the
+user's next `/job-search` (which reads `run_health` from the newest `runs/<id>.json`).
+Do not rely on the process exit code: a headless `claude -p` run returns 0 even when
+blocked. Every HALT therefore writes a `runs/<id>.json` blocked record. The digest's "Run health" line is one of: `healthy | partial (N errors) |
 degraded (LinkedIn flaky) | blocked (action needed)`.
 
 | Code | When | What the user sees (cause + fix) | Run effect |
