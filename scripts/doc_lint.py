@@ -272,12 +272,44 @@ def scan_shared_dup(root):
     return hits
 
 
+INDEX_DIRS = ("docs/design-docs", "docs/product-specs", "docs/exec-plans")
+
+
+def scan_indexes(root):
+    """Each section index.md must link every sibling .md under its tree (no missing entries)."""
+    hits = []
+    for d in INDEX_DIRS:
+        index = os.path.join(root, d, "index.md")
+        if not os.path.isfile(index):
+            continue
+        with open(index, encoding="utf-8", errors="replace") as f:
+            text = f.read()
+        linked = set()
+        for target, _ in parse_links(text):
+            if re.match(r"^(https?:|mailto:)", target):
+                continue
+            pathpart = target.split("#")[0]
+            if pathpart:
+                linked.add(os.path.normpath(os.path.join(os.path.dirname(index), pathpart)))
+        base = os.path.join(root, d)
+        for dirpath, _, files in os.walk(base):
+            for fn in files:
+                if not fn.endswith(".md") or fn == "index.md":
+                    continue
+                sib = os.path.normpath(os.path.join(dirpath, fn))
+                if sib not in linked:
+                    hits.append(f"{os.path.relpath(index, root)}: index-completeness: "
+                                f"missing link to {os.path.relpath(sib, root)}")
+    return hits
+
+
 RULES = {
     "internal-links": scan_internal_links,
     "agents-map": scan_agents_map,
     "frontmatter-schema": scan_frontmatter,
     "code-refs-exist": scan_code_refs,
     "no-shared-reference-duplication": scan_shared_dup,
+    "index-completeness": scan_indexes,
 }
 
 

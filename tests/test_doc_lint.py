@@ -166,3 +166,25 @@ def test_dup_exempts_historical_design_doc(tmp_path):
     (d / "old.md").write_text(body)
     r = run_lint(tmp_path, "--only", "no-shared-reference-duplication")
     assert r.returncode == 0, r.stdout
+
+
+def test_index_lists_all_siblings_passes(tmp_path):
+    d = tmp_path / "docs" / "design-docs"; d.mkdir(parents=True)
+    (d / "spec-a.md").write_text("# A\n")
+    (d / "index.md").write_text("# Index\n\n- [A](spec-a.md)\n")
+    r = run_lint(tmp_path, "--only", "index-completeness")
+    assert r.returncode == 0, r.stdout + r.stderr
+
+def test_index_missing_entry_fails(tmp_path):
+    d = tmp_path / "docs" / "design-docs"; d.mkdir(parents=True)
+    (d / "spec-a.md").write_text("# A\n")
+    (d / "index.md").write_text("# Index\n\n(nothing linked)\n")
+    r = run_lint(tmp_path, "--only", "index-completeness")
+    assert r.returncode == 1 and "spec-a.md" in r.stdout
+
+def test_index_exec_plans_subdirs_passes(tmp_path):
+    a = tmp_path / "docs" / "exec-plans" / "active"; a.mkdir(parents=True)
+    (a / "p1.md").write_text("# P1\n")
+    (tmp_path / "docs" / "exec-plans" / "index.md").write_text("# Plans\n\n- [P1](active/p1.md)\n")
+    r = run_lint(tmp_path, "--only", "index-completeness")
+    assert r.returncode == 0, r.stdout + r.stderr
