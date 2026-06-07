@@ -188,3 +188,36 @@ def test_index_exec_plans_subdirs_passes(tmp_path):
     (tmp_path / "docs" / "exec-plans" / "index.md").write_text("# Plans\n\n- [P1](active/p1.md)\n")
     r = run_lint(tmp_path, "--only", "index-completeness")
     assert r.returncode == 0, r.stdout + r.stderr
+
+
+def _full_quality_score():
+    from importlib import util as _u  # mirror the canonical lists without importing the module here
+    rows = "\n".join(
+        f"| `{name}` | {kind} | strong | some gap |"
+        for name, kind in (
+            [("discovery-search","domain"),("preferences-judgment","domain"),
+             ("workspace-state","domain"),("scheduling-consent","domain"),
+             ("error-surfacing","domain"),("deterministic-core","layer"),
+             ("shared-references","layer"),("skill-layer","layer"),
+             ("hooks-guards","layer"),("tests-evals","layer")]))
+    return "# Quality Score\n\n| Area | Kind | Grade | Gaps |\n|---|---|---|---|\n" + rows + "\n"
+
+def test_quality_score_complete_passes(tmp_path):
+    d = tmp_path / "docs"; d.mkdir()
+    (d / "QUALITY_SCORE.md").write_text(_full_quality_score())
+    r = run_lint(tmp_path, "--only", "quality-score-coverage")
+    assert r.returncode == 0, r.stdout + r.stderr
+
+def test_quality_score_missing_domain_fails(tmp_path):
+    d = tmp_path / "docs"; d.mkdir()
+    text = _full_quality_score().replace("| `scheduling-consent` | domain | strong | some gap |\n", "")
+    (d / "QUALITY_SCORE.md").write_text(text)
+    r = run_lint(tmp_path, "--only", "quality-score-coverage")
+    assert r.returncode == 1 and "scheduling-consent" in r.stdout
+
+def test_quality_score_missing_layer_fails(tmp_path):
+    d = tmp_path / "docs"; d.mkdir()
+    text = _full_quality_score().replace("| `hooks-guards` | layer | strong | some gap |\n", "")
+    (d / "QUALITY_SCORE.md").write_text(text)
+    r = run_lint(tmp_path, "--only", "quality-score-coverage")
+    assert r.returncode == 1 and "hooks-guards" in r.stdout

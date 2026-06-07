@@ -303,6 +303,26 @@ def scan_indexes(root):
     return hits
 
 
+QS_GRADES = ("strong", "adequate", "thin", "missing")
+
+
+def scan_quality_score(root):
+    """QUALITY_SCORE.md must grade every canonical domain and layer (id + a grade word) and have a gaps field."""
+    path = os.path.join(root, "docs", "QUALITY_SCORE.md")
+    if not os.path.isfile(path):
+        return ["docs/QUALITY_SCORE.md: quality-score-coverage: file is missing"] \
+            if os.path.isdir(os.path.join(root, "docs")) else []
+    lines = open(path, encoding="utf-8", errors="replace").read().splitlines()
+    hits = []
+    for name in DOMAINS + LAYERS:
+        if not any(name in ln and any(g in ln.lower() for g in QS_GRADES) for ln in lines):
+            hits.append(f"docs/QUALITY_SCORE.md: quality-score-coverage: "
+                        f"no graded entry for '{name}' (need the id + a grade word in {QS_GRADES})")
+    if not any("gap" in ln.lower() for ln in lines):
+        hits.append("docs/QUALITY_SCORE.md: quality-score-coverage: no 'gaps' column/section found")
+    return hits
+
+
 RULES = {
     "internal-links": scan_internal_links,
     "agents-map": scan_agents_map,
@@ -310,6 +330,7 @@ RULES = {
     "code-refs-exist": scan_code_refs,
     "no-shared-reference-duplication": scan_shared_dup,
     "index-completeness": scan_indexes,
+    "quality-score-coverage": scan_quality_score,
 }
 
 
