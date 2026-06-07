@@ -76,13 +76,13 @@ Phases run in order. Each task = files + red/green/refactor + scoped commit (+ p
 
 One task per rule, each mirroring the Rule-1 pattern (rule fn + pass/fail fixtures + named tests + commit `feat(docs): <rule> lint rule`):
 
-- [ ] **1.1 Rule 2 `frontmatter-schema`** — the hand-rolled frontmatter parser + required-key/enum checks for design-docs and plans.
-- [ ] **1.2 Rule 3 `code-refs-exist`** — every `code_refs:` path resolves in the repo.
-- [ ] **1.3 Rule 7 `no-shared-reference-duplication`** (the key rule) — author the forbidden-signature list from `shared/references/`, prove the link allow-rule, and apply the exemptions in D4.
-- [ ] **1.4 Rule 4 `index-completeness`** — each `index.md` links every sibling; no entry points at a missing file.
-- [ ] **1.5 Rule 5 `quality-score-coverage`** — `QUALITY_SCORE.md` covers every canonical domain and layer with a grade word + gaps.
-- [ ] **1.6 Rule 6 `plan-location`** — a plan's `state:` agrees with its directory; no loose plans in the `exec-plans/` root.
-- [ ] **1.7 Rule 8 `freshness-markers`** — `last_reviewed` parseable; stale ⇒ warning; `--strict-fresh` ⇒ failure.
+- [x] **1.1 Rule 2 `frontmatter-schema`** — the hand-rolled frontmatter parser + required-key/enum checks for design-docs and plans.
+- [x] **1.2 Rule 3 `code-refs-exist`** — every `code_refs:` path resolves in the repo.
+- [x] **1.3 Rule 7 `no-shared-reference-duplication`** (the key rule) — author the forbidden-signature list from `shared/references/`, prove the link allow-rule, and apply the exemptions in D4.
+- [x] **1.4 Rule 4 `index-completeness`** — each `index.md` links every sibling; no entry points at a missing file.
+- [x] **1.5 Rule 5 `quality-score-coverage`** — `QUALITY_SCORE.md` covers every canonical domain and layer with a grade word + gaps.
+- [x] **1.6 Rule 6 `plan-location`** — a plan's `state:` agrees with its directory; no loose plans in the `exec-plans/` root.
+- [x] **1.7 Rule 8 `freshness-markers`** — `last_reviewed` parseable; stale ⇒ warning; `--strict-fresh` ⇒ failure.
 
 After Phase 1 the linter is complete and green against the Phase-0 stubs; every later doc is authored to keep it green.
 
@@ -97,7 +97,7 @@ Each task: write the real doc (passing every rule, **linking** to `shared/refere
 - [ ] **2.5 `exec-plans/tech-debt-tracker.md` + `exec-plans/index.md`** — make the tracker canonical (migrate `TODOS.md`; convert `TODOS.md` to a one-line pointer; fix the one `TESTING.md` reference); catalogue active/ + completed/ + the tracker.
 - [ ] **2.6 `product-specs/new-user-onboarding.md` + `product-specs/index.md`** — the magical-moment onboarding spec (points to the job-search skill) + the catalogue.
 - [ ] **2.7 `docs/PRODUCT_SENSE.md`** — product philosophy + non-goals/YAGNI + who-the-user-is.
-- [ ] **2.8 `docs/QUALITY_SCORE.md`** — every domain × layer graded with qualitative words + gaps.
+- [x] **2.8 `docs/QUALITY_SCORE.md`** — every domain × layer graded with qualitative words + gaps. (Done within Task 1.5, which the coverage rule forced.)
 - [ ] **2.9 `docs/RELIABILITY.md`** — determinism, named errors, retry/circuit-breaker, run-health, headless surfacing, testing/eval strategy (maps into `shared/references/`).
 - [ ] **2.10 `docs/SECURITY.md`** — private-local, deny-all `.gitignore`, no-PII, the consent hook, the fake shim.
 - [ ] **2.11 `docs/INTERFACE.md`** — the conversational / CLI / digest / home surfaces (points to `conventions.md` for the digest contract).
@@ -122,6 +122,8 @@ Each task: write the real doc (passing every rule, **linking** to `shared/refere
 - 2026-06-07 — **Task 0.4** done (`0baa3e0`): `CLAUDE.md` stub + this checked-in exec-plan.
 - 2026-06-07 — **Task 0.5** done (`a1c83d7`): `Doc lint` step added to `.github/workflows/ci.yml` (runs after the philosophy guard).
 - 2026-06-07 — **Task 0.6** done: `.claude/agents/doc-reviewer.md` (per-commit review + on-demand gardening sweep w/ `gh` fix-up-PR recipe). Per-commit doc-reviewer runs begin now. Phase 0 complete.
+- 2026-06-07 — **Phase 1 complete** — all 9 lint rules implemented via TDD; `98 passed`; `doc_lint --root .` clean (default and `--strict-fresh`):
+  - **1.1** (`6babbf5`) frontmatter-schema · **1.2** (`ddf77c5`) code-refs-exist · **1.3** (`34cc844`) no-shared-reference-duplication — preceded by `0f8a789`, which relocated the hardening plan into `exec-plans/completed/` (the move substep of Task 2.4, pulled forward so the new rule's real KB stayed clean) · **1.4** (`3584273`) index-completeness (+ brought the live indexes to completeness) · **1.5** (`79f773b`) quality-score-coverage (+ authored the real `QUALITY_SCORE.md`, folding Task 2.8; the doc-reviewer verified its gaps claims fresh) · **1.6** (`7e84fe9`) plan-location · **1.7** (`4024f72`) freshness-markers.
 
 ## Decision Log
 
@@ -130,3 +132,5 @@ Each task: write the real doc (passing every rule, **linking** to `shared/refere
 - **D3 — agents-map "missing AGENTS.md" gated on `docs/`.** The rule only requires `AGENTS.md` when a `docs/` dir is present, so an empty tree / single-rule fixture run stays clean.
 - **D4 — Rule 7 scope (lands Task 1.3).** `no-shared-reference-duplication` applies only to current/live KB docs. It EXEMPTS `docs/exec-plans/**` (process artifacts) and design-docs with `status: historical`/`superseded` (point-in-time snapshots that legitimately contain contract values). Enforced on the live pillar docs (`ARCHITECTURE.md`, `RELIABILITY.md`, `INTERFACE.md`, etc.) and current design/product docs.
 - **D5 — Outline adaptations (approved).** Dropped `docs/references/`, `docs/generated/db-schema.md`, `docs/DESIGN.md`, `docs/FRONTEND.md`. `generated/` holds `osctl-commands.md` (from argparse). `FRONTEND.md`→`INTERFACE.md`. `QUALITY_SCORE.md` uses qualitative grades (`strong/adequate/thin/missing`). Tech-debt tracker becomes canonical at `docs/exec-plans/tech-debt-tracker.md`. Recurring doc-gardening is on-demand only (no cron).
+- **D6 — doc-reviewer invocation.** The custom agent type isn't live mid-session, so the per-commit / on-demand reviewer is invoked by dispatching a general-purpose subagent that reads and follows `.claude/agents/doc-reviewer.md`. A fresh Claude Code session loads the agent natively.
+- **D7 — per-commit reviewer scope.** After each commit the controller runs the reviewer's first step (identify changed KB docs) and escalates to a full semantic subagent only when the commit touches substantive KB content. Linter-infra commits (`scripts/`+`tests/`) and structural / process-artifact-only changes (indexes, this progress log) take the "no reviewable KB content" fast path.
