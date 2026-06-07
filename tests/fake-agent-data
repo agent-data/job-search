@@ -2,7 +2,7 @@
 """fake-agent-data — a PATH shim that mimics `agent-data` for tests. No network, no credits.
 
 Scenario via env JOBSEARCH_TEST_SCENARIO (default "happy"); fixtures dir via JOBSEARCH_FIXTURES.
-Scenarios: happy | zero-empty | stretch | quota | invalid-pair | detail-fetch-failed | degraded | down.
+Scenarios: happy | zero-empty | stretch | quota | bad-query | invalid-pair | detail-fetch-failed | degraded | down.
 Error-injection scenarios reuse the "happy" fixtures (fallback) for any data they don't override.
 JOBSEARCH_TEST_NOAUTH=1 makes whoami report unauthenticated.
 """
@@ -16,10 +16,21 @@ def out(obj):  # JSON to stdout, exit 0
     print(json.dumps(obj)); sys.exit(0)
 
 
-def err(code, message, retryable):  # error envelope to stderr, exit 1
-    print(json.dumps({"error": {"code": code, "message": message, "retryable": retryable,
-                                "param": None, "request_id": "req_fake", "source": "fake"}}), file=sys.stderr)
+def err(code, message, retryable, param=None, details=None):  # error envelope to stderr, exit 1
+    body = {"code": code, "message": message, "retryable": retryable,
+            "param": param, "request_id": "req_fake", "source": "fake"}
+    if details is not None:
+        body["details"] = details  # present on 422 invalid_request; absent on other errors
+    print(json.dumps({"error": body}), file=sys.stderr)
     sys.exit(1)
+
+
+def flag(argv, name):  # value following --name in argv (e.g. --location), or None
+    if name in argv:
+        i = argv.index(name)
+        if i + 1 < len(argv):
+            return argv[i + 1]
+    return None
 
 
 def fixture(name):
@@ -50,6 +61,14 @@ def main(argv):
                 err("search_failed", "upstream fetch failed", True)
             if SCEN == "quota":
                 err("quota_exceeded", "monthly API limit reached", False)
+            if SCEN == "bad-query":
+                loc = flag(argv, "--location")
+                if loc and "INVALID" in loc.upper():
+                    err("invalid_request", f"location {loc!r} is not a recognized value", False,
+                        param="location",
+                        details=[{"loc": ["query", "location"], "msg": "unrecognized location",
+                                  "type": "value_error"}])
+                # a query whose location lacks the sentinel passes through, so other queries continue
             out(fixture("search-jobs.json"))
         if slug == "get-posting":
             if SCEN == "invalid-pair":

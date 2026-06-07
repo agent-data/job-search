@@ -49,3 +49,21 @@ def test_error_scenario_reuses_happy_search_fixture():
     r = shim(["call", LISTING, "search-jobs", "--keywords", "x"], scenario="degraded")
     assert r.returncode == 0
     assert len(json.loads(r.stdout)["data"]["results"]) == 2
+
+def test_bad_query_422_on_sentinel_location():
+    # E-BAD-QUERY: a query whose location carries the INVALID sentinel returns 422 invalid_request
+    # with details[].loc naming the bad param, non-retryable (the run skips it, never retries).
+    r = shim(["call", LISTING, "search-jobs", "--keywords", "x", "--location", "INVALID-ZZ"],
+             scenario="bad-query")
+    assert r.returncode != 0
+    body = json.loads(r.stderr)["error"]
+    assert body["code"] == "invalid_request" and body["retryable"] is False
+    assert body["param"] == "location"
+    assert body["details"][0]["loc"][-1] == "location"
+
+def test_bad_query_scenario_passes_through_valid_location():
+    # a query without the sentinel still returns the happy fixture, so OTHER queries continue the same run
+    r = shim(["call", LISTING, "search-jobs", "--keywords", "x", "--location", "United States"],
+             scenario="bad-query")
+    assert r.returncode == 0
+    assert len(json.loads(r.stdout)["data"]["results"]) == 2
