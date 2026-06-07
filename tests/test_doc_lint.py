@@ -221,3 +221,29 @@ def test_quality_score_missing_layer_fails(tmp_path):
     (d / "QUALITY_SCORE.md").write_text(text)
     r = run_lint(tmp_path, "--only", "quality-score-coverage")
     assert r.returncode == 1 and "hooks-guards" in r.stdout
+
+
+def test_plan_state_matches_dir_passes(tmp_path):
+    a = tmp_path / "docs" / "exec-plans" / "active"; a.mkdir(parents=True)
+    (a / "p.md").write_text("---\ntitle: P\nstate: active\ncreated: 2026-06-07\n---\n# P\n")
+    r = run_lint(tmp_path, "--only", "plan-location")
+    assert r.returncode == 0, r.stdout + r.stderr
+
+def test_plan_state_mismatch_fails(tmp_path):
+    a = tmp_path / "docs" / "exec-plans" / "active"; a.mkdir(parents=True)
+    (a / "p.md").write_text("---\ntitle: P\nstate: completed\ncreated: 2026-06-07\ncompleted: 2026-06-07\n---\n# P\n")
+    r = run_lint(tmp_path, "--only", "plan-location")
+    assert r.returncode == 1 and "state" in r.stdout
+
+def test_plan_loose_in_root_fails(tmp_path):
+    e = tmp_path / "docs" / "exec-plans"; e.mkdir(parents=True)
+    (e / "stray-plan.md").write_text("---\ntitle: X\nstate: active\ncreated: 2026-06-07\n---\n# X\n")
+    r = run_lint(tmp_path, "--only", "plan-location")
+    assert r.returncode == 1 and "loose" in r.stdout
+
+def test_plan_root_allows_tracker_and_index(tmp_path):
+    e = tmp_path / "docs" / "exec-plans"; e.mkdir(parents=True)
+    (e / "index.md").write_text("# Plans\n")
+    (e / "tech-debt-tracker.md").write_text("# Tech Debt\n")
+    r = run_lint(tmp_path, "--only", "plan-location")
+    assert r.returncode == 0, r.stdout + r.stderr

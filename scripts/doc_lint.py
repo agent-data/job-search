@@ -323,6 +323,35 @@ def scan_quality_score(root):
     return hits
 
 
+EXEC_PLANS = "docs/exec-plans"
+EXEC_ROOT_ALLOWED = {"index.md", "tech-debt-tracker.md"}
+
+
+def scan_plan_location(root):
+    """A plan's state must match its directory; no loose plan files in the exec-plans/ root."""
+    hits = []
+    base = os.path.join(root, EXEC_PLANS)
+    if not os.path.isdir(base):
+        return hits
+    for fn in sorted(os.listdir(base)):
+        full = os.path.join(base, fn)
+        if os.path.isfile(full) and fn.endswith(".md") and fn not in EXEC_ROOT_ALLOWED:
+            hits.append(f"{EXEC_PLANS}/{fn}: plan-location: loose plan in exec-plans/ root "
+                        f"(move it into active/ or completed/)")
+    for sub in ("active", "completed"):
+        d = os.path.join(base, sub)
+        if not os.path.isdir(d):
+            continue
+        for fn in sorted(os.listdir(d)):
+            if not fn.endswith(".md") or fn == "index.md":
+                continue
+            fm = read_frontmatter(os.path.join(d, fn)) or {}
+            if fm.get("state") != sub:
+                hits.append(f"{EXEC_PLANS}/{sub}/{fn}: plan-location: state "
+                            f"{fm.get('state')!r} does not match its directory ({sub})")
+    return hits
+
+
 RULES = {
     "internal-links": scan_internal_links,
     "agents-map": scan_agents_map,
@@ -331,6 +360,7 @@ RULES = {
     "no-shared-reference-duplication": scan_shared_dup,
     "index-completeness": scan_indexes,
     "quality-score-coverage": scan_quality_score,
+    "plan-location": scan_plan_location,
 }
 
 
