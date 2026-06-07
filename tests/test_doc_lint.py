@@ -1,4 +1,4 @@
-import subprocess, sys, pathlib
+import subprocess, sys, pathlib, datetime
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 LINT = ROOT / "scripts" / "doc_lint.py"
 
@@ -247,3 +247,27 @@ def test_plan_root_allows_tracker_and_index(tmp_path):
     (e / "tech-debt-tracker.md").write_text("# Tech Debt\n")
     r = run_lint(tmp_path, "--only", "plan-location")
     assert r.returncode == 0, r.stdout + r.stderr
+
+
+def _recent(): return (datetime.date.today() - datetime.timedelta(days=5)).isoformat()
+def _old(): return (datetime.date.today() - datetime.timedelta(days=200)).isoformat()
+
+def test_fresh_recent_no_warning(tmp_path):
+    d = tmp_path / "docs" / "design-docs"; d.mkdir(parents=True)
+    (d / "x.md").write_text(_design_fm(last_reviewed=_recent()))
+    r = run_lint(tmp_path, "--only", "freshness-markers")
+    assert r.returncode == 0
+    assert "freshness" not in r.stdout
+
+def test_fresh_stale_warns_not_fails(tmp_path):
+    d = tmp_path / "docs" / "design-docs"; d.mkdir(parents=True)
+    (d / "x.md").write_text(_design_fm(last_reviewed=_old()))
+    r = run_lint(tmp_path, "--only", "freshness-markers")
+    assert r.returncode == 0           # warning, not a failure, by default
+    assert "warning" in r.stdout and "x.md" in r.stdout
+
+def test_fresh_stale_fails_under_strict(tmp_path):
+    d = tmp_path / "docs" / "design-docs"; d.mkdir(parents=True)
+    (d / "x.md").write_text(_design_fm(last_reviewed=_old()))
+    r = run_lint(tmp_path, "--only", "freshness-markers", "--strict-fresh")
+    assert r.returncode == 1 and "x.md" in r.stdout

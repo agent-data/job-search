@@ -7,7 +7,7 @@ hits and returns 1 on failure, else prints "Doc lint: clean." and returns 0. Std
 
 Rules are added one per task as scan_* functions called from scan(). This skeleton has none yet.
 """
-import argparse, os, re, sys
+import argparse, datetime, os, re, sys
 
 # Canonical names the knowledge base must cover (used by later rules, e.g. quality-score-coverage).
 DOMAINS = ("discovery-search", "preferences-judgment", "workspace-state",
@@ -208,7 +208,11 @@ def scan(root, strict_fresh=False, only=None):
     for name, fn in RULES.items():
         if only and name not in only:
             continue
-        hits += fn(root)
+        results = fn(root)
+        if name == "freshness-markers":
+            (hits if strict_fresh else warnings).extend(results)
+        else:
+            hits += results
     return hits, warnings
 
 
@@ -352,6 +356,34 @@ def scan_plan_location(root):
     return hits
 
 
+FRESH_DAYS = 90
+
+
+def scan_freshness(root):
+    """Warn when a design-doc / product-spec's last_reviewed is older than FRESH_DAYS.
+    Returned items are routed to WARNINGS by default and to HITS under --strict-fresh (see scan())."""
+    out = []
+    today = datetime.date.today()
+    for path in iter_md_files(root):
+        if os.path.basename(path) == "index.md":
+            continue
+        if not any(_under(path, root, d) for d in VERIFICATION_DIRS):
+            continue
+        fm = read_frontmatter(path) or {}
+        lr = fm.get("last_reviewed")
+        if not lr or not DATE_RE.match(str(lr)):
+            continue  # missing / malformed dates are the frontmatter-schema rule's job
+        try:
+            reviewed = datetime.date.fromisoformat(str(lr))
+        except ValueError:
+            continue
+        age = (today - reviewed).days
+        if age > FRESH_DAYS:
+            out.append(f"{os.path.relpath(path, root)}: freshness-markers: "
+                       f"last_reviewed {lr} is {age} days old (> {FRESH_DAYS}); re-review and bump the date")
+    return out
+
+
 RULES = {
     "internal-links": scan_internal_links,
     "agents-map": scan_agents_map,
@@ -361,6 +393,7 @@ RULES = {
     "index-completeness": scan_indexes,
     "quality-score-coverage": scan_quality_score,
     "plan-location": scan_plan_location,
+    "freshness-markers": scan_freshness,
 }
 
 
