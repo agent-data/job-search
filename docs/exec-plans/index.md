@@ -11,3 +11,6 @@ are archived here.
 - [Plan B — Claude-Code-Driven Onboarding](completed/2026-06-05-plan-b-onboarding.md)
 - [Plan D — Packaging & Dual Distribution](completed/2026-06-05-plan-d-packaging.md)
 - [Job Search Agent Hardening & Self-Knowledge Skill](completed/2026-06-07-job-search-agent-hardening.md)
+
+## Technical debt
+- [Tech-debt tracker](tech-debt-tracker.md) — the itemised P2/P3 backlog.

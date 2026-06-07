@@ -619,7 +619,7 @@ fake-agent-data shim, so zero real credits):
 
 Today all configuration is **conversational** (you chat; Claude edits `config.yaml`). Dedicated config **slash
 commands** — an `/effort`-style surface, e.g. `/job-search-frequency hourly` — are **planned but not built yet**
-(see `TODOS.md` → `TODO-CONFIG-COMMANDS`). These tests are **pending-build**: they are **N/A** today and only go
+(see `docs/exec-plans/tech-debt-tracker.md` → `TODO-CONFIG-COMMANDS`). These tests are **pending-build**: they are **N/A** today and only go
 green once the commands ship. A green run here must never imply the commands exist.
 
 | Test | Planned command | Expected once built | Result |
@@ -660,4 +660,4 @@ Capture reality so the next review can compare against it (this is the boomerang
 - **TTFV (T2.1):** ______ s  ·  **Smoke-subset wall-clock:** ______ min  ·  **Full-pass wall-clock:** ______ min
 - **Where did onboarding / the home view confuse you?** (the one thing you'd fix first) ______
 - **Any T4.7 phrasing Claude misread?** ______
-- **New product gaps found** (add to `TODOS.md`): ______
+- **New product gaps found** (add to `docs/exec-plans/tech-debt-tracker.md`): ______
