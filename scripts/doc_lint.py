@@ -87,14 +87,60 @@ def scan_internal_links(root):
     return hits
 
 
-def scan(root, strict_fresh=False):
+AGENTS_MAX_LINES = 150
+REQUIRED_AGENTS_LINKS = (
+    "ARCHITECTURE.md",
+    "docs/design-docs/index.md",
+    "docs/design-docs/core-beliefs.md",
+    "docs/exec-plans/index.md",
+    "docs/product-specs/index.md",
+    "docs/QUALITY_SCORE.md",
+    "docs/PRODUCT_SENSE.md",
+    "docs/RELIABILITY.md",
+    "docs/SECURITY.md",
+    "docs/INTERFACE.md",
+    "docs/PLANS.md",
+    "shared/references",
+)
+
+
+def scan_agents_map(root):
+    """AGENTS.md must exist (when a KB is present), stay under a size budget, and link to every pillar."""
+    path = os.path.join(root, "AGENTS.md")
+    has_kb = os.path.isdir(os.path.join(root, "docs"))
+    if not os.path.isfile(path):
+        return ["AGENTS.md: agents-map: AGENTS.md is missing (the KB entry point)"] if has_kb else []
+    with open(path, encoding="utf-8", errors="replace") as f:
+        text = f.read()
+    hits = []
+    n = len(text.splitlines())
+    if n > AGENTS_MAX_LINES:
+        hits.append(f"AGENTS.md: agents-map: too large ({n} lines > {AGENTS_MAX_LINES}); keep it a map")
+    targets = [t for t, _ in parse_links(text)]
+    for req in REQUIRED_AGENTS_LINKS:
+        if not any(req in t for t in targets):
+            hits.append(f"AGENTS.md: agents-map: missing required pointer to {req}")
+    return hits
+
+
+def scan(root, strict_fresh=False, only=None):
     """Return (hits, warnings). hits fail the lint; warnings are advisory.
 
-    Each rule is a scan_<rule>(root) -> list[str] of "path:line: <rule>: <detail>" strings,
-    appended here. No rules are implemented yet (the skeleton is always clean)."""
+    Each rule is a scan_<rule>(root) -> list[str] of "path:line: <rule>: <detail>" strings.
+    Rules are dispatched through the ordered RULES registry so unit tests can target one rule
+    via --only; pass `only` to restrict the run to the named rule(s)."""
     hits, warnings = [], []
-    hits += scan_internal_links(root)
+    for name, fn in RULES.items():
+        if only and name not in only:
+            continue
+        hits += fn(root)
     return hits, warnings
+
+
+RULES = {
+    "internal-links": scan_internal_links,
+    "agents-map": scan_agents_map,
+}
 
 
 def main():
@@ -102,8 +148,9 @@ def main():
     ap.add_argument("--root", default=".")
     ap.add_argument("--strict-fresh", action="store_true",
                     help="escalate staleness warnings to failures (for an on-demand freshness sweep)")
+    ap.add_argument("--only", action="append", help="run only the named rule(s); repeatable")
     args = ap.parse_args()
-    hits, warnings = scan(args.root, strict_fresh=args.strict_fresh)
+    hits, warnings = scan(args.root, strict_fresh=args.strict_fresh, only=args.only)
     for w in warnings:
         print(f"warning: {w}")
     if hits:
