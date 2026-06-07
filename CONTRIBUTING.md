@@ -89,7 +89,11 @@ your update.** On each release, bump `version` (semver) in:
 
 ## Project philosophy (please don't regress these)
 
-These are load-bearing design choices, enforced by a grep guard in CI and review. Keep them intact:
+These are load-bearing design choices, enforced by `scripts/philosophy_guard.py` (run in CI via
+`.github/workflows/ci.yml` and as `tests/test_philosophy_guard.py`) and in review. The
+guard scans shipped default output (`examples/`, `templates/`). Note: a numeric score a
+user *explicitly asks for* is fine in chat — it just must never be written into a digest,
+brief, `config.yaml`, or `jobs.jsonl`. Keep them intact:
 
 - **Qualitative relevance, never numeric.** Postings are *relevant or not*, and if relevant *weak / moderate
   / strong*, with reasoning. No 0–100 fit scores, no category weights, no per-criterion points. Importance
