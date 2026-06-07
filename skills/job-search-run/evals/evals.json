@@ -33,7 +33,7 @@
       "expectations": [
         "Stops at preflight with the E-NO-AUTH message (export AGENT_DATA_API_KEY + verify with whoami)",
         "Does NOT call search-jobs; pulls nothing",
-        "Exits non-zero"
+        "Writes runs/<id>.json with run_health 'blocked' naming E-NO-AUTH (the home view surfaces it on next /job-search); does not depend on a non-zero process exit — a headless run returns 0"
       ]
     },
     {
@@ -53,7 +53,7 @@
       "expectations": [
         "Takes the E-NO-PREFERENCES path: names the fix (/job-preference-interview, or point preferences_path at a brief)",
         "Spends nothing (no agent-data data calls)",
-        "Exits non-zero"
+        "Writes runs/<id>.json with run_health 'blocked' naming E-NO-PREFERENCES (home surfaces it next /job-search); a headless run exits 0, so don't assert a non-zero exit"
       ]
     },
     {
@@ -63,7 +63,7 @@
       "expectations": [
         "Surfaces E-QUOTA in plain language (lower schedule.frequency, e.g. daily instead of hourly, or upgrade your agent-data plan) — NO credit/dollar math",
         "Does not retry the quota error (retryable:false)",
-        "Halts and exits non-zero; existing matches in jobs.jsonl are left intact"
+        "Halts and writes a runs/<id>.json blocked record + blocked digest naming E-QUOTA (home surfaces it); existing matches in jobs.jsonl are left intact; a headless run exits 0 (do not assert non-zero)"
       ]
     },
     {
@@ -73,7 +73,7 @@
       "expectations": [
         "The status probe failure → E-SERVICE-DOWN; writes a 'service down' digest (Run health: blocked)",
         "Does NOT call search-jobs or get-posting (halts at the status gate)",
-        "Exits non-zero"
+        "Writes runs/<id>.json with run_health 'blocked' (alongside the 'service down' digest) so the home view surfaces it; a headless run exits 0 (do not assert non-zero)"
       ]
     },
     {
@@ -113,7 +113,7 @@
       "expectations": [
         "resolve reports first_run -> E-NO-CONFIG naming /job-search; does NOT prompt (headless)",
         "Makes no search-jobs/get-posting calls",
-        "Exits non-zero"
+        "Names E-NO-CONFIG (run /job-search); makes no calls; no runs record is written because there is no workspace — the failure is visible because the next /job-search routes to onboarding; the headless process exits 0"
       ]
     }
   ]
