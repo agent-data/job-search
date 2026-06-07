@@ -159,7 +159,7 @@ For the full `E-*` table with exact cause and fix wording: see `references/error
 
 **Evals are credit-free.** Evals run through the fake `agent-data` shim in `tests/` — no metered API calls, nothing billed. When you add a code path that calls `agent-data`, route the eval through the shim rather than the live CLI.
 
-**Philosophy guard.** `scripts/philosophy_guard.py` runs in CI (`python3 scripts/philosophy_guard.py`) and rejects any file that introduces numeric scores, budget/cost/credit fields, or score-threshold config into the tracked paths. Keep the guard green before opening a PR.
+**Philosophy guard.** `scripts/philosophy_guard.py` runs in CI (`python3 scripts/philosophy_guard.py`) and rejects any file that introduces numeric scores, budget/cost/credit fields, or score-threshold config into the shipped default output (`examples/`, `templates/`). Keep the guard green before opening a PR.
 
 **Versioning.** `config.yaml` carries `version: 1`. If a breaking schema change is needed, bump the major version and add the corresponding `E-CONFIG-VERSION` detection to the runner's preflight.
 
