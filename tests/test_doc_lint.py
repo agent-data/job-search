@@ -138,3 +138,31 @@ def test_code_refs_missing_fails(tmp_path):
     (d / "x.md").write_text(_design_fm(code_refs="[nope.py]"))
     r = run_lint(tmp_path, "--only", "code-refs-exist")
     assert r.returncode == 1 and "nope.py" in r.stdout
+
+
+def test_dup_pointer_with_link_passes(tmp_path):
+    d = tmp_path / "docs"; d.mkdir()
+    (d / "a.md").write_text(
+        "Frequencies live in [conventions.md](../shared/references/conventions.md); "
+        "it lists every-2-hours among others.\n")
+    r = run_lint(tmp_path, "--only", "no-shared-reference-duplication")
+    assert r.returncode == 0, r.stdout + r.stderr
+
+def test_dup_restated_without_link_fails(tmp_path):
+    d = tmp_path / "docs"; d.mkdir()
+    (d / "a.md").write_text("Frequencies: hourly, every-2-hours, every-6-hours, daily, weekly.\n")
+    r = run_lint(tmp_path, "--only", "no-shared-reference-duplication")
+    assert r.returncode == 1 and "frequency enum" in r.stdout
+
+def test_dup_exempts_exec_plans(tmp_path):
+    d = tmp_path / "docs" / "exec-plans" / "active"; d.mkdir(parents=True)
+    (d / "p.md").write_text("This plan mentions every-2-hours as an example token.\n")
+    r = run_lint(tmp_path, "--only", "no-shared-reference-duplication")
+    assert r.returncode == 0, r.stdout
+
+def test_dup_exempts_historical_design_doc(tmp_path):
+    d = tmp_path / "docs" / "design-docs"; d.mkdir(parents=True)
+    body = _design_fm(status="historical") + "The run_id format is YYYY-MM-DDTHH-MM-SSZ here.\n"
+    (d / "old.md").write_text(body)
+    r = run_lint(tmp_path, "--only", "no-shared-reference-duplication")
+    assert r.returncode == 0, r.stdout

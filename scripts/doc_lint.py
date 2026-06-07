@@ -230,11 +230,54 @@ def scan_code_refs(root):
     return hits
 
 
+# Distinctive literals OWNED by shared/references/*. A live KB doc reproducing one of these
+# (without linking the source on the same line) is duplicating a contract that will drift.
+DUP_SIGNATURES = [
+    (re.compile(r"every-2-hours"), "frequency enum"),
+    (re.compile(r"YYYY-MM-DDTHH-MM-SSZ"), "run_id format"),
+    (re.compile(r"interested\s*\|\s*applied\s*\|\s*rejected"), "job status enum"),
+    (re.compile(r"degraded \(LinkedIn flaky\)"), "run-health states"),
+    (re.compile(r"strong\s*·\s*\d+\s*moderate"), "digest counts line"),
+    (re.compile(r"desktop_notify_on_block"), "config field"),
+    (re.compile(r"API limit for this period has been reached"), "E-QUOTA verbatim"),
+]
+DUP_ALLOW = re.compile(r"shared/references")  # a line that points to the source is fine
+
+
+def _is_live_kb_doc(path, root):
+    rel = os.path.relpath(path, root)
+    if rel == "docs/exec-plans" or rel.startswith("docs/exec-plans" + os.sep):
+        return False
+    fm = read_frontmatter(path)
+    if fm and fm.get("status") in ("historical", "superseded"):
+        return False
+    return True
+
+
+def scan_shared_dup(root):
+    """Live KB docs must not restate shared/references contracts; link the source instead."""
+    hits = []
+    for path in iter_md_files(root):
+        if not _is_live_kb_doc(path, root):
+            continue
+        rel = os.path.relpath(path, root)
+        with open(path, encoding="utf-8", errors="replace") as f:
+            for i, line in enumerate(f, 1):
+                if DUP_ALLOW.search(line):
+                    continue
+                for rx, label in DUP_SIGNATURES:
+                    if rx.search(line):
+                        hits.append(f"{rel}:{i}: no-shared-reference-duplication: "
+                                    f"{label} restated without linking shared/references")
+    return hits
+
+
 RULES = {
     "internal-links": scan_internal_links,
     "agents-map": scan_agents_map,
     "frontmatter-schema": scan_frontmatter,
     "code-refs-exist": scan_code_refs,
+    "no-shared-reference-duplication": scan_shared_dup,
 }
 
 
