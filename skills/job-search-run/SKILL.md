@@ -29,6 +29,10 @@ never assume the current working directory contains `scripts/`.
    - `agent-data call <listing> status`: `ok` proceed; `degraded` set a flag (cap detail reads at ~2 this run,
      set Run health: degraded, note "LinkedIn flaky" in the digest); unreachable → E-SERVICE-DOWN (write a
      "service down" digest, HALT, exit 1).
+
+   > Before exiting on ANY E-* HALT where a workspace exists (E-NO-AUTH, E-NO-PREFERENCES,
+   > E-CONFIG-VERSION, E-SERVICE-DOWN, E-QUOTA), write `runs/<run_id>.json` with
+   > `run_health:"blocked"` + the error, so the next home view surfaces it.
 1. **Search (one metered call per enabled query).** For each `queries[]` with `enabled:true`, call `search-jobs`
    with `--keywords` (+ `--location`, `--limit`) and `--fields id,source_id,source_url,title,company_name,location_display,salary_display,posted_at,detail_available,source`.
    - `502 search_failed` (retryable) → retry up to 3× with backoff; on give-up record the error and continue.
@@ -57,11 +61,22 @@ never assume the current working directory contains `scripts/`.
    `runs/<run_id>.json` and `reports/<date>-digest.md` (format in conventions.md; strong → moderate → weak,
    then "filtered out: N"). Print a 5-line terminal summary.
 
-## Run health & exit codes
-Every digest starts with a **Run health** line (`healthy | partial | degraded | blocked`). HALT paths
-(E-NO-AGENT-DATA, E-NO-CONFIG, E-NO-AUTH, E-CONFIG-VERSION, E-NO-PREFERENCES, E-SERVICE-DOWN, E-QUOTA) exit non-zero so a schedule
-surfaces them; if `notify.desktop_notify_on_block` is true, fire one desktop notification on a blocked run.
-Successful/partial runs exit 0.
+## Run health, surfacing & exit codes
+Every run ends by writing `runs/<run_id>.json` with at least `{"run_id","run_health",
+"error"|null,"ts"}`. **Every HALT path writes this record with `run_health:"blocked"` and
+its `E-*` BEFORE stopping** — this is the source the home view reads, so a failed scheduled
+run is named on the user's next `/job-search`. When a workspace exists, a HALT also writes
+the blocked `reports/<date>-digest.md` (named error + fix as the body). If
+`notify.desktop_notify_on_block` is true, fire one desktop notification on a blocked run.
+
+Surfacing is the home view + the blocked digest + the desktop notification — NOT the
+process exit code. A headless `claude -p` run returns 0 even when blocked (a skill cannot
+set the host exit code); do not rely on it, and do not tell the user a cron job's `$?`
+will be non-zero.
+
+Exception: **E-NO-CONFIG / first_run** means there is no workspace to write into — this is
+inherently visible because the next `/job-search` routes to onboarding. Name the error and
+stop.
 
 ## Idempotency
 Re-running the same day re-searches (cheap) but dedup means no posting is re-evaluated or re-read. Never write
