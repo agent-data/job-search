@@ -119,7 +119,8 @@ Each task: write the real doc (passing every rule, **linking** to `shared/refere
 - 2026-06-07 — **Task 0.1** done (`6f8283b`): `doc_lint.py` skeleton + clean-repo gate. `64 passed`.
 - 2026-06-07 — **Task 0.2** done (`0b4f7c0`): internal-links rule + shared `iter_md_files`/`parse_links`/`slugify` helpers. `68 passed`.
 - 2026-06-07 — **Task 0.3** done (`20ea38a`): `AGENTS.md` map + agents-map rule + `--only`/RULES registry + KB stubs. `72 passed`.
-- 2026-06-07 — **Task 0.4** in progress: `CLAUDE.md` stub + this checked-in exec-plan.
+- 2026-06-07 — **Task 0.4** done (`0baa3e0`): `CLAUDE.md` stub + this checked-in exec-plan.
+- 2026-06-07 — **Task 0.5** done: `Doc lint` step added to `.github/workflows/ci.yml` (runs after the philosophy guard).
 
 ## Decision Log
 
