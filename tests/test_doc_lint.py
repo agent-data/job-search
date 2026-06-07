@@ -76,3 +76,52 @@ def test_agents_map_missing_file_when_kb_present_fails(tmp_path):
     (tmp_path / "docs").mkdir()
     r = run_lint(tmp_path, "--only", "agents-map")
     assert r.returncode == 1 and "missing" in r.stdout.lower()
+
+
+def _design_fm(**over):
+    fm = {"title": "T", "status": "current", "verified": "partial",
+          "last_reviewed": "2026-06-07", "code_refs": "[scripts/osctl.py]"}
+    fm.update(over)
+    return "---\n" + "\n".join(f"{k}: {v}" for k, v in fm.items()) + "\n---\n# T\n"
+
+def test_frontmatter_valid_design_doc_passes(tmp_path):
+    d = tmp_path / "docs" / "design-docs"; d.mkdir(parents=True)
+    (d / "x.md").write_text(_design_fm())
+    r = run_lint(tmp_path, "--only", "frontmatter-schema")
+    assert r.returncode == 0, r.stdout + r.stderr
+
+def test_frontmatter_missing_key_fails(tmp_path):
+    d = tmp_path / "docs" / "design-docs"; d.mkdir(parents=True)
+    (d / "x.md").write_text("---\ntitle: T\nverified: partial\nlast_reviewed: 2026-06-07\ncode_refs: [scripts/osctl.py]\n---\n# T\n")
+    r = run_lint(tmp_path, "--only", "frontmatter-schema")
+    assert r.returncode == 1 and "status" in r.stdout
+
+def test_frontmatter_bad_enum_fails(tmp_path):
+    d = tmp_path / "docs" / "design-docs"; d.mkdir(parents=True)
+    (d / "x.md").write_text(_design_fm(status="bogus"))
+    r = run_lint(tmp_path, "--only", "frontmatter-schema")
+    assert r.returncode == 1 and "status" in r.stdout
+
+def test_frontmatter_absent_block_fails(tmp_path):
+    d = tmp_path / "docs" / "design-docs"; d.mkdir(parents=True)
+    (d / "x.md").write_text("# No frontmatter\n")
+    r = run_lint(tmp_path, "--only", "frontmatter-schema")
+    assert r.returncode == 1 and "frontmatter" in r.stdout.lower()
+
+def test_frontmatter_index_exempt(tmp_path):
+    d = tmp_path / "docs" / "design-docs"; d.mkdir(parents=True)
+    (d / "index.md").write_text("# Index, no frontmatter\n")
+    r = run_lint(tmp_path, "--only", "frontmatter-schema")
+    assert r.returncode == 0, r.stdout
+
+def test_frontmatter_valid_plan_passes(tmp_path):
+    d = tmp_path / "docs" / "exec-plans" / "active"; d.mkdir(parents=True)
+    (d / "p.md").write_text("---\ntitle: P\nstate: active\ncreated: 2026-06-07\n---\n# P\n")
+    r = run_lint(tmp_path, "--only", "frontmatter-schema")
+    assert r.returncode == 0, r.stdout + r.stderr
+
+def test_frontmatter_completed_plan_requires_completed_date(tmp_path):
+    d = tmp_path / "docs" / "exec-plans" / "completed"; d.mkdir(parents=True)
+    (d / "p.md").write_text("---\ntitle: P\nstate: completed\ncreated: 2026-06-07\n---\n# P\n")
+    r = run_lint(tmp_path, "--only", "frontmatter-schema")
+    assert r.returncode == 1 and "completed" in r.stdout

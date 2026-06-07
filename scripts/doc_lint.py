@@ -104,6 +104,81 @@ REQUIRED_AGENTS_LINKS = (
 )
 
 
+def read_frontmatter(path):
+    """Parse a leading --- ... --- block into {key: str|list}. Returns None if absent/unterminated.
+    Not full YAML: supports flat 'key: value' and 'key: [a, b]' (our known, controlled schema)."""
+    with open(path, encoding="utf-8", errors="replace") as f:
+        lines = f.read().splitlines()
+    if not lines or lines[0].strip() != "---":
+        return None
+    fm = {}
+    for line in lines[1:]:
+        if line.strip() == "---":
+            return fm
+        if ":" not in line:
+            continue
+        key, _, val = line.partition(":")
+        key, val = key.strip(), val.strip()
+        if val.startswith("[") and val.endswith("]"):
+            fm[key] = [v.strip().strip("'\"") for v in val[1:-1].split(",") if v.strip()]
+        else:
+            fm[key] = val.strip("'\"")
+    return None  # unterminated frontmatter => treat as missing
+
+
+STATUS_ENUM = {"current", "superseded", "historical", "aspirational"}
+VERIFIED_ENUM = {"verified", "partial", "unverified"}
+STATE_ENUM = {"active", "completed", "abandoned"}
+DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+VERIFICATION_DIRS = ("docs/design-docs", "docs/product-specs")
+PLAN_DIRS = ("docs/exec-plans/active", "docs/exec-plans/completed")
+
+
+def _under(path, root, prefix):
+    rel = os.path.relpath(path, root)
+    return rel == prefix or rel.startswith(prefix + os.sep)
+
+
+def scan_frontmatter(root):
+    """design-docs & product-specs need verification frontmatter; plans need state frontmatter."""
+    hits = []
+    for path in iter_md_files(root):
+        rel = os.path.relpath(path, root)
+        if os.path.basename(path) == "index.md":
+            continue
+        is_verif = any(_under(path, root, d) for d in VERIFICATION_DIRS)
+        is_plan = any(_under(path, root, d) for d in PLAN_DIRS)
+        if not (is_verif or is_plan):
+            continue
+        fm = read_frontmatter(path)
+        if fm is None:
+            hits.append(f"{rel}: frontmatter-schema: missing or malformed frontmatter block")
+            continue
+        if is_verif:
+            for k in ("title", "status", "verified", "last_reviewed", "code_refs"):
+                if k not in fm:
+                    hits.append(f"{rel}: frontmatter-schema: missing required key '{k}'")
+            if fm.get("status") and fm["status"] not in STATUS_ENUM:
+                hits.append(f"{rel}: frontmatter-schema: status '{fm['status']}' not in {sorted(STATUS_ENUM)}")
+            if fm.get("verified") and fm["verified"] not in VERIFIED_ENUM:
+                hits.append(f"{rel}: frontmatter-schema: verified '{fm['verified']}' not in {sorted(VERIFIED_ENUM)}")
+            if fm.get("last_reviewed") and not DATE_RE.match(str(fm["last_reviewed"])):
+                hits.append(f"{rel}: frontmatter-schema: last_reviewed '{fm['last_reviewed']}' is not YYYY-MM-DD")
+            if "code_refs" in fm and not isinstance(fm["code_refs"], list):
+                hits.append(f"{rel}: frontmatter-schema: code_refs must be a list")
+        if is_plan:
+            for k in ("title", "state", "created"):
+                if k not in fm:
+                    hits.append(f"{rel}: frontmatter-schema: missing required key '{k}'")
+            if fm.get("state") and fm["state"] not in STATE_ENUM:
+                hits.append(f"{rel}: frontmatter-schema: state '{fm['state']}' not in {sorted(STATE_ENUM)}")
+            if fm.get("created") and not DATE_RE.match(str(fm["created"])):
+                hits.append(f"{rel}: frontmatter-schema: created '{fm['created']}' is not YYYY-MM-DD")
+            if fm.get("state") == "completed" and "completed" not in fm:
+                hits.append(f"{rel}: frontmatter-schema: completed plan must have a 'completed' date")
+    return hits
+
+
 def scan_agents_map(root):
     """AGENTS.md must exist (when a KB is present), stay under a size budget, and link to every pillar."""
     path = os.path.join(root, "AGENTS.md")
@@ -140,6 +215,7 @@ def scan(root, strict_fresh=False, only=None):
 RULES = {
     "internal-links": scan_internal_links,
     "agents-map": scan_agents_map,
+    "frontmatter-schema": scan_frontmatter,
 }
 
 
