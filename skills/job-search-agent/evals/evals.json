@@ -1,0 +1,40 @@
+{
+  "skill_name": "job-search-agent",
+  "harness": "Cases that need a workspace: run skills/job-search-run/evals/files/setup-workspace.sh <tmp> to build a workspace + _bin/agent-data shim symlink. Prepend <tmp>/_bin to PATH and set JOBSEARCH_TEST_SCENARIO=happy (or the per-case scenario) so all agent-data calls hit the fake shim (no real credits). Use `osctl set-active <tmp>` (or equivalent registry env var) so resolve() returns the temp workspace. Pre-seed jobs.jsonl where required by running `python3 <repo>/scripts/state.py append --jobs <tmp>/jobs.jsonl --event '<json>'`. Cases without a workspace (e.g. capabilities overview) need no harness setup.",
+  "evals": [
+    {
+      "id": 1,
+      "scenario": "explicit score request — honored in reply, not persisted",
+      "prompt": "Build a temp workspace + shim (setup-workspace.sh). Pre-seed <tmp>/jobs.jsonl with two evaluated matches by running `python3 <repo>/scripts/state.py append --jobs <tmp>/jobs.jsonl --event '{\"event\":\"evaluated\",\"source_id\":\"1001\",\"title\":\"Senior AI Engineer\",\"company_name\":\"Acme\",\"status\":\"new\",\"relevant\":true,\"match\":\"strong\"}'` and the same for source_id 1002 (title: 'ML Platform Engineer', company_name: 'Beta Corp'). Then prompt the agent: 'give each of my matches a fit score out of 100.'",
+      "expectations": [
+        "Provides the requested 0–100 scores for both matches in the reply (honors the explicit user request — flexible on the exact numbers)",
+        "Notes once — briefly, without lecturing — that numeric scoring is non-default and that the qualitative bands (strong / moderate / weak) plus the written reasoning are the real signal",
+        "Does NOT write any numeric score field into jobs.jsonl; `python3 scripts/state.py fold --jobs <tmp>/jobs.jsonl` shows no 'score' key on any evaluated event",
+        "Does NOT write any numeric score into any reports/*.md digest file",
+        "If the user were to ask 'save those scores', the agent would write a side file (e.g. reports/<date>-scored.md) rather than appending score fields to the canonical jobs.jsonl log"
+      ]
+    },
+    {
+      "id": 2,
+      "scenario": "customization routes to brief/query, not a numeric filter",
+      "prompt": "Build a temp workspace + shim (setup-workspace.sh). Use the default config (no edits). Then prompt the agent: 'make it only show remote roles.'",
+      "expectations": [
+        "Adds the remote constraint as a must-have or red-flag in the preferences brief (so evaluate-job-fit enforces it qualitatively) OR narrows the search query's location/remote field — not a numeric threshold or score cutoff",
+        "Does NOT introduce a budget field, a minimum score field, or any numeric filter into config.json or preferences.md",
+        "Preserves version: 1 in config.json; adds no new top-level numeric keys",
+        "The resulting change is human-readable prose or a brief keyword, not a number the user would need to calibrate"
+      ]
+    },
+    {
+      "id": 3,
+      "scenario": "capabilities overview",
+      "prompt": "What can my job search agent do?",
+      "expectations": [
+        "Gives a capabilities overview covering the core skills: job-search (home / onboarding), job-search-run (automated search pass), job-preference-interview (guided brief setup), and evaluate-job-fit (qualitative judgment)",
+        "Mentions scheduling (recurring runs via cron/schedule) and that the database is private and local (jobs.jsonl stays on the user's machine)",
+        "Describes judgment as qualitative — strong / moderate / weak / not relevant — with no numeric scores and no credit or dollar figures anywhere in the reply",
+        "Is concise and conversational; does not enumerate every flag or internal script"
+      ]
+    }
+  ]
+}
