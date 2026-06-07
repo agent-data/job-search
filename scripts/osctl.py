@@ -11,7 +11,7 @@ Path defaults can be redirected for tests/evals without touching real data, via 
   registry:  --registry  >  $JOBSEARCH_OS_REGISTRY  >  $XDG_CONFIG_HOME/job-search-os/config.json  >  ~/.config/...
   workspaces: --default-workspace/--legacy-workspace  >  derived from $JOBSEARCH_OS_HOME  >  ~
 """
-import argparse, html, json, os, sys
+import argparse, html, json, os, sys, time
 from datetime import datetime, timezone
 
 REGISTRY_VERSION = 1
@@ -127,6 +127,50 @@ def cmd_set_scheduled(args):
     return 0
 
 
+SCHED_CHOICES = ("cron", "launchd", "loop")
+
+
+def _intent_path(registry_override=None):
+    d = os.path.dirname(registry_path(registry_override)) or "."
+    return os.path.join(d, ".sched-intent.json")
+
+
+def cmd_set_sched_intent(args):
+    path = _intent_path(args.registry)
+    parent = os.path.dirname(path)
+    if parent:
+        os.makedirs(parent, exist_ok=True)
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump({"choice": args.choice, "set_at_epoch": int(time.time()),
+                   "set_at": datetime.now(timezone.utc).isoformat(timespec="seconds")}, f)
+        f.write("\n")
+    print(json.dumps({"choice": args.choice}))
+    return 0
+
+
+def cmd_clear_sched_intent(args):
+    try:
+        os.remove(_intent_path(args.registry))
+    except FileNotFoundError:
+        pass
+    print(json.dumps({"cleared": True}))
+    return 0
+
+
+def cmd_set_unscheduled(args):
+    try:
+        path = registry_path(args.registry)
+        reg = read_registry(path) or {"version": REGISTRY_VERSION}
+        reg["version"] = REGISTRY_VERSION
+        reg["scheduling"] = {"installed": False, "mechanism": None, "set_at": None}
+        write_registry(path, reg)
+        print(json.dumps(reg["scheduling"]))
+    except ValueError as e:
+        print(f"set-unscheduled failed: {e}", file=sys.stderr)
+        return 1
+    return 0
+
+
 CRON = {"hourly": "0 * * * *", "every-2-hours": "0 */2 * * *", "every-6-hours": "0 */6 * * *"}
 
 
@@ -231,6 +275,19 @@ def main(argv=None):
     sd.add_argument("--set-at")
     sd.add_argument("--registry")
     sd.set_defaults(func=cmd_set_scheduled)
+
+    si = sub.add_parser("set-sched-intent", help="record the user's chosen schedule mechanism (for the consent hook)")
+    si.add_argument("--choice", required=True, choices=SCHED_CHOICES)
+    si.add_argument("--registry")
+    si.set_defaults(func=cmd_set_sched_intent)
+
+    ci = sub.add_parser("clear-sched-intent", help="remove the schedule-intent marker")
+    ci.add_argument("--registry")
+    ci.set_defaults(func=cmd_clear_sched_intent)
+
+    su = sub.add_parser("set-unscheduled", help="clear the scheduling marker (turn-off)")
+    su.add_argument("--registry")
+    su.set_defaults(func=cmd_set_unscheduled)
 
     args = p.parse_args(argv)
     return args.func(args)

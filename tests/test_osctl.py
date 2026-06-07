@@ -181,3 +181,43 @@ def test_set_scheduled_defaults_set_at_to_utc_now(tmp_path):
     out = json.loads(run(["set-scheduled", "--registry", str(reg), "--mechanism", "cron"]).stdout)
     assert out["installed"] is True and out["mechanism"] == "cron"
     assert re.match(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\+00:00", out["set_at"])
+
+
+def test_set_sched_intent_writes_marker_next_to_registry(tmp_path):
+    reg = tmp_path / "reg.json"
+    r = run(["set-sched-intent", "--choice", "launchd", "--registry", str(reg)])
+    assert r.returncode == 0
+    marker = tmp_path / ".sched-intent.json"
+    assert marker.exists()
+    data = json.loads(marker.read_text())
+    assert data["choice"] == "launchd"
+    assert isinstance(data["set_at_epoch"], int)
+    import re
+    assert re.match(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\+00:00", data["set_at"])
+
+
+def test_set_sched_intent_rejects_unknown_choice(tmp_path):
+    reg = tmp_path / "reg.json"
+    r = run(["set-sched-intent", "--choice", "telepathy", "--registry", str(reg)])
+    assert r.returncode != 0
+    assert "Traceback" not in r.stderr
+
+
+def test_clear_sched_intent_removes_marker(tmp_path):
+    reg = tmp_path / "reg.json"
+    run(["set-sched-intent", "--choice", "cron", "--registry", str(reg)])
+    r = run(["clear-sched-intent", "--registry", str(reg)])
+    assert r.returncode == 0
+    assert not (tmp_path / ".sched-intent.json").exists()
+
+
+def test_set_unscheduled_clears_installed_and_preserves_active(tmp_path):
+    reg = tmp_path / "reg.json"
+    run(["set-active", "--workspace", str(tmp_path / "ws"), "--registry", str(reg)])
+    run(["set-scheduled", "--mechanism", "cron", "--registry", str(reg)])
+    r = run(["set-unscheduled", "--registry", str(reg)])
+    assert r.returncode == 0
+    status = json.loads(run(["schedule-status", "--registry", str(reg)]).stdout)
+    assert status["installed"] is False and status["mechanism"] is None
+    reg_data = json.loads(reg.read_text())
+    assert reg_data["active_workspace"].endswith("/ws")  # untouched
