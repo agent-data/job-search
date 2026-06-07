@@ -212,10 +212,29 @@ def scan(root, strict_fresh=False, only=None):
     return hits, warnings
 
 
+def scan_code_refs(root):
+    """Every path in a design-doc / product-spec `code_refs:` list must exist in the repo."""
+    hits = []
+    for path in iter_md_files(root):
+        if os.path.basename(path) == "index.md":
+            continue
+        if not any(_under(path, root, d) for d in VERIFICATION_DIRS):
+            continue
+        fm = read_frontmatter(path)
+        if not fm or not isinstance(fm.get("code_refs"), list):
+            continue  # frontmatter-schema already flags a missing / non-list code_refs
+        rel = os.path.relpath(path, root)
+        for ref in fm["code_refs"]:
+            if not os.path.exists(os.path.join(root, ref)):
+                hits.append(f"{rel}: code-refs-exist: code_ref does not exist: {ref}")
+    return hits
+
+
 RULES = {
     "internal-links": scan_internal_links,
     "agents-map": scan_agents_map,
     "frontmatter-schema": scan_frontmatter,
+    "code-refs-exist": scan_code_refs,
 }
 
 

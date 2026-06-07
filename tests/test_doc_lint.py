@@ -125,3 +125,16 @@ def test_frontmatter_completed_plan_requires_completed_date(tmp_path):
     (d / "p.md").write_text("---\ntitle: P\nstate: completed\ncreated: 2026-06-07\n---\n# P\n")
     r = run_lint(tmp_path, "--only", "frontmatter-schema")
     assert r.returncode == 1 and "completed" in r.stdout
+
+def test_code_refs_resolve_passes(tmp_path):
+    (tmp_path / "thing.py").write_text("x = 1\n")
+    d = tmp_path / "docs" / "design-docs"; d.mkdir(parents=True)
+    (d / "x.md").write_text(_design_fm(code_refs="[thing.py]"))
+    r = run_lint(tmp_path, "--only", "code-refs-exist")
+    assert r.returncode == 0, r.stdout + r.stderr
+
+def test_code_refs_missing_fails(tmp_path):
+    d = tmp_path / "docs" / "design-docs"; d.mkdir(parents=True)
+    (d / "x.md").write_text(_design_fm(code_refs="[nope.py]"))
+    r = run_lint(tmp_path, "--only", "code-refs-exist")
+    assert r.returncode == 1 and "nope.py" in r.stdout
