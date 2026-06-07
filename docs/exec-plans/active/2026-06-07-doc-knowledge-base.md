@@ -90,18 +90,18 @@ After Phase 1 the linter is complete and green against the Phase-0 stubs; every 
 
 Each task: write the real doc (passing every rule, **linking** to `shared/references/` for any contract), keep `doc_lint --root .` green, commit `docs(kb): <doc>`, spawn the per-commit reviewer.
 
-- [ ] **2.1 `ARCHITECTURE.md`** — the 5 product domains × 5 layers and how they fit; points to `shared/references/` for every contract.
-- [ ] **2.2 `design-docs/core-beliefs.md`** — agent-first operating principles (statement / why / enforced-by-link / how-to-verify).
-- [ ] **2.3 Port the design specs + `design-docs/index.md`** — port the source design specs into `design-docs/` with frontmatter; catalogue them with verification status.
-- [ ] **2.4 Port plans + move the hardening plan** — port the source plans into `exec-plans/completed/` and move `docs/superpowers/plans/2026-06-07-job-search-agent-hardening.md` into `completed/` (add `state:` frontmatter; remove the now-empty `docs/superpowers/`).
-- [ ] **2.5 `exec-plans/tech-debt-tracker.md` + `exec-plans/index.md`** — make the tracker canonical (migrate `TODOS.md`; convert `TODOS.md` to a one-line pointer; fix the one `TESTING.md` reference); catalogue active/ + completed/ + the tracker.
-- [ ] **2.6 `product-specs/new-user-onboarding.md` + `product-specs/index.md`** — the magical-moment onboarding spec (points to the job-search skill) + the catalogue.
-- [ ] **2.7 `docs/PRODUCT_SENSE.md`** — product philosophy + non-goals/YAGNI + who-the-user-is.
+- [x] **2.1 `ARCHITECTURE.md`** — the 5 product domains × 5 layers and how they fit; points to `shared/references/` for every contract.
+- [x] **2.2 `design-docs/core-beliefs.md`** — agent-first operating principles (statement / why / enforced-by-link / how-to-verify).
+- [x] **2.3 Port the design specs + `design-docs/index.md`** — port the source design specs into `design-docs/` with frontmatter; catalogue them with verification status.
+- [x] **2.4 Port plans + move the hardening plan** — port the source plans into `exec-plans/completed/` and move `docs/superpowers/plans/2026-06-07-job-search-agent-hardening.md` into `completed/` (add `state:` frontmatter; remove the now-empty `docs/superpowers/`).
+- [x] **2.5 `exec-plans/tech-debt-tracker.md` + `exec-plans/index.md`** — make the tracker canonical (migrate `TODOS.md`; convert `TODOS.md` to a one-line pointer; fix the one `TESTING.md` reference); catalogue active/ + completed/ + the tracker.
+- [x] **2.6 `product-specs/new-user-onboarding.md` + `product-specs/index.md`** — the magical-moment onboarding spec (points to the job-search skill) + the catalogue.
+- [x] **2.7 `docs/PRODUCT_SENSE.md`** — product philosophy + non-goals/YAGNI + who-the-user-is.
 - [x] **2.8 `docs/QUALITY_SCORE.md`** — every domain × layer graded with qualitative words + gaps. (Done within Task 1.5, which the coverage rule forced.)
-- [ ] **2.9 `docs/RELIABILITY.md`** — determinism, named errors, retry/circuit-breaker, run-health, headless surfacing, testing/eval strategy (maps into `shared/references/`).
-- [ ] **2.10 `docs/SECURITY.md`** — private-local, deny-all `.gitignore`, no-PII, the consent hook, the fake shim.
-- [ ] **2.11 `docs/INTERFACE.md`** — the conversational / CLI / digest / home surfaces (points to `conventions.md` for the digest contract).
-- [ ] **2.12 `docs/PLANS.md`** — plans methodology (ephemeral vs exec-plans; TDD/subagent/reviewer) + how to run the on-demand gardening sweep.
+- [x] **2.9 `docs/RELIABILITY.md`** — determinism, named errors, retry/circuit-breaker, run-health, headless surfacing, testing/eval strategy (maps into `shared/references/`).
+- [x] **2.10 `docs/SECURITY.md`** — private-local, deny-all `.gitignore`, no-PII, the consent hook, the fake shim.
+- [x] **2.11 `docs/INTERFACE.md`** — the conversational / CLI / digest / home surfaces (points to `conventions.md` for the digest contract).
+- [x] **2.12 `docs/PLANS.md`** — plans methodology (ephemeral vs exec-plans; TDD/subagent/reviewer) + how to run the on-demand gardening sweep.
 
 ### Phase 3 — Generated docs
 
@@ -124,6 +124,8 @@ Each task: write the real doc (passing every rule, **linking** to `shared/refere
 - 2026-06-07 — **Task 0.6** done: `.claude/agents/doc-reviewer.md` (per-commit review + on-demand gardening sweep w/ `gh` fix-up-PR recipe). Per-commit doc-reviewer runs begin now. Phase 0 complete.
 - 2026-06-07 — **Phase 1 complete** — all 9 lint rules implemented via TDD; `98 passed`; `doc_lint --root .` clean (default and `--strict-fresh`):
   - **1.1** (`6babbf5`) frontmatter-schema · **1.2** (`ddf77c5`) code-refs-exist · **1.3** (`34cc844`) no-shared-reference-duplication — preceded by `0f8a789`, which relocated the hardening plan into `exec-plans/completed/` (the move substep of Task 2.4, pulled forward so the new rule's real KB stayed clean) · **1.4** (`3584273`) index-completeness (+ brought the live indexes to completeness) · **1.5** (`79f773b`) quality-score-coverage (+ authored the real `QUALITY_SCORE.md`, folding Task 2.8; the doc-reviewer verified its gaps claims fresh) · **1.6** (`7e84fe9`) plan-location · **1.7** (`4024f72`) freshness-markers.
+- 2026-06-07 — **Phase 2 complete** — the full knowledge base authored under enforcement; `100 passed`; `doc_lint --root .` clean. Substantive docs were each verified by a per-commit doc-reviewer pass:
+  - **2.1** (`78262d5`) `ARCHITECTURE.md` (reviewer: fresh) · **2.2** (`df6e2e2`) `core-beliefs.md` — reviewer caught a real anchor bug, fixed in `2197487` (see D8) · **2.3** (`c7c28a7`) ported 3 design specs as historical snapshots · **2.4** (`c92f6e0`) archived plans A/B/D · **2.5** (`414a50e`) tech-debt-tracker made canonical · **2.6** (`a246907`) onboarding product spec (reviewer: fresh) · **2.7** (`a188fe6`) `PRODUCT_SENSE.md` · **2.8** done within Task 1.5 · **2.9** (`ea4eb58`) `RELIABILITY.md` (reviewer: fresh) · **2.10** (`ff6d116`) `SECURITY.md` · **2.11** (`701deb5`) `INTERFACE.md` — reviewer caught a no-dup gap, fixed in `cc8fb7c` (see D9) · **2.12** (`35985bf`) `PLANS.md`.
 
 ## Decision Log
 
@@ -134,3 +136,5 @@ Each task: write the real doc (passing every rule, **linking** to `shared/refere
 - **D5 — Outline adaptations (approved).** Dropped `docs/references/`, `docs/generated/db-schema.md`, `docs/DESIGN.md`, `docs/FRONTEND.md`. `generated/` holds `osctl-commands.md` (from argparse). `FRONTEND.md`→`INTERFACE.md`. `QUALITY_SCORE.md` uses qualitative grades (`strong/adequate/thin/missing`). Tech-debt tracker becomes canonical at `docs/exec-plans/tech-debt-tracker.md`. Recurring doc-gardening is on-demand only (no cron).
 - **D6 — doc-reviewer invocation.** The custom agent type isn't live mid-session, so the per-commit / on-demand reviewer is invoked by dispatching a general-purpose subagent that reads and follows `.claude/agents/doc-reviewer.md`. A fresh Claude Code session loads the agent natively.
 - **D7 — per-commit reviewer scope.** After each commit the controller runs the reviewer's first step (identify changed KB docs) and escalates to a full semantic subagent only when the commit touches substantive KB content. Linter-infra commits (`scripts/`+`tests/`) and structural / process-artifact-only changes (indexes, this progress log) take the "no reviewable KB content" fast path.
+- **D8 — `slugify` aligned to github-slugger (fix `2197487`).** The doc-reviewer caught that `slugify` collapsed consecutive hyphens, diverging from GitHub (which renders ` — ` between words as a DOUBLE hyphen anchor). `slugify` now matches GitHub (no collapse), so `internal-links` actually catches GitHub-broken anchors; a genuinely-broken em-dash anchor in `core-beliefs.md` was corrected. (Demonstrates the reviewer→stage-2→fix loop: the reviewer's specific suggestion was backwards, but it surfaced a real linter blind spot.)
+- **D9 — no-dup status-enum signature is separator-agnostic (fix `cc8fb7c`).** The doc-reviewer caught `INTERFACE.md` restating the job-status enum in comma form, which the pipe-only signature missed. The signature now uses `\W+` between the words (catches comma, pipe, and space forms); `INTERFACE.md` now links `conventions.md` instead of listing the statuses.
