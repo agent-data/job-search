@@ -47,8 +47,8 @@ sees at a glance:
 - **Last-run health** — the health state from the most recent `runs/<id>.json`, or
   the latest digest's Run health line as a fallback.
 - **Latest digest summary** — the date and the counts line from the newest digest.
-- **Pipeline counts** — totals by job status (`new`, `interested`, `applied`,
-  `rejected`, `archived`) and how many need a human check.
+- **Pipeline counts** — totals grouped by job status (the status vocabulary is owned by
+  [`conventions.md`](../shared/references/conventions.md)) and how many need a human check.
 - **Quick actions** — conversational prompts: run a search now, add or edit a query,
   change frequency, update preferences, toggle the schedule, show the latest digest.
 

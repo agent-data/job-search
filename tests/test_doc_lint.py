@@ -178,6 +178,12 @@ def test_dup_exempts_historical_design_doc(tmp_path):
     r = run_lint(tmp_path, "--only", "no-shared-reference-duplication")
     assert r.returncode == 0, r.stdout
 
+def test_dup_status_enum_comma_form_fails(tmp_path):
+    d = tmp_path / "docs"; d.mkdir()
+    (d / "a.md").write_text("Pipeline statuses: new, interested, applied, rejected, archived.\n")
+    r = run_lint(tmp_path, "--only", "no-shared-reference-duplication")
+    assert r.returncode == 1 and "job status enum" in r.stdout
+
 
 def test_index_lists_all_siblings_passes(tmp_path):
     d = tmp_path / "docs" / "design-docs"; d.mkdir(parents=True)

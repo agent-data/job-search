@@ -239,7 +239,7 @@ def scan_code_refs(root):
 DUP_SIGNATURES = [
     (re.compile(r"every-2-hours"), "frequency enum"),
     (re.compile(r"YYYY-MM-DDTHH-MM-SSZ"), "run_id format"),
-    (re.compile(r"interested\s*\|\s*applied\s*\|\s*rejected"), "job status enum"),
+    (re.compile(r"interested\W+applied\W+rejected"), "job status enum"),
     (re.compile(r"degraded \(LinkedIn flaky\)"), "run-health states"),
     (re.compile(r"strong\s*·\s*\d+\s*moderate"), "digest counts line"),
     (re.compile(r"desktop_notify_on_block"), "config field"),
