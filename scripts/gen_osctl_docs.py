@@ -39,7 +39,9 @@ def main():
     os.makedirs(os.path.dirname(DOC), exist_ok=True)
     with open(DOC, "w", encoding="utf-8") as f:
         f.write(generate())
-    print(f"generated {os.path.relpath(DOC, REPO)} ({len(osctl.build_parser()._actions)} top-level actions)")
+    p = osctl.build_parser()
+    sub = next(a for a in p._actions if isinstance(a, argparse._SubParsersAction))
+    print(f"generated {os.path.relpath(DOC, REPO)} ({len(sub.choices)} subcommands)")
     return 0
 
 

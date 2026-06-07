@@ -45,11 +45,12 @@ def parse_links(text):
 
 
 def slugify(heading):
-    """GitHub-style heading slug (github-slugger): lowercase, drop punctuation, each space -> '-'.
-    Does NOT collapse consecutive hyphens — a heading like 'A — B' yields 'a--b', matching GitHub."""
+    """GitHub-style heading slug (github-slugger): lowercase, drop chars not in [\\w\\s-], then each
+    whitespace char -> '-'. Does NOT collapse consecutive hyphens (a heading like 'A — B' yields
+    'a--b') and does NOT strip leading/trailing hyphens — both matching github-slugger exactly."""
     s = heading.strip().lower()
     s = re.sub(r"[^\w\s-]", "", s)
-    return re.sub(r"\s", "-", s).strip("-")
+    return re.sub(r"\s", "-", s)
 
 
 def _headings(text):
@@ -154,9 +155,16 @@ def scan_frontmatter(root):
         if fm is None:
             hits.append(f"{rel}: frontmatter-schema: missing or malformed frontmatter block")
             continue
+
+        def _missing(key):
+            # absent, or present but an empty STRING (e.g. `status:`). An empty list
+            # (`code_refs: []`) is allowed by the schema, so empty lists are NOT missing.
+            v = fm.get(key)
+            return key not in fm or (isinstance(v, str) and v.strip() == "")
+
         if is_verif:
             for k in ("title", "status", "verified", "last_reviewed", "code_refs"):
-                if k not in fm:
+                if _missing(k):
                     hits.append(f"{rel}: frontmatter-schema: missing required key '{k}'")
             if fm.get("status") and fm["status"] not in STATUS_ENUM:
                 hits.append(f"{rel}: frontmatter-schema: status '{fm['status']}' not in {sorted(STATUS_ENUM)}")
@@ -168,7 +176,7 @@ def scan_frontmatter(root):
                 hits.append(f"{rel}: frontmatter-schema: code_refs must be a list")
         if is_plan:
             for k in ("title", "state", "created"):
-                if k not in fm:
+                if _missing(k):
                     hits.append(f"{rel}: frontmatter-schema: missing required key '{k}'")
             if fm.get("state") and fm["state"] not in STATE_ENUM:
                 hits.append(f"{rel}: frontmatter-schema: state '{fm['state']}' not in {sorted(STATE_ENUM)}")

@@ -49,7 +49,7 @@ mechanically by the `frontmatter-schema` rule in [`../scripts/doc_lint.py`](../s
 
 ### Body format
 
-Plans use the [writing-plans](../CONTRIBUTING.md) format:
+Plans follow the [commit + message conventions in CONTRIBUTING.md](../CONTRIBUTING.md#commit-message-conventions):
 
 - **Bite-sized red → green TDD steps** — each task writes a failing test first, then the minimal
   implementation, then refactors; commands are written out exactly.

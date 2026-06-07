@@ -77,7 +77,8 @@ Five canonical layers describe *how the system is built*, bottom-up.
 Stdlib-only Python helpers under [scripts/](scripts/osctl.py) that do the non-judgment work the skills must
 not improvise: [scripts/osctl.py](scripts/osctl.py) (registry, workspace resolution, schedule artifacts) and
 [scripts/state.py](scripts/state.py) (the `jobs.jsonl` engine). Skills call these by absolute path resolved
-from their own directory.
+from their own directory. `osctl`'s full subcommand surface is generated at
+[docs/generated/osctl-commands.md](docs/generated/osctl-commands.md).
 
 ### shared-references
 The single source of truth for every runtime contract:

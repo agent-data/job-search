@@ -107,6 +107,12 @@ def test_frontmatter_missing_key_fails(tmp_path):
     r = run_lint(tmp_path, "--only", "frontmatter-schema")
     assert r.returncode == 1 and "status" in r.stdout
 
+def test_frontmatter_empty_value_fails(tmp_path):
+    d = tmp_path / "docs" / "design-docs"; d.mkdir(parents=True)
+    (d / "x.md").write_text("---\ntitle: T\nstatus:\nverified: partial\nlast_reviewed: 2026-06-07\ncode_refs: [scripts/osctl.py]\n---\n# T\n")
+    r = run_lint(tmp_path, "--only", "frontmatter-schema")
+    assert r.returncode == 1 and "status" in r.stdout
+
 def test_frontmatter_bad_enum_fails(tmp_path):
     d = tmp_path / "docs" / "design-docs"; d.mkdir(parents=True)
     (d / "x.md").write_text(_design_fm(status="bogus"))
