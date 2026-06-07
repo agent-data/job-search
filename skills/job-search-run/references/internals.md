@@ -56,6 +56,26 @@ OPTION B — keep Claude open and loop:  /loop <frequency> /job-search-run
 Not sure? Use Option A.
 ```
 
+### Scheduling: record intent, then install (consent-guarded)
+
+Scheduling installs are guarded by a PreToolUse hook (`hooks/guard-scheduled-tasks.py`).
+Before any privileged write (a `crontab` line or a launchd plist), follow this order:
+
+1. The DEFAULT mechanism is **cron**. Prefer it unless the user explicitly asks for
+   launchd or /loop.
+2. Record the user's explicit choice so the guard can tell intent from improvisation:
+   `python3 "$OS" set-sched-intent --choice <cron|launchd|loop>` — run this ONLY after
+   the user has explicitly chosen that mechanism.
+3. Perform the install. The guard will **ask** (cron, or a user-chosen launchd) or
+   **deny** (a launchd the user did not choose — reach for cron or /loop instead).
+4. On success record it: `python3 "$OS" set-scheduled --mechanism <m>`, then clear the
+   intent: `python3 "$OS" clear-sched-intent`.
+5. To turn scheduling off: remove the OS artifact, then
+   `python3 "$OS" set-unscheduled` (clears the marker — no more stale `installed: true`).
+
+Never set `set-sched-intent` for a mechanism the user did not name. /loop performs no
+privileged write and is never gated.
+
 ## osctl.py command reference
 `resolve` · `set-active --workspace P` · `schedule-line --frequency F [--time T] [--workspace W]` ·
 `launchd-plist --frequency F [--time T] [--workspace W]` · `schedule-status` · `set-scheduled --mechanism M`.

@@ -77,7 +77,8 @@ Offer these and apply each by **chatting**, editing `config.yaml` per the `inter
 - **Change or turn off the schedule** → re-run the scheduling flow in `onboarding.md` (generate with
   `$OS schedule-line` / `launchd-plist`, do the privileged write, `set-scheduled`), and **always print the
   verbatim fallback block** from `internals.md`. To turn it off, remove the crontab line or
-  `launchctl unload` + delete the plist, and tell the user it's off.
+  `launchctl unload` + delete the plist, then `python3 "$OS" set-unscheduled` so `schedule-status` reads
+  `installed: false`, and tell the user it's off.
 - **Show the latest digest** → print the newest `reports/<date>-digest.md` (strong → moderate → weak →
   filtered-out), unchanged.
 

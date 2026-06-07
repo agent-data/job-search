@@ -170,10 +170,12 @@ Ask a simple **yes/no**: "Want me to set this up to run automatically?"
 1. Generate the artifact deterministically with `$OS`:
    - cron → `python3 "$OS" schedule-line --frequency <f> --time <t> --workspace <workspace>`
    - launchd → `python3 "$OS" launchd-plist --frequency <f> --time <t> --workspace <workspace>`
-2. Perform the **privileged write**: append the generated line to the crontab, **or** write the plist to
+2. If the user chose launchd or /loop specifically, first run `python3 "$OS" set-sched-intent --choice <mechanism>` (records consent for the guard).
+3. Perform the **privileged write**: append the generated line to the crontab, **or** write the plist to
    `~/Library/LaunchAgents/dev.jobsearchos.run.plist` and `launchctl load` it.
-3. Record it so you never re-ask: `python3 "$OS" set-scheduled --mechanism <cron|launchd|loop>`.
-4. **Also print the verbatim fallback block below** (so the user has the manual recipe too).
+4. Record it so you never re-ask: `python3 "$OS" set-scheduled --mechanism <cron|launchd|loop>`,
+   then `python3 "$OS" clear-sched-intent`.
+5. **Also print the verbatim fallback block below** (so the user has the manual recipe too).
 
 **On no:** print the verbatim fallback block so the user can do it later, and only run
 `python3 "$OS" set-scheduled --mechanism <m>` if they confirm they set it up themselves.
