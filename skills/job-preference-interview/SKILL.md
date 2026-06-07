@@ -7,6 +7,9 @@ user-invocable: true
 
 # job-preference-interview
 
+> To configure, extend, customize, or troubleshoot the agent itself (or understand its
+> capabilities), use the **job-search-agent** skill — the operator manual.
+
 Interview the user, one question at a time, to build their **Job Preferences Brief** — the prose
 `preferences.md` that `evaluate-job-fit` later reads next to a posting to judge it.
 

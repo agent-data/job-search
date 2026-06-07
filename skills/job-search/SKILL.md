@@ -7,6 +7,9 @@ user-invocable: true
 
 # job-search
 
+> To configure, extend, customize, or troubleshoot the agent itself (or understand its
+> capabilities), use the **job-search-agent** skill — the operator manual.
+
 The **OS shell** for Job Search OS — the front door you run when you want to set the system up or check on
 it. Mental model: this skill is the **login shell + home screen**; `osctl.py` is the **OS state** that
 remembers your workspace and schedule; `job-search-run` is the **scheduled job** that pulls and judges

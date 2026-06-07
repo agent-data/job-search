@@ -6,6 +6,9 @@ user-invocable: true
 ---
 # evaluate-job-fit
 
+> To configure, extend, customize, or troubleshoot the agent itself (or understand its
+> capabilities), use the **job-search-agent** skill — the operator manual.
+
 Judge ONE job posting against the user's prose Job Preferences Brief. Output is a **qualitative
 relevance judgment** — never a numeric score, never category weights.
 

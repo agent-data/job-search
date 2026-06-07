@@ -7,6 +7,9 @@ user-invocable: true
 
 # job-search-run
 
+> To configure, extend, customize, or troubleshoot the agent itself (or understand its
+> capabilities), use the **job-search-agent** skill — the operator manual.
+
 Run ONE headless job-search pass over the workspace. Free gates before metered calls; no silent failures.
 Read `references/agent-data-contract.md` (CLI + routes + retry rules), `references/errors.md` (every E-* with
 the exact cause+fix wording), and `references/conventions.md` (file schemas + digest format) — follow them exactly.

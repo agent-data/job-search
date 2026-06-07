@@ -218,6 +218,8 @@ This release covers **discovery + qualitative relevance + local scheduling**: th
 `/job-search` onboarding, the preferences interview, the scheduled runner, single-posting evaluation, and a
 private local workspace.
 
+**Operator manual:** the `job-search-agent` skill is the reference Claude reaches for to configure, extend, or troubleshoot the agent.
+
 **Coming next (Plan C):** resume tools — `resume-compare` (a qualitative read of how your resume lines up
 against a posting, with gaps; read-only) and `resume-tailor` (truthful, provenance-checked tailoring that
 never invents experience you don't have).
