@@ -20,8 +20,8 @@
       "prompt": "Build a temp workspace + shim (setup-workspace.sh). Use the default config (no edits). Then prompt the agent: 'make it only show remote roles.'",
       "expectations": [
         "Adds the remote constraint as a must-have or red-flag in the preferences brief (so evaluate-job-fit enforces it qualitatively) OR narrows the search query's location/remote field — not a numeric threshold or score cutoff",
-        "Does NOT introduce a budget field, a minimum score field, or any numeric filter into config.json or preferences.md",
-        "Preserves version: 1 in config.json; adds no new top-level numeric keys",
+        "Does NOT introduce a budget field, a minimum score field, or any numeric filter into config.yaml or preferences.md",
+        "Preserves version: 1 in config.yaml; adds no new top-level numeric keys",
         "The resulting change is human-readable prose or a brief keyword, not a number the user would need to calibrate"
       ]
     },
