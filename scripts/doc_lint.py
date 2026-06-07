@@ -45,11 +45,11 @@ def parse_links(text):
 
 
 def slugify(heading):
-    """GitHub-style heading slug: lowercase, drop punctuation, spaces->hyphens."""
+    """GitHub-style heading slug (github-slugger): lowercase, drop punctuation, each space -> '-'.
+    Does NOT collapse consecutive hyphens — a heading like 'A — B' yields 'a--b', matching GitHub."""
     s = heading.strip().lower()
     s = re.sub(r"[^\w\s-]", "", s)
-    s = re.sub(r"\s+", "-", s)
-    return re.sub(r"-+", "-", s).strip("-")
+    return re.sub(r"\s", "-", s).strip("-")
 
 
 def _headings(text):

@@ -46,6 +46,17 @@ def test_links_external_url_ignored(tmp_path):
     r = run_lint(tmp_path, "--only", "internal-links")
     assert r.returncode == 0, r.stdout
 
+def test_links_em_dash_anchor_needs_double_hyphen(tmp_path):
+    d = tmp_path / "docs"; d.mkdir()
+    (d / "t.md").write_text("# Versioning — bump it\n")
+    # A single-hyphen anchor must FAIL: GitHub renders a DOUBLE hyphen for the em-dash gap.
+    (d / "a.md").write_text("[v](t.md#versioning-bump-it)\n")
+    assert run_lint(tmp_path, "--only", "internal-links").returncode == 1
+    # The double-hyphen anchor must PASS.
+    (d / "a.md").write_text("[v](t.md#versioning--bump-it)\n")
+    r = run_lint(tmp_path, "--only", "internal-links")
+    assert r.returncode == 0, r.stdout + r.stderr
+
 def _valid_agents_md():
     links = ["ARCHITECTURE.md", "docs/design-docs/index.md", "docs/design-docs/core-beliefs.md",
              "docs/exec-plans/index.md", "docs/product-specs/index.md", "docs/QUALITY_SCORE.md",

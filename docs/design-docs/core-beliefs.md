@@ -94,7 +94,7 @@ and are linked, never restated here — this doc is a live design-doc subject to
 - **Enforced by.** [scripts/build.sh](../../scripts/build.sh) regenerates every skill's bundled copies
   from the source, and CI ([.github/workflows/ci.yml](../../.github/workflows/ci.yml)) runs the build
   and fails if it changed any tracked `skills/` file — so a PR with stale or hand-edited copies is
-  blocked. The rule is stated in [CONTRIBUTING.md](../../CONTRIBUTING.md#single-source-of-truth-never-hand-edit-a-skills-synced-copies).
+  blocked. The rule is stated in [CONTRIBUTING.md](../../CONTRIBUTING.md#single-source-of-truth--never-hand-edit-a-skills-synced-copies).
 - **How to verify.** `./scripts/build.sh` then `git status --porcelain skills` → empty output (the
   bundled copies are already in sync with the source).
 
