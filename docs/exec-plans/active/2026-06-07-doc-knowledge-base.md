@@ -69,8 +69,8 @@ Phases run in order. Each task = files + red/green/refactor + scoped commit (+ p
 - [x] **0.2 Rule 1 `internal-links`** + fixtures + tests. Refactor out shared `iter_md_files()` / `parse_links()` / `slugify()` helpers (reused by Rules 4, 7, 9). Commit `feat(docs): doc_lint internal-link rule`.
 - [x] **0.3 `AGENTS.md` + Rule 9 `agents-map`.** Author the small map; create **stubs** for its forward-link targets (`ARCHITECTURE.md`, the three `index.md`s, `core-beliefs.md`, and the pillar docs) with `status: aspirational` frontmatter so Rule 1 stays green; add Rule 9 + fixtures + tests + the `--only`/`RULES` registry. This is the moment the real knowledge base starts passing the linter. Commit `feat(docs): AGENTS.md entry-point map + agents-map rule`.
 - [x] **0.4 `CLAUDE.md` stub + materialize this plan.** Create `CLAUDE.md` (one line → `AGENTS.md`); create `docs/exec-plans/active/2026-06-07-doc-knowledge-base.md` (this file) in writing-plans form, with the Progress Log and Decision Log sections every later task appends to. Commit `docs(kb): CLAUDE.md stub + checked-in exec-plan with progress & decision logs`.
-- [ ] **0.5 Extend CI.** Add a `Doc lint` step to `.github/workflows/ci.yml` (`python3 scripts/doc_lint.py --root .`). Commit `ci: run doc_lint on PRs`.
-- [ ] **0.6 `doc-reviewer` agent.** Create `.claude/agents/doc-reviewer.md` (both modes + the `gh` fix-up-PR recipe). Smoke-test it against one stub doc. Commit `feat(docs): doc-reviewer agent (per-commit + on-demand gardening)`.
+- [x] **0.5 Extend CI.** Add a `Doc lint` step to `.github/workflows/ci.yml` (`python3 scripts/doc_lint.py --root .`). Commit `ci: run doc_lint on PRs`.
+- [x] **0.6 `doc-reviewer` agent.** Create `.claude/agents/doc-reviewer.md` (both modes + the `gh` fix-up-PR recipe). Smoke-test it against one stub doc. Commit `feat(docs): doc-reviewer agent (per-commit + on-demand gardening)`.
 
 ### Phase 1 — Remaining lint rules (one TDD task each)
 
@@ -120,7 +120,8 @@ Each task: write the real doc (passing every rule, **linking** to `shared/refere
 - 2026-06-07 — **Task 0.2** done (`0b4f7c0`): internal-links rule + shared `iter_md_files`/`parse_links`/`slugify` helpers. `68 passed`.
 - 2026-06-07 — **Task 0.3** done (`20ea38a`): `AGENTS.md` map + agents-map rule + `--only`/RULES registry + KB stubs. `72 passed`.
 - 2026-06-07 — **Task 0.4** done (`0baa3e0`): `CLAUDE.md` stub + this checked-in exec-plan.
-- 2026-06-07 — **Task 0.5** done: `Doc lint` step added to `.github/workflows/ci.yml` (runs after the philosophy guard).
+- 2026-06-07 — **Task 0.5** done (`a1c83d7`): `Doc lint` step added to `.github/workflows/ci.yml` (runs after the philosophy guard).
+- 2026-06-07 — **Task 0.6** done: `.claude/agents/doc-reviewer.md` (per-commit review + on-demand gardening sweep w/ `gh` fix-up-PR recipe). Per-commit doc-reviewer runs begin now. Phase 0 complete.
 
 ## Decision Log
 
