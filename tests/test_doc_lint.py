@@ -178,6 +178,12 @@ def test_dup_exempts_historical_design_doc(tmp_path):
     r = run_lint(tmp_path, "--only", "no-shared-reference-duplication")
     assert r.returncode == 0, r.stdout
 
+def test_dup_exempts_generated(tmp_path):
+    g = tmp_path / "docs" / "generated"; g.mkdir(parents=True)
+    (g / "x.md").write_text("frequencies include every-2-hours per the CLI.\n")
+    r = run_lint(tmp_path, "--only", "no-shared-reference-duplication")
+    assert r.returncode == 0, r.stdout
+
 def test_dup_status_enum_comma_form_fails(tmp_path):
     d = tmp_path / "docs"; d.mkdir()
     (d / "a.md").write_text("Pipeline statuses: new, interested, applied, rejected, archived.\n")

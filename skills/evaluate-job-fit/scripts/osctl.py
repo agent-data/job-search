@@ -238,7 +238,7 @@ def cmd_launchd_plist(args):
     return 0
 
 
-def main(argv=None):
+def build_parser():
     p = argparse.ArgumentParser(description="Job Search OS internals (registry, discovery, scheduling)")
     sub = p.add_subparsers(dest="cmd", required=True)
 
@@ -289,7 +289,11 @@ def main(argv=None):
     su.add_argument("--registry")
     su.set_defaults(func=cmd_set_unscheduled)
 
-    args = p.parse_args(argv)
+    return p
+
+
+def main(argv=None):
+    args = build_parser().parse_args(argv)
     return args.func(args)
 
 

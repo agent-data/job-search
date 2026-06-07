@@ -252,6 +252,8 @@ def _is_live_kb_doc(path, root):
     rel = os.path.relpath(path, root)
     if rel == "docs/exec-plans" or rel.startswith("docs/exec-plans" + os.sep):
         return False
+    if rel == "docs/generated" or rel.startswith("docs/generated" + os.sep):
+        return False
     fm = read_frontmatter(path)
     if fm and fm.get("status") in ("historical", "superseded"):
         return False
