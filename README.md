@@ -75,6 +75,8 @@ ln -s "$PWD/skills/job-preference-interview" ~/.claude/skills/job-preference-int
 under `shared/references/` or `scripts/`, re-run `./scripts/build.sh` to re-sync the bundled copies — see
 [CONTRIBUTING.md](CONTRIBUTING.md).)
 
+Contributing or exploring the codebase with an AI agent? See [AGENTS.md](AGENTS.md) — the agent-facing map of the repo (architecture, design beliefs, plans, quality).
+
 After any of the above, run:
 
 ```

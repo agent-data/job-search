@@ -5,7 +5,7 @@ cross-linked, fresh, and does not duplicate the shared/references single source 
 Mirrors scripts/philosophy_guard.py in shape: scan(root) -> (hits, warnings); main() prints
 hits and returns 1 on failure, else prints "Doc lint: clean." and returns 0. Stdlib only.
 
-Rules are added one per task as scan_* functions called from scan(). This skeleton has none yet.
+Rules are scan_* functions dispatched via the RULES registry (currently 9: internal-links, agents-map, frontmatter-schema, code-refs-exist, no-shared-reference-duplication, index-completeness, quality-score-coverage, plan-location, freshness-markers).
 """
 import argparse, datetime, os, re, sys
 

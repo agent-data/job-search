@@ -3,6 +3,8 @@
 Thanks for helping out. This project has a few hard rules that keep the codebase honest and the skills
 self-contained — please read these before opening a PR.
 
+> Coding agent, or want the map of this repo? Start with [AGENTS.md](AGENTS.md) — the agent-facing entry point.
+
 ## Single source of truth — never hand-edit a skill's synced copies
 
 Each skill folder (`skills/<skill>/`) is shipped **self-contained**: it carries its own copy of the shared
@@ -29,13 +31,17 @@ place — only the *synced* `references/*.md` and `scripts/*` are generated.
 
 ## Before you open a PR: everything must be green
 
-Run both of these and make sure they pass:
+Run all of these and make sure they pass:
 
 ```bash
-# 1) Unit tests (state.py, osctl.py, the agent-data shim) — no real API calls
+# 1) Unit tests (state.py, osctl.py, the agent-data shim) — no real API calls; also exercises doc-lint + philosophy-guard coverage
 python3 -m pytest -q
 
-# 2) Skill-creator evals — one suite per skill
+# 2) Doc-lint (knowledge base) + philosophy guard (shipped output) — both run in CI too
+python3 scripts/doc_lint.py --root .
+python3 scripts/philosophy_guard.py --root .
+
+# 3) Skill-creator evals — one suite per skill
 #    (run each skill's evals under skills/<skill>/evals/)
 ```
 
