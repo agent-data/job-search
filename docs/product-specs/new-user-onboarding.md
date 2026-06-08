@@ -2,7 +2,7 @@
 title: New-User Onboarding
 status: current
 verified: partial
-last_reviewed: 2026-06-07
+last_reviewed: 2026-06-08
 code_refs: [skills/job-search/SKILL.md, skills/job-search/references/onboarding.md, scripts/osctl.py]
 ---
 
@@ -79,11 +79,13 @@ Either path ends with `preferences.md` present at the workspace path. If a run i
 without a usable brief, the error is `E-NO-PREFERENCES` (see
 [`shared/references/errors.md`](../../shared/references/errors.md)).
 
-### 5. Queries and frequency (conversational)
+### 5. Searches and frequency (derived from the brief)
 
-The user names a role and location; the skill writes a `queries[]` entry into `config.yaml` by
-editing the file minimally (preserve comments and structure). The user picks a run frequency in
-plain human terms — no credit math, no cost reasoning. Config schema and edit recipes are owned by
+The skill **derives** 2–3 searches from the brief it just built — it does not ask the user to name
+keywords — and writes them as `queries[]` entries into `config.yaml` (editing minimally, preserving
+comments and structure), then **acknowledges** what it saved and notes the searches are editable
+anytime. The user picks a run frequency in plain human terms — no credit math, no cost reasoning.
+Config schema and the derive/edit recipes are owned by
 [`shared/references/internals.md`](../../shared/references/internals.md) and
 [`shared/references/conventions.md`](../../shared/references/conventions.md).
 
@@ -101,13 +103,14 @@ are `E-QUOTA` (the only point where API limits surface, reactively) and `E-SERVI
 Mechanics and the full run-result taxonomy are in
 [`skills/job-search/references/onboarding.md`](../../skills/job-search/references/onboarding.md).
 
-### 7. Schedule offer (consent-gated)
+### 7. Schedule offer (native `/loop`)
 
-The skill offers to automate the search. Three mechanisms: OS cron (recommended), launchd (robust
-macOS), or `/loop`. The user answers yes/no; on yes the skill performs the privileged write and
-records it with `set-scheduled`. A copy-paste fallback block is always printed. The scheduling
-protocol — consent guard, `set-sched-intent`, `set-scheduled`, and the verbatim fallback block —
-is owned by [`shared/references/internals.md`](../../shared/references/internals.md).
+The skill offers to keep the search running automatically with Claude Code's native `/loop` — it
+re-runs the search on an interval inside an open Claude session and never writes the user's machine
+(no crontab, no launchd). The user answers yes/no; on yes the skill runs the `/loop` line emitted by
+`loop-command` and records it with `set-scheduled`. The `/loop` recipe is shown either way. The
+scheduling protocol and the safety-net guard hook are owned by
+[`shared/references/internals.md`](../../shared/references/internals.md).
 
 ## What the user sees / success criteria
 
@@ -116,7 +119,8 @@ At the end of onboarding all of the following are true:
 - A **digest** exists at `<workspace>/reports/<date>-digest.md` with real, judged postings.
 - A **persisted workspace** at `~/.job-search/` (or a user-chosen path) contains `config.yaml`,
   `preferences.md`, and `jobs.jsonl` — all created or adopted without hand-editing.
-- An **optional schedule** is installed and recorded in the OS registry if the user consented.
+- An **optional `/loop` schedule** is running and recorded in the OS registry if the user consented
+  (session-bound; nothing is installed on the user's machine).
 
 On a **returning session**, `python3 "$OS" resolve` returns `first_run: false` because
 `config.yaml` exists in the workspace, and the skill routes to the home view (latest digest,

@@ -19,9 +19,8 @@ The mechanics that must never improvise are pure, dependency-free Python:
 [../scripts/osctl.py](../scripts/osctl.py) (registry, workspace discovery, schedule artifacts)
 and [../scripts/state.py](../scripts/state.py) (the job-event log). They take JSON/text in and
 emit JSON/text out with no network and no clock-dependent behavior beyond an explicit
-timestamp, so **identical inputs produce identical outputs**: the same frequency and time
-always generate the same cron line or launchd plist, and the same event log always folds to
-the same current state.
+timestamp, so **identical inputs produce identical outputs**: the same frequency always generates
+the same `/loop` command, and the same event log always folds to the same current state.
 
 State is an **append-only event log**, not a mutable record: `jobs.jsonl` is a sequence of
 events, and current state is computed by folding them by dedup key (last-write-wins per field).
@@ -85,7 +84,7 @@ with that state. The set of states and the digest's health line are owned by
 
 The important reliability property is *how* a blocked run reaches the user. It does **not** rely
 on the process exit code: a headless `claude -p` invocation returns `0` even when the run was
-blocked (a skill cannot set the host process's exit status), so a cron job's `$?` is not a
+blocked (a skill cannot set the host process's exit status), so a headless run's `$?` is not a
 trustworthy signal and the docs never tell the user to check it. Instead, a blocked run surfaces
 three records-based ways, all owned by [../shared/references/errors.md](../shared/references/errors.md):
 
@@ -104,7 +103,7 @@ enforces all of this is [../skills/job-search-run/SKILL.md](../skills/job-search
 ## 5. Headless-first — the scheduled run never blocks on a human
 
 The scheduled pass is strictly **non-interactive**: it never prompts, because there is no human
-at a terminal when cron fires. Anything that would need a decision is instead resolved by the
+watching when the `/loop` run fires. Anything that would need a decision is instead resolved by the
 contract (retry vs. skip vs. halt) and recorded. All user-facing output is **records-based** —
 the digest file, the run audit log, the desktop notification — never an interactive prompt the
 scheduler can't answer. This is what makes the system safe to run unattended: a headless run

@@ -12,7 +12,7 @@ Location: `$XDG_CONFIG_HOME/job-search-os/config.json`, i.e. `~/.config/job-sear
 ```json
 { "version": 1,
   "active_workspace": "/Users/<u>/.job-search",
-  "scheduling": { "installed": true, "mechanism": "cron|launchd|loop", "set_at": "<iso>" } }
+  "scheduling": { "installed": true, "mechanism": "loop", "set_at": "<iso>" } }
 ```
 The registry is machine state; the workspace's `config.yaml` stays the user-facing config.
 
@@ -33,50 +33,45 @@ The user changes config by **chatting**; manual editing is an escape hatch. To a
 `<workspace>/config.yaml`, edit it minimally (preserve comments/structure), and write it back.
 - **Add a query:** append to `queries:` an item like
   `  - { id: "ml-platform-sf", keywords: "ML platform engineer", location: "San Francisco Bay Area", limit: 25, enabled: true }`
+  When the user hasn't named keywords (onboarding, or a vague "add another search"), **derive** them from
+  `preferences.md` — role/title + domain terms for `keywords`, the brief's location constraints for
+  `location` — then **acknowledge** what you saved rather than asking them to pick.
 - **Change frequency:** set `schedule.frequency` to one of `hourly | every-2-hours | every-6-hours | daily | weekly`.
 - **Change run time:** set `schedule.time` (HH:MM, used for daily/weekly).
 - Always keep `version: 1`. NEVER add a budget, cost, or score/weight field (philosophy).
 
-## Scheduling setup (offer to set it up; consent + marker; always show the copy-paste fallback)
-Generate the artifact deterministically: `python3 "$OS" schedule-line --frequency <f> --time <t> --workspace <ws>`
-(cron), or `python3 "$OS" launchd-plist --frequency <f> --time <t> --workspace <ws>` (macOS robust). Explain
-the options, ask a yes/no, and ONLY on yes perform the privileged write (append the crontab line, or write the
-plist to `~/Library/LaunchAgents/dev.jobsearchos.run.plist` and `launchctl load` it). Then record it:
-`python3 "$OS" set-scheduled --mechanism <cron|launchd|loop>`. Check `schedule-status` so you never re-ask.
-ALWAYS also print this copy-paste fallback verbatim:
+## Scheduling setup (native `/loop` — nothing is installed on the user's machine)
+Job Search OS schedules with Claude Code's native **`/loop`**: it re-runs the search on an interval inside an
+open Claude session. There is **no privileged write** — no crontab, no launchd, nothing on the user's machine.
+The one tradeoff: it runs only while a Claude session is open.
+
+Get the artifact deterministically: `python3 "$OS" loop-command --frequency <f>` → prints
+`/loop <interval> /job-search-run` (hourly→`1h`, every-2-hours→`2h`, every-6-hours→`6h`, daily→`24h`,
+weekly→`168h`; `schedule.time` is informational under /loop — the loop fires on an interval from when it's
+started). Offer it as a yes/no; on yes, run that `/loop` command and record it with
+`python3 "$OS" set-scheduled` (mechanism `loop`). Check `schedule-status` so you never re-ask. ALWAYS also
+show this recipe verbatim so the user can start or restart it themselves:
 
 ```
-OPTION A — OS cron (recommended; runs even when Claude is closed)
-  crontab -e  →  0 8 * * *  cd ~/.job-search && claude -p "/job-search-run" >> ~/.job-search/runs/cron.log 2>&1
-       (an hourly frequency would generate `0 * * * *`, etc. — setup writes the line matching your choice)
-  • Verify now:  cd ~/.job-search && claude -p "/job-search-run"
-  • macOS: the Mac must be awake at run time — keep it on, use `caffeinate`, or install the launchd plist
-    (StartCalendarInterval can wake the machine — the robust mac option).
-OPTION B — keep Claude open and loop:  /loop <frequency> /job-search-run
-Not sure? Use Option A.
+Recurring (runs while a Claude session is open — nothing installed on your machine):
+  /loop <interval> /job-search-run      # hourly → 1h · daily → 24h · weekly → 168h
+One-off run anytime:
+  /job-search-run
 ```
 
-### Scheduling: record intent, then install (consent-guarded)
+To turn scheduling off: stop the loop (end the session, or cancel the pending wakeup), then
+`python3 "$OS" set-unscheduled` (clears the marker — no more stale `installed: true`).
 
-Scheduling installs are guarded by a PreToolUse hook (`hooks/guard-scheduled-tasks.py`).
-Before any privileged write (a `crontab` line or a launchd plist), follow this order:
+### Safety net: the scheduling guard hook
 
-1. The DEFAULT mechanism is **cron**. Prefer it unless the user explicitly asks for
-   launchd or /loop.
-2. Record the user's explicit choice so the guard can tell intent from improvisation:
-   `python3 "$OS" set-sched-intent --choice <cron|launchd|loop>` — run this ONLY after
-   the user has explicitly chosen that mechanism.
-3. Perform the install. The guard will **ask** (cron, or a user-chosen launchd) or
-   **deny** (a launchd the user did not choose — reach for cron or /loop instead).
-4. On success record it: `python3 "$OS" set-scheduled --mechanism <m>`, then clear the
-   intent: `python3 "$OS" clear-sched-intent`.
-5. To turn scheduling off: remove the OS artifact, then
-   `python3 "$OS" set-unscheduled` (clears the marker — no more stale `installed: true`).
-
-Never set `set-sched-intent` for a mechanism the user did not name. /loop performs no
-privileged write and is never gated.
+A PreToolUse hook (`hooks/guard-scheduled-tasks.py`) is a defense-in-depth backstop, not part of the normal
+flow. Scheduling is native `/loop`, so the model never needs to touch the machine — the guard therefore
+**denies** any model-initiated `crontab`/launchd *install* and points back to `/loop`. It defers everything
+else: reads (`crontab -l`), removals, `/loop` itself, and commands that merely *mention* these words (a
+`grep`, an `echo`). The user stays free to run cron/launchd by hand in their own shell — the guard only gates
+the agent's Bash tool calls.
 
 ## osctl.py command reference
-`resolve` · `set-active --workspace P` · `schedule-line --frequency F [--time T] [--workspace W]` ·
-`launchd-plist --frequency F [--time T] [--workspace W]` · `schedule-status` · `set-scheduled --mechanism M`.
+`resolve` · `set-active --workspace P` · `loop-command --frequency F` · `schedule-status` ·
+`set-scheduled [--mechanism loop]` · `set-unscheduled`.
 All accept `--registry P` (and resolve accepts `--default-workspace`/`--legacy-workspace`) for tests/evals.

@@ -48,12 +48,9 @@ The deterministic OS state lives in `scripts/osctl.py` (bundled into each skill)
 |---|---|
 | `resolve` | Print active workspace, `first_run`, and `source` as JSON — the one correct way to find the workspace |
 | `set-active --workspace P` | Write the active workspace path to the registry |
-| `schedule-line --frequency F [--time T] [--workspace W]` | Emit the cron line for a given frequency |
-| `launchd-plist --frequency F [--time T] [--workspace W]` | Emit a macOS launchd plist |
+| `loop-command --frequency F` | Emit `/loop <interval> /job-search-run` for a given frequency |
 | `schedule-status` | Print the scheduling marker (installed mechanism) as JSON |
-| `set-scheduled --mechanism M` | Record that scheduling was installed (cron / launchd / loop) |
-| `set-sched-intent --choice M` | Record the user's explicit mechanism choice before the install (consent hook reads this) |
-| `clear-sched-intent` | Remove the intent marker after a successful install |
+| `set-scheduled [--mechanism loop]` | Record that a `/loop` schedule is running |
 | `set-unscheduled` | Clear the scheduling marker when turning scheduling off |
 
 **`state.py` subcommands:**
@@ -95,15 +92,13 @@ The agent is designed to be extended — add queries, swap the brief, point the 
 
 ## Scheduling
 
-Three mechanisms; cron is the default:
+Scheduling is Claude Code's native **`/loop`** — the only mechanism. `/loop <interval> /job-search-run`
+re-runs the search on an interval inside an open Claude session; nothing is installed on the user's machine
+(no crontab, no launchd). Get the line with `osctl loop-command --frequency <f>`, run it, and record it with
+`osctl set-scheduled`. The one tradeoff: it runs only while a Claude session is open.
 
-| Mechanism | When to use |
-|---|---|
-| **cron** (default) | Best for most users — runs even when Claude is closed; set up with `osctl schedule-line` |
-| **launchd** (macOS) | More robust on Mac — `StartCalendarInterval` can wake the machine; set up with `osctl launchd-plist` |
-| **/loop** | Keep Claude open and run `/loop <frequency> /job-search-run` — no privileged write needed |
-
-Scheduling is consent-guarded — see `references/scheduling-and-consent.md` for the record-intent-then-install workflow and the hook's ask/deny behavior.
+A `PreToolUse` safety-net hook **denies** any model-initiated crontab/launchd install (and ignores reads,
+removals, `/loop`, and mere mentions) — see `references/scheduling-and-consent.md`.
 
 ---
 
@@ -129,8 +124,7 @@ For the full `E-*` table with exact cause and fix wording: see `references/error
 | Runs complete but 0 matches even though real postings exist | Query keywords don't match the brief's must-haves | Broaden the query in `config.yaml`, or run `/job-preference-interview` to align the brief |
 | 0 results (literally empty) | Keywords too narrow or location too specific | Broaden `keywords` or `location` in the query |
 | Last run: blocked — E-QUOTA | API limit reached for the period | Lower `schedule.frequency` (e.g. `daily` instead of `hourly`), or upgrade your plan at agent-data.motie.dev |
-| Schedule isn't firing | cron line missing, or launchd plist not loaded | Run `python3 "$OS" schedule-status`; reinstall if missing |
-| Mac schedule fires inconsistently | Machine was asleep at run time | Use `caffeinate`, or switch to launchd (`osctl launchd-plist`) which can wake the machine |
+| Schedule isn't firing | The `/loop` isn't running (its Claude session closed) | Run `python3 "$OS" schedule-status`; restart it with `/loop <interval> /job-search-run` |
 | "Stale brief" nudge in the digest | `preferences.md` hasn't been updated in a long time | Run `/job-preference-interview` to refresh it |
 
 ---

@@ -1,62 +1,48 @@
 #!/usr/bin/env python3
-"""PreToolUse guard for the Job Search Agent — deterministic scheduling consent.
+"""PreToolUse safety net for Job Search OS — scheduling stays native (/loop), off the machine.
 
-  default mechanism (cron)               -> ASK  (confirm the privileged write)
-  non-default (launchd) the USER chose   -> ASK  ("are you sure? the default is cron")
-  non-default (launchd) the MODEL chose  -> DENY (default is cron / use /loop)
-  reads, line-generation, /loop, normal  -> defer (no decision)
+Job Search OS schedules through Claude Code's native `/loop`; it never writes the user's
+crontab or launchd. This guard DENIES a model-initiated cron/launchd *install* and defers
+everything else — reads (`crontab -l`, `launchctl list`), removals, `/loop`, and any command
+that merely *mentions* these words (a `grep`/`rg` search, an `echo`, a comment).
 
-"Who chose" is read from a short-lived marker the scheduling workflow writes via
-`osctl.py set-sched-intent --choice <mechanism>` right before installing. No fresh
-marker => the model reached for it unprompted. Stdlib only; self-contained.
+Detection is anchored to a shell **command position** (start of line, or right after a
+separator like `|` `;` `&&` `(`) AND requires real write syntax, so searches such as
+`grep -E "crontab|launchd"` or `rg crontab docs/` are never flagged — only an actual
+invocation is. Stdlib only; self-contained.
 """
-import json, os, re, sys, time
+import json, re, sys
 
-DEFAULT_MECHANISM = "cron"
-MARKER_TTL_SECONDS = 300
+# A shell "command position": start of input, or right after a separator / operator / subshell
+# opener. The character class already covers `&&`, `||`, pipes, and `$(`/backtick subshells.
+# Anchoring here is what lets `grep "crontab"`, `echo "... crontab ..."`, and comments through.
+_CMD = r"(?:^|[\n;&|(`])\s*(?:sudo\s+)?"
 
-LAUNCHD = re.compile(
-    r"launchctl\s+(load|bootstrap|enable|submit)"   # install verbs only; removal (unload/rm, for turn-off) is intentionally NOT gated
-    r"|(?:>|>>|\bcp\b|\bmv\b|\btee\b|\binstall\b)[^\n]*Launch(Agents|Daemons)",
+# Installing a cron schedule: `crontab -e`, `crontab <file>`, or `… | crontab -`. The arg after
+# `crontab` must be real write syntax (`-e`, a bare `-` for stdin, or a filename); `crontab -l`
+# (read) and `crontab -r` (removal) are intentionally NOT gated, and a quoted mention like
+# `"foo|crontab"` has no whitespace+arg after it, so it never matches.
+CRON_INSTALL = re.compile(
+    _CMD + r"crontab\s+(?:-e\b|-(?=\s|$)|[^\s\-]\S*)", re.IGNORECASE)
+
+# Installing a launchd agent: `launchctl load|bootstrap|enable|submit …` (at a command position),
+# or redirecting/copying a plist into LaunchAgents/LaunchDaemons. Removal (`unload`, `rm`) is not
+# gated; `launchctl list` (read) needs no exclusion since it isn't an install verb.
+LAUNCHD_INSTALL = re.compile(
+    _CMD + r"launchctl\s+(?:load|bootstrap|enable|submit)\b"
+    r"|(?:>>?|\bcp\b|\bmv\b|\btee\b|\binstall\b)[^\n]*Launch(?:Agents|Daemons)\b",
     re.IGNORECASE)
-CRON = re.compile(r"crontab(?!\s+-l\b)|/etc/cron", re.IGNORECASE)
 
-
-def _registry_dir():
-    reg = os.environ.get("JOBSEARCH_OS_REGISTRY")
-    if reg:
-        return os.path.dirname(reg) or "."
-    xdg = os.environ.get("XDG_CONFIG_HOME") or os.path.join(
-        os.environ.get("JOBSEARCH_OS_HOME") or os.path.expanduser("~"), ".config")
-    return os.path.join(xdg, "job-search-os")
-
-
-def _explicit_choice():
-    """Return the user's freshly-recorded mechanism choice, or None."""
-    try:
-        with open(os.path.join(_registry_dir(), ".sched-intent.json"), encoding="utf-8") as f:
-            data = json.load(f)
-        if time.time() - float(data.get("set_at_epoch", 0)) > MARKER_TTL_SECONDS:
-            return None
-        return data.get("choice")
-    except Exception:
-        return None
+_DENY_REASON = (
+    "Job Search OS schedules with Claude Code's native /loop and never writes your machine's "
+    "crontab or launchd. Set up recurring runs with:  /loop <interval> /job-search-run")
 
 
 def decide(cmd):
-    """Pure decision: returns (decision, reason) or None to defer."""
-    is_launchd, is_cron = bool(LAUNCHD.search(cmd)), bool(CRON.search(cmd))
-    if not (is_launchd or is_cron):
-        return None
-    if is_launchd:
-        if _explicit_choice() == "launchd":
-            return ("ask", "You're installing a launchd agent, which is NOT the default "
-                           "(cron is). Confirm you want launchd specifically.")
-        return ("deny", "Do not install a launchd agent here. The Job Search Agent's "
-                        "default scheduler is cron, and /loop needs no privileged write. "
-                        "Use cron, or have the user explicitly confirm launchd first.")
-    return ("ask", "This installs a cron schedule for the Job Search Agent. Confirm the "
-                   "privileged write to your crontab.")
+    """Pure decision: ('deny', reason) for a model-initiated cron/launchd install, else None."""
+    if CRON_INSTALL.search(cmd) or LAUNCHD_INSTALL.search(cmd):
+        return ("deny", _DENY_REASON)
+    return None
 
 
 def main():

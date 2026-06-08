@@ -7,7 +7,7 @@ it reports; a few checks are pure shell or visual.
 ## How to use this doc
 
 - **Driver legend:** 🤖 = give the instruction to Claude Code and let it run · 👤 = you run a shell command or eyeball output · ⚙️ = automated (pytest/CLI).
-- **Platform:** written for **macOS** (launchd, BSD `stat -f`, `shasum`). On **Linux**, use cron only — skip the launchd test (T9.2) — and swap BSD-isms (`stat -f '%Sm'` → `stat -c '%y'`); `shasum -a 256`, `xmllint`, and `grep -E` work on both.
+- **Platform:** written for **macOS** (BSD `stat -f`, `shasum`). Scheduling is native `/loop` (cross-platform; no cron/launchd tests), so the only platform swap is the BSD-isms (`stat -f '%Sm'` → `stat -c '%y'`); `shasum -a 256` and `grep -E` work on both.
 - **Live-first.** Tests use the real `agent-data` API (per the project's design and your call). The handful of
   error conditions you can't trigger on demand (quota, outage, stale links) use the bundled **fake-agent-data
   shim** — clearly marked.
@@ -55,8 +55,9 @@ aren't set in this shell — **stop and re-run the exports** before any test tha
 claude --plugin-dir "$JSOS"
 ```
 **Safety rules while testing:**
-- When onboarding reaches **scheduling**, answer **"no, just show me the commands"** — do NOT let it install a
-  real cron job / launchd plist (that's a lingering side effect). A dedicated, reversible scheduling test is §9.
+- When onboarding reaches **scheduling**, answer **"no"** — it'll just show the `/loop` recipe. (Starting a
+  real `/loop` would keep re-running during your test.) Nothing is ever written to your machine; the dedicated
+  scheduling test is §9.
 - **Teardown** when done: `rm -rf "$JSOS_TEST"`. (Re-`export JSOS_TEST=$(mktemp -d)` + the two env vars for a
   fresh first-run.)
 
@@ -145,7 +146,7 @@ date +%s > "$JSOS_TEST/.tthw_start"    # run this the moment you send the first 
 - Runs a **live** sample search and shows **real, current** postings judged relevant/weak/moderate/strong with
   reasoning — "found seconds ago." **No numeric scores, no dollar/credit figures.** (0 results → apply the §0.4
   sparse-data fallback before calling this a ❌.)
-- Prints the scheduling copy-paste options (cron / launchd / `/loop`) and the home view.
+- Prints the `/loop` scheduling recipe and the home view.
 **Verify (👤):**
 ```bash
 echo "TTFV: $(( $(date +%s) - $(cat "$JSOS_TEST/.tthw_start") )) s"   # target < ~300 s (5 min)
@@ -213,22 +214,18 @@ Say: **"change how often it runs to weekly."**
 **Result:** ⬜
 
 ### T4.4 Turn the schedule off — *verify*, don't just take its word — 🤖 + 👤
-Seed a "schedule installed" marker first (registry only — **no** real cron), so there's something to turn off:
+Seed a "schedule running" marker first (registry only), so there's something to turn off:
 ```bash
-python3 "$JSOS/scripts/osctl.py" set-scheduled --mechanism cron   # schedule-status now {"installed":true,...}
+python3 "$JSOS/scripts/osctl.py" set-scheduled   # mechanism defaults to loop; schedule-status now {"installed":true,...}
 ```
 Then say: **"actually, turn off the schedule for now."**
-**Expected:** Claude (a) sees the marker and gives the **exact** removal command (remove the crontab line /
-`launchctl unload`), (b) does **not** silently edit your real `crontab`, (c) confirms it's off.
+**Expected:** Claude (a) tells you to stop the loop (end the session / cancel the pending wakeup), (b) runs
+`set-unscheduled` to clear the marker, (c) confirms it's off — and never touches your `crontab`.
 **Verify (👤):**
 ```bash
 python3 "$JSOS/scripts/osctl.py" schedule-status   # SHOULD read {"installed": false, ...}
 crontab -l 2>/dev/null | grep -c job-search-run     # 0 — your real crontab is untouched
 ```
-**⚠ Known gap (TODO-SCHED-OFF):** there is currently **no** `osctl.py` command to clear the marker, and the
-turn-off flow (`home.md:79-80`) only removes the OS artifact — so `schedule-status` may still report
-`installed: true` (stale). If it does, that's the product gap, not a tester error: mark the marker line ❌ and
-see the TODO in §13. (The crontab-untouched check must still pass.)
 **Result:** ⬜
 
 ### T4.5 Update preferences (re-interview) — 🤖
@@ -322,8 +319,8 @@ ls -t "$JSOS_TEST/.job-search/reports/"*.md | head -1   # a digest exists / was 
 (Run health line, counts line, Strong→Moderate→Weak); the summary lands in `cron.log`. Fresh matches **or** a clean
 "No NEW postings" dedup digest are both passes (dedup if T5.1 already searched this workspace); 0 live results →
 §0.4 fallback.
-**Cross-check** the command equals the T9.1 daily line (sans schedule prefix + log redirect):
-`python3 "$JSOS/scripts/osctl.py" schedule-line --frequency daily --workspace "$JSOS_TEST/.job-search"`.
+**Cross-check** `/loop` runs this same skill headlessly each interval:
+`python3 "$JSOS/scripts/osctl.py" loop-command --frequency daily` → `/loop 24h /job-search-run`.
 **Result:** ⬜
 
 ### T5.5 Non-healthy digest shape — `blocked` must replace the body — 👤 (fake shim)
@@ -507,35 +504,33 @@ unchanged. (All tests used `$JSOS_TEST`/temp dirs + declined real scheduling.)
 
 ---
 
-## 9. Scheduling artifacts
+## 9. Scheduling (native `/loop`)
 
-### T9.1 Cron lines — ⚙️
+### T9.1 `loop-command` emits the right `/loop` line per frequency — ⚙️
 ```bash
 for f in hourly every-2-hours every-6-hours daily weekly; do
-  python3 "$JSOS/scripts/osctl.py" schedule-line --frequency "$f" --time 08:00 --workspace "$JSOS_TEST/.job-search"
+  python3 "$JSOS/scripts/osctl.py" loop-command --frequency "$f"
 done
 ```
-**Expected:** `0 * * * *`, `0 */2 * * *`, `0 */6 * * *`, `0 8 * * *`, `0 8 * * 1` respectively, each followed by
-`cd "…/.job-search" && claude -p "/job-search-run" >> "…/runs/cron.log" 2>&1`.
+**Expected:** `/loop 1h /job-search-run`, `/loop 2h /job-search-run`, `/loop 6h /job-search-run`,
+`/loop 24h /job-search-run`, `/loop 168h /job-search-run` respectively.
 **Result:** ⬜
 
-### T9.2 launchd plist is well-formed — 👤 *(macOS only; on Linux skip — use cron, T9.1)*
+### T9.2 The safety-net guard denies a machine write, ignores mentions — ⚙️
 ```bash
-python3 "$JSOS/scripts/osctl.py" launchd-plist --frequency daily --time 08:00 --workspace "$JSOS_TEST/.job-search" | xmllint --noout - && echo "valid plist"
+printf '%s' '{"tool_input":{"command":"(crontab -l; echo job) | crontab -"}}' | python3 "$JSOS/hooks/guard-scheduled-tasks.py"
+printf '%s' '{"tool_input":{"command":"grep -rE \"crontab|launchd\" docs"}}'  | python3 "$JSOS/hooks/guard-scheduled-tasks.py"
 ```
-**Expected:** `valid plist`; contains `StartCalendarInterval` with Hour 8.
+**Expected:** the **first** prints a JSON `"permissionDecision":"deny"` pointing to `/loop`; the **second**
+prints **nothing** (a search that merely mentions the words is never flagged). The full decision table is
+covered by `python3 -m pytest -q tests/test_guard_scheduled_tasks.py`.
 **Result:** ⬜
 
-### T9.3 (Opt-in, reversible) real cron round-trip — 👤
-*Only if you want to verify a real install.* Do it in a way you can undo: install the generated line, confirm one
-run writes to the log, then **remove it**. Skip if you'd rather not touch your crontab.
-**Result:** ⬜ / N/A
-
-### T9.4 `/loop` scheduling — no privileged write — 🤖 + 👤
-`/loop` keeps a Claude session open instead of installing cron/launchd. Say: **"set it up with /loop instead —
-keep Claude open and loop it."**
-**Expected:** Claude prints the loop line **`/loop <frequency> /job-search-run`** (using your configured
-frequency) and records the mechanism in the registry — **without** writing any crontab line or launchd plist.
+### T9.3 `/loop` scheduling — nothing installed on the machine — 🤖 + 👤
+Onboarding's scheduling step (or "set it up to run automatically") uses Claude Code's native `/loop`. Say:
+**"yes, keep it running automatically."**
+**Expected:** Claude shows the loop line **`/loop <interval> /job-search-run`** (matching your configured
+frequency — `24h` for daily) and records the mechanism — **without** writing any crontab line or launchd plist.
 **Verify (👤):**
 ```bash
 python3 "$JSOS/scripts/osctl.py" schedule-status   # {"installed": true, "mechanism": "loop", ...}
@@ -626,7 +621,7 @@ green once the commands ship. A green run here must never imply the commands exi
 |---|---|---|---|
 | T13.1 | `/job-search-frequency <hourly…weekly>` | sets `schedule.frequency` to the same value the conversational path (T4.3) would; `version: 1` intact; no cost math | ⬜ pending-build |
 | T13.2 | `/job-search-add-query "<keywords>" "<location>"` | appends a `queries[]` item identical to T4.2's conversational result | ⬜ pending-build |
-| T13.3 | `/job-search-schedule off` | turns the schedule off **and clears the registry marker** (also resolves `TODO-SCHED-OFF`) | ⬜ pending-build |
+| T13.3 | `/job-search-schedule off` | turns the schedule off **and clears the registry marker** (via `set-unscheduled`) | ⬜ pending-build |
 
 **Acceptance for each:** the command produces the **same** `config.yaml`/registry edit as its conversational
 equivalent (parity), errors on bad input with a named `E-*`, and never introduces a numeric/budget field. Until
@@ -645,10 +640,10 @@ built, mark **N/A (pending build)**.
 - ⬜ Relevance is **qualitative** (relevant + weak/moderate/strong + reasoning); dealbreakers reject; unknowns flag, never reject (§6)
 - ⬜ Every blocked path is a **named `E-*`** with its fix — auth, no-CLI, no-config, **config-version**, no-prefs, quota, down, stretch, **bad-query**, invalid-pair, detail-fetch-failed, degraded, zero/all-known (§7)
 - ⬜ **Never clobbers** real data; adopts an existing workspace byte-identically; real `~/.job-search`/`~/job-search`/crontab untouched (§8)
-- ⬜ Scheduling artifacts correct (cron lines per frequency; valid launchd plist; **`/loop`** sets `mechanism:loop` with no privileged write) (§9)
+- ⬜ Scheduling correct (`loop-command` emits `/loop <interval>` per frequency; the guard **denies** model-initiated crontab/launchd writes; `/loop` sets `mechanism:loop`) (§9)
 - ⬜ **No numeric scores/weights/credit knobs** in files **or chat**; frequency is the only cost lever (§10)
 - ⬜ Docs match reality (install commands, error table, sample digest) (§11)
-- ⬜ Full regression green: `pytest` (**62**; gate on `0 failed`) + all four skills' evals (§0.3, §12)
+- ⬜ Full regression green: `pytest` (**90**; gate on `0 failed`) + all four skills' evals (§0.3, §12)
 - ⬜ Planned config slash-command tests are marked **N/A (pending build)**, not green (§13)
 
 **Teardown:** `rm -rf "$JSOS_TEST"` and any `$T*`/`$SH*` dirs you kept.

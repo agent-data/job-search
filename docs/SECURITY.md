@@ -33,25 +33,22 @@ philosophy section states the "private and local" rule and names the mechanism t
 CI if it finds numeric scores, budget fields, or other artifacts that would indicate real personal
 data had leaked into a generated example.
 
-## Consent-gated privileged writes
+## Scheduling never writes your machine
 
-Scheduling installs — writing a cron line or a launchd plist — are persistent, privileged changes
-that survive the session. The agent is not allowed to perform them silently. A PreToolUse hook
-([`../hooks/guard-scheduled-tasks.py`](../hooks/guard-scheduled-tasks.py)) intercepts every Bash
-command before it runs and makes a deterministic decision:
+Scheduling is Claude Code's native `/loop` — `/loop <interval> /job-search-run` re-runs the search inside an
+open Claude session. The agent never installs a cron line or a launchd plist; nothing scheduling-related is
+written to your machine. A PreToolUse hook
+([`../hooks/guard-scheduled-tasks.py`](../hooks/guard-scheduled-tasks.py)) is a defense-in-depth backstop that
+enforces this on the agent's Bash tool calls:
 
-- **Ask** — for any cron install (the default mechanism), and for a launchd install the user
-  explicitly requested.
-- **Deny** — for a launchd install the model reached for without the user naming it. The default
-  is cron; unprompted escalation is blocked outright.
-- **Defer** — for reads, list commands, `/loop`, and schedule removal (which is intentionally not
-  gated).
+- **Deny** — any model-initiated `crontab` or launchd *install* (the message points back to `/loop`).
+- **Defer** — reads (`crontab -l`), list commands, schedule removal, `/loop`, and any command that merely
+  *mentions* these words (a `grep`, an `echo`). Detection is anchored to a shell command position, so
+  searching for these terms is never blocked.
 
-The "who chose" question is answered by a short-lived marker that `osctl.py set-sched-intent`
-writes immediately after the user confirms a mechanism; no fresh marker means the model acted
-unprompted. The full record-intent-then-install workflow is documented in
-[`../shared/references/internals.md`](../shared/references/internals.md) (see the scheduling
-section). Do not reproduce the hook's exact decision strings here — link the source.
+You remain free to run cron or launchd by hand in your own shell — the guard only gates the agent. The
+`/loop` flow is documented in [`../shared/references/internals.md`](../shared/references/internals.md) (see
+the scheduling section). Do not reproduce the hook's exact decision strings here — link the source.
 
 ## Auth and secrets
 

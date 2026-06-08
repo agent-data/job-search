@@ -92,129 +92,59 @@ def test_resolve_uses_env_registry_override(tmp_path):
     assert out["source"] == "registry" and out["workspace"] == str(ws.resolve())
 
 
-# --- schedule-line ---
-def test_schedule_line_daily_uses_time_and_workspace(tmp_path):
-    line = run(["schedule-line", "--frequency", "daily", "--time", "08:00", "--workspace", "/ws"]).stdout.strip()
-    assert line.startswith("0 8 * * * ")
-    assert 'cd "/ws" && claude -p "/job-search-run" >> "/ws/runs/cron.log" 2>&1' in line
+# --- loop-command (the native scheduler artifact) ---
+def test_loop_command_maps_frequencies(tmp_path):
+    cases = {"hourly": "1h", "every-2-hours": "2h", "every-6-hours": "6h", "daily": "24h", "weekly": "168h"}
+    for freq, iv in cases.items():
+        out = run(["loop-command", "--frequency", freq]).stdout.strip()
+        assert out == f"/loop {iv} /job-search-run"
 
-def test_schedule_line_hourly(tmp_path):
-    assert run(["schedule-line", "--frequency", "hourly", "--workspace", "/ws"]).stdout.strip().startswith("0 * * * * ")
-
-def test_schedule_line_every_6_hours(tmp_path):
-    assert run(["schedule-line", "--frequency", "every-6-hours", "--workspace", "/ws"]).stdout.strip().startswith("0 */6 * * * ")
-
-def test_schedule_line_weekly_monday(tmp_path):
-    assert run(["schedule-line", "--frequency", "weekly", "--time", "09:30", "--workspace", "/ws"]).stdout.strip().startswith("30 9 * * 1 ")
-
-def test_schedule_line_unknown_frequency_errors(tmp_path):
-    r = run(["schedule-line", "--frequency", "fortnightly", "--workspace", "/ws"])
+def test_loop_command_unknown_frequency_errors(tmp_path):
+    r = run(["loop-command", "--frequency", "fortnightly"])
     assert r.returncode == 1 and "unknown frequency" in r.stderr
-
-# --- launchd-plist ---
-def test_launchd_plist_daily_has_calendar_and_log(tmp_path):
-    out = run(["launchd-plist", "--frequency", "daily", "--time", "08:00", "--workspace", "/ws"]).stdout
-    assert "StartCalendarInterval" in out and "<integer>8</integer>" in out and "/ws/runs/cron.log" in out
+    assert "Traceback" not in r.stderr
 
 
-# --- schedule-status / set-scheduled ---
+# --- schedule-status / set-scheduled / set-unscheduled (loop only) ---
 def test_schedule_status_default_not_installed(tmp_path):
     out = json.loads(run(["schedule-status", "--registry", str(tmp_path / "absent.json")]).stdout)
     assert out == {"installed": False, "mechanism": None, "set_at": None}
 
 def test_set_scheduled_roundtrip_and_preserves_active(tmp_path):
-    ws = tmp_path / "ws"
-    ws.mkdir()
+    ws = tmp_path / "ws"; ws.mkdir()
     reg = tmp_path / "reg.json"
     run(["set-active", "--registry", str(reg), "--workspace", str(ws)])
-    run(["set-scheduled", "--registry", str(reg), "--mechanism", "launchd", "--set-at", "2026-06-05T08:00:00+00:00"])
+    run(["set-scheduled", "--registry", str(reg), "--set-at", "2026-06-05T08:00:00+00:00"])
     data = json.loads(reg.read_text())
     assert data["active_workspace"] == str(ws.resolve())
-    assert data["scheduling"] == {"installed": True, "mechanism": "launchd", "set_at": "2026-06-05T08:00:00+00:00"}
+    assert data["scheduling"] == {"installed": True, "mechanism": "loop", "set_at": "2026-06-05T08:00:00+00:00"}
     out = json.loads(run(["schedule-status", "--registry", str(reg)]).stdout)
-    assert out["installed"] is True and out["mechanism"] == "launchd"
+    assert out["installed"] is True and out["mechanism"] == "loop"
 
-def test_set_active_preserves_scheduling(tmp_path):
-    ws = tmp_path / "ws"
-    ws.mkdir()
-    reg = tmp_path / "reg.json"
-    run(["set-scheduled", "--registry", str(reg), "--mechanism", "cron", "--set-at", "2026-06-05T08:00:00+00:00"])
-    run(["set-active", "--registry", str(reg), "--workspace", str(ws)])
-    assert json.loads(reg.read_text())["scheduling"]["mechanism"] == "cron"
-
-
-def test_schedule_line_quotes_workspace_with_space(tmp_path):
-    line = run(["schedule-line", "--frequency", "hourly", "--workspace", "/Users/jane doe/.job-search"]).stdout.strip()
-    assert 'cd "/Users/jane doe/.job-search"' in line
-
-
-def test_schedule_line_malformed_time_is_clean_error(tmp_path):
-    r = run(["schedule-line", "--frequency", "daily", "--time", "8", "--workspace", "/ws"])
-    assert r.returncode == 1
-    assert "Traceback" not in r.stderr
-
-
-def test_launchd_plist_hourly_ignores_time(tmp_path):
-    out = run(["launchd-plist", "--frequency", "hourly", "--time", "whatever", "--workspace", "/ws"]).stdout
-    assert "<key>Minute</key><integer>0</integer>" in out
-
-
-def test_launchd_plist_weekly_has_weekday(tmp_path):
-    out = run(["launchd-plist", "--frequency", "weekly", "--time", "09:30", "--workspace", "/ws"]).stdout
-    assert "<key>Weekday</key><integer>1</integer>" in out and "<integer>9</integer>" in out
-
-
-def test_launchd_plist_unsupported_frequency_errors(tmp_path):
-    r = run(["launchd-plist", "--frequency", "every-2-hours", "--workspace", "/ws"])
-    assert r.returncode == 1 and "use cron" in r.stderr
-
-
-def test_launchd_plist_escapes_ampersand_in_workspace(tmp_path):
-    import xml.etree.ElementTree as ET
-    out = run(["launchd-plist", "--frequency", "daily", "--workspace", "/a&b/.job-search"]).stdout
-    ET.fromstring(out)   # must be well-formed XML (raises if not)
-
-
-def test_set_scheduled_defaults_set_at_to_utc_now(tmp_path):
+def test_set_scheduled_defaults_mechanism_to_loop_and_set_at_to_utc_now(tmp_path):
     import re
     reg = tmp_path / "reg.json"
-    out = json.loads(run(["set-scheduled", "--registry", str(reg), "--mechanism", "cron"]).stdout)
-    assert out["installed"] is True and out["mechanism"] == "cron"
+    out = json.loads(run(["set-scheduled", "--registry", str(reg)]).stdout)   # no --mechanism: defaults to loop
+    assert out["installed"] is True and out["mechanism"] == "loop"
     assert re.match(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\+00:00", out["set_at"])
 
-
-def test_set_sched_intent_writes_marker_next_to_registry(tmp_path):
+def test_set_scheduled_rejects_non_loop_mechanism(tmp_path):
     reg = tmp_path / "reg.json"
-    r = run(["set-sched-intent", "--choice", "launchd", "--registry", str(reg)])
-    assert r.returncode == 0
-    marker = tmp_path / ".sched-intent.json"
-    assert marker.exists()
-    data = json.loads(marker.read_text())
-    assert data["choice"] == "launchd"
-    assert isinstance(data["set_at_epoch"], int)
-    import re
-    assert re.match(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\+00:00", data["set_at"])
-
-
-def test_set_sched_intent_rejects_unknown_choice(tmp_path):
-    reg = tmp_path / "reg.json"
-    r = run(["set-sched-intent", "--choice", "telepathy", "--registry", str(reg)])
+    r = run(["set-scheduled", "--registry", str(reg), "--mechanism", "cron"])
     assert r.returncode != 0
     assert "Traceback" not in r.stderr
 
-
-def test_clear_sched_intent_removes_marker(tmp_path):
+def test_set_active_preserves_scheduling(tmp_path):
+    ws = tmp_path / "ws"; ws.mkdir()
     reg = tmp_path / "reg.json"
-    run(["set-sched-intent", "--choice", "cron", "--registry", str(reg)])
-    r = run(["clear-sched-intent", "--registry", str(reg)])
-    assert r.returncode == 0
-    assert not (tmp_path / ".sched-intent.json").exists()
-
+    run(["set-scheduled", "--registry", str(reg), "--set-at", "2026-06-05T08:00:00+00:00"])
+    run(["set-active", "--registry", str(reg), "--workspace", str(ws)])
+    assert json.loads(reg.read_text())["scheduling"]["mechanism"] == "loop"
 
 def test_set_unscheduled_clears_installed_and_preserves_active(tmp_path):
     reg = tmp_path / "reg.json"
     run(["set-active", "--workspace", str(tmp_path / "ws"), "--registry", str(reg)])
-    run(["set-scheduled", "--mechanism", "cron", "--registry", str(reg)])
+    run(["set-scheduled", "--registry", str(reg)])
     r = run(["set-unscheduled", "--registry", str(reg)])
     assert r.returncode == 0
     status = json.loads(run(["schedule-status", "--registry", str(reg)]).stdout)

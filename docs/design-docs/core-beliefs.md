@@ -114,18 +114,18 @@ and are linked, never restated here — this doc is a live design-doc subject to
 
 ## 7. Consent-gated autonomy
 
-- **Statement.** The model suggests; it never silently performs a privileged scheduling install. A
-  PreToolUse hook gates those writes — *ask* for the default mechanism, *ask* when the user explicitly
-  chose a non-default, and *deny* when the model reached for a non-default unprompted.
-- **Why.** Installing a system scheduler is a privileged, persistent change. Autonomy is fine for
-  suggestions and reversible work, but a write that survives the session needs the human in the loop —
-  and a model-initiated non-default escalation should be refused outright.
-- **Enforced by.** [hooks/guard-scheduled-tasks.py](../../hooks/guard-scheduled-tasks.py) makes a
-  deterministic decision from the command plus a short-lived "who chose" marker that
-  [scripts/osctl.py](../../scripts/osctl.py) writes (`set-sched-intent`); reads, `/loop`, and schedule
-  *removal* are intentionally not gated.
-- **How to verify.** `python3 -m pytest -q tests/test_guard_scheduled_tasks.py` → the ask/deny/defer
-  cases pass.
+- **Statement.** Scheduling is Claude Code's native `/loop`; the model never writes the user's machine. A
+  PreToolUse safety-net hook **denies** any model-initiated `crontab`/launchd install outright and points
+  back to `/loop`.
+- **Why.** Installing a system scheduler is a privileged, persistent change to someone's machine. With a
+  native, session-bound `/loop` there's no reason for the agent to touch crontab or launchd at all — so the
+  safest rule is the simplest one: it can't. (The user stays free to run cron by hand in their own shell; the
+  guard only gates the agent's Bash tool calls.)
+- **Enforced by.** [hooks/guard-scheduled-tasks.py](../../hooks/guard-scheduled-tasks.py) decides from the
+  command alone — deny a cron/launchd *install*; defer reads, removals, `/loop`, and mere *mentions* (a
+  `grep` or `echo`). Detection is anchored to a shell command position, so searching for these words is never
+  flagged.
+- **How to verify.** `python3 -m pytest -q tests/test_guard_scheduled_tasks.py` → the deny/defer cases pass.
 
 ## 8. Conversational-first configuration
 

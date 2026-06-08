@@ -9,10 +9,7 @@
 |---|---|---|
 | `resolve` | `--registry`, `--default-workspace`, `--legacy-workspace` | print active workspace + first_run + source as JSON |
 | `set-active` | `--workspace`, `--registry` | record the active workspace in the registry |
-| `schedule-line` | `--frequency`, `--time`, `--timezone`, `--workspace` | emit the cron line for a frequency |
-| `launchd-plist` | `--frequency`, `--time`, `--workspace` | emit a launchd plist (macOS) |
+| `loop-command` | `--frequency` | emit `/loop <interval> /job-search-run` for a frequency |
 | `schedule-status` | `--registry` | print the scheduling marker as JSON |
-| `set-scheduled` | `--mechanism`, `--set-at`, `--registry` | record that scheduling was installed |
-| `set-sched-intent` | `--choice`, `--registry` | record the user's chosen schedule mechanism (for the consent hook) |
-| `clear-sched-intent` | `--registry` | remove the schedule-intent marker |
+| `set-scheduled` | `--mechanism`, `--set-at`, `--registry` | record that a /loop schedule is running |
 | `set-unscheduled` | `--registry` | clear the scheduling marker (turn-off) |

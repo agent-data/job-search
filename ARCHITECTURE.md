@@ -25,7 +25,7 @@ The product framing is an operating system whose userland is your job search:
 | Shared libraries | `shared/references/` (contracts) + `scripts/` (deterministic helpers) |
 | Filesystem | the private per-user workspace (default `~/.job-search/`), never committed |
 | System calls | the agent-data CLI — the one job source the runner shells out to |
-| Cron | the local schedule (cron / launchd / `/loop`), consent-guarded before any install |
+| Cron | the schedule — Claude Code's native `/loop`; a safety-net hook keeps it off the machine |
 
 Where the OS state lives and how the workspace is discovered is specified in
 [shared/references/internals.md](shared/references/internals.md); the on-disk file layout is in
@@ -57,11 +57,11 @@ workspace discovery) and [scripts/state.py](scripts/state.py) (the event log). F
 [shared/references/internals.md](shared/references/internals.md).
 
 ### scheduling-consent
-Run on a cadence the user controls, and never install a privileged schedule without explicit consent. The
-[job-search](skills/job-search/SKILL.md) skill offers setup; [scripts/osctl.py](scripts/osctl.py) emits the
-schedule artifacts and records intent; [hooks/guard-scheduled-tasks.py](hooks/guard-scheduled-tasks.py)
-gates the install. The record-intent-then-install workflow and the cadence options live in
-[shared/references/internals.md](shared/references/internals.md).
+Run on a cadence the user controls, using Claude Code's native `/loop` — and never write the user's machine.
+The [job-search](skills/job-search/SKILL.md) skill offers setup; [scripts/osctl.py](scripts/osctl.py) emits
+the `/loop` command and records the schedule marker; [hooks/guard-scheduled-tasks.py](hooks/guard-scheduled-tasks.py)
+is a safety net that denies any model-initiated cron/launchd install. The `/loop` flow and cadence options
+live in [shared/references/internals.md](shared/references/internals.md).
 
 ### error-surfacing
 Make every failure named and visible — no silent failures. Each blocked path is a named `E-*` error that

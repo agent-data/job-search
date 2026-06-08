@@ -112,10 +112,10 @@ Full error catalog with exact cause+fix wording:
 
 ## CLI / headless surface
 
-The scheduled run is invoked as `claude -p "/job-search-run"` — non-interactive,
-typically from cron or a launchd plist. Users set this up conversationally through the
-`/job-search` home view; the scheduling artifacts are generated and installed by the
-skill, not typed by hand.
+The recurring run is Claude Code's native `/loop` — `/loop <interval> /job-search-run`
+re-runs the search inside an open Claude session (the one-off form is just
+`/job-search-run`). Users set this up conversationally through the `/job-search` home view;
+nothing is installed on their machine (no cron, no launchd).
 
 `osctl.py` and `state.py` are deterministic internal CLIs that skills call to read and
 write OS state (workspace discovery, registry, job database, schedule markers). They are

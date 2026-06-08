@@ -10,5 +10,5 @@ def test_generated_osctl_doc_in_sync():
 
 def test_generated_lists_known_commands():
     text = DOC.read_text()
-    for cmd in ("resolve", "set-active", "schedule-status", "set-sched-intent"):
+    for cmd in ("resolve", "set-active", "loop-command", "schedule-status", "set-scheduled", "set-unscheduled"):
         assert f"`{cmd}`" in text, f"missing command {cmd}"

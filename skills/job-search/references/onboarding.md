@@ -94,31 +94,42 @@ a stale brief). If for some reason a run is attempted before a usable brief exis
 **`E-NO-PREFERENCES`** (build one with `/job-preference-interview`, or point
 `config.yaml:workspace.preferences_path` at your own prose brief).
 
-## 5. Queries + frequency (conversational-first — no cost talk)
+## 5. Searches + frequency (derive from the brief — don't make the user pick keywords)
 
-Now save at least one search. Do this by **chatting**, then editing `config.yaml` per the `internals.md`
-recipes — never make the user open the file.
+You just built the brief, so you already know what they want. **Derive the searches from it — don't ask the
+user to name keywords.** They can retune anytime; the goal here is zero upfront homework.
 
-1. **Get the search.** Ask for the **role / keywords** and the **location** ("What role should I search for,
-   and where — remote, a metro, a country?"). It's fine to seed a couple if the brief makes them obvious,
-   but confirm them.
-2. **Write a `queries[]` entry** into `config.yaml`. Show the user the item shape so they see what you're
-   saving:
+1. **Derive 2–3 queries from `preferences.md`.** Read the **Summary**, **Must-haves / dealbreakers**, and
+   **Strong preferences**, and turn them into a few complementary searches:
+   - **keywords** — the role/title and domain terms a job board would match (e.g. "AI engineer", "ML platform
+     engineer", "LLM engineer"). Give each query a *different* angle, not one near-duplicate.
+   - **location** — read it off the brief's location constraints: "remote within the US" → `United States`;
+     "onsite in the SF Bay Area" → `San Francisco Bay Area`. If the brief allows both, cover each with its
+     own query.
+2. **Write them to `config.yaml`** per the `internals.md` "Add a query" recipe — never make the user open the
+   file. Each item:
 
    ```yaml
    - { id: "ml-platform-sf", keywords: "ML platform engineer", location: "San Francisco Bay Area", limit: 25, enabled: true }
    ```
 
-   Give the `id` a short, human slug; keep `enabled: true`; `limit: 25` is a fine default. Preserve the
+   Give each `id` a short, human slug; keep `enabled: true`; `limit: 25` is a fine default. Preserve the
    file's comments and structure, and keep `version: 1`.
-3. **Pick a frequency.** Ask how often to pull, with the plain-language nudge — **no credit or cost math**:
+3. **Acknowledge what you saved — don't ask them to choose.** Name the searches you derived and make clear
+   they're fully editable, e.g.:
+
+   > "From your preferences I'll search for **'AI engineer' · 'ML platform engineer'** across **US-remote +
+   > the SF Bay Area**. I can add, retune, or drop any of these anytime — just say the word."
+
+   Only if the brief is too thin to derive anything sensible (rare) do you ask one focused question to fill
+   the gap — lead with derivation, never a blank "what should I search for?".
+4. **Pick a frequency.** Ask how often to pull, with the plain-language nudge — **no credit or cost math**:
 
    > "How often should I check for new postings? **Daily suits most searches; choose hourly only if you're
    > in a fast-moving, active search.** You can change this anytime by just telling me."
 
    Set `schedule.frequency` to one of the allowed values: `hourly | every-2-hours | every-6-hours | daily |
-   weekly`. (For `daily`/`weekly`, `schedule.time` sets when.) **Never** add a budget, cost, or
-   score/weight field — those don't exist in this system.
+   weekly`. **Never** add a budget, cost, or score/weight field — those don't exist in this system.
 
 ## 6. First live sample run — the magical moment
 
@@ -152,45 +163,33 @@ Handle whatever the run reports, in plain language:
 
 Don't show run internals, credits, or scores — just the matches and, if relevant, the named error.
 
-## 7. Scheduling (offer it; consent + fallback)
+## 7. Scheduling (offer it; native `/loop`, nothing touches the machine)
 
-Offer to make the search run on its own. Follow `internals.md` **exactly** — explain the options, get a
-yes/no, and **always** print the verbatim copy-paste fallback regardless of the answer.
+Offer to keep the search running automatically. Job Search OS schedules with Claude Code's **native
+`/loop`** — it re-runs the search on an interval **inside an open Claude session** and never writes anything
+to the user's machine (no crontab, no launchd). Follow `internals.md`. Say it plainly, including the one
+tradeoff: it runs **while you have a Claude session open**.
 
-Explain the three options in a sentence each:
-
-- **cron** (default) — the OS runs it on a schedule even when Claude is closed.
-- **launchd** (robust macOS) — a launch agent that can wake the Mac at run time.
-- **`/loop`** — keep a Claude session open and loop the run.
-
-Ask a simple **yes/no**: "Want me to set this up to run automatically?"
+Ask a simple **yes/no**: "Want me to keep this running automatically while you have Claude open?"
 
 **On yes:**
 
-1. Generate the artifact deterministically with `$OS`:
-   - cron → `python3 "$OS" schedule-line --frequency <f> --time <t> --workspace <workspace>`
-   - launchd → `python3 "$OS" launchd-plist --frequency <f> --time <t> --workspace <workspace>`
-2. If the user chose launchd or /loop specifically, first run `python3 "$OS" set-sched-intent --choice <mechanism>` (records consent for the guard).
-3. Perform the **privileged write**: append the generated line to the crontab, **or** write the plist to
-   `~/Library/LaunchAgents/dev.jobsearchos.run.plist` and `launchctl load` it.
-4. Record it so you never re-ask: `python3 "$OS" set-scheduled --mechanism <cron|launchd|loop>`,
-   then `python3 "$OS" clear-sched-intent`.
-5. **Also print the verbatim fallback block below** (so the user has the manual recipe too).
+1. Get the deterministic command for the chosen frequency:
+   `python3 "$OS" loop-command --frequency <f>` → prints e.g. `/loop 24h /job-search-run`.
+2. **Start it** by running that `/loop …` command, then record it so you don't re-ask:
+   `python3 "$OS" set-scheduled` (records `mechanism: loop`).
+3. Show the user the exact `/loop` line so they can restart it anytime (it stops when the session ends).
 
-**On no:** print the verbatim fallback block so the user can do it later, and only run
-`python3 "$OS" set-scheduled --mechanism <m>` if they confirm they set it up themselves.
+**On no:** leave it unscheduled — tell them they can turn it on later by just asking, and that a one-off run
+is always `/job-search-run`.
 
-**Always print this fallback block verbatim** (from `internals.md`):
+**Either way, show this recipe verbatim** so the user can start or restart it themselves (from `internals.md`):
 
 ```
-OPTION A — OS cron (recommended; runs even when Claude is closed)
-  crontab -e  →  0 8 * * *  cd ~/.job-search && claude -p "/job-search-run" >> ~/.job-search/runs/cron.log 2>&1
-       (an hourly frequency would generate `0 * * * *`, etc. — setup writes the line matching your choice)
-  • Verify now:  cd ~/.job-search && claude -p "/job-search-run"
-  • macOS: the Mac must be awake at run time — keep it on, use `caffeinate`, or install the launchd plist
-    (StartCalendarInterval can wake the machine — the robust mac option).
-OPTION B — keep Claude open and loop:  /loop <frequency> /job-search-run
-Not sure? Use Option A.
+Recurring (runs while a Claude session is open — nothing installed on your machine):
+  /loop <interval> /job-search-run      # hourly → 1h · daily → 24h · weekly → 168h
+One-off run anytime:
+  /job-search-run
 ```
 
 ## 8. Home
@@ -209,8 +208,8 @@ runs", "update my preferences", "show the latest digest").
 - [ ] workspace adopted-or-created; **never clobbered** an existing `config.yaml` / `preferences.md` /
       `jobs.jsonl`; `set-active` recorded
 - [ ] `preferences.md` exists (interview or import via `job-preference-interview`)
-- [ ] at least one `queries[]` entry written; `schedule.frequency` set (plain-language nudge, **no cost
-      math**)
+- [ ] 2–3 `queries[]` **derived from the brief** and written (no upfront keyword-picking); searches
+      acknowledged; `schedule.frequency` set (plain-language nudge, **no cost math**)
 - [ ] first **live** `job-search-run` done; strong/moderate matches shown — or the named error if blocked
-- [ ] scheduling offered; on yes installed + `set-scheduled`; **fallback block printed verbatim either way**
+- [ ] scheduling offered via native `/loop`; on yes started + `set-scheduled`; `/loop` recipe shown either way
 - [ ] home view printed

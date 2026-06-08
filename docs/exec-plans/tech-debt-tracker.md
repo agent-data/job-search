@@ -35,7 +35,5 @@ concurrency / interrupted-run recovery (two overlapping runs; a hard-kill mid-ru
 **How to apply:** Add targeted tests when these surfaces are exercised in the field.
 **Linked tests:** none yet.
 
-## P3 — osctl schedule-line accepts an out-of-range --time (`TODO-TIME-RANGE`)
-**What:** `python3 scripts/osctl.py schedule-line --frequency daily --time 25:99` is accepted and emits an invalid cron line `99 25 * * *`. `cron_schedule()` (and `launchd_cal()`) parse `int(hh), int(mm)` with no range check.
-**Why:** Surfaced in the 2026-06-07 DX audit. Low impact (the conversational layer sets valid times), but the deterministic core should reject out-of-range hours/minutes. The passing `test_schedule_line_malformed_time_is_clean_error` only covers a missing-colon time, not out-of-range values.
-**How to apply:** Validate `0 <= h <= 23` and `0 <= m <= 59`; raise `ValueError` → clean `schedule-line failed: …` (exit 1); add a `25:99` test.
+## P3 — osctl schedule-line accepts an out-of-range --time (`TODO-TIME-RANGE`) — ✅ resolved (obsolete)
+**Resolved 2026-06-08 by removal.** The cron/launchd generators (`schedule-line`, `cron_schedule()`, `launchd_cal()`) no longer exist — scheduling is native `/loop` (see [`../../shared/references/internals.md`](../../shared/references/internals.md)). `loop-command` takes only `--frequency` (no `--time`), so there is no time value to range-check. No action needed.

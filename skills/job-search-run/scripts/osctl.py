@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""osctl.py — Job Search OS internals: registry + workspace discovery + scheduling artifacts.
+"""osctl.py — Job Search OS internals: registry + workspace discovery + the /loop schedule marker.
 
 Deterministic, dependency-free (stdlib only; NOT YAML-aware). The registry is a small JSON file
 (machine-managed OS state); the workspace's config.yaml stays the user-facing config.
@@ -11,7 +11,7 @@ Path defaults can be redirected for tests/evals without touching real data, via 
   registry:  --registry  >  $JOBSEARCH_OS_REGISTRY  >  $XDG_CONFIG_HOME/job-search-os/config.json  >  ~/.config/...
   workspaces: --default-workspace/--legacy-workspace  >  derived from $JOBSEARCH_OS_HOME  >  ~
 """
-import argparse, html, json, os, sys, time
+import argparse, json, os, sys
 from datetime import datetime, timezone
 
 REGISTRY_VERSION = 1
@@ -127,36 +127,6 @@ def cmd_set_scheduled(args):
     return 0
 
 
-SCHED_CHOICES = ("cron", "launchd", "loop")
-
-
-def _intent_path(registry_override=None):
-    d = os.path.dirname(registry_path(registry_override)) or "."
-    return os.path.join(d, ".sched-intent.json")
-
-
-def cmd_set_sched_intent(args):
-    path = _intent_path(args.registry)
-    parent = os.path.dirname(path)
-    if parent:
-        os.makedirs(parent, exist_ok=True)
-    with open(path, "w", encoding="utf-8") as f:
-        json.dump({"choice": args.choice, "set_at_epoch": int(time.time()),
-                   "set_at": datetime.now(timezone.utc).isoformat(timespec="seconds")}, f)
-        f.write("\n")
-    print(json.dumps({"choice": args.choice}))
-    return 0
-
-
-def cmd_clear_sched_intent(args):
-    try:
-        os.remove(_intent_path(args.registry))
-    except FileNotFoundError:
-        pass
-    print(json.dumps({"cleared": True}))
-    return 0
-
-
 def cmd_set_unscheduled(args):
     try:
         path = registry_path(args.registry)
@@ -171,75 +141,35 @@ def cmd_set_unscheduled(args):
     return 0
 
 
-CRON = {"hourly": "0 * * * *", "every-2-hours": "0 */2 * * *", "every-6-hours": "0 */6 * * *"}
+LOOP_INTERVAL = {"hourly": "1h", "every-2-hours": "2h", "every-6-hours": "6h",
+                 "daily": "24h", "weekly": "168h"}
 
 
-def cron_schedule(frequency, time_str):
-    if frequency in CRON:
-        return CRON[frequency]
-    hh, mm = (time_str or "08:00").split(":")
-    h, m = int(hh), int(mm)
-    if frequency == "daily":
-        return f"{m} {h} * * *"
-    if frequency == "weekly":
-        return f"{m} {h} * * 1"   # Monday
-    raise ValueError(f"unknown frequency {frequency!r} (hourly|every-2-hours|every-6-hours|daily|weekly)")
+def loop_command(frequency):
+    """The native scheduler artifact: `/loop <interval> /job-search-run` for a config frequency.
+
+    /loop runs the recurring search inside an open Claude Code session — no privileged write, nothing
+    installed on the user's machine. `schedule.time` is informational under /loop: the loop fires on an
+    interval from when it's started, not at a wall-clock time. Intervals are hour-based (e.g. `24h`)
+    rather than `1d`/`7d`, since /loop's duration parser is not guaranteed to accept a day unit.
+    """
+    iv = LOOP_INTERVAL.get(frequency)
+    if not iv:
+        raise ValueError(f"unknown frequency {frequency!r} (hourly|every-2-hours|every-6-hours|daily|weekly)")
+    return f"/loop {iv} /job-search-run"
 
 
-def cron_line(frequency, time_str, workspace):
-    ws = workspace or default_workspace()
-    return f'{cron_schedule(frequency, time_str)} cd "{ws}" && claude -p "/job-search-run" >> "{ws}/runs/cron.log" 2>&1'
-
-
-def cmd_schedule_line(args):
+def cmd_loop_command(args):
     try:
-        print(cron_line(args.frequency, args.time, args.workspace))
+        print(loop_command(args.frequency))
     except ValueError as e:
-        print(f"schedule-line failed: {e}", file=sys.stderr)
-        return 1
-    return 0
-
-
-PLIST = """<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-  <key>Label</key><string>dev.jobsearchos.run</string>
-  <key>ProgramArguments</key>
-  <array>
-    <string>/bin/bash</string><string>-lc</string>
-    <string>cd "{ws}" &amp;&amp; claude -p "/job-search-run" >> "{ws}/runs/cron.log" 2>&amp;1</string>
-  </array>
-  <key>StartCalendarInterval</key><dict>{cal}</dict>
-  <key>RunAtLoad</key><false/>
-</dict>
-</plist>"""
-
-
-def launchd_cal(frequency, time_str):
-    if frequency == "hourly":
-        return "<key>Minute</key><integer>0</integer>"
-    hh, mm = (time_str or "08:00").split(":")
-    h, m = int(hh), int(mm)
-    if frequency == "daily":
-        return f"<key>Hour</key><integer>{h}</integer><key>Minute</key><integer>{m}</integer>"
-    if frequency == "weekly":
-        return f"<key>Weekday</key><integer>1</integer><key>Hour</key><integer>{h}</integer><key>Minute</key><integer>{m}</integer>"
-    raise ValueError(f"launchd plist supports hourly|daily|weekly; for {frequency!r} use cron")
-
-
-def cmd_launchd_plist(args):
-    try:
-        ws = args.workspace or default_workspace()
-        print(PLIST.format(ws=html.escape(ws), cal=launchd_cal(args.frequency, args.time)))
-    except ValueError as e:
-        print(f"launchd-plist failed: {e}", file=sys.stderr)
+        print(f"loop-command failed: {e}", file=sys.stderr)
         return 1
     return 0
 
 
 def build_parser():
-    p = argparse.ArgumentParser(description="Job Search OS internals (registry, discovery, scheduling)")
+    p = argparse.ArgumentParser(description="Job Search OS internals (registry, discovery, /loop scheduling)")
     sub = p.add_subparsers(dest="cmd", required=True)
 
     r = sub.add_parser("resolve", help="print active workspace + first_run + source as JSON")
@@ -253,37 +183,19 @@ def build_parser():
     s.add_argument("--registry")
     s.set_defaults(func=cmd_set_active)
 
-    sl = sub.add_parser("schedule-line", help="emit the cron line for a frequency")
-    sl.add_argument("--frequency", required=True)
-    sl.add_argument("--time", default="08:00")
-    sl.add_argument("--timezone", help="accepted for compatibility; cron uses the system timezone")
-    sl.add_argument("--workspace")
-    sl.set_defaults(func=cmd_schedule_line)
-
-    lp = sub.add_parser("launchd-plist", help="emit a launchd plist (macOS)")
-    lp.add_argument("--frequency", required=True)
-    lp.add_argument("--time", default="08:00")
-    lp.add_argument("--workspace")
-    lp.set_defaults(func=cmd_launchd_plist)
+    lc = sub.add_parser("loop-command", help="emit `/loop <interval> /job-search-run` for a frequency")
+    lc.add_argument("--frequency", required=True)
+    lc.set_defaults(func=cmd_loop_command)
 
     ss = sub.add_parser("schedule-status", help="print the scheduling marker as JSON")
     ss.add_argument("--registry")
     ss.set_defaults(func=cmd_schedule_status)
 
-    sd = sub.add_parser("set-scheduled", help="record that scheduling was installed")
-    sd.add_argument("--mechanism", required=True, choices=["cron", "launchd", "loop"])
+    sd = sub.add_parser("set-scheduled", help="record that a /loop schedule is running")
+    sd.add_argument("--mechanism", default="loop", choices=["loop"])
     sd.add_argument("--set-at")
     sd.add_argument("--registry")
     sd.set_defaults(func=cmd_set_scheduled)
-
-    si = sub.add_parser("set-sched-intent", help="record the user's chosen schedule mechanism (for the consent hook)")
-    si.add_argument("--choice", required=True, choices=SCHED_CHOICES)
-    si.add_argument("--registry")
-    si.set_defaults(func=cmd_set_sched_intent)
-
-    ci = sub.add_parser("clear-sched-intent", help="remove the schedule-intent marker")
-    ci.add_argument("--registry")
-    ci.set_defaults(func=cmd_clear_sched_intent)
 
     su = sub.add_parser("set-unscheduled", help="clear the scheduling marker (turn-off)")
     su.add_argument("--registry")

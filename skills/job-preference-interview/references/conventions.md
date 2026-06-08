@@ -23,8 +23,8 @@ workspace:
 queries:
   - { id: "ai-eng-remote", keywords: "AI engineer", location: "United States", limit: 25, enabled: true }
 schedule:
-  frequency: "daily"         # hourly | every-2-hours | every-6-hours | daily | weekly
-  time: "08:00"
+  frequency: "daily"         # hourly | every-2-hours | every-6-hours | daily | weekly → /loop interval (24h for daily)
+  time: "08:00"              # informational under /loop (loop fires on an interval, not at a wall-clock time)
   timezone: "America/Los_Angeles"
 notify:
   digest_path_template: "reports/{date}-digest.md"

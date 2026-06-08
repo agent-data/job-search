@@ -15,7 +15,7 @@ Resolve the workspace once: `python3 "$OS" resolve` → use its `workspace` as `
 Read just what the home view needs (all local, all free):
 
 - **Schedule marker:** `python3 "$OS" schedule-status` →
-  `{"installed":<bool>,"mechanism":"cron|launchd|loop"|null,"set_at":<iso>|null}`.
+  `{"installed":<bool>,"mechanism":"loop"|null,"set_at":<iso>|null}`.
 - **Brief age:** the `created_at:` line near the top of `<ws>/preferences.md`.
 - **Last run health:** the newest `<ws>/runs/*.json` (its `run_health`), or fall back to the **Run health**
   line of the latest digest.
@@ -33,7 +33,7 @@ Keep it tight. A good shape:
 
 ```
 Job search — <ws path>
-Brief: updated <date> (<N months ago>)   ·   Schedule: <on, daily via cron | off>   ·   Last run: <healthy | partial (N) | degraded | blocked>
+Brief: updated <date> (<N months ago>)   ·   Schedule: <on, daily via /loop | off>   ·   Last run: <healthy | partial (N) | degraded | blocked>
 
 Latest digest — <date>
   9 new postings · 3 strong · 2 moderate · 1 weak · 3 filtered out · <n> searches · <m> detail reads
@@ -50,7 +50,7 @@ What next? Just tell me:
 Notes on each part:
 
 - **Status line.** Workspace path; brief age from `preferences.md:created_at`; schedule from
-  `schedule-status` (on + mechanism, or off) — the **frequency** to render (e.g. "daily" in "daily via cron")
+  `schedule-status` (on + mechanism, or off) — the **frequency** to render (e.g. "daily" in "daily via /loop")
   comes from `config.yaml:schedule.frequency`, since `schedule-status` carries only on/off + mechanism;
   last-run health from the newest `runs/*.json` `run_health` (or the latest digest's Run health line). Run
   health is one of `healthy | partial (N errors) | degraded (LinkedIn flaky) | blocked (action needed)`.
@@ -68,16 +68,18 @@ Offer these and apply each by **chatting**, editing `config.yaml` per the `inter
 - **Run a search now** → invoke `job-search-run` against `<ws>` (disclose it makes a few live calls), then
   show the fresh digest's strong/moderate matches.
 - **Add or edit a query** → append/modify a `queries[]` item
-  (`{ id, keywords, location, limit, enabled }`); preserve comments; keep `version: 1`.
+  (`{ id, keywords, location, limit, enabled }`); preserve comments; keep `version: 1`. If the user asks for
+  another search without naming keywords, **derive** it from their brief (don't make them pick) and
+  acknowledge what you added — same as onboarding step 5.
 - **Change how often it runs** → set `schedule.frequency` to `hourly | every-2-hours | every-6-hours |
   daily | weekly` (and `schedule.time` for daily/weekly). Reuse the plain-language nudge — "daily suits most
   searches; hourly only for a fast-moving, active search." **No cost math.**
 - **Update preferences** → invoke `job-preference-interview` (it reads the existing brief and updates it,
   refreshing `created_at`).
-- **Change or turn off the schedule** → re-run the scheduling flow in `onboarding.md` (generate with
-  `$OS schedule-line` / `launchd-plist`, do the privileged write, `set-scheduled`), and **always print the
-  verbatim fallback block** from `internals.md`. To turn it off, remove the crontab line or
-  `launchctl unload` + delete the plist, then `python3 "$OS" set-unscheduled` so `schedule-status` reads
+- **Change or turn off the schedule** → re-run the scheduling flow in `onboarding.md`: get the line with
+  `python3 "$OS" loop-command --frequency <f>`, run that `/loop …`, then `python3 "$OS" set-scheduled`; always
+  show the verbatim `/loop` recipe from `internals.md`. To turn it off, stop the loop (end the session or
+  cancel the pending wakeup), then `python3 "$OS" set-unscheduled` so `schedule-status` reads
   `installed: false`, and tell the user it's off.
 - **Show the latest digest** → print the newest `reports/<date>-digest.md` (strong → moderate → weak →
   filtered-out), unchanged.

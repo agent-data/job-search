@@ -1,55 +1,44 @@
 # Scheduling & consent
 
-How the Job Search Agent installs its recurring schedule, what mechanisms are available, and how the consent hook enforces safe behavior.
+How the Job Search Agent schedules its recurring run with Claude Code's native `/loop`, and how the
+safety-net hook keeps scheduling native and off the user's machine.
 
-## Mechanisms
+## Mechanism: native `/loop` (the only one)
 
-| Mechanism | How it works | Generate with | Notes |
-|-----------|-------------|---------------|-------|
-| **cron** | OS cron daemon; runs even when Claude is closed | `python3 "$OS" schedule-line --frequency <f> --time <t> --workspace <ws>` | **Default — prefer this unless the user explicitly asks otherwise** |
-| **launchd** | macOS LaunchAgents; `StartCalendarInterval` can wake the machine | `python3 "$OS" launchd-plist --frequency <f> --time <t> --workspace <ws>` | Robust macOS option; non-default — requires explicit user choice |
-| **/loop** | Keeps a Claude session open via `/loop <frequency> /job-search-run` | n/a (no artifact) | No privileged write; session-bound only |
+Job Search OS schedules with Claude Code's native **`/loop`**: `/loop <interval> /job-search-run` re-runs the
+search on an interval inside an **open Claude session**. There is no privileged write — nothing is added to
+the user's crontab or launchd, and nothing persists on their machine. The tradeoff: it runs only while a
+Claude session is open. (`/schedule` — cloud routines — is intentionally not used: a cloud agent wouldn't
+have the local workspace or `agent-data` auth.)
 
-Cron is the default. Prefer it unless the user explicitly names launchd or /loop.
+| Step | Command | Notes |
+|------|---------|-------|
+| Get the artifact | `python3 "$OS" loop-command --frequency <f>` | Prints `/loop <interval> /job-search-run`. hourly→`1h`, every-2-hours→`2h`, every-6-hours→`6h`, daily→`24h`, weekly→`168h`. |
+| Start it (on yes) | run the printed `/loop …` line | Runs in the current session; stops when the session ends. |
+| Record it | `python3 "$OS" set-scheduled` | Records `mechanism: loop` so the home view shows the schedule and you don't re-ask. |
+| Turn it off | stop the loop, then `python3 "$OS" set-unscheduled` | Clears the marker so `schedule-status` reads `installed: false`. |
 
-## The record-intent-then-install workflow
+`schedule.time` in `config.yaml` is informational under `/loop` (the loop fires on an interval from when it's
+started, not at a wall-clock time). Always also show the user the verbatim `/loop` recipe from `internals.md`
+so they can start or restart it themselves.
 
-Scheduling installs are consent-guarded (see [§ The consent hook](#the-consent-hook) below). Follow this exact order:
+## The safety-net hook
 
-1. **Default is cron.** Prefer it unless the user explicitly asked for launchd or /loop.
-2. **Record intent only if the user named a non-default mechanism.** After the user explicitly chooses launchd or /loop, record their choice so the guard can distinguish user intent from model improvisation:
-   ```
-   python3 "$OS" set-sched-intent --choice <cron|launchd|loop>
-   ```
-   Run this step ONLY after the user has named that mechanism. Do not set it for cron (the default) and do not set it for any mechanism the user has not named.
-3. **Perform the install.** The guard will `ask` or `deny` based on the mechanism and whether a fresh intent marker exists (see decision table below).
-4. **On success, record completion and clear the intent marker:**
-   ```
-   python3 "$OS" set-scheduled --mechanism <cron|launchd|loop>
-   python3 "$OS" clear-sched-intent
-   ```
-5. **To turn scheduling off:** remove the OS artifact (delete the crontab line or the launchd plist), then:
-   ```
-   python3 "$OS" set-unscheduled
-   ```
-   This clears the `installed: true` marker so `schedule-status` reads `installed: false`.
+`hooks/guard-scheduled-tasks.py` is a `PreToolUse` (Bash) guard — a **defense-in-depth backstop, not part of
+the normal flow**. Because scheduling is native `/loop`, the model never needs to write the machine, so the
+guard refuses any attempt to install an OS schedule and defers everything else:
 
-## The consent hook
+| Command | Decision | Why |
+|---------|----------|-----|
+| A `crontab` install (`crontab -e`, `crontab <file>`, or piping into `crontab -`) | **deny** | Scheduling is `/loop`; the model must never write the user's crontab. |
+| A launchd install (`launchctl load/bootstrap/enable/submit`, or writing a plist into `LaunchAgents`/`LaunchDaemons`) | **deny** | Same — `/loop` needs no launch agent. |
+| Reads (`crontab -l`, `launchctl list`), removals (`launchctl unload`, `rm …plist`), `/loop`, and anything that merely *mentions* these words (a `grep`, an `echo`, a comment) | **defer** (not gated) | They don't write the machine; flagging them was a false-positive bug. |
 
-`hooks/guard-scheduled-tasks.py` is a `PreToolUse` (Bash) guard that intercepts every Bash command before it runs. It inspects the command for scheduling install patterns and applies this decision table:
-
-| Command pattern | Condition | Decision | Message shown |
-|-----------------|-----------|----------|---------------|
-| `crontab` write / `/etc/cron` | — | **ask** | "This installs a cron schedule… Confirm the privileged write to your crontab." |
-| `launchctl load/bootstrap/enable/submit` or writing to `LaunchAgents/LaunchDaemons` | Fresh `set-sched-intent --choice launchd` marker (≤ 300 s old) | **ask** | "You're installing a launchd agent, which is NOT the default (cron is). Confirm you want launchd specifically." |
-| `launchctl load/bootstrap/enable/submit` or writing to `LaunchAgents/LaunchDaemons` | No fresh marker (model reached for launchd unprompted) | **deny** | "Do not install a launchd agent here. The default is cron, and /loop needs no privileged write." |
-| Removal / turn-off (`launchctl unload`, `rm` the plist) | — | **not gated** (defer) | — |
-| `/loop` | — | **not gated** (defer) | — |
-| Read-only commands (`crontab -l`, `launchctl list`) | — | **not gated** (defer) | — |
-
-**Rationale:** The guard makes the consent gate unbypassable regardless of how the model is prompted. Phrasings like "make it run hourly" or "set up a schedule" can no longer silently install a launchd agent — the hook denies it unless the user explicitly confirmed launchd first via `set-sched-intent`. The 300-second TTL on the intent marker means stale confirmations do not carry over to a later session.
-
-Note: the `CRON` regex in the hook matches `crontab` writes but explicitly excludes `crontab -l` (read-only list), so inspection commands are never gated.
+The deny message points the model back to `/loop <interval> /job-search-run`. Detection is anchored to a
+shell **command position** (start of line, or right after a separator like `|` `;` `&&` `(`) and requires
+real write syntax — so a search like `grep -E "crontab|launchd"` or `rg crontab docs/` is never flagged; only
+an actual invocation is. The guard sees only the **agent's** Bash tool calls; a user typing `crontab -e` in
+their own terminal is unaffected.
 
 ## Packaging
 

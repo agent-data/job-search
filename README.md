@@ -43,13 +43,15 @@ See a full one in [`examples/sample-digest.md`](examples/sample-digest.md).
 
 Clone the repo and pick the option that fits how permanent you want it.
 
-**A — Try it in one session (non-persistent).** Point Claude Code at the cloned repo for this session only:
+**A — Try it in one session (non-persistent).** Launch Claude Code with the plugin loaded — `--plugin-dir`
+is a *launch* flag, so run this in your **shell**, not inside a Claude Code session that's already open:
 
 ```bash
 claude --plugin-dir /path/to/job-search-os
 ```
 
-Then run `/job-search` inside that session.
+That command **starts a new** Claude Code session with the plugin available; run `/job-search` inside it.
+(Already in a running session? Use option **B** instead.)
 
 **B — Install it persistently from a local clone.** Register the clone as a local marketplace, then install:
 
