@@ -65,7 +65,7 @@ Notes on each part:
 
 Offer these and apply each by **chatting**, editing `config.yaml` per the `internals.md` recipes:
 
-- **Run a search now** → invoke `job-search-run` against `<ws>` (disclose it makes a few live calls), then
+- **Run a search now** → invoke `job-search-run` against `<ws>` (disclose it makes live calls), then
   show the fresh digest's strong/moderate matches.
 - **Add or edit a query** → append/modify a `queries[]` item
   (`{ id, keywords, location, limit, enabled }`); preserve comments; keep `version: 1`. If the user asks for

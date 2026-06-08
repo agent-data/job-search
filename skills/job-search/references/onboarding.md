@@ -135,7 +135,7 @@ user to name keywords.** They can retune anytime; the goal here is zero upfront 
 
 This is the payoff. Disclose it plainly first, then do it:
 
-> "Now I'll run your first search for real — this makes a few **live calls** to pull and read postings.
+> "Now I'll run your first search for real — this makes **live calls** to pull and read postings.
 > Give me a moment…"
 
 Invoke **`job-search-run`** against the workspace (`/job-search-run --workspace <workspace>`). It probes the

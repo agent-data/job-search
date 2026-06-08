@@ -414,7 +414,7 @@ JOBSEARCH_FIXTURES=$JSOS/tests/fixtures, JOBSEARCH_TEST_SCENARIO=<scenario>) and
 | T7.6 **E-SERVICE-DOWN** | `down` | "service down" digest, Run health blocked; **no** search/get-posting calls; writes a `runs/<id>.json` with `run_health: blocked` naming **E-SERVICE-DOWN**, so the next `/job-search` home view surfaces it; the headless `claude -p` process returns **0**, so do not assert on `$?` | ⬜ |
 | T7.7 **E-UPSTREAM-STRETCH** | `stretch` | retries the 502 with backoff, stops after two consecutive failed queries; writes a **partial** digest (Run health `partial (N errors)`); doesn't crash | ⬜ |
 | T7.8 invalid-pair (non-error) | `invalid-pair` | no retry; summary-only judgment + "detail link expired" footnote; `detail_read:false`; run completes, exit 0 | ⬜ |
-| T7.9 degraded (non-error) | `degraded` | Run-health line reads `degraded (LinkedIn flaky)`; caps detail reads (~2); still produces matches; exit 0 | ⬜ |
+| T7.9 degraded (non-error) | `degraded` | Run-health line reads `degraded (LinkedIn flaky)`; digest notes results this run may be affected; **no detail-read cap** (reads promising matches as normal); still produces matches; exit 0 | ⬜ |
 | T7.10 zero / all-known | `zero-empty` | "Searches ran but returned 0 results — broaden keywords"; exit 0. (All-known: pre-seed jobs.jsonl with the happy ids → "No NEW postings.") | ⬜ |
 
 ```bash

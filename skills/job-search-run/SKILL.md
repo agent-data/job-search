@@ -29,9 +29,9 @@ never assume the current working directory contains `scripts/`.
    - `agent-data whoami`; `api_key_set:false` → E-NO-AUTH (HALT, exit 1).
    - `config.yaml` `version` major unknown → E-CONFIG-VERSION (HALT, exit 1).
    - Brief missing/empty (`workspace.preferences_path`) → E-NO-PREFERENCES (HALT, exit 1, named fix).
-   - `agent-data call <listing> status`: `ok` proceed; `degraded` set a flag (cap detail reads at ~2 this run,
-     set Run health: degraded, note "LinkedIn flaky" in the digest); unreachable → E-SERVICE-DOWN (write a
-     "service down" digest, HALT, exit 1).
+   - `agent-data call <listing> status`: `ok` proceed; `degraded` set a flag (set Run health: degraded;
+     note "LinkedIn flaky — results this run may be affected" in the digest; no detail-read cap — read
+     promising matches as normal); unreachable → E-SERVICE-DOWN (write a "service down" digest, HALT, exit 1).
 
    > Before exiting on ANY E-* HALT where a workspace exists (E-NO-AUTH, E-NO-PREFERENCES,
    > E-CONFIG-VERSION, E-SERVICE-DOWN, E-QUOTA), write `runs/<run_id>.json` with
@@ -53,8 +53,9 @@ never assume the current working directory contains `scripts/`.
    + `missing_fields[]` (missing = "not stated", never negative).
    - `400 invalid_pair` (not retryable) → judge from summary only; footnote "detail link expired".
    - `502 detail_fetch_failed` (retryable) → retry/backoff; on give-up, summary-only + note.
-   - If many look relevant, read the most promising first (≈up to 5–10 on a healthy run, ~2 when degraded) and
-     mark the rest "summary-only, not yet fully read" in the digest.
+   - **No cap on detail reads** — read all the promising matches, not a fixed number; let relevance, not a
+     count, decide how many. Order most-promising first so the highest-signal reads happen earliest; a posting
+     that fails a detail read per the rules above falls back to summary-only with a note.
 5. **Persist + report.** For each new posting, append the FULL `evaluated` event (complete schema in
    conventions.md §jobs.jsonl) via `python3 "$STATE" append --jobs <workspace>/jobs.jsonl --event '<json>'`.
    The event MUST carry provenance — `event:"evaluated"`, `ts`, `run_id`, `source:"linkedin"`, `query_id`,

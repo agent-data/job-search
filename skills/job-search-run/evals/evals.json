@@ -91,8 +91,8 @@
       "scenario": "degraded",
       "prompt": "Same harness but JOBSEARCH_TEST_SCENARIO=degraded (status returns 'degraded'; search returns the happy results via fallback). Run job-search-run and show the digest.",
       "expectations": [
-        "Sets Run health: degraded and notes LinkedIn is flaky in the digest",
-        "Caps detail reads aggressively this run (about 2) rather than reading every relevant posting",
+        "Sets Run health: degraded and notes LinkedIn is flaky (results this run may be affected) in the digest",
+        "Reads detail for promising matches as normal — no aggressive cap; relevance, not a count, decides how many",
         "Still produces matches and exits 0 (partial/degraded, not a HALT)"
       ]
     },
