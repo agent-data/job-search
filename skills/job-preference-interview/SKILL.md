@@ -12,7 +12,9 @@ user-invocable: true
 
 Build the user's **Job Preferences Brief** at a depth they choose — from a one-line sketch to a thorough
 interview — the prose `preferences.md` that `evaluate-job-fit` later reads next to a posting to judge it.
-Follow `references/voice.md` for how you talk and how you present the finished brief.
+Follow `references/voice.md` for how you talk and how you present the finished brief — and don't narrate
+setup mechanics (no "resolving the workspace", no reference-file talk; your first words open the
+conversation itself).
 
 ## Purpose
 Produce a **prose** brief a model can read against a job posting and judge it **qualitatively**:

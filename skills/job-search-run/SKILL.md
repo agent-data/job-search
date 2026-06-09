@@ -13,6 +13,10 @@ user-invocable: true
 Run ONE headless job-search pass over the workspace. Free gates before metered calls; no silent failures.
 **Shape:** search → dedup/freshen → **scan summaries in this (primary) context** → **fan out one parallel
 subagent per promising posting** for the detail read → **consolidate** into a digest.
+**Voice — before you say anything:** none of this machinery is user-facing. Never say "headless pass",
+"contract/reference files", "resolving the workspace", "dedup", or "database" to the user
+(`references/voice.md`). Interactive narration is sparse user outcomes ("Searching for 'X'…" · "N are new —
+reading them in full…"); scheduled runs stay quiet until the summary + digest.
 Read `references/agent-data-contract.md` (CLI + routes + retry rules), `references/errors.md` (every E-* with
 the exact cause+fix wording), `references/conventions.md` (file schemas + digest format),
 `references/parallelism.md` (parallel-by-default + how to brief a subagent), and `references/voice.md` (how
