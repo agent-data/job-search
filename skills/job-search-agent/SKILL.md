@@ -147,6 +147,7 @@ For the full `E-*` table with exact cause and fix wording: see `references/error
 | Scheduling status | `python3 "$OS" schedule-status` |
 | Customization and flexibility workflows | `references/customization.md` |
 | Parallel-by-default principle + how to brief a subagent | `references/parallelism.md` |
+| How skills talk to the user (voice, banned jargon, rendering briefs/digests) | `references/voice.md` |
 | Scheduling consent workflow and hook behavior | `references/scheduling-and-consent.md` |
 | This operator manual | `job-search-agent` skill |
 

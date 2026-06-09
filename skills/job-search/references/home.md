@@ -5,8 +5,8 @@ glanceable home** for the user's job search, then let them drive the next action
 dashboard, not log dump — a few lines they can scan in seconds.
 
 Resolve `$OS` and `$STATE` from **this skill's own directory** (e.g. `${CLAUDE_SKILL_DIR}/scripts/...`).
-Follow `internals.md`, `conventions.md`, and `errors.md` exactly. No numeric scores, no credits — the only
-time cost appears is reactively as **`E-QUOTA`** in a run's health.
+Follow `internals.md`, `conventions.md`, `errors.md`, and `voice.md` exactly. No numeric scores, no
+credits — the only time cost appears is reactively as **`E-QUOTA`** in a run's health.
 
 ## Gather
 
@@ -45,7 +45,7 @@ What next? Just tell me:
   • run a search now            • add or edit a query
   • change how often it runs    • tune the feed
   • update your preferences     • change or turn off the schedule
-  • show the latest digest
+  • show the latest digest      • show your preferences brief
 ```
 
 Notes on each part:
@@ -82,13 +82,16 @@ Offer these and apply each by **chatting**, editing `config.yaml` per the `inter
   searches; hourly only for a fast-moving, active search." **No cost math.**
 - **Update preferences** → invoke `job-preference-interview` (it reads the existing brief and updates it,
   refreshing `updated_at`).
+- **Show your preferences brief** → print `<ws>/preferences.md`'s body in your reply as normal message text
+  (rendered markdown — no code fence, skip the front-matter lines, never just the path).
 - **Change or turn off the schedule** → re-run the scheduling flow in `onboarding.md`: get the line with
   `python3 "$OS" loop-command --frequency <f>`, run that `/loop …`, then `python3 "$OS" set-scheduled`; always
   show the verbatim `/loop` recipe from `internals.md`. To turn it off, stop the loop (end the session or
   cancel the pending wakeup), then `python3 "$OS" set-unscheduled` so `schedule-status` reads
   `installed: false`, and tell the user it's off.
 - **Show the latest digest** → print the newest `reports/<date>-digest.md` (strong → moderate → weak →
-  filtered-out), unchanged.
+  filtered-out) unchanged, as normal message text in your reply (rendered markdown — never inside a code
+  fence, never just the file path).
 
 ## Nudges (surface only when they apply)
 

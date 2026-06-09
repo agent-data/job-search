@@ -64,6 +64,7 @@ That's the whole router. Everything else is in the two playbooks; read the one y
 
 Read and follow exactly: `references/internals.md` (OS state, discovery, never-clobber adoption, config
 recipes, and the verbatim scheduling block), `references/conventions.md` (workspace layout, `config.yaml`
-schema, `jobs.jsonl` statuses, digest format + counts line), `references/errors.md` (every named error), and
-`references/agent-data-contract.md` (the source contract `job-search-run` honors). These are the source of
-truth; this skill never restates their details from memory.
+schema, `jobs.jsonl` statuses, digest format + counts line), `references/errors.md` (every named error),
+`references/voice.md` (how every reply talks to the user — plain English, zero-context first-run asks,
+render documents inline), and `references/agent-data-contract.md` (the source contract `job-search-run`
+honors). These are the source of truth; this skill never restates their details from memory.

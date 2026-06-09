@@ -1,6 +1,6 @@
 ---
 name: job-search-run
-description: Run one headless, non-interactive job-search pass — load the preferences brief and config, search agent-data for each saved query, dedup against the local job database, judge each new posting's relevance, read full descriptions for promising matches, and write a digest. Use to run the scheduled search, check for new jobs, or when invoked by a schedule. (For interactive setup or the home view, use job-search.)
+description: Run one headless, non-interactive job-search pass — load the preferences brief and config, search agent-data for each saved query, skip postings it has already seen, judge each new posting's relevance, read full descriptions for promising matches, and write a digest. Use to run the scheduled search, check for new jobs, or when invoked by a schedule. (For interactive setup or the home view, use job-search.)
 disable-model-invocation: false
 user-invocable: true
 ---
@@ -14,8 +14,9 @@ Run ONE headless job-search pass over the workspace. Free gates before metered c
 **Shape:** search → dedup/freshen → **scan summaries in this (primary) context** → **fan out one parallel
 subagent per promising posting** for the detail read → **consolidate** into a digest.
 Read `references/agent-data-contract.md` (CLI + routes + retry rules), `references/errors.md` (every E-* with
-the exact cause+fix wording), `references/conventions.md` (file schemas + digest format), and
-`references/parallelism.md` (parallel-by-default + how to brief a subagent) — follow them exactly.
+the exact cause+fix wording), `references/conventions.md` (file schemas + digest format),
+`references/parallelism.md` (parallel-by-default + how to brief a subagent), and `references/voice.md` (how
+any user-facing line is worded) — follow them exactly.
 
 Resolve the workspace with `python3 "$OS" resolve` (bundled `scripts/osctl.py`; registry → `~/.job-search/` → legacy `~/job-search/`) UNLESS `--workspace <path>` is given, which overrides. Resolve `$OS` (and `$STATE`) from this skill's own directory (e.g. `${CLAUDE_SKILL_DIR}/scripts/...` as a plugin) — never assume cwd. This run is HEADLESS: never prompt. If `resolve` reports `first_run` (no workspace/config yet) → E-NO-CONFIG naming the **job-search** skill as the fix (HALT, exit 1); onboarding is interactive and lives in the `job-search` skill, not here. The job source listing id is `f9a6ec16-0bfd-44d8-b3ee-073776745ee7`.
 
@@ -91,6 +92,16 @@ the `evaluate-job-fit` skill to follow, and your scan's **steer** — the provis
 must-have/unknown to confirm (e.g. *"Strong on AI/LLM-IC-Python; confirm remote-US — `location_display` says
 Austin"*). It returns only its `source_id` + the structured judgment object. Keep the steer a provisional read +
 open question, never a verdict.
+
+## Narrating a live run (interactive sessions only)
+
+Scheduled/headless invocations stay as they are — quiet until the 5-line summary + digest. But when this
+skill runs inside a live conversation (onboarding's first run, "run a search now"), narrate progress
+sparsely per `references/voice.md`: one short line per stage, in user outcomes — "Searching for
+'<keywords>'…" → "Found N postings — M are new." → "Reading the M promising ones in full…" → then the
+matches as normal message text (never a code fence, never just the digest's path). Internal vocabulary
+(headless, dedup, database, jobs.jsonl, registry, contract/reference files, skill names) never reaches the
+user — see the table in `voice.md`.
 
 ## Run health, surfacing & exit codes
 Every run ends by writing `runs/<run_id>.json` with at least `{"run_id","run_health",

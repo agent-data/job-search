@@ -12,6 +12,7 @@ user-invocable: true
 
 Build the user's **Job Preferences Brief** at a depth they choose — from a one-line sketch to a thorough
 interview — the prose `preferences.md` that `evaluate-job-fit` later reads next to a posting to judge it.
+Follow `references/voice.md` for how you talk and how you present the finished brief.
 
 ## Purpose
 Produce a **prose** brief a model can read against a job posting and judge it **qualitatively**:
@@ -57,7 +58,8 @@ python3 "$OS" resolve   →  {"workspace":"<abs>","first_run":<bool>,"source":"r
 Before you ask anything, let the user choose how deep to go — and make clear they can **start light and deepen
 later** (a follow-up interview reads the existing brief and *enriches* it, never overwrites). Offer it plainly:
 
-> How deep do you want to go? You can always come back for a deeper pass later.
+> This brief is the plain-English "what I want" that every job posting gets judged against. How deep do you
+> want to go? You can always come back for a deeper pass later.
 > 1. **Quick sketch** (~1 question) — just describe what you want in a sentence or two; I'll draft a brief so you
 >    can see matching jobs right away.
 > 2. **Standard interview** (~6–10 questions) — a focused, one-question-at-a-time pass over what matters most.
@@ -77,8 +79,9 @@ For users who'd rather see jobs now than answer questions:
    **Must-have**, softer wants go to **Strong preferences / Nice-to-haves**. **Don't invent preferences they
    didn't express**; leave a section empty rather than padding it — they can deepen it later. Ask **at most one**
    follow-up, and only if a likely must-have is missing entirely.
-3. Write it, say where it went, and tell the user plainly they can **run a deeper interview anytime** to sharpen
-   it — then hand back so they can run a search.
+3. Write it, **show it rendered in your reply** (no code fence), say in one line where it went, and tell the
+   user plainly they can **run a deeper interview anytime** to sharpen it — then hand back so they can run a
+   search.
 
 ## Interview method
 This is the **Standard** and **Thorough** path — same method, different coverage. **Standard** (~6–10 questions)
@@ -148,7 +151,9 @@ End the brief with a one-line **How to use this** note, e.g.:
 > _How to use this: Claude reads this brief next to a job posting and judges whether it's relevant, and if so
 > whether it's a weak, moderate, or strong match — with reasoning. No score._
 
-After writing, tell the user the file path and offer to refine any section.
+After writing, **show the user the brief itself** — print `preferences.md`'s body directly in your reply as
+normal message text (rendered markdown; no code fence, skip the front-matter lines — see
+`references/voice.md`), say in one line where it's saved, and offer to refine any section.
 
 ## Import an existing brief
 If the user already has a brief, accept a **file path** or **pasted prose** instead of interviewing from
@@ -161,4 +166,5 @@ scratch.
 3. **If it's thin** (missing sections, vague items), offer a few targeted enrich questions to fill the gaps —
    using the same one-question-at-a-time method.
 4. Map its contents onto the five sections, add the `created_at:` + `updated_at:` front-matter lines, and write
-   `preferences.md` at the resolved path. Confirm the path with the user.
+   `preferences.md` at the resolved path. Show the finished brief rendered in your reply the same way (no
+   code fence), and confirm in one line where it's saved.
