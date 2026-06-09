@@ -42,7 +42,7 @@ To shift the importance of a factor, move it between the brief's buckets:
 | **Nice-to-have** | Noted positively when present; absence doesn't hurt |
 | **Red flag** | Presence weakens or disqualifies the posting |
 
-Importance lives in the bucket assignment, never in numeric weights or score multipliers. Run `/job-preference-interview` for a guided way to restructure the brief, or edit `preferences.md` directly.
+Importance lives in the bucket assignment, never in numeric weights or score multipliers. Run the **job-preference-interview** skill for a guided way to restructure the brief, or edit `preferences.md` directly.
 
 ---
 

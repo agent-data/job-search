@@ -99,6 +99,14 @@ def test_loop_command_maps_frequencies(tmp_path):
         out = run(["loop-command", "--frequency", freq]).stdout.strip()
         assert out == f"/loop {iv} /job-search-run"
 
+def test_loop_command_namespace_for_plugin_installs(tmp_path):
+    out = run(["loop-command", "--frequency", "daily", "--namespace", "job-search-os"]).stdout.strip()
+    assert out == "/loop 24h /job-search-os:job-search-run"
+
+def test_loop_command_namespace_forgives_trailing_colon(tmp_path):
+    out = run(["loop-command", "--frequency", "hourly", "--namespace", "job-search-os:"]).stdout.strip()
+    assert out == "/loop 1h /job-search-os:job-search-run"
+
 def test_loop_command_unknown_frequency_errors(tmp_path):
     r = run(["loop-command", "--frequency", "fortnightly"])
     assert r.returncode == 1 and "unknown frequency" in r.stderr

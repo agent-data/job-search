@@ -48,7 +48,7 @@ The deterministic OS state lives in `scripts/osctl.py` (bundled into each skill)
 |---|---|
 | `resolve` | Print active workspace, `first_run`, and `source` as JSON — the one correct way to find the workspace |
 | `set-active --workspace P` | Write the active workspace path to the registry |
-| `loop-command --frequency F` | Emit `/loop <interval> /job-search-run` for a given frequency |
+| `loop-command --frequency F [--namespace job-search-os]` | Emit the `/loop` scheduling line for a frequency — `--namespace job-search-os` for plugin installs (plugin skills are only invocable namespaced); bare for loose skills |
 | `schedule-status` | Print the scheduling marker (installed mechanism) as JSON |
 | `set-scheduled [--mechanism loop]` | Record that a `/loop` schedule is running |
 | `set-unscheduled` | Clear the scheduling marker when turning scheduling off |
@@ -97,9 +97,10 @@ The agent is designed to be extended — add queries, swap the brief, point the 
 
 ## Scheduling
 
-Scheduling is Claude Code's native **`/loop`** — the only mechanism. `/loop <interval> /job-search-run`
-re-runs the search on an interval inside an open Claude session; nothing is installed on the user's machine
-(no crontab, no launchd). Get the line with `osctl loop-command --frequency <f>`, run it, and record it with
+Scheduling is Claude Code's native **`/loop`** — the only mechanism. `/loop <interval> /job-search-os:job-search-run`
+(plugin installs; loose skills drop the `job-search-os:` prefix) re-runs the search on an interval inside an
+open Claude session; nothing is installed on the user's machine (no crontab, no launchd). Get the line with
+`osctl loop-command --frequency <f> [--namespace job-search-os]`, run it, and record it with
 `osctl set-scheduled`. The one tradeoff: it runs only while a Claude session is open.
 
 A `PreToolUse` safety-net hook **denies** any model-initiated crontab/launchd install (and ignores reads,
@@ -118,7 +119,7 @@ removals, `/loop`, and mere mentions) — see `references/scheduling-and-consent
 | `degraded (LinkedIn flaky)` | The status probe returned `degraded`; the digest notes LinkedIn is flaky and the run proceeds (no read cap — relevance decides how many to read) |
 | `blocked (action needed)` | A named `E-*` halted the run; action required before the next run succeeds |
 
-**How failures surface:** a blocked run writes three artifacts — a `runs/<id>.json` record with `run_health:"blocked"`, a `reports/<date>-digest.md` whose body is the named error + fix, and (if `notify.desktop_notify_on_block: true`) a desktop notification. The **home view** on your next `/job-search` reads `runs/<id>.json` and shows the error there. Do not rely on the process exit code — a headless `claude -p` run returns 0 even when blocked.
+**How failures surface:** a blocked run writes three artifacts — a `runs/<id>.json` record with `run_health:"blocked"`, a `reports/<date>-digest.md` whose body is the named error + fix, and (if `notify.desktop_notify_on_block: true`) a desktop notification. The **home view** the next time you open the **job-search** skill reads `runs/<id>.json` and shows the error there. Do not rely on the process exit code — a headless `claude -p` run returns 0 even when blocked.
 
 For the full `E-*` table with exact cause and fix wording: see `references/errors.md`.
 
@@ -126,11 +127,11 @@ For the full `E-*` table with exact cause and fix wording: see `references/error
 
 | Symptom | Likely cause | Fix |
 |---|---|---|
-| Runs complete but 0 matches even though real postings exist | Query keywords don't match the brief's must-haves | Broaden the query in `config.yaml`, or run `/job-preference-interview` to align the brief |
+| Runs complete but 0 matches even though real postings exist | Query keywords don't match the brief's must-haves | Broaden the query in `config.yaml`, or run the **job-preference-interview** skill to align the brief |
 | 0 results (literally empty) | Keywords too narrow or location too specific | Broaden `keywords` or `location` in the query |
 | Last run: blocked — E-QUOTA | API limit reached for the period | Lower `schedule.frequency` (e.g. `daily` instead of `hourly`), or upgrade your plan at agent-data.motie.dev |
-| Schedule isn't firing | The `/loop` isn't running (its Claude session closed) | Run `python3 "$OS" schedule-status`; restart it with `/loop <interval> /job-search-run` |
-| "Stale brief" nudge in the digest | `preferences.md` hasn't been updated in a long time | Run `/job-preference-interview` to refresh it |
+| Schedule isn't firing | The `/loop` isn't running (its Claude session closed) | Run `python3 "$OS" schedule-status`; restart it with the line from `osctl loop-command` (namespaced `/job-search-os:job-search-run` for plugin installs) |
+| "Stale brief" nudge in the digest | `preferences.md` hasn't been updated in a long time | Run the **job-preference-interview** skill to refresh it |
 
 ---
 

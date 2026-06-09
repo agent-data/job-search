@@ -1,6 +1,6 @@
 {
   "skill_name": "job-search-run",
-  "harness": "Each case: run skills/job-search-run/evals/files/setup-workspace.sh <tmp> to build a workspace + _bin/agent-data shim symlink. Prepend <tmp>/_bin to PATH and export JOBSEARCH_FIXTURES=<repo>/tests/fixtures and JOBSEARCH_TEST_SCENARIO=<scenario> (plus the per-case tweak), so the run skill's `agent-data` calls hit the fake shim (no real credits). Then run /job-search-run --workspace <tmp> (the override path, so discovery is bypassed for these workspace-provided cases) and inspect <tmp>/reports/<date>-digest.md, <tmp>/jobs.jsonl, and the exit code. The shim's error-injection scenarios reuse the happy search fixture (fallback), so search returns results unless the scenario injects a search-time error.",
+  "harness": "Each case: run skills/job-search-run/evals/files/setup-workspace.sh <tmp> to build a workspace + _bin/agent-data shim symlink. Prepend <tmp>/_bin to PATH and export JOBSEARCH_FIXTURES=<repo>/tests/fixtures and JOBSEARCH_TEST_SCENARIO=<scenario> (plus the per-case tweak), so the run skill's `agent-data` calls hit the fake shim (no real credits). Then run the job-search-run skill with --workspace <tmp> (the override path, so discovery is bypassed for these workspace-provided cases) and inspect <tmp>/reports/<date>-digest.md, <tmp>/jobs.jsonl, and the exit code. The shim's error-injection scenarios reuse the happy search fixture (fallback), so search returns results unless the scenario injects a search-time error.",
   "evals": [
     {
       "id": 1,
@@ -33,7 +33,7 @@
       "expectations": [
         "Stops at preflight with the E-NO-AUTH message (export AGENT_DATA_API_KEY + verify with whoami)",
         "Does NOT call search-jobs; pulls nothing",
-        "Writes runs/<id>.json with run_health 'blocked' naming E-NO-AUTH (the home view surfaces it on next /job-search); does not depend on a non-zero process exit — a headless run returns 0"
+        "Writes runs/<id>.json with run_health 'blocked' naming E-NO-AUTH (the home view surfaces it on the next job-search visit); does not depend on a non-zero process exit — a headless run returns 0"
       ]
     },
     {
@@ -51,9 +51,9 @@
       "scenario": "happy, no preferences.md",
       "prompt": "Same harness, JOBSEARCH_TEST_SCENARIO=happy, but delete <tmp>/preferences.md after setup. Run job-search-run.",
       "expectations": [
-        "Takes the E-NO-PREFERENCES path: names the fix (/job-preference-interview, or point preferences_path at a brief)",
+        "Takes the E-NO-PREFERENCES path: names the fix (the job-preference-interview skill, or point preferences_path at a brief)",
         "Spends nothing (no agent-data data calls)",
-        "Writes runs/<id>.json with run_health 'blocked' naming E-NO-PREFERENCES (home surfaces it next /job-search); a headless run exits 0, so don't assert a non-zero exit"
+        "Writes runs/<id>.json with run_health 'blocked' naming E-NO-PREFERENCES (home surfaces it on the next job-search visit); a headless run exits 0, so don't assert a non-zero exit"
       ]
     },
     {
@@ -109,17 +109,17 @@
     {
       "id": 11,
       "scenario": "first-run, no workspace (headless)",
-      "prompt": "Do NOT create a workspace. Export JOBSEARCH_OS_REGISTRY=<tmp>/absent.json and JOBSEARCH_OS_HOME=<tmp> (empty), PATH=<tmp>/_bin:$PATH with the shim, JOBSEARCH_TEST_SCENARIO=happy. Run /job-search-run with NO --workspace.",
+      "prompt": "Do NOT create a workspace. Export JOBSEARCH_OS_REGISTRY=<tmp>/absent.json and JOBSEARCH_OS_HOME=<tmp> (empty), PATH=<tmp>/_bin:$PATH with the shim, JOBSEARCH_TEST_SCENARIO=happy. Run the job-search-run skill with NO --workspace.",
       "expectations": [
-        "resolve reports first_run -> E-NO-CONFIG naming /job-search; does NOT prompt (headless)",
+        "resolve reports first_run -> E-NO-CONFIG naming the job-search skill; does NOT prompt (headless)",
         "Makes no search-jobs/get-posting calls",
-        "Names E-NO-CONFIG (run /job-search); makes no calls; no runs record is written because there is no workspace — the failure is visible because the next /job-search routes to onboarding; the headless process exits 0"
+        "Names E-NO-CONFIG (run the job-search skill); makes no calls; no runs record is written because there is no workspace — the failure is visible because the next job-search visit routes to onboarding; the headless process exits 0"
       ]
     },
     {
       "id": 12,
       "scenario": "config written by newer version (E-CONFIG-VERSION)",
-      "prompt": "Build a temp workspace + shim (setup-workspace.sh), PATH=<tmp>/_bin:$PATH, JOBSEARCH_TEST_SCENARIO=happy, JOBSEARCH_FIXTURES=<repo>/tests/fixtures. Then bump the config version: `sed -i.bak 's/^version: 1/version: 2/' <tmp>/config.yaml`. Run /job-search-run --workspace <tmp>.",
+      "prompt": "Build a temp workspace + shim (setup-workspace.sh), PATH=<tmp>/_bin:$PATH, JOBSEARCH_TEST_SCENARIO=happy, JOBSEARCH_FIXTURES=<repo>/tests/fixtures. Then bump the config version: `sed -i.bak 's/^version: 1/version: 2/' <tmp>/config.yaml`. Run the job-search-run skill with --workspace <tmp>.",
       "expectations": [
         "Halts at preflight with E-CONFIG-VERSION (config written by a newer version; update the job-search-os skills); makes NO search-jobs/get-posting calls",
         "Writes runs/<id>.json with run_health 'blocked' naming E-CONFIG-VERSION so the home view surfaces it; a headless run exits 0 (do not assert non-zero)",

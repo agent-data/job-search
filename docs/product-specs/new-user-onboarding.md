@@ -22,7 +22,8 @@ that moment or gates it safely; none is bureaucratic overhead.
 
 ## Trigger and routing
 
-`/job-search` is the front door. On every invocation the skill calls `python3 "$OS" resolve` to
+The **job-search** skill is the front door (`/job-search-os:job-search` as a plugin — plugin skills
+are only invocable namespaced; bare `/job-search` for loose-skill installs). On every invocation the skill calls `python3 "$OS" resolve` to
 read the workspace state. When `resolve` returns `first_run: true` the skill routes to the
 first-run playbook; when `first_run: false` it routes to the returning-user home. The routing
 logic and both playbooks are owned by [`skills/job-search/SKILL.md`](../../skills/job-search/SKILL.md).

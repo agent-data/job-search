@@ -35,7 +35,8 @@ data had leaked into a generated example.
 
 ## Scheduling never writes your machine
 
-Scheduling is Claude Code's native `/loop` — `/loop <interval> /job-search-run` re-runs the search inside an
+Scheduling is Claude Code's native `/loop` — `/loop <interval> /job-search-os:job-search-run` (plugin
+installs; loose-skill installs use the bare `/job-search-run` target) re-runs the search inside an
 open Claude session. The agent never installs a cron line or a launchd plist; nothing scheduling-related is
 written to your machine. A PreToolUse hook
 ([`../hooks/guard-scheduled-tasks.py`](../hooks/guard-scheduled-tasks.py)) is a defense-in-depth backstop that

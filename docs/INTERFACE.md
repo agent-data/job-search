@@ -13,6 +13,11 @@ Surfaces covered here:
 - Error surfacing as part of the UX
 - The CLI/headless run surface
 
+Slash commands in this doc use the **short skill names** as shorthand. The typed form depends on
+the install: plugin installs (the usual case) are namespaced — `/job-search-os:job-search` — because
+plugin skills are only invocable as `/plugin-name:skill-name`; the bare `/job-search` form exists
+only for loose-skill installs into `~/.claude/skills/`. See README → Install.
+
 ---
 
 ## Conversational configuration
@@ -112,10 +117,11 @@ Full error catalog with exact cause+fix wording:
 
 ## CLI / headless surface
 
-The recurring run is Claude Code's native `/loop` — `/loop <interval> /job-search-run`
-re-runs the search inside an open Claude session (the one-off form is just
-`/job-search-run`). Users set this up conversationally through the `/job-search` home view;
-nothing is installed on their machine (no cron, no launchd).
+The recurring run is Claude Code's native `/loop` — `/loop <interval> /job-search-os:job-search-run`
+(plugin installs; loose skills drop the prefix) re-runs the search inside an open Claude
+session (the one-off form is the same target without `/loop`). Users set this up
+conversationally through the `/job-search` home view; nothing is installed on their
+machine (no cron, no launchd).
 
 `osctl.py` and `state.py` are deterministic internal CLIs that skills call to read and
 write OS state (workspace discovery, registry, job database, schedule markers). They are

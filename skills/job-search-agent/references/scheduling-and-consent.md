@@ -5,7 +5,8 @@ safety-net hook keeps scheduling native and off the user's machine.
 
 ## Mechanism: native `/loop` (the only one)
 
-Job Search OS schedules with Claude Code's native **`/loop`**: `/loop <interval> /job-search-run` re-runs the
+Job Search OS schedules with Claude Code's native **`/loop`**: `/loop <interval> /job-search-os:job-search-run`
+(plugin installs — plugin skills are only invocable namespaced; loose-skill installs drop the prefix) re-runs the
 search on an interval inside an **open Claude session**. There is no privileged write — nothing is added to
 the user's crontab or launchd, and nothing persists on their machine. The tradeoff: it runs only while a
 Claude session is open. (`/schedule` — cloud routines — is intentionally not used: a cloud agent wouldn't
@@ -13,7 +14,7 @@ have the local workspace or `agent-data` auth.)
 
 | Step | Command | Notes |
 |------|---------|-------|
-| Get the artifact | `python3 "$OS" loop-command --frequency <f>` | Prints `/loop <interval> /job-search-run`. hourly→`1h`, every-2-hours→`2h`, every-6-hours→`6h`, daily→`24h`, weekly→`168h`. |
+| Get the artifact | `python3 "$OS" loop-command --frequency <f> [--namespace job-search-os]` | Prints the `/loop` line. Pass `--namespace job-search-os` when running as a plugin (this skill appears as `job-search-os:…` in the skill list) → `/loop <interval> /job-search-os:job-search-run`; omit it for loose skills. hourly→`1h`, every-2-hours→`2h`, every-6-hours→`6h`, daily→`24h`, weekly→`168h`. |
 | Start it (on yes) | run the printed `/loop …` line | Runs in the current session; stops when the session ends. |
 | Record it | `python3 "$OS" set-scheduled` | Records `mechanism: loop` so the home view shows the schedule and you don't re-ask. |
 | Turn it off | stop the loop, then `python3 "$OS" set-unscheduled` | Clears the marker so `schedule-status` reads `installed: false`. |
@@ -34,7 +35,7 @@ guard refuses any attempt to install an OS schedule and defers everything else:
 | A launchd install (`launchctl load/bootstrap/enable/submit`, or writing a plist into `LaunchAgents`/`LaunchDaemons`) | **deny** | Same — `/loop` needs no launch agent. |
 | Reads (`crontab -l`, `launchctl list`), removals (`launchctl unload`, `rm …plist`), `/loop`, and anything that merely *mentions* these words (a `grep`, an `echo`, a comment) | **defer** (not gated) | They don't write the machine; flagging them was a false-positive bug. |
 
-The deny message points the model back to `/loop <interval> /job-search-run`. Detection is anchored to a
+The deny message points the model back to the `/loop` line from `osctl loop-command`. Detection is anchored to a
 shell **command position** (start of line, or right after a separator like `|` `;` `&&` `(`) and requires
 real write syntax — so a search like `grep -E "crontab|launchd"` or `rg crontab docs/` is never flagged; only
 an actual invocation is. The guard sees only the **agent's** Bash tool calls; a user typing `crontab -e` in

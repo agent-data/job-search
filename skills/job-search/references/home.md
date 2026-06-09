@@ -24,8 +24,8 @@ Read just what the home view needs (all local, all free):
   `source_id`, last-write-wins). Count by `status` and tally how many have `needs_human_check: true`.
 
 If the workspace is somehow missing its `config.yaml` (e.g. the directory was deleted out from under the
-registry), that's **`E-NO-CONFIG`** — say so with its fix ("Run `/job-search` to set it up") and offer to
-re-onboard, rather than rendering a broken home.
+registry), that's **`E-NO-CONFIG`** — say so with its fix ("Run the job-search skill (say 'set up job
+search') to set it up") and offer to re-onboard, rather than rendering a broken home.
 
 ## Render the home
 

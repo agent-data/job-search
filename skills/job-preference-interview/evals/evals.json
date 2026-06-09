@@ -1,6 +1,6 @@
 {
   "skill_name": "job-preference-interview",
-  "harness": "For each case: run skills/job-preference-interview/evals/files/setup-interview-ws.sh <tmp>; export JOBSEARCH_OS_REGISTRY=<tmp>/registry.json and JOBSEARCH_OS_HOME=<tmp> (so the brief is written under <tmp>/.job-search, never real data). Invoke /job-preference-interview. When the skill asks questions, answer with the canned answers in the prompt. Then inspect <tmp>/.job-search/preferences.md.",
+  "harness": "For each case: run skills/job-preference-interview/evals/files/setup-interview-ws.sh <tmp>; export JOBSEARCH_OS_REGISTRY=<tmp>/registry.json and JOBSEARCH_OS_HOME=<tmp> (so the brief is written under <tmp>/.job-search, never real data). Invoke the job-preference-interview skill. When the skill asks questions, answer with the canned answers in the prompt. Then inspect <tmp>/.job-search/preferences.md.",
   "evals": [
     { "id": 1, "scenario": "fresh interview",
       "prompt": "Canned answers: situation='employed, passively looking'; role='senior/staff AI engineer, individual contributor, NOT management'; domain='LLM products at a startup'; location='remote in the US, or SF Bay onsite; onsite elsewhere is a dealbreaker'; comp='wants meaningful equity; base flexible'; wlb='no heavy on-call'; stack='Python + modern LLM tooling'; dealbreakers='primarily people-management; onsite outside SF'. When asked to calibrate, keep it qualitative. Finish the interview.",

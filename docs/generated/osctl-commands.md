@@ -9,7 +9,7 @@
 |---|---|---|
 | `resolve` | `--registry`, `--default-workspace`, `--legacy-workspace` | print active workspace + first_run + source as JSON |
 | `set-active` | `--workspace`, `--registry` | record the active workspace in the registry |
-| `loop-command` | `--frequency` | emit `/loop <interval> /job-search-run` for a frequency |
+| `loop-command` | `--frequency`, `--namespace` | emit the `/loop <interval> /job-search-run` scheduling line for a frequency |
 | `schedule-status` | `--registry` | print the scheduling marker as JSON |
 | `set-scheduled` | `--mechanism`, `--set-at`, `--registry` | record that a /loop schedule is running |
 | `set-unscheduled` | `--registry` | clear the scheduling marker (turn-off) |

@@ -145,8 +145,10 @@ LOOP_INTERVAL = {"hourly": "1h", "every-2-hours": "2h", "every-6-hours": "6h",
                  "daily": "24h", "weekly": "168h"}
 
 
-def loop_command(frequency):
-    """The native scheduler artifact: `/loop <interval> /job-search-run` for a config frequency.
+def loop_command(frequency, namespace=""):
+    """The native scheduler artifact for a config frequency: `/loop <interval> /job-search-run`,
+    or `/loop <interval> /<namespace>:job-search-run` when the skills run as a plugin (plugin
+    skills are only invocable namespaced, so pass `--namespace job-search-os` in that mode).
 
     /loop runs the recurring search inside an open Claude Code session — no privileged write, nothing
     installed on the user's machine. `schedule.time` is informational under /loop: the loop fires on an
@@ -156,12 +158,14 @@ def loop_command(frequency):
     iv = LOOP_INTERVAL.get(frequency)
     if not iv:
         raise ValueError(f"unknown frequency {frequency!r} (hourly|every-2-hours|every-6-hours|daily|weekly)")
-    return f"/loop {iv} /job-search-run"
+    ns = namespace.strip().rstrip(":")  # forgive a pasted "job-search-os:" so the colon can't double up
+    skill = f"{ns}:job-search-run" if ns else "job-search-run"
+    return f"/loop {iv} /{skill}"
 
 
 def cmd_loop_command(args):
     try:
-        print(loop_command(args.frequency))
+        print(loop_command(args.frequency, args.namespace))
     except ValueError as e:
         print(f"loop-command failed: {e}", file=sys.stderr)
         return 1
@@ -183,8 +187,10 @@ def build_parser():
     s.add_argument("--registry")
     s.set_defaults(func=cmd_set_active)
 
-    lc = sub.add_parser("loop-command", help="emit `/loop <interval> /job-search-run` for a frequency")
+    lc = sub.add_parser("loop-command", help="emit the `/loop <interval> /job-search-run` scheduling line for a frequency")
     lc.add_argument("--frequency", required=True)
+    lc.add_argument("--namespace", default="",
+                    help="skill namespace for plugin installs (job-search-os → /job-search-os:job-search-run); omit for loose-skill installs")
     lc.set_defaults(func=cmd_loop_command)
 
     ss = sub.add_parser("schedule-status", help="print the scheduling marker as JSON")

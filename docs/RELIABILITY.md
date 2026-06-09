@@ -90,14 +90,14 @@ three records-based ways, all owned by [../shared/references/errors.md](../share
 
 - the **blocked digest** — the named error's cause + fix replaces the match list as the body;
 - a **desktop notification** on a blocked run (toggled by a notify setting in `config.yaml`); and
-- the **home view** on the user's next `/job-search`, which reads the health state from the
-  newest run record.
+- the **home view** on the user's next front-door visit (the `job-search` skill), which reads the
+  health state from the newest run record.
 
 So that surfacing always works, **every** halting path writes its `runs/<id>.json` blocked
 record *before* it stops — that record is the source the home view reads, so a scheduled run
 that failed overnight is named the next time the user opens the front door. The one exception is
 the no-workspace / first-run case: there is nowhere to write a record, but the failure is
-inherently visible because the next `/job-search` routes to onboarding. The run loop that
+inherently visible because the next front-door visit routes to onboarding. The run loop that
 enforces all of this is [../skills/job-search-run/SKILL.md](../skills/job-search-run/SKILL.md).
 
 ## 5. Headless-first — the scheduled run never blocks on a human
@@ -108,7 +108,7 @@ contract (retry vs. skip vs. halt) and recorded. All user-facing output is **rec
 the digest file, the run audit log, the desktop notification — never an interactive prompt the
 scheduler can't answer. This is what makes the system safe to run unattended: a headless run
 either completes and writes a digest, or halts and writes a named blocked record, and in both
-cases the next interactive `/job-search` shows the result. The headless run loop and its
+cases the next interactive front-door visit shows the result. The headless run loop and its
 surfacing rules are specified in
 [../skills/job-search-run/SKILL.md](../skills/job-search-run/SKILL.md).
 

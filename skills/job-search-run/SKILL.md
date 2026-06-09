@@ -17,7 +17,7 @@ Read `references/agent-data-contract.md` (CLI + routes + retry rules), `referenc
 the exact cause+fix wording), `references/conventions.md` (file schemas + digest format), and
 `references/parallelism.md` (parallel-by-default + how to brief a subagent) — follow them exactly.
 
-Resolve the workspace with `python3 "$OS" resolve` (bundled `scripts/osctl.py`; registry → `~/.job-search/` → legacy `~/job-search/`) UNLESS `--workspace <path>` is given, which overrides. Resolve `$OS` (and `$STATE`) from this skill's own directory (e.g. `${CLAUDE_SKILL_DIR}/scripts/...` as a plugin) — never assume cwd. This run is HEADLESS: never prompt. If `resolve` reports `first_run` (no workspace/config yet) → E-NO-CONFIG naming `/job-search` (HALT, exit 1); onboarding is interactive and lives in the `job-search` skill, not here. The job source listing id is `f9a6ec16-0bfd-44d8-b3ee-073776745ee7`.
+Resolve the workspace with `python3 "$OS" resolve` (bundled `scripts/osctl.py`; registry → `~/.job-search/` → legacy `~/job-search/`) UNLESS `--workspace <path>` is given, which overrides. Resolve `$OS` (and `$STATE`) from this skill's own directory (e.g. `${CLAUDE_SKILL_DIR}/scripts/...` as a plugin) — never assume cwd. This run is HEADLESS: never prompt. If `resolve` reports `first_run` (no workspace/config yet) → E-NO-CONFIG naming the **job-search** skill as the fix (HALT, exit 1); onboarding is interactive and lives in the `job-search` skill, not here. The job source listing id is `f9a6ec16-0bfd-44d8-b3ee-073776745ee7`.
 
 **Retries:** branch only on the error envelope's `retryable` boolean (`true` → retry with backoff up to 3×;
 `false` → never retry), not on the error `code` string — see `references/agent-data-contract.md`.
@@ -96,7 +96,7 @@ open question, never a verdict.
 Every run ends by writing `runs/<run_id>.json` with at least `{"run_id","run_health",
 "error"|null,"ts"}`. **Every HALT path writes this record with `run_health:"blocked"` and
 its `E-*` BEFORE stopping** — this is the source the home view reads, so a failed scheduled
-run is named on the user's next `/job-search`. When a workspace exists, a HALT also writes
+run is named on the user's next job-search home view. When a workspace exists, a HALT also writes
 the blocked `reports/<date>-digest.md` (named error + fix as the body). If
 `notify.desktop_notify_on_block` is true, fire one desktop notification on a blocked run.
 
@@ -106,8 +106,8 @@ set the host exit code); do not rely on it, and do not tell the user a cron job'
 will be non-zero.
 
 Exception: **E-NO-CONFIG / first_run** means there is no workspace to write into — this is
-inherently visible because the next `/job-search` routes to onboarding. Name the error and
-stop.
+inherently visible because the next time the user opens the **job-search** skill it routes
+to onboarding. Name the error and stop.
 
 ## Idempotency
 Re-running the same day re-searches (cheap) but dedup means no posting is re-evaluated or re-read. Never write

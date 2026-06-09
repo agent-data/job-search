@@ -35,7 +35,9 @@ LAUNCHD_INSTALL = re.compile(
 
 _DENY_REASON = (
     "Job Search OS schedules with Claude Code's native /loop and never writes your machine's "
-    "crontab or launchd. Set up recurring runs with:  /loop <interval> /job-search-run")
+    "crontab or launchd. Set up recurring runs with:  /loop <interval> /job-search-os:job-search-run "
+    "(plugin install) or  /loop <interval> /job-search-run  (loose skills) — "
+    "`osctl.py loop-command --frequency <f> [--namespace job-search-os]` emits the exact line.")
 
 
 def decide(cmd):

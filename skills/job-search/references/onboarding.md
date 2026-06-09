@@ -91,7 +91,7 @@ runner reads against each posting. Ask which path the user wants:
 
 Either way, the brief ends up at `<workspace>/preferences.md` with `created_at:` + `updated_at:` front-matter
 lines (the home view flags a stale brief from `updated_at`). If for some reason a run is attempted before a usable brief exists, that path surfaces
-**`E-NO-PREFERENCES`** (build one with `/job-preference-interview`, or point
+**`E-NO-PREFERENCES`** (build one with the **job-preference-interview** skill, or point
 `config.yaml:workspace.preferences_path` at your own prose brief).
 
 ## 5. Searches + frequency (derive from the brief — don't make the user pick keywords)
@@ -142,7 +142,7 @@ This is the payoff. Disclose it plainly first, then do it:
 > "Now I'll run your first search for real — this makes **live calls** to pull and read postings.
 > Give me a moment…"
 
-Invoke **`job-search-run`** against the workspace (`/job-search-run --workspace <workspace>`). It probes the
+Invoke **`job-search-run`** against the workspace (pass `--workspace <workspace>`). It probes the
 source, searches each enabled query, dedups, judges each new posting against the brief, reads full
 descriptions for the promising ones, and writes a digest. Then present the result like a discovery, not a
 log dump — surface the **strong and moderate** matches from the digest:
@@ -180,21 +180,29 @@ Ask a simple **yes/no**: "Want me to keep this running automatically while you h
 
 1. Get the deterministic command for the chosen frequency:
    `python3 "$OS" loop-command --frequency <f>` → prints e.g. `/loop 24h /job-search-run`.
+   **Match the target to the install:** plugin skills are only invocable namespaced, so when these skills
+   run as a plugin (this skill appears as `job-search-os:…` in your skill list — the usual install), add
+   `--namespace job-search-os` so it prints `/loop 24h /job-search-os:job-search-run`. Loose skills in
+   `~/.claude/skills/` use the bare form.
 2. **Start it** by running that `/loop …` command, then record it so you don't re-ask:
    `python3 "$OS" set-scheduled` (records `mechanism: loop`).
 3. Show the user the exact `/loop` line so they can restart it anytime (it stops when the session ends).
 
 **On no:** leave it unscheduled — tell them they can turn it on later by just asking, and that a one-off run
-is always `/job-search-run`.
+is always one slash command away (`/job-search-os:job-search-run` as a plugin; `/job-search-run` as loose
+skills).
 
-**Either way, show this recipe verbatim** so the user can start or restart it themselves (from `internals.md`):
+**Either way, show this recipe verbatim** (in the form for THIS install) so the user can start or restart it
+themselves (from `internals.md`):
 
 ```
 Recurring (runs while a Claude session is open — nothing installed on your machine):
-  /loop <interval> /job-search-run      # hourly → 1h · daily → 24h · weekly → 168h
+  /loop <interval> /job-search-os:job-search-run      # hourly → 1h · daily → 24h · weekly → 168h
 One-off run anytime:
-  /job-search-run
+  /job-search-os:job-search-run
 ```
+
+(For loose-skill installs, drop the `job-search-os:` prefix from both lines.)
 
 ## 8. Home
 

@@ -58,16 +58,22 @@ The one tradeoff: it runs only while a Claude session is open.
 Get the artifact deterministically: `python3 "$OS" loop-command --frequency <f>` → prints
 `/loop <interval> /job-search-run` (hourly→`1h`, every-2-hours→`2h`, every-6-hours→`6h`, daily→`24h`,
 weekly→`168h`; `schedule.time` is informational under /loop — the loop fires on an interval from when it's
-started). Offer it as a yes/no; on yes, run that `/loop` command and record it with
-`python3 "$OS" set-scheduled` (mechanism `loop`). Check `schedule-status` so you never re-ask. ALWAYS also
-show this recipe verbatim so the user can start or restart it themselves:
+started). **Match the /loop target to the install:** plugin skills are only invocable namespaced, so when
+these skills run as a plugin (this skill appears as `job-search-os:…` in your skill list — the usual
+install), add `--namespace job-search-os` so it prints `/loop <interval> /job-search-os:job-search-run`;
+loose skills copied into `~/.claude/skills/` use the bare form. Offer it as a yes/no; on yes, run that
+`/loop` command and record it with `python3 "$OS" set-scheduled` (mechanism `loop`). Check
+`schedule-status` so you never re-ask. ALWAYS also show this recipe verbatim (in the form for THIS install)
+so the user can start or restart it themselves:
 
 ```
 Recurring (runs while a Claude session is open — nothing installed on your machine):
-  /loop <interval> /job-search-run      # hourly → 1h · daily → 24h · weekly → 168h
+  /loop <interval> /job-search-os:job-search-run      # hourly → 1h · daily → 24h · weekly → 168h
 One-off run anytime:
-  /job-search-run
+  /job-search-os:job-search-run
 ```
+
+(For loose-skill installs, drop the `job-search-os:` prefix from both lines.)
 
 To turn scheduling off: stop the loop (end the session, or cancel the pending wakeup), then
 `python3 "$OS" set-unscheduled` (clears the marker — no more stale `installed: true`).
@@ -82,6 +88,6 @@ else: reads (`crontab -l`), removals, `/loop` itself, and commands that merely *
 the agent's Bash tool calls.
 
 ## osctl.py command reference
-`resolve` · `set-active --workspace P` · `loop-command --frequency F` · `schedule-status` ·
-`set-scheduled [--mechanism loop]` · `set-unscheduled`.
+`resolve` · `set-active --workspace P` · `loop-command --frequency F [--namespace job-search-os]` ·
+`schedule-status` · `set-scheduled [--mechanism loop]` · `set-unscheduled`.
 All accept `--registry P` (and resolve accepts `--default-workspace`/`--legacy-workspace`) for tests/evals.

@@ -54,6 +54,12 @@ aren't set in this shell — **stop and re-run the exports** before any test tha
 ```bash
 claude --plugin-dir "$JSOS"
 ```
+**Slash commands in this suite are namespaced.** `--plugin-dir` loads the skills as the `job-search-os`
+plugin, and plugin skills are only invocable as `/job-search-os:<skill>` — bare `/job-search` is **not
+registered** (it exists only for loose-skill installs into `~/.claude/skills/`); typing it interactively
+errors with "Unknown command". Headless `claude -p` differs: an unknown slash string is passed through to
+the model as plain text, which usually still works by model interpretation — but write the namespaced form
+in `-p` commands anyway so the skill is invoked deterministically.
 **Safety rules while testing:**
 - When onboarding reaches **scheduling**, answer **"no"** — it'll just show the `/loop` recipe. (Starting a
   real `/loop` would keep re-running during your test.) Nothing is ever written to your machine; the dedicated
@@ -131,7 +137,7 @@ that's T2.1.)*
 ```bash
 python3 "$JSOS/scripts/osctl.py" resolve     # first_run:true, source:none, workspace:$JSOS_TEST/.job-search
 ```
-**Steps (🤖):** Start the TTFV clock, then say **"set up job search"** (or `/job-search`). Drive it from the
+**Steps (🤖):** Start the TTFV clock, then say **"set up job search"** (or `/job-search-os:job-search`). Drive it from the
 **canonical persona** (§0.4): when asked for preferences, either answer with `$JSOS_CANON_ROLE` in
 `$JSOS_CANON_LOC`, or say *"I already have a brief"* and paste `$JSOS_TEST/canonical-brief.md`; accept the
 suggested query; choose **daily**; at scheduling answer **"no, just show me the commands."**
@@ -160,7 +166,8 @@ ls -R "$JSOS_TEST/.job-search"; cat "$JSOS_TEST/registry.json"; cat "$JSOS_TEST/
 ## 3. Preferences interview
 
 ### T3.1 Standalone interview → prose brief — 🤖
-Fresh sandbox. Tell Claude: **"/job-preference-interview"** and answer ~6–8 questions.
+Fresh sandbox. Tell Claude: **"/job-search-os:job-preference-interview"** (or "build my job preferences
+brief") and answer ~6–8 questions.
 **Expected:** asks **one question at a time**; writes `$JSOS_TEST/.job-search/preferences.md` with a `created_at:`
 line + the five sections (Summary; Must-haves/dealbreakers; Strong preferences; Nice-to-haves; Red flags) in
 plain observable prose; ends with a "How to use this … No score." note. **Zero numbers/weights/0–100.**
@@ -184,8 +191,8 @@ the written `preferences.md` has the prose sections and **no numbers**.
 
 *(Prereq: complete T2.1 in this sandbox so a workspace + registry exist.)*
 
-### T4.1 Second `/job-search` shows home (not onboarding) — 🤖
-Say **"/job-search"** again (or "check my job search").
+### T4.1 Second `job-search` visit shows home (not onboarding) — 🤖
+Say **"/job-search-os:job-search"** again (or "check my job search").
 **Expected:** **no onboarding**; shows a status line (workspace · brief age · schedule on/off + frequency ·
 last run health), the latest digest summary (date + counts), a pipeline snapshot (counts by status +
 `needs_human_check` to review), and conversational quick-actions.
@@ -258,7 +265,7 @@ after the status row.
 
 ### T4.8 Home failure-states — don't bury problems — 🤖 + 👤
 The healthy home is T4.1; these are the states `home.md:26-92` says must render specifically. Build each, then
-say **"/job-search"**:
+say **"/job-search-os:job-search"**:
 - **No runs yet** (workspace exists, no digest): complete onboarding but **decline** the sample run (or
   `rm "$JSOS_TEST/.job-search/reports/"*.md`). → Home says *"No runs yet — want me to run your first search
   now?"*, not an empty digest block.
@@ -281,7 +288,7 @@ say **"/job-search"**:
 ## 5. Scheduled run (`job-search-run`) — LIVE
 
 ### T5.1 Live run produces a digest — 🤖
-Say: **"run a job search now"** (or `/job-search-run`).
+Say: **"run a job search now"** (or `/job-search-os:job-search-run`).
 **Expected:** free `status` gate first; one `search-jobs` per enabled query; new postings judged from summary,
 full details read for the promising ones; writes `reports/<date>-digest.md` (Run health line; counts line;
 Strong→Moderate→Weak; Filtered-out: N; footnotes) and appends `evaluated` events to `jobs.jsonl`. No scores/credits.
@@ -298,18 +305,18 @@ Immediately run it again.
 ```bash
 T2=$(mktemp -d)
 JOBSEARCH_OS_REGISTRY="$T2/absent.json" JOBSEARCH_OS_HOME="$T2" \
-  claude --plugin-dir "$JSOS" -p "/job-search-run"     # no --workspace, empty sandbox
+  claude --plugin-dir "$JSOS" -p "/job-search-os:job-search-run"     # no --workspace, empty sandbox
 echo "exit: $?"; rm -rf "$T2"
 ```
-**Expected:** names **E-NO-CONFIG** (run `/job-search`); makes no calls; no `runs/` record is written (no workspace) — the failure is visible because the next `/job-search` routes to onboarding; the process exits **0** (do not assert non-zero).
+**Expected:** names **E-NO-CONFIG** (run the job-search skill); makes no calls; no `runs/` record is written (no workspace) — the failure is visible because the next job-search visit routes to onboarding; the process exits **0** (do not assert non-zero).
 **Result:** ⬜
 
-### T5.4 Headless **+ live** run — the actual cron path — 👤  ★ production path
-This is the command half of the **daily cron line** from T9.1 (only delta: `--plugin-dir`, since the plugin isn't
+### T5.4 Headless **+ live** run — the actual scheduled path — 👤  ★ production path
+This is the command half of the **`/loop` line** from T9.1 (only delta: `--plugin-dir`, since the plugin isn't
 installed in the sandbox). It proves the scheduled job itself works headlessly against the real API — the
 mandatory suite otherwise tests headless-only on the fake shim (T7.8–T7.10) and live-only interactively (T5.1).
 ```bash
-cd "$JSOS_TEST/.job-search" && claude --plugin-dir "$JSOS" -p "/job-search-run" \
+cd "$JSOS_TEST/.job-search" && claude --plugin-dir "$JSOS" -p "/job-search-os:job-search-run" \
   >> "$JSOS_TEST/.job-search/runs/cron.log" 2>&1
 echo "exit: $?"
 tail -8 "$JSOS_TEST/.job-search/runs/cron.log"          # the run summary, exactly as cron would log it
@@ -320,7 +327,8 @@ ls -t "$JSOS_TEST/.job-search/reports/"*.md | head -1   # a digest exists / was 
 "No NEW postings" dedup digest are both passes (dedup if T5.1 already searched this workspace); 0 live results →
 §0.4 fallback.
 **Cross-check** `/loop` runs this same skill headlessly each interval:
-`python3 "$JSOS/scripts/osctl.py" loop-command --frequency daily` → `/loop 24h /job-search-run`.
+`python3 "$JSOS/scripts/osctl.py" loop-command --frequency daily --namespace job-search-os` →
+`/loop 24h /job-search-os:job-search-run` (omit `--namespace` for loose-skill installs → `/loop 24h /job-search-run`).
 **Result:** ⬜
 
 ### T5.5 Non-healthy digest shape — `blocked` must replace the body — 👤 (fake shim)
@@ -329,10 +337,10 @@ deterministic `down` scenario and read the digest:
 ```bash
 SH5=$(mktemp -d); bash "$JSOS/skills/job-search-run/evals/files/setup-workspace.sh" "$SH5" >/dev/null
 PATH="$SH5/_bin:$PATH" JOBSEARCH_FIXTURES="$JSOS/tests/fixtures" JOBSEARCH_TEST_SCENARIO=down \
-  claude --plugin-dir "$JSOS" -p "/job-search-run --workspace $SH5"; echo "exit: $?"
+  claude --plugin-dir "$JSOS" -p "/job-search-os:job-search-run --workspace $SH5"; echo "exit: $?"
 cat "$SH5/reports/"*.md 2>/dev/null; rm -rf "$SH5"
 ```
-**Expected:** writes a `runs/<id>.json` with `run_health: blocked` naming **E-SERVICE-DOWN**, so the next `/job-search` home view surfaces it; the headless `claude -p` process returns **0**, so do not assert on `$?`; the digest's Run-health line reads exactly **`Run health: blocked (action needed)`**
+**Expected:** writes a `runs/<id>.json` with `run_health: blocked` naming **E-SERVICE-DOWN**, so the next job-search home view surfaces it; the headless `claude -p` process returns **0**, so do not assert on `$?`; the digest's Run-health line reads exactly **`Run health: blocked (action needed)`**
 (the full set is `healthy | partial (N errors) | degraded (LinkedIn flaky) | blocked (action needed)`); the body is
 the **E-SERVICE-DOWN** message ("unreachable right now … next scheduled run will retry"), **not** a match list.
 (`degraded`/`partial` digest shapes are strengthened in T7.9/T7.7.)
@@ -369,21 +377,21 @@ in the reasoning. Unknowns are never counted against it.
 ```bash
 T3=$(mktemp -d); cp -R "$JSOS_TEST/.job-search" "$T3/.job-search" 2>/dev/null || true
 AGENT_DATA_API_KEY="" JOBSEARCH_OS_HOME="$T3" JOBSEARCH_OS_REGISTRY="$T3/reg.json" \
-  claude --plugin-dir "$JSOS" -p "/job-search-run --workspace $T3/.job-search"
+  claude --plugin-dir "$JSOS" -p "/job-search-os:job-search-run --workspace $T3/.job-search"
 echo "exit: $?"; rm -rf "$T3"
 ```
 *(If your key is in `~/.agent-data/config.json`, temporarily test in a shell where it isn't, or skip — the eval covers it.)*
-**Expected:** halts with **E-NO-AUTH** (names the `export AGENT_DATA_API_KEY=…` fix); nothing pulled; writes a `runs/<id>.json` with `run_health: blocked` naming **E-NO-AUTH**, so the next `/job-search` home view surfaces it; the headless `claude -p` process returns **0**, so do not assert on `$?`.
+**Expected:** halts with **E-NO-AUTH** (names the `export AGENT_DATA_API_KEY=…` fix); nothing pulled; writes a `runs/<id>.json` with `run_health: blocked` naming **E-NO-AUTH**, so the next job-search home view surfaces it; the headless `claude -p` process returns **0**, so do not assert on `$?`.
 **Result:** ⬜
 
 ### T7.2 E-NO-AGENT-DATA — 👤
 ```bash
 T4=$(mktemp -d)
 PATH="/usr/bin:/bin" JOBSEARCH_OS_HOME="$T4" JOBSEARCH_OS_REGISTRY="$T4/reg.json" \
-  claude --plugin-dir "$JSOS" -p "/job-search-run --workspace $T4/.job-search"  # agent-data not on this PATH
+  claude --plugin-dir "$JSOS" -p "/job-search-os:job-search-run --workspace $T4/.job-search"  # agent-data not on this PATH
 echo "exit: $?"; rm -rf "$T4"
 ```
-**Expected:** **E-NO-AGENT-DATA** naming the `npm install -g agent-data` fix; writes a `runs/<id>.json` with `run_health: blocked` naming **E-NO-AGENT-DATA**, so the next `/job-search` home view surfaces it; the headless `claude -p` process returns **0**, so do not assert on `$?`. *(Skip if `python3`
+**Expected:** **E-NO-AGENT-DATA** naming the `npm install -g agent-data` fix; writes a `runs/<id>.json` with `run_health: blocked` naming **E-NO-AGENT-DATA**, so the next job-search home view surfaces it; the headless `claude -p` process returns **0**, so do not assert on `$?`. *(Skip if `python3`
 isn't on the trimmed PATH on your system — rely on the eval; or add the python dir to PATH.)*
 **Result:** ⬜
 
@@ -392,9 +400,9 @@ isn't on the trimmed PATH on your system — rely on the eval; or add the python
 ```bash
 T5=$(mktemp -d); mkdir -p "$T5/.job-search/runs" "$T5/.job-search/reports"
 cp "$JSOS/templates/config.example.yaml" "$T5/.job-search/config.yaml"; : > "$T5/.job-search/preferences.md"; : > "$T5/.job-search/jobs.jsonl"
-claude --plugin-dir "$JSOS" -p "/job-search-run --workspace $T5/.job-search"; echo "exit: $?"; rm -rf "$T5"
+claude --plugin-dir "$JSOS" -p "/job-search-os:job-search-run --workspace $T5/.job-search"; echo "exit: $?"; rm -rf "$T5"
 ```
-**Expected:** **E-NO-PREFERENCES** naming `/job-preference-interview`; nothing pulled; writes a `runs/<id>.json` with `run_health: blocked` naming **E-NO-PREFERENCES**, so the next `/job-search` home view surfaces it; the headless `claude -p` process returns **0**, so do not assert on `$?`.
+**Expected:** **E-NO-PREFERENCES** naming the job-preference-interview skill; nothing pulled; writes a `runs/<id>.json` with `run_health: blocked` naming **E-NO-PREFERENCES**, so the next job-search home view surfaces it; the headless `claude -p` process returns **0**, so do not assert on `$?`.
 **Result:** ⬜
 
 ### Fake-shim only (deterministic error injection — cannot be forced on the live API)
@@ -403,15 +411,15 @@ Shared setup for T7.5–T7.10:
 ```bash
 SH=$(mktemp -d); bash "$JSOS/skills/job-search-run/evals/files/setup-workspace.sh" "$SH" >/dev/null
 export FAKE="PATH=$SH/_bin:$PATH JOBSEARCH_FIXTURES=$JSOS/tests/fixtures"
-# run pattern:  env $FAKE JOBSEARCH_TEST_SCENARIO=<scenario> claude --plugin-dir "$JSOS" -p "/job-search-run --workspace $SH"
+# run pattern:  env $FAKE JOBSEARCH_TEST_SCENARIO=<scenario> claude --plugin-dir "$JSOS" -p "/job-search-os:job-search-run --workspace $SH"
 ```
-Run each by giving Claude: *"run /job-search-run --workspace $SH with the fake shim (PATH=$SH/_bin:$PATH,
+Run each by giving Claude: *"run the job-search-run skill with --workspace $SH and the fake shim (PATH=$SH/_bin:$PATH,
 JOBSEARCH_FIXTURES=$JSOS/tests/fixtures, JOBSEARCH_TEST_SCENARIO=<scenario>) and show the digest + exit code."*
 
 | Test | scenario | Expected | Result |
 |---|---|---|---|
-| T7.5 **E-QUOTA** | `quota` | plain-language quota note (lower frequency / upgrade) — **no credit math**; no retry; existing matches intact; writes a `runs/<id>.json` with `run_health: blocked` naming **E-QUOTA**, so the next `/job-search` home view surfaces it; the headless `claude -p` process returns **0**, so do not assert on `$?` | ⬜ |
-| T7.6 **E-SERVICE-DOWN** | `down` | "service down" digest, Run health blocked; **no** search/get-posting calls; writes a `runs/<id>.json` with `run_health: blocked` naming **E-SERVICE-DOWN**, so the next `/job-search` home view surfaces it; the headless `claude -p` process returns **0**, so do not assert on `$?` | ⬜ |
+| T7.5 **E-QUOTA** | `quota` | plain-language quota note (lower frequency / upgrade) — **no credit math**; no retry; existing matches intact; writes a `runs/<id>.json` with `run_health: blocked` naming **E-QUOTA**, so the next job-search home view surfaces it; the headless `claude -p` process returns **0**, so do not assert on `$?` | ⬜ |
+| T7.6 **E-SERVICE-DOWN** | `down` | "service down" digest, Run health blocked; **no** search/get-posting calls; writes a `runs/<id>.json` with `run_health: blocked` naming **E-SERVICE-DOWN**, so the next job-search home view surfaces it; the headless `claude -p` process returns **0**, so do not assert on `$?` | ⬜ |
 | T7.7 **E-UPSTREAM-STRETCH** | `stretch` | retries the 502 with backoff, stops after two consecutive failed queries; writes a **partial** digest (Run health `partial (N errors)`); doesn't crash | ⬜ |
 | T7.8 invalid-pair (non-error) | `invalid-pair` | no retry; summary-only judgment + "detail link expired" footnote; `detail_read:false`; run completes, exit 0 | ⬜ |
 | T7.9 degraded (non-error) | `degraded` | Run-health line reads `degraded (LinkedIn flaky)`; digest notes results this run may be affected; **no detail-read cap** (reads promising matches as normal); still produces matches; exit 0 | ⬜ |
@@ -429,10 +437,10 @@ workspace, so they don't depend on the shared `$SH` above.
 SHV=$(mktemp -d); bash "$JSOS/skills/job-search-run/evals/files/setup-workspace.sh" "$SHV" >/dev/null
 sed -i.bak 's/^version: 1/version: 2/' "$SHV/config.yaml"      # pretend a newer skill wrote it
 PATH="$SHV/_bin:$PATH" JOBSEARCH_FIXTURES="$JSOS/tests/fixtures" \
-  claude --plugin-dir "$JSOS" -p "/job-search-run --workspace $SHV"; echo "exit: $?"; rm -rf "$SHV"
+  claude --plugin-dir "$JSOS" -p "/job-search-os:job-search-run --workspace $SHV"; echo "exit: $?"; rm -rf "$SHV"
 ```
 **Expected:** **E-CONFIG-VERSION** ("written by a newer version … update the job-search-os skills"); HALT at
-preflight (no `search-jobs`/`get-posting`); writes a `runs/<id>.json` with `run_health: blocked` naming **E-CONFIG-VERSION**, so the next `/job-search` home view surfaces it; the headless `claude -p` process returns **0**, so do not assert on `$?`.
+preflight (no `search-jobs`/`get-posting`); writes a `runs/<id>.json` with `run_health: blocked` naming **E-CONFIG-VERSION**, so the next job-search home view surfaces it; the headless `claude -p` process returns **0**, so do not assert on `$?`.
 **Result:** ⬜
 
 ### T7.12 E-BAD-QUERY — skip the bad query, keep the good ones — 👤
@@ -452,7 +460,7 @@ schedule:
   time: "08:00"
 YAML
 PATH="$SHB/_bin:$PATH" JOBSEARCH_FIXTURES="$JSOS/tests/fixtures" JOBSEARCH_TEST_SCENARIO=bad-query \
-  claude --plugin-dir "$JSOS" -p "/job-search-run --workspace $SHB"; echo "exit: $?"
+  claude --plugin-dir "$JSOS" -p "/job-search-os:job-search-run --workspace $SHB"; echo "exit: $?"
 cat "$SHB/reports/"*.md 2>/dev/null; rm -rf "$SHB"
 ```
 **Expected:** the **bad** query → **E-BAD-QUERY** naming the param (`location`, from `details[].loc`) + the
@@ -464,7 +472,7 @@ health **partial**; **no retry** on the 422 (`retryable:false`); run **completes
 ```bash
 SHD=$(mktemp -d); bash "$JSOS/skills/job-search-run/evals/files/setup-workspace.sh" "$SHD" >/dev/null
 PATH="$SHD/_bin:$PATH" JOBSEARCH_FIXTURES="$JSOS/tests/fixtures" JOBSEARCH_TEST_SCENARIO=detail-fetch-failed \
-  claude --plugin-dir "$JSOS" -p "/job-search-run --workspace $SHD"; echo "exit: $?"
+  claude --plugin-dir "$JSOS" -p "/job-search-os:job-search-run --workspace $SHD"; echo "exit: $?"
 cat "$SHD/reports/"*.md 2>/dev/null; rm -rf "$SHD"
 ```
 **Expected:** the `502 detail_fetch_failed` is **retryable** → retries with backoff, then **gives up on the detail**
@@ -485,7 +493,7 @@ printf 'SENTINEL-PREFS\n' > "$T6/job-search/preferences.md"
 printf '{"event":"evaluated","source_id":"SENTINEL-JOB","status":"new"}\n' > "$T6/job-search/jobs.jsonl"
 shasum -a 256 "$T6/job-search/"{preferences.md,jobs.jsonl,config.yaml}     # record
 ```
-Launch Claude with `JOBSEARCH_OS_HOME="$T6"` (no registry yet) and say **"/job-search"**.
+Launch Claude with `JOBSEARCH_OS_HOME="$T6"` (no registry yet) and say **"/job-search-os:job-search"**.
 **Expected:** it detects + **adopts** the legacy workspace ("Found an existing workspace at …"), writes the
 registry to point there, and goes to **home (no fresh interview)**.
 **Verify:** re-run `shasum -a 256 …` → **identical**; `SENTINEL-PREFS` / `SENTINEL-JOB` intact; only `runs/`+`reports/`
@@ -511,9 +519,11 @@ unchanged. (All tests used `$JSOS_TEST`/temp dirs + declined real scheduling.)
 for f in hourly every-2-hours every-6-hours daily weekly; do
   python3 "$JSOS/scripts/osctl.py" loop-command --frequency "$f"
 done
+python3 "$JSOS/scripts/osctl.py" loop-command --frequency daily --namespace job-search-os
 ```
 **Expected:** `/loop 1h /job-search-run`, `/loop 2h /job-search-run`, `/loop 6h /job-search-run`,
-`/loop 24h /job-search-run`, `/loop 168h /job-search-run` respectively.
+`/loop 24h /job-search-run`, `/loop 168h /job-search-run` respectively (the bare loose-skill form), then
+`/loop 24h /job-search-os:job-search-run` for the namespaced plugin form.
 **Result:** ⬜
 
 ### T9.2 The safety-net guard denies a machine write, ignores mentions — ⚙️
@@ -529,8 +539,9 @@ covered by `python3 -m pytest -q tests/test_guard_scheduled_tasks.py`.
 ### T9.3 `/loop` scheduling — nothing installed on the machine — 🤖 + 👤
 Onboarding's scheduling step (or "set it up to run automatically") uses Claude Code's native `/loop`. Say:
 **"yes, keep it running automatically."**
-**Expected:** Claude shows the loop line **`/loop <interval> /job-search-run`** (matching your configured
-frequency — `24h` for daily) and records the mechanism — **without** writing any crontab line or launchd plist.
+**Expected:** Claude shows the loop line **`/loop <interval> /job-search-os:job-search-run`** (the suite runs
+as the plugin, so the target is namespaced; matching your configured frequency — `24h` for daily) and records
+the mechanism — **without** writing any crontab line or launchd plist.
 **Verify (👤):**
 ```bash
 python3 "$JSOS/scripts/osctl.py" schedule-status   # {"installed": true, "mechanism": "loop", ...}
@@ -633,9 +644,9 @@ built, mark **N/A (pending build)**.
 
 - ⬜ Install: plugin validates `--strict`; loads via `--plugin-dir`; loose-skills self-contained (§1)
 - ⬜ Isolation pre-flight passes; canonical persona set before any LIVE test (§0.2, §0.4)
-- ⬜ First-run `/job-search` onboards end-to-end and shows **real live matches**; TTFV recorded < ~5 min (T2.1)
+- ⬜ First-run `/job-search-os:job-search` onboards end-to-end and shows **real live matches**; TTFV recorded < ~5 min (T2.1)
 - ⬜ Interview produces a **prose** brief; the 0–100 rubric is gone; import + rubric→prose work (§3)
-- ⬜ Returning `/job-search` shows home incl. **failure-states** (no-runs, blocked, stale-brief); **all config changes work conversationally** — add/**edit**/**remove** query, frequency, schedule off, prefs, status — and survive **phrasing variety** (§4)
+- ⬜ Returning `/job-search-os:job-search` shows home incl. **failure-states** (no-runs, blocked, stale-brief); **all config changes work conversationally** — add/**edit**/**remove** query, frequency, schedule off, prefs, status — and survive **phrasing variety** (§4)
 - ⬜ **Headless + live** run (the cron path) writes a correct digest; live run **dedups** on re-run; **headless** first-run → E-NO-CONFIG (names the error, exits 0, no `runs/` record); a `blocked` run writes `run_health: blocked` naming the `E-*` so the home view surfaces it (process exits 0) (§5)
 - ⬜ Relevance is **qualitative** (relevant + weak/moderate/strong + reasoning); dealbreakers reject; unknowns flag, never reject (§6)
 - ⬜ Every blocked path is a **named `E-*`** with its fix — auth, no-CLI, no-config, **config-version**, no-prefs, quota, down, stretch, **bad-query**, invalid-pair, detail-fetch-failed, degraded, zero/all-known (§7)
