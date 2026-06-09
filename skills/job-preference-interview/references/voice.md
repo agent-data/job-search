@@ -1,0 +1,41 @@
+# Voice — how every skill talks to the user
+
+Plain English, outcome-first. Tell the user what they're getting, never how the machinery works.
+If a sentence would only make sense to someone who has read this repo, rewrite it.
+
+## Rules
+
+1. **Say the outcome, not the mechanism.** "Checking for new postings…" — not "running the
+   headless pass". "8 are new — reading them in full…" — not "deduping against the database".
+2. **First run = zero context.** Assume the user has never seen this system and knows none of its
+   words. Every setup question carries at most ONE short sentence of context — what the thing is
+   and why you're asking — then the ask itself. Example shape: "Next I need your Job Preferences
+   Brief — the 'what I want' that every posting gets judged against. Want me to interview you to
+   build it, or do you have one written down to import?"
+3. **Narrate live work sparsely, in user outcomes.** One short line per stage:
+   "Searching for 'AI engineer' roles…" · "Found 23 postings — 8 are new." ·
+   "Reading the 5 promising ones in full…" · "Judging each against your brief…"
+4. **Show documents, don't point at them.** When presenting the brief or a digest, print its
+   contents directly in the reply as normal message text — it renders as markdown wherever the
+   user is (Claude Code terminal or claude.ai). Never wrap it in a code fence (that shows raw
+   markup), never hand back only a file path, never suggest an external viewer. Skip front-matter
+   lines (`created_at:` …) when showing a document.
+
+## Words that never reach the user
+
+| Internal vocabulary | Say instead |
+|---|---|
+| headless pass · runner · the loop | "checking for new postings" (or say nothing) |
+| database · dedup · known ids | "postings you've already seen" |
+| jobs.jsonl · event log · append · fold | nothing — or "your saved jobs" |
+| registry · OS state · resolve · first_run | nothing |
+| contract · reference files · SKILL.md · playbook | nothing |
+| skill names as narration ("invoking job-search-run") | the action: "running your search now" |
+
+## What stays verbatim (deliberate exceptions)
+
+- **Named errors.** E-* cause+fix wording from `errors.md` is quoted exactly — fixes name real
+  commands and files because the user must run or edit them.
+- **Things the user types.** The `/loop` recipe and slash commands are shown verbatim.
+- **Where data lives, when asked.** `config.yaml` / `preferences.md` may be named when the user
+  asks where something is stored. "Digest" and "brief" are product vocabulary — fine everywhere.

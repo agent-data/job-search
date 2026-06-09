@@ -23,7 +23,7 @@ degraded (LinkedIn flaky) | blocked (action needed)`.
 - **invalid_pair** (`400`, `retryable:false`) on `get-posting`: the `jp_`/`source_url` pair went stale (LinkedIn
   re-indexed). Judge from the summary instead and add a digest footnote: "1 posting's detail link had expired;
   judged from its summary." Not an error.
-- **Zero results — all already known:** reassuring, not an error — "No NEW postings — all N already in your database."
+- **Zero results — all already known:** reassuring, not an error — "No new postings — you've already seen all N of these."
 - **Zero results — literally empty:** actionable — "Searches ran but returned 0 results. Broaden keywords in
   `config.yaml`, or check `agent-data call <listing> status`."
 
