@@ -31,7 +31,7 @@ Core philosophy:
 | Skill | What it does | When to use it |
 |---|---|---|
 | `job-search` | Front door: onboarding on first run; home view (latest digest, new matches, pipeline) with quick actions on return | Daily use — set up, check in, run now, change anything |
-| `job-search-run` | Headless scheduled pull: preflight → search → dedup → judge → persist → digest | Called by cron / launchd / `/loop`; also manually when you want a fresh pull without the home view |
+| `job-search-run` | Headless scheduled pull: preflight → search → dedup → judge → persist → digest | Run by the `/loop` schedule, or manually for a fresh pull without the home view |
 | `job-preference-interview` | Interactive interview that builds or refines the prose preferences brief | Whenever you want to update what you're looking for |
 | `evaluate-job-fit` | Judge one posting against the current brief | When you paste a single job description and want a fit assessment |
 | `job-search-agent` | This operator manual | Configure, extend, troubleshoot, or understand the agent itself |
@@ -72,6 +72,9 @@ The user changes configuration by chatting — you apply it by reading `config.y
 | Add a search query | Append an item to `queries:` with `id`, `keywords`, `location`, `limit`, `enabled: true` |
 | Edit or remove a query | Find the item by `id`, update its fields or set `enabled: false` / remove the item |
 | Change search frequency | Set `schedule.frequency` to one of `hourly \| every-2-hours \| every-6-hours \| daily \| weekly` |
+| Change the recency window | Set `search.freshness` to `any \| past-week \| past-2-weeks \| past-month` (default `past-2-weeks`) — client-side filter on each posting's `posted_at` |
+| Change the detail-read model | Set `search.detail_model` to `haiku \| sonnet \| opus \| inherit` (default `haiku`; `inherit` = use the run's own model) |
+| Widen a query's feed | Raise `queries[].limit` (1–100, default 25) — pull broadly across several varied queries; breadth + frequency + dedup accumulate coverage |
 | Mark a job status | Write a `status_changed` event via `state.py append` (statuses: `new \| interested \| applied \| rejected \| archived`) |
 | Update preferences | Run `job-preference-interview` (interactive) or edit `preferences.md` directly |
 
@@ -87,6 +90,8 @@ For the exact edit rules, field schemas, and the never-clobber adoption rule: se
 ## Customizing & extending it
 
 The agent is designed to be extended — add queries, swap the brief, point the runner at a different workspace, or build new skills that slot into the same conventions. For the full flexibility workflows — including how to honor an explicit score or cost-math request without polluting the clean data — see `references/customization.md`.
+
+**Run architecture.** Each run scans new posting summaries in the primary context (cheaply rejecting clear dealbreakers), then fans out one detail-read subagent per promising posting in parallel (model = `search.detail_model`, each follows the `evaluate-job-fit` skill), then consolidates and validates all verdicts before persisting. See `references/parallelism.md` for the parallel-by-default principle and how to brief a subagent; see `references/customization.md` for the recency, model, and feed-size knobs.
 
 ---
 
@@ -110,7 +115,7 @@ removals, `/loop`, and mere mentions) — see `references/scheduling-and-consent
 |---|---|
 | `healthy` | All searches ran, all details attempted |
 | `partial (N)` | N query-level errors but the run completed |
-| `degraded (LinkedIn flaky)` | The status probe returned `degraded`; detail reads were capped |
+| `degraded (LinkedIn flaky)` | The status probe returned `degraded`; the digest notes LinkedIn is flaky and the run proceeds (no read cap — relevance decides how many to read) |
 | `blocked (action needed)` | A named `E-*` halted the run; action required before the next run succeeds |
 
 **How failures surface:** a blocked run writes three artifacts — a `runs/<id>.json` record with `run_health:"blocked"`, a `reports/<date>-digest.md` whose body is the named error + fix, and (if `notify.desktop_notify_on_block: true`) a desktop notification. The **home view** on your next `/job-search` reads `runs/<id>.json` and shows the error there. Do not rely on the process exit code — a headless `claude -p` run returns 0 even when blocked.
@@ -140,6 +145,7 @@ For the full `E-*` table with exact cause and fix wording: see `references/error
 | The active workspace path | `python3 "$OS" resolve` |
 | Scheduling status | `python3 "$OS" schedule-status` |
 | Customization and flexibility workflows | `references/customization.md` |
+| Parallel-by-default principle + how to brief a subagent | `references/parallelism.md` |
 | Scheduling consent workflow and hook behavior | `references/scheduling-and-consent.md` |
 | This operator manual | `job-search-agent` skill |
 

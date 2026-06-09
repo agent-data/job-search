@@ -22,6 +22,9 @@ workspace:
   master_resume_path: "resumes/master.md"
 queries:
   - { id: "ai-eng-remote", keywords: "AI engineer", location: "United States", limit: 25, enabled: true }
+search:
+  freshness: "past-2-weeks"  # any | past-week | past-2-weeks | past-month — client-side recency filter on posted_at (no API date param)
+  detail_model: "haiku"      # model the per-posting detail subagents use: haiku | sonnet | opus | inherit
 schedule:
   frequency: "daily"         # hourly | every-2-hours | every-6-hours | daily | weekly → /loop interval (24h for daily)
   time: "08:00"              # informational under /loop (loop fires on an interval, not at a wall-clock time)
@@ -30,6 +33,12 @@ notify:
   digest_path_template: "reports/{date}-digest.md"
   desktop_notify_on_block: true
 ```
+The **`search` block** tunes the feed: `freshness` is a client-side recency window on `posted_at` (the API has
+no date param; `any` = no filter); `detail_model` is the model the runner's per-posting detail subagents use
+(`inherit` = the run's own model). **`queries[].limit`** (1–100, default 25) is the per-query feed size — pull
+generously across several varied queries rather than one giant pull; there is no pagination, so breadth +
+frequency + dedup accumulate coverage. Query construction (incl. deriving "remote") lives in `internals.md`.
+
 `run_id` format: UTC timestamp `YYYY-MM-DDTHH-MM-SSZ` (hyphens, not colons, in the time component — safe as a filename on every platform). `<date>` for digests: `YYYY-MM-DD` (local tz).
 
 ## jobs.jsonl — append-only events (one JSON object per line)
@@ -59,8 +68,9 @@ No budget block, no credit/USD fields.
 ## preferences.md — prose brief (the model reads this; NO machine-readable contract, NO weights)
 Sections: a 2–3 sentence **Summary**; **Must-haves / dealbreakers** (the binary filters); **Strong
 preferences**; **Nice-to-haves**; **Red flags**. Each item is plain, observable language a reader could check
-against a posting (e.g. "Remote within the US, or SF Bay Area onsite"). A `created_at:` line near the top lets
-a stale brief be flagged.
+against a posting (e.g. "Remote within the US, or SF Bay Area onsite"). Two front-matter dates sit near the
+top: `created_at:` (origin, preserved across updates) and `updated_at:` (last change). **Staleness is measured
+from `updated_at`** (fall back to `created_at` for briefs written before `updated_at` existed).
 
 ## Relevance vocabulary (qualitative — NO numbers)
 - **relevant**: boolean. False only when a must-have/dealbreaker is clearly violated.

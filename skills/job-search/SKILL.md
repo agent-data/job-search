@@ -22,11 +22,9 @@ This skill has two modes and almost no logic of its own — it **routes**, then 
 - **Returning** → show the job-search home (latest digest, new matches, pipeline) with conversational quick
   actions.
 
-The deterministic OS state lives in `scripts/osctl.py`, bundled into this skill at `scripts/osctl.py`.
-Resolve its absolute path **from this skill's own directory** (e.g. `${CLAUDE_SKILL_DIR}/scripts/osctl.py`
-when installed as a plugin) and call it below as `$OS` — exactly as the sibling skills resolve `$STATE`.
-The `jobs.jsonl` engine `scripts/state.py` is bundled the same way; call it as `$STATE`. Never hard-code or
-re-derive the workspace path — always ask `osctl.py`.
+Resolve `$OS` (`scripts/osctl.py`) and `$STATE` (`scripts/state.py`) from **this skill's own directory**
+(`${CLAUDE_SKILL_DIR}/scripts/…` as a plugin), never cwd; find the workspace with `python3 "$OS" resolve` and
+never hard-code its path.
 
 ## Step 0 — route
 

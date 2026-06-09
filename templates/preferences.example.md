@@ -1,5 +1,6 @@
 ---
 created_at: 2026-06-05
+updated_at: 2026-06-05
 ---
 # Job Preferences Brief
 

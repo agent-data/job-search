@@ -1,6 +1,6 @@
 ---
 name: job-search-run
-description: Run one job-search pass — load the preferences brief and config, search agent-data for each saved query, dedup against the local job database, judge each new posting's relevance, read full descriptions for promising matches, and write a digest. Use to run the scheduled search, check for new jobs, or when invoked by a schedule.
+description: Run one headless, non-interactive job-search pass — load the preferences brief and config, search agent-data for each saved query, dedup against the local job database, judge each new posting's relevance, read full descriptions for promising matches, and write a digest. Use to run the scheduled search, check for new jobs, or when invoked by a schedule. (For interactive setup or the home view, use job-search.)
 disable-model-invocation: false
 user-invocable: true
 ---
@@ -11,13 +11,13 @@ user-invocable: true
 > capabilities), use the **job-search-agent** skill — the operator manual.
 
 Run ONE headless job-search pass over the workspace. Free gates before metered calls; no silent failures.
+**Shape:** search → dedup/freshen → **scan summaries in this (primary) context** → **fan out one parallel
+subagent per promising posting** for the detail read → **consolidate** into a digest.
 Read `references/agent-data-contract.md` (CLI + routes + retry rules), `references/errors.md` (every E-* with
-the exact cause+fix wording), and `references/conventions.md` (file schemas + digest format) — follow them exactly.
+the exact cause+fix wording), `references/conventions.md` (file schemas + digest format), and
+`references/parallelism.md` (parallel-by-default + how to brief a subagent) — follow them exactly.
 
 Resolve the workspace with `python3 "$OS" resolve` (bundled `scripts/osctl.py`; registry → `~/.job-search/` → legacy `~/job-search/`) UNLESS `--workspace <path>` is given, which overrides. Resolve `$OS` (and `$STATE`) from this skill's own directory (e.g. `${CLAUDE_SKILL_DIR}/scripts/...` as a plugin) — never assume cwd. This run is HEADLESS: never prompt. If `resolve` reports `first_run` (no workspace/config yet) → E-NO-CONFIG naming `/job-search` (HALT, exit 1); onboarding is interactive and lives in the `job-search` skill, not here. The job source listing id is `f9a6ec16-0bfd-44d8-b3ee-073776745ee7`.
-Deterministic db ops use `state.py`, bundled WITH this skill at `scripts/state.py` (inside this skill's
-own directory). Resolve its absolute path from the skill's own location and use it below as `$STATE` —
-never assume the current working directory contains `scripts/`.
 
 **Retries:** branch only on the error envelope's `retryable` boolean (`true` → retry with backoff up to 3×;
 `false` → never retry), not on the error `code` string — see `references/agent-data-contract.md`.
@@ -36,27 +36,45 @@ never assume the current working directory contains `scripts/`.
    > Before exiting on ANY E-* HALT where a workspace exists (E-NO-AUTH, E-NO-PREFERENCES,
    > E-CONFIG-VERSION, E-SERVICE-DOWN, E-QUOTA), write `runs/<run_id>.json` with
    > `run_health:"blocked"` + the error, so the next home view surfaces it.
-1. **Search (one metered call per enabled query).** For each `queries[]` with `enabled:true`, call `search-jobs`
-   with `--keywords` (+ `--location`, `--limit`) and `--fields id,source_id,source_url,title,company_name,location_display,salary_display,posted_at,detail_available,source`.
+1. **Search the feed (one metered `search-jobs` per enabled query; run the queries concurrently).** For each
+   `queries[]` with `enabled:true`, call `search-jobs` with `--keywords` (+ `--location`, `--limit`) and `--fields id,source_id,source_url,title,company_name,location_display,salary_display,posted_at,detail_available,source`.
+   `limit` is the feed size (1–100, **default 25**) — pull generously and lean on **breadth** (several varied
+   queries beat one giant pull; there's no pagination and re-runs reorder). See remote-derivation and "as many
+   NEW as possible" in `references/internals.md`.
    - `502 search_failed` (retryable) → retry up to 3× with backoff; on give-up record the error and continue.
      **Two consecutive queries that fail entirely (all retries exhausted) → E-UPSTREAM-STRETCH: stop searching the rest.**
    - `422`/`400 unsupported_field` → E-BAD-QUERY (name the bad param from `details[].loc`), skip that query.
    - A quota/limit/payment failure (see errors.md detection) → E-QUOTA (HALT, exit 1).
-2. **Dedup (free).** `python3 "$STATE" known-ids --jobs <workspace>/jobs.jsonl` → the known set.
-   New postings = results whose non-null `source_id` is not in that set. (Rows with null `source_id` can't be
-   deduped → skip and count as "unidentifiable" in the digest.)
-3. **Evaluate from the summary (free).** Apply the `evaluate-job-fit` method (read its SKILL.md as the rubric)
-   to each NEW posting using only the summary fields. Clearly-irrelevant (a must-have plainly violated) →
-   record irrelevant, no detail read. Relevant or uncertain → queue for a detail read.
-4. **Read details for promising matches (one metered call each), most-promising first.** Call `get-posting`
-   with the row's `id` as `--posting_id` AND its `--source_url` (the pair). Re-judge with `description_markdown`
-   + `missing_fields[]` (missing = "not stated", never negative).
-   - `400 invalid_pair` (not retryable) → judge from summary only; footnote "detail link expired".
-   - `502 detail_fetch_failed` (retryable) → retry/backoff; on give-up, summary-only + note.
-   - **No cap on detail reads** — read all the promising matches, not a fixed number; let relevance, not a
-     count, decide how many. Order most-promising first so the highest-signal reads happen earliest; a posting
-     that fails a detail read per the rules above falls back to summary-only with a note.
-5. **Persist + report.** For each new posting, append the FULL `evaluated` event (complete schema in
+2. **Dedup + freshen (free).** `python3 "$STATE" known-ids --jobs <workspace>/jobs.jsonl` → the known set;
+   NEW = results whose non-null `source_id` is not in it. Then apply `search.freshness` (default `past-2-weeks`):
+   drop NEW rows whose `posted_at` is older than the window — the API has no date parameter, so this is a
+   client-side filter on `posted_at` (`any` disables it). Null-`source_id` rows can't be deduped → skip, count
+   "unidentifiable".
+3. **Scan the feed here, in this (primary) context — the cheap first pass.** Review every NEW posting's SUMMARY
+   fields (title, company, `location_display`, `salary_display`, `posted_at`). Reject the clearly-irrelevant from
+   the summary alone — a must-have plainly violated and stated right in the row (e.g. an onsite-elsewhere
+   `location_display`) → record irrelevant, NO detail read. Queue everything relevant-or-uncertain, and for each queued posting jot a one-line
+   **steer** for the detail read — your provisional read + the *specific* open questions it must resolve (which
+   must-haves are unconfirmed from the summary, what's uncertain), e.g. "looks strong; confirm remote-US —
+   location says Austin" or "confirm IC vs manager; seniority unstated". The cheap scan does real work — it
+   produces the primary's guidance for each detail review, not just a gate.
+4. **Fan out the detail reads — one subagent per queued posting, in PARALLEL.** The reads are independent, so
+   dispatch all queued postings **at once, in a single batch** of concurrent subagents (model =
+   `search.detail_model`, default `haiku`; `inherit` = this run's own model) — never a one-at-a-time loop. Hand
+   each subagent the **orchestration + the primary's steer**: the posting's `id` + `source_url` pair, the brief's
+   path, the **`evaluate-job-fit` skill to follow**, and the **per-posting steer from the scan** (your provisional
+   read + the specific must-haves/unknowns it should confirm) — brief it like a colleague with zero context (see
+   **Briefing each detail subagent**). Never a re-stated rubric — that skill's `SKILL.md`
+   is the single source of truth for *how* to judge; the primary supplies *what* to judge and *what to confirm*.
+   Each subagent calls `get-posting` with the row's `id` (`--posting_id`) AND its `--source_url` (the same-row
+   pair), judges `description_markdown` + `missing_fields[]` (missing = "not stated", never negative) by following
+   that skill and **resolving the steer's open questions**, and returns ONLY its `source_id` + the structured
+   judgment object. Per-posting errors stay inside that subagent: `400 invalid_pair` (not retryable) → judge from summary,
+   note "detail link expired"; `502 detail_fetch_failed` (retryable) → retry/backoff, then summary-only + note.
+   **No cap** — every queued posting gets a subagent; the scan (relevance), not a count, decided how many. Running
+   them in parallel is the point: it cuts wall-clock, keeps full JDs out of this context, and lets a
+   faster/cheaper model do the bulk reads.
+5. **Consolidate + persist + report.** Collect the parallel subagents' verdicts and **validate each before it lands**: `match` must be `strong | moderate | weak`, or `null` when `relevant` is false — coerce anything else (a faster delegated model can emit a stray number or out-of-vocab band) and never let a numeric score reach `jobs.jsonl` or the digest. Then for each new posting append the FULL `evaluated` event (complete schema in
    conventions.md §jobs.jsonl) via `python3 "$STATE" append --jobs <workspace>/jobs.jsonl --event '<json>'`.
    The event MUST carry provenance — `event:"evaluated"`, `ts`, `run_id`, `source:"linkedin"`, `query_id`,
    `title`, `company_name`, `location_display`, `salary_display`, `posted_at`, `source_url`,
@@ -64,6 +82,15 @@ never assume the current working directory contains `scripts/`.
    `reasoning`, `dealbreakers_hit`, `unknowns`, `needs_human_check`, `status:"new"`, `first_seen`. Write
    `runs/<run_id>.json` and `reports/<date>-digest.md` (format in conventions.md; strong → moderate → weak,
    then "filtered out: N"). Print a 5-line terminal summary.
+
+## Briefing each detail subagent
+
+`references/parallelism.md` is the general rule (parallel-by-default + how to brief a subagent that starts with
+zero context). Applied here: hand each detail subagent the posting's `id`+`source_url` pair, the brief's path,
+the `evaluate-job-fit` skill to follow, and your scan's **steer** — the provisional read plus the specific
+must-have/unknown to confirm (e.g. *"Strong on AI/LLM-IC-Python; confirm remote-US — `location_display` says
+Austin"*). It returns only its `source_id` + the structured judgment object. Keep the steer a provisional read +
+open question, never a verdict.
 
 ## Run health, surfacing & exit codes
 Every run ends by writing `runs/<run_id>.json` with at least `{"run_id","run_health",

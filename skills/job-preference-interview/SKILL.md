@@ -1,6 +1,6 @@
 ---
 name: job-preference-interview
-description: Build or update the user's Job Preferences Brief through a one-question-at-a-time interview, producing a prose preferences.md (Summary, Must-haves/dealbreakers, Strong preferences, Nice-to-haves, Red flags). Also imports an existing brief. Use when the user wants to set up or refine what they want in a job, or when job-search onboarding needs a brief.
+description: Build or update the user's Job Preferences Brief at a depth they choose — a quick free-form sketch (~1 question), the standard one-question-at-a-time interview, or a thorough pass — producing a prose preferences.md (Summary, Must-haves/dealbreakers, Strong preferences, Nice-to-haves, Red flags). Imports an existing brief too, and can deepen a light brief later. Use when the user wants to set up or refine what they want in a job, or when job-search onboarding needs a brief.
 disable-model-invocation: false
 user-invocable: true
 ---
@@ -10,8 +10,8 @@ user-invocable: true
 > To configure, extend, customize, or troubleshoot the agent itself (or understand its
 > capabilities), use the **job-search-agent** skill — the operator manual.
 
-Interview the user, one question at a time, to build their **Job Preferences Brief** — the prose
-`preferences.md` that `evaluate-job-fit` later reads next to a posting to judge it.
+Build the user's **Job Preferences Brief** at a depth they choose — from a one-line sketch to a thorough
+interview — the prose `preferences.md` that `evaluate-job-fit` later reads next to a posting to judge it.
 
 ## Purpose
 Produce a **prose** brief a model can read against a job posting and judge it **qualitatively**:
@@ -27,10 +27,8 @@ This skill is **interactive only** — it asks questions and waits for answers. 
 scheduled run.
 
 ## Where it writes
-Resolve the workspace with the bundled `osctl.py`. It is copied into this skill's own directory at
-`scripts/osctl.py`; resolve its absolute path **from this skill's directory** (e.g.
-`${CLAUDE_SKILL_DIR}/scripts/osctl.py` when installed as a plugin) and use it below as `$OS` — exactly as the
-sibling skills resolve `$STATE`. Never hard-code or re-derive the workspace path.
+Resolve `$OS` (`scripts/osctl.py`) from **this skill's own directory** (`${CLAUDE_SKILL_DIR}/scripts/…` as a
+plugin), never cwd; find the workspace with `python3 "$OS" resolve` and never hard-code its path.
 
 ```
 python3 "$OS" resolve   →  {"workspace":"<abs>","first_run":<bool>,"source":"registry|default|legacy|none"}
@@ -42,18 +40,52 @@ python3 "$OS" resolve   →  {"workspace":"<abs>","first_run":<bool>,"source":"r
   workspace, it tells you where to write.)
 - If a `preferences.md` already exists, you are **updating** it — read it first, fill gaps, and confirm changes
   rather than silently overwriting.
-- Put a `created_at: YYYY-MM-DD` line at the top in front-matter style, matching
-  `templates/preferences.example.md`:
+- Put `created_at:` and `updated_at:` front-matter lines at the top, matching
+  `templates/preferences.example.md`. On a **new** brief set both to today; on an **update** keep `created_at`
+  and refresh `updated_at` to today — the home view measures staleness from `updated_at`:
 
   ```
   ---
   created_at: 2026-06-05
+  updated_at: 2026-06-08
   ---
   # Job Preferences Brief
   ...
   ```
 
+## Choose a depth (offer all three; give the question estimate)
+Before you ask anything, let the user choose how deep to go — and make clear they can **start light and deepen
+later** (a follow-up interview reads the existing brief and *enriches* it, never overwrites). Offer it plainly:
+
+> How deep do you want to go? You can always come back for a deeper pass later.
+> 1. **Quick sketch** (~1 question) — just describe what you want in a sentence or two; I'll draft a brief so you
+>    can see matching jobs right away.
+> 2. **Standard interview** (~6–10 questions) — a focused, one-question-at-a-time pass over what matters most.
+> 3. **Thorough interview** (~15–20 questions) — a deeper pass across every dimension, for the most precise brief.
+> (Already have one written down? I can **import** it instead — paste it or give me the path.)
+
+Whatever the depth, the **output is the same five-section brief** (below): depth changes how much you ask, not
+the shape of the result. If a brief already exists, any path **updates** it — read it first, fill gaps, and
+confirm changes rather than overwriting.
+
+### Quick sketch — the fast escape hatch
+For users who'd rather see jobs now than answer questions:
+1. Ask once: *"In a sentence or two — what are you after? (role, where, pay floor, anything that's a
+   dealbreaker)"*. Take whatever they give you; don't push for more.
+2. Draft the five-section brief from **only what they actually said**, plus *safe, direct* implications (e.g. an
+   on-call **red flag** from "good work-life balance") — a stated role / location / pay floor becomes a
+   **Must-have**, softer wants go to **Strong preferences / Nice-to-haves**. **Don't invent preferences they
+   didn't express**; leave a section empty rather than padding it — they can deepen it later. Ask **at most one**
+   follow-up, and only if a likely must-have is missing entirely.
+3. Write it, say where it went, and tell the user plainly they can **run a deeper interview anytime** to sharpen
+   it — then hand back so they can run a search.
+
 ## Interview method
+This is the **Standard** and **Thorough** path — same method, different coverage. **Standard** (~6–10 questions)
+works the core dimensions below and skips whatever the user says doesn't matter. **Thorough** (~15–20) works
+through *every* dimension with follow-ups and deliberately fleshes out all four buckets — nice-to-haves and red
+flags included.
+
 - Ask **one main question at a time** (a single tight, directly-related follow-up is fine). **Wait** for the
   answer before moving on. Never dump a long checklist of questions.
 - **Start** with the user's current situation and what's prompting the search ("What's making you look now?"),
@@ -128,5 +160,5 @@ scratch.
    drop the numbers, and reshape into the five sections above.
 3. **If it's thin** (missing sections, vague items), offer a few targeted enrich questions to fill the gaps —
    using the same one-question-at-a-time method.
-4. Map its contents onto the five sections, add the `created_at:` front-matter line, and write
+4. Map its contents onto the five sections, add the `created_at:` + `updated_at:` front-matter lines, and write
    `preferences.md` at the resolved path. Confirm the path with the user.

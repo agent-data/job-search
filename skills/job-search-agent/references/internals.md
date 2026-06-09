@@ -36,6 +36,16 @@ The user changes config by **chatting**; manual editing is an escape hatch. To a
   When the user hasn't named keywords (onboarding, or a vague "add another search"), **derive** them from
   `preferences.md` — role/title + domain terms for `keywords`, the brief's location constraints for
   `location` — then **acknowledge** what you saved rather than asking them to pick.
+- **Tune the feed (`search` block):** `search.freshness` (`any | past-week | past-2-weeks | past-month` — a
+  client-side recency filter on `posted_at`; the API has no date param) and `search.detail_model`
+  (`haiku | sonnet | opus | inherit` — the model the runner's per-posting detail subagents use). `queries[].limit`
+  (1–100, default 25) is the per-query feed size.
+- **Derive "remote" into the query:** `search-jobs` has no remote flag, so when the brief requires remote (or
+  rejects onsite-elsewhere), fold `remote` into the query `keywords` and/or set `location` to the brief's allowed
+  geographies — otherwise the feed fills with onsite roles the judge then filters out.
+- **Pull as many NEW as possible:** there's no pagination and re-runs reorder, so breadth + frequency + dedup do
+  the work, not a giant single pull — keep `limit` sensible (default 25, up to 100), run several varied queries
+  (role synonyms, key locations, remote variants), run often, and dedup; distinct postings accumulate across runs.
 - **Change frequency:** set `schedule.frequency` to one of `hourly | every-2-hours | every-6-hours | daily | weekly`.
 - **Change run time:** set `schedule.time` (HH:MM, used for daily/weekly).
 - Always keep `version: 1`. NEVER add a budget, cost, or score/weight field (philosophy).

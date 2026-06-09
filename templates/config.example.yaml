@@ -5,6 +5,9 @@ workspace:
 queries:
   - { id: "ai-eng-remote",  keywords: "AI engineer",          location: "United States",         limit: 25, enabled: true }
   - { id: "ml-platform-sf", keywords: "ML platform engineer", location: "San Francisco Bay Area", limit: 25, enabled: true }
+search:
+  freshness: "past-2-weeks"    # any | past-week | past-2-weeks | past-month (client-side filter on posted_at)
+  detail_model: "haiku"        # per-posting detail subagents: haiku | sonnet | opus | inherit
 schedule:
   frequency: "daily"           # /loop interval: hourly→1h · every-2-hours→2h · every-6-hours→6h · daily→24h · weekly→168h
   time: "08:00"                # informational under /loop (the loop fires on an interval, not at a wall-clock time)

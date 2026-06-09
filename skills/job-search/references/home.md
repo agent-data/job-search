@@ -16,7 +16,7 @@ Read just what the home view needs (all local, all free):
 
 - **Schedule marker:** `python3 "$OS" schedule-status` →
   `{"installed":<bool>,"mechanism":"loop"|null,"set_at":<iso>|null}`.
-- **Brief age:** the `created_at:` line near the top of `<ws>/preferences.md`.
+- **Brief age:** the `updated_at:` line near the top of `<ws>/preferences.md` (fall back to `created_at` if absent).
 - **Last run health:** the newest `<ws>/runs/*.json` (its `run_health`), or fall back to the **Run health**
   line of the latest digest.
 - **Latest digest:** the newest `<ws>/reports/<date>-digest.md` — its date and its **counts line**.
@@ -43,13 +43,14 @@ Pipeline
 
 What next? Just tell me:
   • run a search now            • add or edit a query
-  • change how often it runs    • update your preferences
-  • change or turn off the schedule    • show the latest digest
+  • change how often it runs    • tune the feed
+  • update your preferences     • change or turn off the schedule
+  • show the latest digest
 ```
 
 Notes on each part:
 
-- **Status line.** Workspace path; brief age from `preferences.md:created_at`; schedule from
+- **Status line.** Workspace path; brief age from `preferences.md:updated_at` (fallback `created_at`); schedule from
   `schedule-status` (on + mechanism, or off) — the **frequency** to render (e.g. "daily" in "daily via /loop")
   comes from `config.yaml:schedule.frequency`, since `schedule-status` carries only on/off + mechanism;
   last-run health from the newest `runs/*.json` `run_health` (or the latest digest's Run health line). Run
@@ -68,14 +69,19 @@ Offer these and apply each by **chatting**, editing `config.yaml` per the `inter
 - **Run a search now** → invoke `job-search-run` against `<ws>` (disclose it makes live calls), then
   show the fresh digest's strong/moderate matches.
 - **Add or edit a query** → append/modify a `queries[]` item
-  (`{ id, keywords, location, limit, enabled }`); preserve comments; keep `version: 1`. If the user asks for
-  another search without naming keywords, **derive** it from their brief (don't make them pick) and
-  acknowledge what you added — same as onboarding step 5.
+  (`{ id, keywords, location, limit, enabled }`); `limit` is the per-query feed size (1–100, default 25).
+  Preserve comments; keep `version: 1`. If the user asks for another search without naming keywords,
+  **derive** it from their brief (don't make them pick) and acknowledge what you added — same as onboarding
+  step 5.
+- **Tune the feed** → set `search.freshness` (`any | past-week | past-2-weeks | past-month`) to narrow or
+  widen the recency window, and/or set `search.detail_model` (`haiku | sonnet | opus | inherit`) to control
+  which model reads full posting details (default `haiku`). Edit `config.yaml` per the `internals.md`
+  recipes; preserve comments; keep `version: 1`. **No cost math.**
 - **Change how often it runs** → set `schedule.frequency` to `hourly | every-2-hours | every-6-hours |
   daily | weekly` (and `schedule.time` for daily/weekly). Reuse the plain-language nudge — "daily suits most
   searches; hourly only for a fast-moving, active search." **No cost math.**
 - **Update preferences** → invoke `job-preference-interview` (it reads the existing brief and updates it,
-  refreshing `created_at`).
+  refreshing `updated_at`).
 - **Change or turn off the schedule** → re-run the scheduling flow in `onboarding.md`: get the line with
   `python3 "$OS" loop-command --frequency <f>`, run that `/loop …`, then `python3 "$OS" set-scheduled`; always
   show the verbatim `/loop` recipe from `internals.md`. To turn it off, stop the loop (end the session or
@@ -86,7 +92,7 @@ Offer these and apply each by **chatting**, editing `config.yaml` per the `inter
 
 ## Nudges (surface only when they apply)
 
-- **Stale brief.** If `preferences.md:created_at` is older than ~3 months, gently suggest a refresh: "Your
+- **Stale brief.** If `preferences.md:updated_at` (fallback `created_at`) is older than ~3 months, gently suggest a refresh: "Your
   preferences are about <N> months old — want to update them? Just say so and I'll walk through it." (This
   mirrors the digest's brief-age footnote.)
 - **Last run blocked/failed.** If the newest run's `run_health` is `blocked` (or the latest digest shows a

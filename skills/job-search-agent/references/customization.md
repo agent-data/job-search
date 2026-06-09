@@ -46,7 +46,43 @@ Importance lives in the bucket assignment, never in numeric weights or score mul
 
 ---
 
-## 4. Adding a new capability or skill
+## 4. Tuning the search feed & detail reads
+
+Three `config.yaml` keys (schema in `shared/references/conventions.md`) control how much the system fetches, how fresh it is, and how carefully it reads each posting.
+
+**Recency window — `search.freshness`**
+
+Filters each posting's `posted_at` on the client side after the feed is returned (the search API has no date parameter).
+
+| Value | What passes |
+|---|---|
+| `any` | Everything in the feed regardless of age |
+| `past-week` | Posted within the last 7 days |
+| `past-2-weeks` | Posted within the last 14 days *(default)* |
+| `past-month` | Posted within the last 30 days |
+
+Narrowing the window keeps the digest focused on live roles. Widening it is useful when you haven't run a search in a while and want to catch up.
+
+**Feed size — `queries[].limit`**
+
+Sets how many postings each query pulls (1–100, default 25). A higher limit fetches more raw postings per query, but it is not pagination — there is no way to walk deeper pages. The practical path to seeing more new postings is **breadth + frequency**: several varied queries with meaningful keyword differences, run regularly, with dedup preventing repeats from inflating the digest.
+
+**Detail-read model — `search.detail_model`**
+
+After the primary pass scans summaries, the agent fans out one detail-read subagent per promising posting in parallel (see `references/parallelism.md` for the general pattern). Each subagent follows the `evaluate-job-fit` skill. This key controls which model those subagents use.
+
+| Value | Behavior |
+|---|---|
+| `haiku` | Fast and light *(default)* |
+| `sonnet` | More deliberate on nuanced qualitative judgments |
+| `opus` | Highest fidelity |
+| `inherit` | Uses the same model as the top-level run |
+
+Haiku is the right starting point for most searches. It is a touch looser on subtle qualitative calls — occasionally emitting an out-of-vocabulary band or a stray numeric value — but the consolidation step after all subagents return validates and coerces every verdict before anything reaches `jobs.jsonl` or the digest, so no invalid output persists. For roles where the brief's distinctions are fine-grained or the must-have/red-flag list is long, set `detail_model: sonnet` (or `opus`) to improve judgment fidelity. This is a **fidelity/speed tradeoff**, not a quality-gate — the defaults are safe either way.
+
+---
+
+## 5. Adding a new capability or skill
 
 See the **"Extending & contributing"** section in `SKILL.md` for the full workflow. Key points:
 

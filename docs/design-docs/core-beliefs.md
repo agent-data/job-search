@@ -188,3 +188,18 @@ and are linked, never restated here — this doc is a live design-doc subject to
   product framing live in [ARCHITECTURE.md](../../ARCHITECTURE.md). That every error names its fix is
   the contract in [shared/references/errors.md](../../shared/references/errors.md).
 - **How to verify.** `python3 scripts/doc_lint.py --root .` → `Doc lint: clean.`
+
+## 12. Parallel by default
+
+- **Statement.** Independent work runs concurrently, not in sequence — a run dispatches mutually-independent
+  subtasks (e.g. one detail-read subagent per posting) in a single batch, and briefs each like a colleague with
+  zero context.
+- **Why.** Time-to-value is a product feature. Parallelizing independent work turns a serial crawl into one
+  concurrent step; isolating each subtask in its own subagent keeps the primary context clean and lets a faster,
+  cheaper model do the bulk. A well-briefed subagent makes judgment calls — a terse one returns shallow, generic work.
+- **Enforced by.** **Cultural / by design** — no linter for parallelism. The principle and the subagent-briefing
+  guidance are owned by [shared/references/parallelism.md](../../shared/references/parallelism.md) (bundled into
+  every skill); `job-search-run` embodies it (scan → parallel per-posting fan-out → consolidate; the
+  `search.detail_model` knob lives in [shared/references/conventions.md](../../shared/references/conventions.md)).
+- **How to verify.** Inspect [shared/references/parallelism.md](../../shared/references/parallelism.md) and
+  `skills/job-search-run/SKILL.md`; confirm mutually-independent work is dispatched concurrently, one subagent per item.

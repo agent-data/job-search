@@ -89,8 +89,8 @@ runner reads against each posting. Ask which path the user wants:
   to prose (this system is qualitative only), enriches thin sections with a few targeted questions, and
   writes `preferences.md`. Follow that skill's import rules — don't reimplement them here.
 
-Either way, the brief ends up at `<workspace>/preferences.md` with a `created_at:` line (used later to flag
-a stale brief). If for some reason a run is attempted before a usable brief exists, that path surfaces
+Either way, the brief ends up at `<workspace>/preferences.md` with `created_at:` + `updated_at:` front-matter
+lines (the home view flags a stale brief from `updated_at`). If for some reason a run is attempted before a usable brief exists, that path surfaces
 **`E-NO-PREFERENCES`** (build one with `/job-preference-interview`, or point
 `config.yaml:workspace.preferences_path` at your own prose brief).
 
@@ -105,7 +105,9 @@ user to name keywords.** They can retune anytime; the goal here is zero upfront 
      engineer", "LLM engineer"). Give each query a *different* angle, not one near-duplicate.
    - **location** — read it off the brief's location constraints: "remote within the US" → `United States`;
      "onsite in the SF Bay Area" → `San Francisco Bay Area`. If the brief allows both, cover each with its
-     own query.
+     own query. **If remote is a must-have, also fold the word `remote` into `keywords`** (e.g. "remote AI
+     engineer") — the search API has no remote filter, so without it the feed fills with onsite roles the
+     judge then has to cull.
 2. **Write them to `config.yaml`** per the `internals.md` "Add a query" recipe — never make the user open the
    file. Each item:
 
@@ -123,6 +125,8 @@ user to name keywords.** They can retune anytime; the goal here is zero upfront 
 
    Only if the brief is too thin to derive anything sensible (rare) do you ask one focused question to fill
    the gap — lead with derivation, never a blank "what should I search for?".
+   The config already comes preset with a recency window (recent postings only) and a fast model for reading
+   posting details — both are tunable anytime just by asking.
 4. **Pick a frequency.** Ask how often to pull, with the plain-language nudge — **no credit or cost math**:
 
    > "How often should I check for new postings? **Daily suits most searches; choose hourly only if you're
