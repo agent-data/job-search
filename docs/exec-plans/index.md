@@ -5,6 +5,7 @@ are archived here.
 
 ## Active
 - [Documentation Knowledge Base](active/2026-06-07-doc-knowledge-base.md)
+- [Voice & Onboarding Clarity](active/2026-06-09-voice-and-onboarding-clarity.md)
 
 ## Completed
 - [Job Search OS — Foundation & Core (Plan A)](completed/2026-06-05-foundation-core.md)
