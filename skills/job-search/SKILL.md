@@ -39,6 +39,8 @@ python3 "$OS" resolve   →  {"workspace":"<abs>","first_run":<bool>,"source":"r
 - `first_run: false` → follow **`references/home.md`** (the returning-user home).
 
 That's the whole router. Everything else is in the two playbooks; read the one you routed to and follow it.
+Step 0 is mechanical — do it **silently**: no `resolve` / "OS state" / `registry` / `first_run` talk in your
+reply (`references/voice.md`). Your first user-facing words are the onboarding welcome or the home view.
 
 ## Principles (apply in both modes)
 
