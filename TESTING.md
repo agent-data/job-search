@@ -297,7 +297,7 @@ Strong→Moderate→Weak; Filtered-out: N; footnotes) and appends `evaluated` ev
 
 ### T5.2 Re-run dedups — 🤖
 Immediately run it again.
-**Expected:** dedup by `source_id` → "No NEW postings — all already in your database"; **no** duplicate
+**Expected:** dedup by `source_id` → "No new postings — you've already seen all N of these"; **no** duplicate
 `evaluated` events; no `get-posting` calls; Run health healthy; exits 0.
 **Result:** ⬜
 
@@ -324,8 +324,8 @@ ls -t "$JSOS_TEST/.job-search/reports/"*.md | head -1   # a digest exists / was 
 ```
 **Expected:** exit **0**; **no prompt** (headless); a `reports/<date>-digest.md` with the **same shape** as T5.1
 (Run health line, counts line, Strong→Moderate→Weak); the summary lands in `cron.log`. Fresh matches **or** a clean
-"No NEW postings" dedup digest are both passes (dedup if T5.1 already searched this workspace); 0 live results →
-§0.4 fallback.
+"you've already seen all N of these" dedup digest are both passes (dedup if T5.1 already searched this workspace);
+0 live results → §0.4 fallback.
 **Cross-check** `/loop` runs this same skill headlessly each interval:
 `python3 "$JSOS/scripts/osctl.py" loop-command --frequency daily --namespace job-search-os` →
 `/loop 24h /job-search-os:job-search-run` (omit `--namespace` for loose-skill installs → `/loop 24h /job-search-run`).
@@ -423,7 +423,7 @@ JOBSEARCH_FIXTURES=$JSOS/tests/fixtures, JOBSEARCH_TEST_SCENARIO=<scenario>) and
 | T7.7 **E-UPSTREAM-STRETCH** | `stretch` | retries the 502 with backoff, stops after two consecutive failed queries; writes a **partial** digest (Run health `partial (N errors)`); doesn't crash | ⬜ |
 | T7.8 invalid-pair (non-error) | `invalid-pair` | no retry; summary-only judgment + "detail link expired" footnote; `detail_read:false`; run completes, exit 0 | ⬜ |
 | T7.9 degraded (non-error) | `degraded` | Run-health line reads `degraded (LinkedIn flaky)`; digest notes results this run may be affected; **no detail-read cap** (reads promising matches as normal); still produces matches; exit 0 | ⬜ |
-| T7.10 zero / all-known | `zero-empty` | "Searches ran but returned 0 results — broaden keywords"; exit 0. (All-known: pre-seed jobs.jsonl with the happy ids → "No NEW postings.") | ⬜ |
+| T7.10 zero / all-known | `zero-empty` | "Searches ran but returned 0 results — broaden keywords"; exit 0. (All-known: pre-seed jobs.jsonl with the happy ids → "No new postings — you've already seen all N of these.") | ⬜ |
 
 ```bash
 rm -rf "$SH"

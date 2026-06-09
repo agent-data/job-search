@@ -38,7 +38,7 @@ the `shared/references/` file that owns its contract.
 
 ### discovery-search
 Find postings: run each saved query against the agent-data Job Postings API, dedup new results against the
-local database, and respect retry / outage rules. Implemented by the [job-search-run](skills/job-search-run/SKILL.md)
+local record of already-seen postings, and respect retry / outage rules. Implemented by the [job-search-run](skills/job-search-run/SKILL.md)
 skill over [scripts/state.py](scripts/state.py) (dedup + persistence). The CLI routes, fields, and retry
 semantics are owned by [shared/references/agent-data-contract.md](shared/references/agent-data-contract.md).
 

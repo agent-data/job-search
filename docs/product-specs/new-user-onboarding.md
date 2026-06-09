@@ -2,7 +2,7 @@
 title: New-User Onboarding
 status: current
 verified: partial
-last_reviewed: 2026-06-08
+last_reviewed: 2026-06-09
 code_refs: [skills/job-search/SKILL.md, skills/job-search/references/onboarding.md, scripts/osctl.py]
 ---
 
@@ -33,6 +33,10 @@ logic and both playbooks are owned by [`skills/job-search/SKILL.md`](../../skill
 The full playbook lives in
 [`skills/job-search/references/onboarding.md`](../../skills/job-search/references/onboarding.md).
 This section names each step and points to the owning reference; it does not restate mechanics.
+Every ask follows the zero-context voice rules owned by
+[`shared/references/voice.md`](../../shared/references/voice.md) — one short line of plain-English
+context (what the thing is, why it's asked), then the question; internal vocabulary never reaches
+the user.
 
 ### 1. Welcome
 
@@ -93,7 +97,7 @@ Config schema and the derive/edit recipes are owned by
 ### 6. First live search — the magical moment
 
 The skill invokes `job-search-run` against the new workspace. It searches each enabled query,
-deduplicates against the local jobs database, judges each new posting against the brief
+skips postings it has already seen, judges each new posting against the brief
 (qualitatively: relevant or not, and if relevant weak/moderate/strong), reads full descriptions
 for the promising ones, and writes a digest. The agent presents strong and moderate matches as a
 discovery — "Here are N jobs matching your brief, found seconds ago."

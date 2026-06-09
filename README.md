@@ -143,8 +143,8 @@ The system is frugal *by behavior*, not by making you do arithmetic:
 
 - It **judges from the free posting summary first** and only spends a metered detail read on postings that
   already look promising.
-- It **dedupes against your local job database**, so it never re-pulls or re-evaluates a posting it has
-  already seen.
+- It **remembers every posting it has already seen** (in a local file inside your workspace), so it never
+  re-pulls or re-evaluates one.
 - One search per query per run, plus a detail read only for the promising matches.
 
 If the API limit for the period is ever reached, you get a **plain-language note** — never credit math:
@@ -198,7 +198,7 @@ needed)`.
 
 - A posting's detail link went stale (LinkedIn re-indexed) — Claude judges it from the summary and adds a
   footnote. Not an error.
-- "No NEW postings — all already in your database." Reassuring, not a failure.
+- "No new postings — you've already seen all of these." Reassuring, not a failure.
 - "Searches ran but returned 0 results." Actionable: broaden your keywords in `config.yaml`.
 
 ---

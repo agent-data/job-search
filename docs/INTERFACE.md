@@ -33,6 +33,10 @@ see [`../shared/references/internals.md`](../shared/references/internals.md).
 For the product philosophy behind this (prose-over-knobs, conversational-first),
 see [`design-docs/core-beliefs.md`](design-docs/core-beliefs.md).
 
+How skills speak — the plain-English outcome-first voice, the banned internal vocabulary,
+and the render-inline rule for briefs and digests — is owned by
+[`../shared/references/voice.md`](../shared/references/voice.md).
+
 ---
 
 ## The front door and home view
@@ -124,8 +128,8 @@ conversationally through the `/job-search` home view; nothing is installed on th
 machine (no cron, no launchd).
 
 `osctl.py` and `state.py` are deterministic internal CLIs that skills call to read and
-write OS state (workspace discovery, registry, job database, schedule markers). They are
-not user-facing; users never interact with them directly.
+write OS state (workspace discovery, registry, the local jobs file, schedule markers).
+They are not user-facing; users never interact with them directly.
 
 For the full CLI surface, internal scripts, and how the scheduling mechanisms work, see
 [`../ARCHITECTURE.md`](../ARCHITECTURE.md).
