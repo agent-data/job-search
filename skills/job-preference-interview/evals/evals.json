@@ -10,7 +10,8 @@
         "Items are concrete/observable prose (e.g. 'Remote within the US, or SF Bay onsite')",
         "Contains NO numeric score, NO 0–100 rubric, NO category weights, NO scoring formula",
         "The IC-not-management and onsite-location dealbreakers appear under Must-haves / dealbreakers",
-        "Ends with a 'How to use this' line stating Claude judges relevant/not + weak/moderate/strong with reasoning and 'No score.'"
+        "Ends with a 'How to use this' line stating Claude judges relevant/not + weak/moderate/strong with reasoning and 'No score.'",
+        "Ends by showing the written brief in the reply as rendered markdown (not inside a code fence), with a one-line note of where it's saved"
       ] },
     { "id": 2, "scenario": "import a usable prose brief",
       "prompt": "User says 'I already have a brief' and provides the contents of evals/files/imported-brief.md. Do not run a full interview.",

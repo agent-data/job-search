@@ -31,7 +31,7 @@
       "prompt": "What can my job search agent do?",
       "expectations": [
         "Gives a capabilities overview covering the core skills: job-search (home / onboarding), job-search-run (automated search pass), job-preference-interview (guided brief setup), and evaluate-job-fit (qualitative judgment)",
-        "Mentions scheduling (recurring runs via cron/schedule) and that the database is private and local (jobs.jsonl stays on the user's machine)",
+        "Mentions scheduling (recurring runs via native /loop) and that all data is private and local (jobs.jsonl stays on the user's machine)",
         "Describes judgment as qualitative — strong / moderate / weak / not relevant — with no numeric scores and no credit or dollar figures anywhere in the reply",
         "Is concise and conversational; does not enumerate every flag or internal script"
       ]

@@ -102,7 +102,7 @@
       "prompt": "Same harness, JOBSEARCH_TEST_SCENARIO=happy, but BEFORE running, pre-seed <tmp>/jobs.jsonl with prior evaluated events for both happy source_ids by running `python3 <repo>/scripts/state.py append --jobs <tmp>/jobs.jsonl --event '{\"event\":\"evaluated\",\"source_id\":\"1001\",\"status\":\"new\"}'` and the same for source_id 1002. Then run job-search-run.",
       "expectations": [
         "Dedup finds BOTH search results already known → no NEW postings",
-        "Reassuring message: 'No NEW postings — all already in your database' (NOT an error, NOT 'broaden keywords')",
+        "Reassuring message in plain English, e.g. 'No new postings — you've already seen all N of these' (NOT an error, NOT 'broaden keywords', and never the word 'database')",
         "Spends no get-posting calls; writes no duplicate evaluated events; Run health healthy; exits 0"
       ]
     },

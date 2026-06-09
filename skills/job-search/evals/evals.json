@@ -15,6 +15,9 @@
         "Runs a real sample job-search-run against <tmp>/.job-search and surfaces the Acme 'Senior AI Engineer (Remote US)' as a STRONG match in the digest, framed as found seconds ago",
         "Records the scheduling marker (osctl set-scheduled → schedule-status now installed:true, mechanism:loop) AND prints the verbatim /loop recipe block (namespaced /job-search-os:job-search-run target when running as a plugin)",
         "Prints the home view at the end (status line · latest digest · pipeline · quick actions)",
+        "Every setup question carries one short plain-English sentence of context (what the thing is / why it's asked) — e.g. the workspace ask explains it's the private folder holding preferences, searches, and matched jobs; the brief ask explains it's the 'what I want' every posting is judged against",
+        "No internal jargon in any user-facing line — never 'headless', 'dedup', 'database', 'event log', 'JSONL', 'registry', 'contract references', or skill/reference filenames as narration; live-run progress is narrated as user outcomes ('Searching…', 'N are new — reading them in full…')",
+        "After the interview, the finished brief is shown rendered in the reply (not inside a code fence, not just a file path)",
         "NO numeric score, NO category weights, NO credit/dollar/budget math anywhere in the output"
       ]
     },
@@ -30,6 +33,7 @@
         "Prints the verbatim /loop recipe block (scheduling was declined — the user can start it themselves later)",
         "Does NOT set the scheduling marker (set-scheduled NOT called; schedule-status stays installed:false) because the user declined",
         "Writes the registry with active_workspace = <tmp>/.job-search",
+        "After the import, the brief is shown rendered in the reply (not a code fence, not just a path); user-facing lines stay free of internal jargon (no 'headless'/'dedup'/'database')",
         "NO numbers/weights/credit math anywhere"
       ]
     },
