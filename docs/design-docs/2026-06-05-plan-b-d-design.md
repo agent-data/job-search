@@ -9,9 +9,8 @@ code_refs: [shared/references/conventions.md, scripts/state.py, scripts/osctl.py
 # Spec delta: Job Search OS — Claude-Code-driven Onboarding + OS internals (Plan B/D)
 
 **Status:** approved (design gate, 2026-06-05). Extends the original spec
-`2026-06-05-job-search-os-design.md`. Driven by the handoff
-`2026-06-05-job-search-os-plan-b-d-handoff.md` (§6 open decisions resolved here). Read those first;
-this document records only what is **new or changed**.
+`2026-06-05-os-design.md`. Driven by the handoff `2026-06-05-plan-b-d-handoff.md` (§6 open
+decisions resolved here). Read those first; this document records only what is **new or changed**.
 
 ## Why this delta
 

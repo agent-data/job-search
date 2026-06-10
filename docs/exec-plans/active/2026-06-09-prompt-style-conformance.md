@@ -480,7 +480,7 @@ Effort: S (<30 min) / M (half-day) / L (day+). Order within a tier = suggested e
   caps; every description gains quoted phrasings + a negative trigger naming the sibling that
   wins. *Verify:* cross-read the five for collisions; `claude plugin validate .`; optionally run
   the skill-creator description-optimization loop on the two "needs work" skills.
-- [ ] **R3 [BLOCKS, S] Fix design-doc cross-references.** Correct the two dead filenames in
+- [x] **R3 [BLOCKS, S] Fix design-doc cross-references.** Correct the two dead filenames in
   `2026-06-05-plan-b-d-design.md:12-13`; in the handoff, re-root in-repo pointers and banner the
   13 machine-local `~/cookbooks` / `~/job-search-os` paths as historical artifacts (publishing
   blocker — they leak a personal directory layout). *Verify:* grep per Done-when.
@@ -650,6 +650,7 @@ depends on R13 landing with it.)*
 - 2026-06-09 — R1: style guide landed as docs/design-docs/prompt-style-guide.md (verbatim Part 1);
   pointers added in AGENTS.md + CONTRIBUTING.md + design-docs index.
 - 2026-06-09 — R2: five descriptions re-cut per the §2.2 ownership map (job-search cedes "find me jobs"; agent drops caps + "set up, use"; all five gain quoted phrasings + negative triggers).
+- 2026-06-09 — R3: fixed the two dead filenames in plan-b-d-design (→ `2026-06-05-os-design.md`, `2026-06-05-plan-b-d-handoff.md`); landed a historical-snapshot banner under the handoff H1 covering the 13 `~/cookbooks` + 5 `~/job-search-os` machine-local paths (no in-repo equivalent — left as text under the banner; no `~/job-search-os/<subpath>` pointers exist to re-root). No literal username present (`/Users/<u>` placeholder only). Gates: Done-when grep satisfied (banner is hit #1), doc_lint clean, pytest 92 green.
 
 ## Decision log
 
@@ -680,3 +681,20 @@ depends on R13 landing with it.)*
   the corpus at authoring time, but the corpus lives outside the repo (machine-local Piebald
   extraction), so a future reviewer can't re-verify the claim with repo tooling. This matches the
   only sibling Living design doc, core-beliefs.md, which also claims `partial`.
+- **R3/R4 banner seam — the handoff banner landed with R3, not R4.** The R3 Done-when grep
+  (`grep -c 'cookbooks' …handoff.md → 0, or every hit under a snapshot banner`) depends on the
+  handoff banner existing, so R3 lands it; R4 still owns the `2026-06-05-os-design.md` banner and
+  may consolidate that doc's inline Revision notes. The wording is R4's approved snapshot text,
+  extended with the machine-local-paths clause; both superseded-details claims were verified
+  against the handoff before inclusion (it discusses scheduling and schemas/errors in several
+  sections, so both clauses are true here).
+- **`~/cookbooks` / `~/job-search-os` mentions stay as text under the banner, not re-rooted.**
+  `~/cookbooks/*` has no in-repo equivalent (it's the author's external superpowers checkout), and
+  all 5 `~/job-search-os` references are bare repo-root mentions ("Repo: `~/job-search-os`"), not
+  `~/job-search-os/<subpath>` pointers — there were no resolvable sub-paths to make repo-relative,
+  so the banner (not deletion or rewording) is what makes them publishing-safe, per the task.
+- **Dead-link fix kept the doc's bare-backtick convention.** plan-b-d-design uses bare backticked
+  filenames (no markdown links anywhere in it); the fix corrects only the two wrong names
+  (`2026-06-05-job-search-os-design.md` → `2026-06-05-os-design.md`,
+  `…-job-search-os-plan-b-d-handoff.md` → `2026-06-05-plan-b-d-handoff.md`) and leaves the
+  sentence otherwise intact rather than introducing link syntax the file doesn't use.

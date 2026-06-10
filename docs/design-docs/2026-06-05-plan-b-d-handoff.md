@@ -8,6 +8,12 @@ code_refs: [shared/references/conventions.md, scripts/state.py, scripts/osctl.py
 
 # Handoff — Job Search OS: Plan B (Claude-Code-driven Onboarding) + Plan D (Packaging)
 
+> **Historical snapshot (2026-06-05).** This handoff is preserved as written. Machine-local paths
+> below (`~/cookbooks/…`, `~/job-search-os/…`) describe the original author's machine at handoff
+> time and resolve nowhere else; the work they pointed at now lives in this repo. Superseded
+> details: schemas/errors live in `shared/references/`; scheduling is `/loop`-only per
+> core-beliefs 7.
+
 **Purpose:** everything a fresh Claude Code session needs to design and build Plan B and Plan D. The
 **new headline requirement**: the **entire onboarding is driven by Claude Code**. A user installs the plugin
 (or clones the repo), opens Claude Code, says "go," and Claude Code runs the whole setup + onboarding —
