@@ -6,7 +6,7 @@ pytest + fake-shim + skill-creator eval harness. **This file is the entry point 
 working on this repo** — a map, not the territory. Start here, then follow the pointers.
 
 ## Start here
-- **[ARCHITECTURE.md](ARCHITECTURE.md)** — the five product domains × five layers and how they fit.
+- **[ARCHITECTURE.md](ARCHITECTURE.md)** — the five product domains × five layers and how they fit; read before any change.
 - **[Core beliefs](docs/design-docs/core-beliefs.md)** — the agent-first operating principles; read before changing behavior.
 - **[Runtime contracts](shared/references/)** — the SINGLE SOURCE OF TRUTH for errors, config, conventions, and the agent-data API. Docs here POINT to these; never duplicate them.
 
@@ -23,7 +23,7 @@ working on this repo** — a map, not the territory. Start here, then follow the
 - [Plans methodology](docs/PLANS.md) · [Exec-plans index](docs/exec-plans/index.md)
 
 ## Working here
-- **Single source of truth:** edit `shared/references/` + `scripts/`, then run `./scripts/build.sh`; never hand-edit `skills/*/references` or `skills/*/scripts`.
+- **Single source of truth:** edit `shared/references/` + `scripts/`, then run `./scripts/build.sh`; never hand-edit `skills/*/references` or `skills/*/scripts` — build.sh regenerates them and your edit is silently lost.
 - All prompts and docs are held to the [prompt & doc style guide](docs/design-docs/prompt-style-guide.md).
 - Stdlib-only Python; scoped conventional commits; `python3 scripts/doc_lint.py --root .` and `python3 -m pytest -q` must be green before a PR.
 - Daily contributor docs: [README](README.md) · [CONTRIBUTING](CONTRIBUTING.md) · [TESTING](TESTING.md)
