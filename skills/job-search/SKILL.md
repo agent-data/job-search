@@ -37,16 +37,24 @@ Run:
 python3 "$OS" resolve   →  {"workspace":"<abs>","first_run":<bool>,"source":"registry|default|legacy|none"}
 ```
 
-- `first_run: true` → follow **`references/onboarding.md`** (the first-run playbook). Onboarding owns the
-  workspace and tells the delegated skills where to write.
-- `first_run: false` → follow **`references/home.md`** (the returning-user home).
+- `first_run: true` → **say the welcome, then** follow **`references/onboarding.md`** (the first-run
+  playbook). Greet the moment `resolve` reports `first_run: true` — before you open the playbook, before
+  any check. This is the one place text comes before tools; a silent read-streak swallows the greeting and
+  the user's first minute opens with machinery instead. The welcome, verbatim or close to it:
+
+  > "Let's set up your job search. I'll check a couple of prerequisites, make you a private workspace,
+  > learn what you're looking for, save your first search, and then actually pull live postings and show
+  > you the matches — all in a few minutes. Every step that needs something from you will say so plainly;
+  > nothing fails silently."
+
+  Onboarding owns the workspace and tells the delegated skills where to write.
+- `first_run: false` → follow **`references/home.md`** (the returning-user home). Gather its state
+  silently; the home view itself is your first words.
 
 That's the whole router. Everything else is in the two playbooks; read the one you routed to and follow it.
 Step 0 is mechanical — do it **silently**: no `resolve` / "OS state" / `registry` / `first_run` talk in your
-reply (`references/voice.md`). Your first user-facing words are the onboarding welcome or the home view —
-reading the routed playbook and its references happens silently before them. Onboarding holds every further
-check and command (even free ones) behind the welcome; home gathers its state silently and opens with the
-view itself.
+reply (`references/voice.md`). Your first user-facing words are the onboarding welcome (already said, above,
+before the playbook was opened) or the home view.
 
 ## Principles (apply in both modes)
 

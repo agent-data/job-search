@@ -21,20 +21,12 @@ vocabulary, ever.
 
 ## 1. Welcome
 
-**The welcome is your first user-facing words — nothing visible happens before it.** Routing here and
-reading this playbook's references happen first, silently; that is the only work that may precede it.
-Everything else waits behind it: no prerequisite check, no workspace command, no tool call the user can
-see. The urge to announce what you're about to do is right — the welcome IS that announcement. "Let me
-read the references / run some checks first" is the failure mode: it opens the user's first minute with
+The router (SKILL.md Step 0) already said the welcome — your first user-facing words, spoken the moment
+`resolve` returned `first_run: true`, **before this playbook was opened**. If that somehow hasn't happened,
+say it now (the template lives in Step 0) before anything else: no prerequisite check, no workspace
+command, no tool call the user can see comes before the welcome — in every mode, headless included. "Let
+me read the references / run some checks first" is the failure mode: it opens the user's first minute with
 machinery talk instead of a greeting.
-
-Open with a sentence or two, not a wall of text. Tell the user what's about to happen and that it ends with
-real postings:
-
-> "Let's set up your job search. I'll check a couple of prerequisites, make you a private workspace, learn
-> what you're looking for, save your first search, and then actually pull live postings and show you the
-> matches — all in a few minutes. Every step that needs something from you will say so plainly; nothing
-> fails silently."
 
 Then go, one step at a time. Keep the user oriented but don't over-explain.
 
