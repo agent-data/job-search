@@ -47,7 +47,9 @@ Scope: exactly one posting. Batches are job-search-run's job — it invokes this
 numerically; if comp matters and isn't clearly stated, it's an unknown.
 
 ## Output
-Return BOTH a short human summary AND this object (used by job-search-run when evaluating in batch):
+Return BOTH a short human summary AND this object (used by job-search-run when evaluating in batch).
+The summary is 1–2 sentences: the verdict + the deciding factor — e.g. "Strong match — remote-US
+senior IC in Python; comp not stated."
 
 ```json
 { "relevant": true, "match": "strong", "reasoning": "…",

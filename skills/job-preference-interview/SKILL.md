@@ -91,19 +91,22 @@ works the core dimensions below and skips whatever the user says doesn't matter.
 through *every* dimension with follow-ups and deliberately fleshes out all four buckets — nice-to-haves and red
 flags included.
 
+### Standing rules (apply to every question)
 - Ask **one main question at a time** (a single tight, directly-related follow-up is fine). **Wait** for the
   answer before moving on. Never dump a long checklist of questions.
-- **Start** with the user's current situation and what's prompting the search ("What's making you look now?"),
-  then work through the dimensions below.
 - **Adapt** to answers — let each reply decide what to probe next.
 - **Make vague answers concrete.** When you hear "good culture", "decent pay", "work-life balance", ask a
   follow-up that turns it into something **observable** a reader could actually check against a posting
   ("good culture" → "small teams, low meeting load, ships weekly"; "decent pay" → "base at least ~$X").
 - **Make answering easy.** Offer a few example options or a simple scale when it helps, and **always** let the
   user say "no preference", "skip", or "that's a dealbreaker".
-- **Reflect back every 4–5 questions** in 1–2 sentences so the user can correct you.
 - Keep every message short. Don't lecture or pad.
-- **Finish** when you have enough detail or the user says they're done — then write the brief.
+
+### Flow
+1. **Start** with the user's current situation and what's prompting the search ("What's making you look now?"),
+   then work through the dimensions below.
+2. **Reflect back every 4–5 questions** in 1–2 sentences so the user can correct you.
+3. **Finish** when you have enough detail or the user says they're done — then write the brief.
 
 ## Dimensions to cover
 Skip any the user says don't matter; add others if they come up. For each, learn **what** they want, **how much
@@ -136,8 +139,9 @@ Do **not** ask the user to assign numbers or weights, and do **not** ask how cat
 other numerically. If they volunteer a relative ordering, capture it in words inside the bucket.
 
 ## Output: the brief
-Write the prose document to the path above, with **exactly** these sections (matching
-`shared/references/conventions.md` and `templates/preferences.example.md`):
+Write the prose document to the path above, with **exactly** these sections —
+`references/conventions.md` ("preferences.md — prose brief") owns the authoritative set (names + order);
+the gloss below is orientation, not a second source of truth:
 
 - **Summary** — 2–3 sentences capturing the ideal role in plain language.
 - **Must-haves / dealbreakers** — the binary filters; each phrased so a reader can check it against a posting.
