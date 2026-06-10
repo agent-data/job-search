@@ -1,6 +1,6 @@
 ---
 name: job-search-agent
-description: The operator manual for the Job Search Agent — reach for this to CONFIGURE, set up, use, EXTEND, customize, or TROUBLESHOOT the agent itself, or to understand its features and capabilities. Use for "how does my job search agent work", "how do I change/add/customize …", "why did the run fail", "what can it do", or any change to how the agent behaves. (For daily use — onboarding, the home view, running a search — use job-search.)
+description: The operator manual for the Job Search Agent — configure, customize, extend, or troubleshoot the agent itself, or explain how it works. Use when the user asks how the agent works, why a run failed, what it can do, or how to change its behavior — a query, the schedule, the recency window, the detail-read model: "how does my job search agent work", "why did the run fail", "how do I change/add/customize …", "change how often it runs". Not for daily use — onboarding, the home view, and running a search are job-search; the search pass itself is job-search-run.
 disable-model-invocation: false
 user-invocable: true
 version: 0.1.0

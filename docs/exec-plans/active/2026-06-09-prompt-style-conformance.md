@@ -475,7 +475,7 @@ Effort: S (<30 min) / M (half-day) / L (day+). Order within a tier = suggested e
   current`, `verified`, `last_reviewed`, `code_refs`); add it to `design-docs/index.md` (Living)
   and a one-line pointer in `AGENTS.md` + `CONTRIBUTING.md` ("all prompts and docs follow
   docs/design-docs/prompt-style-guide.md"). *Verify:* `doc_lint` clean.
-- [ ] **R2 [BLOCKS, S] Re-cut the five frontmatter descriptions** per §2.2's ownership map and
+- [x] **R2 [BLOCKS, S] Re-cut the five frontmatter descriptions** per §2.2's ownership map and
   proposed texts — job-search cedes "find me jobs"; job-search-agent drops "set up, use" and the
   caps; every description gains quoted phrasings + a negative trigger naming the sibling that
   wins. *Verify:* cross-read the five for collisions; `claude plugin validate .`; optionally run
@@ -649,6 +649,7 @@ depends on R13 landing with it.)*
   beyond this plan and the exec-plans index entry.
 - 2026-06-09 — R1: style guide landed as docs/design-docs/prompt-style-guide.md (verbatim Part 1);
   pointers added in AGENTS.md + CONTRIBUTING.md + design-docs index.
+- 2026-06-09 — R2: five descriptions re-cut per the §2.2 ownership map (job-search cedes "find me jobs"; agent drops caps + "set up, use"; all five gain quoted phrasings + negative triggers).
 
 ## Decision log
 
@@ -670,6 +671,11 @@ depends on R13 landing with it.)*
 - **Descriptions stay honest to current behavior.** R2's re-cuts add phrasings and fences but
   claim no capability the bodies don't have — triggering accuracy means routing right, not
   marketing.
+- **evaluate-job-fit covers the "rate this job" intent by paraphrase, not literal quote.** §2.2's
+  ownership map lists "rate this job" for evaluate-job-fit, but §2.2's proposed addition for that
+  skill ("whether to apply, or how good a match it is") and finding G2 ("should I apply") are the
+  approved literal texts. R2 applies those two; "how good a match it is" subsumes "rate this job,"
+  so the description carries the intent without a redundant third phrasing.
 - **The style guide ships `verified: partial`, not `verified`.** Its quotes were checked against
   the corpus at authoring time, but the corpus lives outside the repo (machine-local Piebald
   extraction), so a future reviewer can't re-verify the claim with repo tooling. This matches the
