@@ -1,18 +1,25 @@
 # Security & Privacy
 
-Job Search OS handles career-sensitive PII: your preferences brief, matched job postings, run
-logs, and (in future) resumes. The threat model is simple — keep that data on your machine and
-out of any public repository. This document describes each mechanism that enforces that posture,
-and states plainly where the system relies on human review rather than automation.
+Job Search OS handles career-sensitive PII: the preferences brief, every posting judged against
+it, run logs, and (in future) resumes. The threat model is one sentence — **keep that data on the
+user's machine and out of any public repository.** This document maps each mechanism that enforces
+that posture and says plainly where enforcement is human review, not automation.
 
-## What's protected
+**Out of scope** — this posture does not defend against: a compromised or shared machine (the
+workspace is plaintext on disk); a collaborator with write access committing data past review; or
+instructions embedded in fetched posting text — postings are untrusted web content the model
+reads, and the judging skills treat them as data to evaluate, never instructions to follow (the
+guard line in [`evaluate-job-fit`](../skills/evaluate-job-fit/SKILL.md) and the
+[detail-read briefing](../skills/job-search-run/SKILL.md) in `job-search-run`). If a reader needs
+those guarantees, nothing below should be read as implying them.
 
-The workspace contains everything personal: the preferences brief you wrote, every posting the
-agent has ever judged against it, the run audit logs, and the digest reports. None of that
-material belongs in a public repo, and none of it is uploaded anywhere by this system. The
-mechanisms below enforce that at every layer.
+## What's at risk, and where it lives
 
-## Private, local-first workspace
+The workspace contains everything personal — the brief, judged postings, run records, digests.
+None of it belongs in a public repo, and none of it is uploaded anywhere by this system. The
+sections below walk the enforcement, layer by layer.
+
+## How the workspace stays out of git
 
 The workspace lives outside this repo — by default at `~/.job-search/` on your machine. At
 first-run, the setup copies [`../templates/workspace.gitignore`](../templates/workspace.gitignore)
@@ -24,7 +31,7 @@ For the full workspace layout (which files live where and what each contains), s
 [`../shared/references/conventions.md`](../shared/references/conventions.md). Do not reproduce
 field lists from that file here — it is the single source of truth.
 
-## No PII in the public repo
+## How the public repo stays free of personal data
 
 This repository contains no personal data. All shipped examples (`examples/`) use synthetic,
 fictional postings and preferences. The [`../CONTRIBUTING.md`](../CONTRIBUTING.md) project
