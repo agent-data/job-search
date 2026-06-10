@@ -500,7 +500,7 @@ Effort: S (<30 min) / M (half-day) / L (day+). Order within a tier = suggested e
 - [x] **R6 [TUNE, S] One owner for the blocked-run surfacing story.** RELIABILITY §4 keeps the
   doc-level narration; INTERFACE and onboarding §6 compress to one line + pointer. *Verify:* the
   three-channel list appears in exactly one pillar doc.
-- [ ] **R7 [TUNE, M] job-search-run readability pass** per §2.1 — headed Voice/References
+- [x] **R7 [TUNE, M] job-search-run readability pass** per §2.1 — headed Voice/References
   sections, the 5-line summary skeleton (or pointer), single idempotency statement. *Verify:*
   evals for job-search-run still pass (fake-shim, credit-free).
 - [ ] **R8 [TUNE, S] Body boundary lines** in job-search and evaluate-job-fit (scope fence:
@@ -655,8 +655,50 @@ depends on R13 landing with it.)*
 - 2026-06-09 — R5: reworked `skills/job-search-agent/SKILL.md` per Rewrite A — boundary-first opener ("You are working on the agent itself — … not running a search"), one-paragraph system context, stance lead-in over the five philosophy bullets (kept verbatim; the description was already landed in R2 and untouched). Converted the two duplicated tables to pointers: config-recipes → `internals.md` "Config read/update recipes" (+ `conventions.md` status_changed event, kept because internals doesn't own the status vocabulary; + `customization.md` query-pausing); run-health → `errors.md` (four states + surfacing) and `conventions.md` digest "Run health" line. Kept the symptom→fix table (not owned by a single reference — only the E-QUOTA and empty-results rows are duplicated; see Decision log). Dropped per-skill frontmatter `version`/`metadata` (only job-search-agent carried them; nothing reads them). Gates: build no-op (`git status --porcelain skills` empty), `claude plugin validate .` passes, doc_lint clean, pytest green.
 - 2026-06-09 — R6: RELIABILITY §4 is now the sole owner of the blocked-run surfacing story (the three-channel list + exit-code trap). Compressed INTERFACE's "## Error surfacing as UX" numbered three-channel list to one concept+pointer line (interface-side framing: the blocked digest + home view the user meets, desktop notification ceded to RELIABILITY), and onboarding §6 to a one-line pointer for surfacing + a kept onboarding-specific note (likeliest blocks `E-QUOTA`/`E-SERVICE-DOWN`); also trimmed §6's run-loop re-narration to a pointer (restores the spec's "names each step… does not restate mechanics" promise). Both pointers use RELIABILITY §4's real anchor (`#4-run-health--blocked-surfacing--visible-without-the-exit-code`, matching the existing core-beliefs anchor convention). No orphaned facts (digest path literal survives in INTERFACE's "## The digest"; run-loop + taxonomy owned by `references/onboarding.md`; notify-flag config owned by RELIABILITY §4). Verify: enumeration grep shows the three-channel list in exactly one pillar doc (RELIABILITY); `PRODUCT_SENSE.md` (no-cloud non-goal exception) and `design-docs/core-beliefs.md` (belief #4, delegates ownership) carry single mentions, not the list — both out of scope. Gates: doc_lint clean, pytest 92 green.
 
+- 2026-06-09 — R7 (completed across two agents — the first landed the structural moves before a session limit, the second finished the merge + bookkeeping + evals): `skills/job-search-run/SKILL.md` readability pass per §2.1's three findings. (1) C9/D1 — promoted the reference list to a headed `## References` section and moved Voice out of the dense pre-loop block into a renamed `## Narrating — what reaches the user` section with the never-say rule front-loaded; the pre-loop block is now Shape + workspace resolution + Retries. (2) D2 — gave "Print a 5-line terminal summary" a fenced skeleton (queries+postings/new · read-in-full · bands · run-health · digest-path) plus a blocked-HALT collapse note. (3) A6 — `## Idempotency` is now the sole full statement of the no-duplicates mechanism; the step-2 dedup line and step-5 "deduped set" both compressed to "— see Idempotency" back-references. Second-agent finish work: merged a regression where the moved Narrating section stated the never-say rule twice (front-loaded list + a residual "Internal vocabulary … never reaches the user" sentence) into one front-loaded statement (per commit 908d3e3's front-load-the-voice-rule decision), folding in the residual's extra items (`jobs.jsonl`, registry, skill names) and the `voice.md`-table pointer. Cold-read verified: body starts at line 13, `## Loop` at line 30 (17 lines in, within one screen); exactly one full no-duplicates statement (`## Idempotency`), steps 2/5 back-reference only. Gates: doc_lint clean, pytest green, `claude plugin validate .` passes, `./scripts/build.sh` then `git status --porcelain skills` empty. Evals: ran the job-search-run suite headlessly through the fake shim (credit-free) per `evals/evals.json`'s harness — see the eval-method Decision-log entry.
+
 ## Decision log
 
+- **R7 kept Retries in the pre-loop block, not inside a step — against §2.1 finding 1's literal
+  "leaving the pre-loop block at Shape + workspace rule."** The retryable-boolean-not-code rule is a
+  standing rule the whole Loop leans on (step 1 searches retry 502s; step 4's detail reads retry
+  `detail_fetch_failed`), not a Voice/References concern. §2.1's fix sketch only enumerates Voice and
+  the reference list as the things to promote out; folding Retries into one step would hide it from
+  the others, and promoting it to its own headed section for two sentences is over-structure. So the
+  pre-loop block is Shape + workspace resolution + Retries — the two cross-cutting things finding 1
+  named (Voice, refs) moved to headed sections, the third standing rule stayed where every step can
+  see it.
+- **R7's terminal summary is a fenced skeleton, not a pointer — the task's own escape hatch didn't
+  apply.** §2.1 finding 2 says "add a 5-line fenced skeleton … or, if `shared/references/conventions.md`
+  owns it, point there instead." Checked: `grep -rniE "terminal summary|5-line|five-line|summary line"`
+  over `shared/references/` and the bundled `skills/job-search-run/references/` returned zero hits —
+  no reference owns the terminal-summary shape (conventions.md owns the *digest* format, a different
+  artifact). So the skeleton is the correct treatment, not a pointer.
+- **R7 eval method + a noted concern (DONE).** Ran all 12 `evals/evals.json` cases headlessly per
+  the harness block — `setup-workspace.sh <tmp>` builds a workspace + `_bin/agent-data` symlink to
+  `tests/fake-agent-data`; then `PATH=<tmp>/_bin:$PATH JOBSEARCH_FIXTURES=<repo>/tests/fixtures
+  JOBSEARCH_TEST_SCENARIO=<scenario> [per-case tweak] claude --plugin-dir <repo> --allowedTools
+  "Bash,Read,Write,Edit,Task,Glob,Grep" --output-format stream-json --verbose -p
+  "/job-search-os:job-search-run --workspace <tmp>"`. Scoped `--allowedTools` (NOT
+  `--dangerously-skip-permissions`, per the prior-session gotcha); stream-json so narration is
+  judgeable alongside the digest/`jobs.jsonl`/runs-record artifacts. **Credit-free** — every
+  `agent-data` call hit the fake shim; the live CLI was never touched. **All 12 passed** against
+  their expectations: correct named-error HALTs with blocked digest + runs record (3 noauth, 5
+  no-prefs, 6 quota, 7 down, 11 first-run/no-runs-record, 12 config-version), correct dedup/no-dup
+  (10 all-known → "you've already seen all 2", no `get-posting`), summary-only fallback on
+  invalid-pair (8, `detail_read:false` + footnote), degraded-not-HALT with no read cap (9), partial
+  on stretch (4, E-UPSTREAM-STRETCH after two failed queries), happy strong/filtered split (1); every
+  artifact philosophy-clean (no numeric score/weight/credit); all exit 0. The new 5-line skeleton was
+  emitted verbatim by the healthy/zero/degraded/partial cases, and blocked cases collapsed to
+  named-error + fix + digest path per the skeleton's collapse note. **Concern (does not fail R7):** in
+  headless `claude -p` the model's *first* orientation line still leaks one or two internal terms
+  ("Running a headless job-search pass…", "reading the skill's reference files") before it acts —
+  present in every case's stream-json but in NO saved artifact and NOT in the final user-facing
+  summary/match (those are clean). This is a pre-existing `claude -p` thinking-aloud behavior, not an
+  R7 regression — R7 strengthened the never-say rule; the scheduled-path contract is "stay quiet until
+  the summary," and the summary is clean. Tightening the model's opener narration in headless mode is
+  out of R7's scope (a Voice-behavior tweak, not the readability/structure pass); flagged here so a
+  later Voice pass can pick it up.
 - **Completed exec-plans are exempt from style fixes.** They are verified-as-shipped records;
   rewriting them is churn (B5/E3). Only CI-breaking links get fixed. Lessons feed the template
   (R11) instead.

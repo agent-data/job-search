@@ -13,19 +13,19 @@ user-invocable: true
 Run ONE headless job-search pass over the workspace. Free gates before metered calls; no silent failures.
 **Shape:** search → dedup/freshen → **scan summaries in this (primary) context** → **fan out one parallel
 subagent per promising posting** for the detail read → **consolidate** into a digest.
-**Voice — before you say anything:** none of this machinery is user-facing. Never say "headless pass",
-"contract/reference files", "resolving the workspace", "dedup", or "database" to the user
-(`references/voice.md`). Interactive narration is sparse user outcomes ("Searching for 'X'…" · "N are new —
-reading them in full…"); scheduled runs stay quiet until the summary + digest.
-Read `references/agent-data-contract.md` (CLI + routes + retry rules), `references/errors.md` (every E-* with
-the exact cause+fix wording), `references/conventions.md` (file schemas + digest format),
-`references/parallelism.md` (parallel-by-default + how to brief a subagent), and `references/voice.md` (how
-any user-facing line is worded) — follow them exactly.
 
 Resolve the workspace with `python3 "$OS" resolve` (bundled `scripts/osctl.py`; registry → `~/.job-search/` → legacy `~/job-search/`) UNLESS `--workspace <path>` is given, which overrides. Resolve `$OS` (and `$STATE`) from this skill's own directory (e.g. `${CLAUDE_SKILL_DIR}/scripts/...` as a plugin) — never assume cwd. This run is HEADLESS: never prompt. If `resolve` reports `first_run` (no workspace/config yet) → E-NO-CONFIG naming the **job-search** skill as the fix (HALT, exit 1); onboarding is interactive and lives in the `job-search` skill, not here. The job source listing id is `f9a6ec16-0bfd-44d8-b3ee-073776745ee7`.
 
 **Retries:** branch only on the error envelope's `retryable` boolean (`true` → retry with backoff up to 3×;
 `false` → never retry), not on the error `code` string — see `references/agent-data-contract.md`.
+
+## References
+Read these before running, and follow them exactly:
+- `references/agent-data-contract.md` — CLI + routes + retry rules.
+- `references/errors.md` — every E-* with the exact cause+fix wording.
+- `references/conventions.md` — file schemas + digest format.
+- `references/parallelism.md` — parallel-by-default + how to brief a subagent.
+- `references/voice.md` — how any user-facing line is worded (see **Narrating** below).
 
 ## Loop
 0. **Preflight (free).**
@@ -51,7 +51,8 @@ Resolve the workspace with `python3 "$OS" resolve` (bundled `scripts/osctl.py`; 
    - `422`/`400 unsupported_field` → E-BAD-QUERY (name the bad param from `details[].loc`), skip that query.
    - A quota/limit/payment failure (see errors.md detection) → E-QUOTA (HALT, exit 1).
 2. **Dedup + freshen (free).** `python3 "$STATE" known-ids --jobs <workspace>/jobs.jsonl` → the known set;
-   NEW = results whose non-null `source_id` is not in it. Then apply `search.freshness` (default `past-2-weeks`):
+   NEW = results whose non-null `source_id` is not in it (this is the dedup mechanism the no-reprocessing
+   guarantee rests on — see Idempotency). Then apply `search.freshness` (default `past-2-weeks`):
    drop NEW rows whose `posted_at` is older than the window — the API has no date parameter, so this is a
    client-side filter on `posted_at` (`any` disables it). Null-`source_id` rows can't be deduped → skip, count
    "unidentifiable".
@@ -79,14 +80,24 @@ Resolve the workspace with `python3 "$OS" resolve` (bundled `scripts/osctl.py`; 
    **No cap** — every queued posting gets a subagent; the scan (relevance), not a count, decided how many. Running
    them in parallel is the point: it cuts wall-clock, keeps full JDs out of this context, and lets a
    faster/cheaper model do the bulk reads.
-5. **Consolidate + persist + report.** Collect the parallel subagents' verdicts and **validate each before it lands**: `match` must be `strong | moderate | weak`, or `null` when `relevant` is false — coerce anything else (a faster delegated model can emit a stray number or out-of-vocab band) and never let a numeric score reach `jobs.jsonl` or the digest. Then for each new posting append the FULL `evaluated` event (complete schema in
+5. **Consolidate + persist + report.** Collect the parallel subagents' verdicts and **validate each before it lands**: `match` must be `strong | moderate | weak`, or `null` when `relevant` is false — coerce anything else (a faster delegated model can emit a stray number or out-of-vocab band) and never let a numeric score reach `jobs.jsonl` or the digest. Then for each NEW posting (the deduped set from step 2 — see Idempotency) append the FULL `evaluated` event (complete schema in
    conventions.md §jobs.jsonl) via `python3 "$STATE" append --jobs <workspace>/jobs.jsonl --event '<json>'`.
    The event MUST carry provenance — `event:"evaluated"`, `ts`, `run_id`, `source:"linkedin"`, `query_id`,
    `title`, `company_name`, `location_display`, `salary_display`, `posted_at`, `source_url`,
    `posting_id_at_seen` (the `jp_` id), `detail_read` — AND the judgment — `source_id`, `relevant`, `match`,
    `reasoning`, `dealbreakers_hit`, `unknowns`, `needs_human_check`, `status:"new"`, `first_seen`. Write
    `runs/<run_id>.json` and `reports/<date>-digest.md` (format in conventions.md; strong → moderate → weak,
-   then "filtered out: N"). Print a 5-line terminal summary.
+   then "filtered out: N"). Print a 5-line terminal summary in this shape:
+
+   ```
+   Searched <n> queries · <total> postings, <new> new
+   Read <m> in full
+   <s> strong · <md> moderate · <w> weak · <f> filtered out
+   Run health: <healthy | partial (N errors) | degraded | blocked>
+   Digest: <path to reports/<date>-digest.md>
+   ```
+
+   On a blocked HALT, collapse to the named error + fix and the digest path (there are no bands to report).
 
 ## Briefing each detail subagent
 
@@ -97,15 +108,18 @@ must-have/unknown to confirm (e.g. *"Strong on AI/LLM-IC-Python; confirm remote-
 Austin"*). It returns only its `source_id` + the structured judgment object. Keep the steer a provisional read +
 open question, never a verdict.
 
-## Narrating a live run (interactive sessions only)
+## Narrating — what reaches the user
 
-Scheduled/headless invocations stay as they are — quiet until the 5-line summary + digest. But when this
-skill runs inside a live conversation (onboarding's first run, "run a search now"), narrate progress
-sparsely per `references/voice.md`: one short line per stage, in user outcomes — "Searching for
-'<keywords>'…" → "Found N postings — M are new." → "Reading the M promising ones in full…" → then the
-matches as normal message text (never a code fence, never just the digest's path). Internal vocabulary
-(headless, dedup, database, jobs.jsonl, registry, contract/reference files, skill names) never reaches the
-user — see the table in `voice.md`.
+**Before you say anything:** none of this machinery is user-facing. Internal vocabulary — "headless
+pass", "dedup", "database", "resolving the workspace", `jobs.jsonl`, registry, contract/reference
+files, skill names — never reaches the user; say the outcome, not the mechanism (see the table in
+`references/voice.md`).
+
+**Scheduled/headless invocations stay quiet** until the 5-line summary + digest. But when this skill runs
+inside a live conversation (onboarding's first run, "run a search now"), narrate progress sparsely per
+`references/voice.md`: one short line per stage, in user outcomes — "Searching for '<keywords>'…" → "Found N
+postings — M are new." → "Reading the M promising ones in full…" → then the matches as normal message text
+(never a code fence, never just the digest's path).
 
 ## Run health, surfacing & exit codes
 Every run ends by writing `runs/<run_id>.json` with at least `{"run_id","run_health",
