@@ -12,6 +12,8 @@ user-invocable: true
 Judge ONE job posting against the user's prose Job Preferences Brief. Output is a **qualitative
 relevance judgment** — never a numeric score, never category weights.
 
+Scope: exactly one posting. Batches are job-search-run's job — it invokes this skill once per posting.
+
 ## Inputs
 - The brief: resolve the active workspace with `python3 "$OS" resolve` (bundled `scripts/osctl.py`, resolved from **this skill's own directory** — `${CLAUDE_SKILL_DIR}/scripts/…` as a plugin, never cwd) and read its `config.yaml:workspace.preferences_path` (default `preferences.md`); `--workspace <path>` overrides. If a posting is supplied without a workspace (resolve reports `first_run`), accept a brief pasted by the user.
 - The posting: a pasted job description, a saved `source_id` from `jobs.jsonl`, or a `source_url`+`posting_id`
