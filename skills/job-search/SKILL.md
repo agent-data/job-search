@@ -43,7 +43,10 @@ python3 "$OS" resolve   →  {"workspace":"<abs>","first_run":<bool>,"source":"r
 
 That's the whole router. Everything else is in the two playbooks; read the one you routed to and follow it.
 Step 0 is mechanical — do it **silently**: no `resolve` / "OS state" / `registry` / `first_run` talk in your
-reply (`references/voice.md`). Your first user-facing words are the onboarding welcome or the home view.
+reply (`references/voice.md`). Your first user-facing words are the onboarding welcome or the home view —
+reading the routed playbook and its references happens silently before them. Onboarding holds every further
+check and command (even free ones) behind the welcome; home gathers its state silently and opens with the
+view itself.
 
 ## Principles (apply in both modes)
 

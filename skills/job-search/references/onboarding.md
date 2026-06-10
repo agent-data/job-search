@@ -20,6 +20,13 @@ asking — then ask. No internal vocabulary, ever.
 
 ## 1. Welcome
 
+**The welcome is your first user-facing words — nothing visible happens before it.** Routing here and
+reading this playbook's references happen first, silently; that is the only work that may precede it.
+Everything else waits behind it: no prerequisite check, no workspace command, no tool call the user can
+see. The urge to announce what you're about to do is right — the welcome IS that announcement. "Let me
+read the references / run some checks first" is the failure mode: it opens the user's first minute with
+machinery talk instead of a greeting.
+
 Open with a sentence or two, not a wall of text. Tell the user what's about to happen and that it ends with
 real postings:
 
@@ -32,7 +39,9 @@ Then go, one step at a time. Keep the user oriented but don't over-explain.
 
 ## 2. Prerequisites (free)
 
-These are free checks — no metered calls, no cost. Do them before anything else.
+These are free checks — no metered calls, no cost. Run them immediately after the welcome and before
+anything metered or persistent — nothing is searched, written, or created until both pass. After the
+welcome, never before it: §1 owns your first words.
 
 1. **Is the `agent-data` CLI installed?** If it's not found on `PATH` →
    **`E-NO-AGENT-DATA`**: tell the user the agent-data CLI isn't installed; the fix is
@@ -226,6 +235,8 @@ runs", "update my preferences", "show the latest digest").
 
 ### Onboarding checklist (don't skip a guard)
 
+- [ ] the welcome was the FIRST user-facing text — reference reads silent before it; no check, command,
+      or narration preceded it
 - [ ] agent-data installed → else **E-NO-AGENT-DATA** (stop)
 - [ ] agent-data authenticated → else **E-NO-AUTH** (stop)
 - [ ] workspace adopted-or-created; **never clobbered** an existing `config.yaml` / `preferences.md` /
