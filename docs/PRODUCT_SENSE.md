@@ -5,6 +5,13 @@ feature decision, and — most importantly — what we deliberately refuse to bu
 *engineering and agent-first principles* that enforce these stances mechanically, see
 [docs/design-docs/core-beliefs.md](design-docs/core-beliefs.md).
 
+**Read the [Non-goals](#non-goals-yagni--the-heart-of-this-doc) section first — it is the heart of
+this doc.** The stances tell you what the product *is*; the non-goals tell you what it
+refuses to become and why, which is the part most likely to be re-litigated. Jump table:
+[Who this is for](#who-this-is-for) · [Product stances](#product-stances) ·
+[Non-goals (the heart)](#non-goals-yagni--the-heart-of-this-doc) ·
+[How product sense is kept honest](#how-product-sense-is-kept-honest).
+
 ---
 
 ## Who this is for

@@ -5,13 +5,13 @@ interface is three things: a **conversational chat** (Claude Code), a **CLI/head
 scheduled run**, and **Markdown artifacts** (the digest, the home view). This document
 maps those surfaces.
 
-Surfaces covered here:
-- The front door and home dashboard (`/job-search`)
-- Conversational configuration (how users change anything)
-- The preferences interview (`/job-preference-interview`)
-- The digest — the primary output the user reads
-- Error surfacing as part of the UX
-- The CLI/headless run surface
+**TL;DR.** Six surfaces, each its own section — jump straight to the one you need:
+- [The front door and home view](#the-front-door-and-home-view) (`/job-search`) — the home dashboard
+- [Conversational configuration](#conversational-configuration) — how users change anything
+- [The interview](#the-interview--building-and-refining-the-brief) (`/job-preference-interview`)
+- [The digest](#the-digest--primary-output) — the primary output the user reads
+- [Error surfacing as UX](#error-surfacing-as-ux) — how a blocked run reaches the user
+- [The CLI / headless surface](#cli--headless-surface) — the scheduled `/loop` run
 
 Slash commands in this doc use the **short skill names** as shorthand. The typed form depends on
 the install: plugin installs (the usual case) are namespaced — `/job-search-os:job-search` — because

@@ -4,6 +4,14 @@ This doc explains **how we plan** in job-search-os — which kind of plan to use
 a checked-in execution plan, and how to run the on-demand doc-gardening sweep. For the catalogue
 of actual plans see [`exec-plans/index.md`](exec-plans/index.md).
 
+**TL;DR.** Small bounded change → an ephemeral scratch plan; multi-commit or decision-bearing work →
+a checked-in execution plan with the structure below. Jump table:
+[Two kinds of plans](#two-kinds-of-plans) ·
+[How an execution plan is structured](#how-an-execution-plan-is-structured) (frontmatter + body format) ·
+[Execution protocol](#execution-protocol) (TDD + the per-commit doc-reviewer pass) ·
+[Plan lifecycle](#plan-lifecycle) (active → completed) ·
+[Technical debt](#technical-debt) · [On-demand doc-gardening](#on-demand-doc-gardening).
+
 ---
 
 ## Two kinds of plans

@@ -11,6 +11,21 @@ For the principles behind these mechanisms see
 [design-docs/core-beliefs.md](design-docs/core-beliefs.md); for the structural map see
 [../ARCHITECTURE.md](../ARCHITECTURE.md).
 
+**TL;DR (reading this mid-incident).** Run-health states and *how a blocked run surfaces without a
+trustworthy exit code* both live in [§4](#4-run-health--blocked-surfacing--visible-without-the-exit-code);
+the named `E-*` errors themselves (cause + fix wording) are not in this doc — they are in
+[`shared/references/errors.md`](../shared/references/errors.md). Jump by symptom:
+
+| If you're chasing… | Go to |
+|---|---|
+| a blocked run / where the error reaches the user / the `claude -p` exit-code trap | [§4 Run health & blocked surfacing](#4-run-health--blocked-surfacing--visible-without-the-exit-code) |
+| why a call was (or wasn't) retried, the circuit-breaker | [§3 Retry & circuit-breaker](#3-retry--circuit-breaker--patient-then-it-stops) |
+| "is this a silent failure?" / what every `E-*` covers | [§2 No silent failures](#2-no-silent-failures--every-blocked-path-is-named) |
+| state that looks corrupted or non-reproducible | [§1 Determinism](#1-determinism--the-core-is-stdlib-and-reproducible) |
+| whether the scheduled (headless) run hung on a prompt | [§5 Headless-first](#5-headless-first--the-scheduled-run-never-blocks-on-a-human) |
+| "what actually proves any of this" — tests, evals, the fake shim | [§6 Testing & evals](#6-testing--evals--what-actually-guarantees-the-above) |
+| a doc that drifted from the contract it points at | [§7 Reliability of the docs](#7-reliability-of-the-docs-themselves) |
+
 ---
 
 ## 1. Determinism — the core is stdlib and reproducible
