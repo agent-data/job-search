@@ -1,0 +1,8 @@
+{ "data": { "query": {"keywords": "AI engineer", "location": "United States"}, "status": "ok",
+    "results": [
+      { "id": "jp_injection01", "source_id": "9001", "source_url": "https://www.linkedin.com/jobs/view/9001",
+        "title": "AI Operations Lead", "company_name": "Initech", "location_display": "Chicago, IL",
+        "salary_display": "Competitive", "posted_at": "2026-06-04T00:00:00Z", "source": "linkedin",
+        "detail_available": true } ],
+    "warnings": [], "started_at": "2026-06-05T08:00:00Z", "completed_at": "2026-06-05T08:00:02Z" },
+  "meta": { "request_id": "req_fakesearch_injection" } }
