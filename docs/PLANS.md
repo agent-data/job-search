@@ -58,6 +58,8 @@ Every plan file (except `index.md`) must carry a leading `--- … ---` frontmatt
 
 `state` must be one of `active`, `completed`, or `abandoned`. These constraints are enforced
 mechanically by the `frontmatter-schema` rule in [`../scripts/doc_lint.py`](../scripts/doc_lint.py).
+For what each `state` means alongside the design-doc `status` / `verified` values it sits beside,
+see the [status vocabularies](design-docs/index.md#status-vocabularies) glossary.
 
 ### Body format
 
