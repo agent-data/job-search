@@ -3,26 +3,21 @@ name: job-search-agent
 description: The operator manual for the Job Search Agent — configure, customize, extend, or troubleshoot the agent itself, or explain how it works. Use when the user asks how the agent works, why a run failed, what it can do, or how to change its behavior — a query, the schedule, the recency window, the detail-read model: "how does my job search agent work", "why did the run fail", "how do I change/add/customize …", "change how often it runs". Not for daily use — onboarding, the home view, and running a search are job-search; the search pass itself is job-search-run.
 disable-model-invocation: false
 user-invocable: true
-version: 0.1.0
-metadata:
-  tags: [job-search, configuration, customization, scheduling, troubleshooting, extension]
-  homepage: https://github.com/agent-data/job-search-os
-  related_skills: [job-search, job-search-run, job-preference-interview, evaluate-job-fit]
 ---
 
 # Job Search Agent
 
-Job Search OS turns Claude Code into a private, local-first job-search agent that runs entirely on your machine. It searches LinkedIn job postings via the agent-data marketplace, judges each match against your prose preferences brief, and writes human-readable digests to a private workspace that never touches source control.
+You are working on the agent itself — configuring, extending, or troubleshooting it — not running a search. Daily use lives elsewhere: onboarding and the home view in **job-search**, the search pass in **job-search-run**. This manual holds the playbooks and guardrails for changing the system safely.
 
-Core philosophy:
+The system in one paragraph: a private, local-first job-search agent. It searches LinkedIn postings via agent-data, judges each one against the user's prose preferences brief, and writes digests to a workspace that never touches source control (`~/.job-search/` by default).
+
+Hold these stances in every change you make — each exists for a reason, and several are CI-enforced:
 
 - **Qualitative-by-default.** Relevance is expressed as relevant or not, and if relevant as weak / moderate / strong with plain-language reasoning. No score is computed or stored unless you explicitly ask — and even then a numeric score is never written into your saved digests, `jobs.jsonl`, or preferences brief.
 - **Frequency-not-budget.** You tune the system in human terms (how often to pull: hourly, daily, weekly). Credits and per-call cost are never surfaced except reactively as the named error `E-QUOTA` when the API limit is actually hit.
 - **Private-local.** All data lives under `~/.job-search/` (hidden, deny-all `.gitignore`). Nothing is ever committed to a public repo by the agent.
 - **Every blocked path is a named error.** If anything can't proceed, the agent names the exact `E-*` with its cause and fix, then stops. No silent failures.
 - **Conversational-first config.** You change anything — a query, the frequency, your preferences — by chatting. The agent edits `config.yaml` minimally and writes it back. Hand-editing files is an escape hatch you can always use, not a required step.
-
-*This skill is what you (Claude) reach for to configure, extend, or troubleshoot the agent — the playbooks and guardrails live here.*
 
 ---
 
@@ -65,20 +60,9 @@ The deterministic OS state lives in `scripts/osctl.py` (bundled into each skill)
 
 ## Configuring it (conversational)
 
-The user changes configuration by chatting — you apply it by reading `config.yaml`, editing it minimally (preserving comments and structure), and writing it back. Common recipes:
+The user changes configuration by chatting — you apply it by reading `config.yaml`, editing it minimally (preserving comments and structure), and writing it back.
 
-| What to change | How |
-|---|---|
-| Add a search query | Append an item to `queries:` with `id`, `keywords`, `location`, `limit`, `enabled: true` |
-| Edit or remove a query | Find the item by `id`, update its fields or set `enabled: false` / remove the item |
-| Change search frequency | Set `schedule.frequency` to one of `hourly \| every-2-hours \| every-6-hours \| daily \| weekly` |
-| Change the recency window | Set `search.freshness` to `any \| past-week \| past-2-weeks \| past-month` (default `past-2-weeks`) — client-side filter on each posting's `posted_at` |
-| Change the detail-read model | Set `search.detail_model` to `haiku \| sonnet \| opus \| inherit` (default `haiku`; `inherit` = use the run's own model) |
-| Widen a query's feed | Raise `queries[].limit` (1–100, default 25) — pull broadly across several varied queries; breadth + frequency + dedup accumulate coverage |
-| Mark a job status | Write a `status_changed` event via `state.py append` (statuses: `new \| interested \| applied \| rejected \| archived`) |
-| Update preferences | Run `job-preference-interview` (interactive) or edit `preferences.md` directly |
-
-For the exact edit rules, field schemas, and the never-clobber adoption rule: see `references/internals.md`.
+For every supported edit — adding, editing, or pausing a query (`enabled: false`); the `search` block (`freshness`, `detail_model`, `queries[].limit`); `schedule.frequency`/`time`; the never-clobber adoption rule; and exact field schemas — see `references/internals.md` → "Config read/update recipes". Marking a job status (`new | interested | applied | rejected | archived`) is a `status_changed` event written via `state.py append`, not a `config.yaml` edit — see `references/conventions.md` → the `status_changed` event. To update the brief itself, run `job-preference-interview` or edit `preferences.md` directly.
 
 **Invariants — never break these:**
 - Always preserve `version: 1` in `config.yaml`.
@@ -110,14 +94,7 @@ removals, `/loop`, and mere mentions) — see `references/scheduling-and-consent
 
 ## When something fails
 
-**Run health states** (the `run_health` field in `runs/<id>.json` and the digest header):
-
-| State | Meaning |
-|---|---|
-| `healthy` | All searches ran, all details attempted |
-| `partial (N)` | N query-level errors but the run completed |
-| `degraded (LinkedIn flaky)` | The status probe returned `degraded`; the digest notes LinkedIn is flaky and the run proceeds (no read cap — relevance decides how many to read) |
-| `blocked (action needed)` | A named `E-*` halted the run; action required before the next run succeeds |
+The run's outcome is the `run_health` field in `runs/<id>.json` and the digest header — one of `healthy | partial (N errors) | degraded (LinkedIn flaky) | blocked (action needed)`. For what each state means and when it's written, see `references/errors.md` (the four states and the surfacing story) and `references/conventions.md` → the digest "Run health" line. One meaning lives with the runner instead: a `degraded` run still reads promising matches in full — no detail-read cap, relevance decides (see **job-search-run**).
 
 **How failures surface:** a blocked run writes three artifacts — a `runs/<id>.json` record with `run_health:"blocked"`, a `reports/<date>-digest.md` whose body is the named error + fix, and (if `notify.desktop_notify_on_block: true`) a desktop notification. The **home view** the next time you open the **job-search** skill reads `runs/<id>.json` and shows the error there. Do not rely on the process exit code — a headless `claude -p` run returns 0 even when blocked.
 

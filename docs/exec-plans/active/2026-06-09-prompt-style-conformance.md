@@ -492,7 +492,7 @@ Effort: S (<30 min) / M (half-day) / L (day+). Order within a tier = suggested e
 
 ### P1 — high value, medium effort
 
-- [ ] **R5 [TUNE, M] Rework `job-search-agent` per Rewrite A** — boundary-first opener, operator
+- [x] **R5 [TUNE, M] Rework `job-search-agent` per Rewrite A** — boundary-first opener, operator
   register, philosophy bullets kept (plugin must carry; see Decision log) but tightened to
   maxim+why; convert config-recipes / run-health / symptom→fix tables to pointers into the
   bundled references they restate; standardize frontmatter extras across the five skills (keep
@@ -652,6 +652,7 @@ depends on R13 landing with it.)*
 - 2026-06-09 — R2: five descriptions re-cut per the §2.2 ownership map (job-search cedes "find me jobs"; agent drops caps + "set up, use"; all five gain quoted phrasings + negative triggers).
 - 2026-06-09 — R3: fixed the two dead filenames in plan-b-d-design (→ `2026-06-05-os-design.md`, `2026-06-05-plan-b-d-handoff.md`); landed a historical-snapshot banner under the handoff H1 covering the 13 `~/cookbooks` + 5 `~/job-search-os` machine-local paths (no in-repo equivalent — left as text under the banner; no `~/job-search-os/<subpath>` pointers exist to re-root). No literal username present (`/Users/<u>` placeholder only). Gates: Done-when grep satisfied (banner is hit #1), doc_lint clean, pytest 92 green.
 - 2026-06-09 — R4: snapshot-bannered `2026-06-05-os-design.md` (blockquote under the H1) and folded its two inline "Revision (2026-06-08)" notes into it, then removed both notes from the body (only change to the body prose). The banner names the two frozen excerpts — the inlined `config.yaml` predating the live `search:` section (verified: the live `search:` keys (`freshness`/`detail_model`) are present in `shared/references/conventions.md` and absent from os-design's inlined `config.yaml` block) and the E-QUOTA message reproduced near-verbatim from `shared/references/errors.md` (verified shared) — and states the cron/launchd option was dropped per core-beliefs 7 (`/loop`-only). Confirmed the handoff banner (landed with R3) already satisfies R4's quoted wording; left it unchanged. Cold-read: with the banner up top, the OPTION A/OS-cron block in Scheduling UX reads as a dropped historical snapshot, not live. Gates: doc_lint clean, pytest 92 green.
+- 2026-06-09 — R5: reworked `skills/job-search-agent/SKILL.md` per Rewrite A — boundary-first opener ("You are working on the agent itself — … not running a search"), one-paragraph system context, stance lead-in over the five philosophy bullets (kept verbatim; the description was already landed in R2 and untouched). Converted the two duplicated tables to pointers: config-recipes → `internals.md` "Config read/update recipes" (+ `conventions.md` status_changed event, kept because internals doesn't own the status vocabulary; + `customization.md` query-pausing); run-health → `errors.md` (four states + surfacing) and `conventions.md` digest "Run health" line. Kept the symptom→fix table (not owned by a single reference — only the E-QUOTA and empty-results rows are duplicated; see Decision log). Dropped per-skill frontmatter `version`/`metadata` (only job-search-agent carried them; nothing reads them). Gates: build no-op (`git status --porcelain skills` empty), `claude plugin validate .` passes, doc_lint clean, pytest green.
 
 ## Decision log
 
@@ -667,6 +668,36 @@ depends on R13 landing with it.)*
   carried (compressed) in SKILL bodies, while *intra*-plugin duplication (SKILL body restating a
   bundled reference) is still a gap. This is why R5 keeps job-search-agent's philosophy bullets
   but converts its config-recipe tables to pointers.
+- **R5 dropped per-skill frontmatter `version`/`metadata` everywhere (not added everywhere).** Only
+  `job-search-agent` carried `version: 0.1.0` plus a `metadata` block (`tags`, `homepage`,
+  `related_skills`); the other four skills have minimal frontmatter (`name`, `description`,
+  `disable-model-invocation`, `user-invocable`). Evidence that nothing reads them: grepping
+  `scripts/`, `.claude-plugin/`, and `tests/` for `version`/`metadata`/`related_skills`/`homepage`
+  found only the **registry** version (`REGISTRY_VERSION` in `osctl.py`) and `config.yaml`'s
+  `version: 1` — never the SKILL.md frontmatter key — and zero readers of the `metadata` block. The
+  released version is owned by the plugin manifest `.claude-plugin/plugin.json` (`0.2.1`), so the
+  per-skill `0.1.0` was stale drift (it didn't even match). Per the task's stated default ("dropping
+  everywhere is the better default unless you find tooling that reads them"), R5 drops both extras,
+  leaving all five frontmatters uniform and minimal.
+- **R5 kept the symptom→fix troubleshooting table; converted only the two Finding-3-named duplicated
+  tables.** §2.1 finding 3 names exactly two tables as restating references — config-recipes and
+  run-health — and tells R5 to "keep the orientation tables (skills, where-to-find); compress
+  duplicated ones to pointers." Before compressing, each table's rows were checked against the
+  references (the task's never-delete-information guard): config-recipes is fully owned across
+  `internals.md` (recipes + schemas + never-clobber), `conventions.md` (the `status_changed` event
+  vocabulary `new|interested|applied|rejected|archived`, which `internals.md` does *not* carry — so
+  the pointer names `conventions.md` too), and `customization.md` (pausing a query via
+  `enabled: false`); run-health's four state names are owned by `errors.md` (states + surfacing
+  story) and `conventions.md` (the digest "Run health" line) — except `degraded`'s no-read-cap
+  meaning, which lives in **job-search-run**, so the pointer carries that one clause inline
+  (spec-review finding). The **symptom→fix** table, by contrast, is a
+  synthesis the references do not own as a unit: only its E-QUOTA row (duplicates `errors.md`'s
+  E-QUOTA fix) and "0 results literally empty" row (a footnote in `errors.md`) are covered — the
+  other three rows (0 matches despite real postings; `/loop` not firing → `schedule-status`/restart;
+  stale-brief nudge) have no single owning reference section. Deleting them would lose information,
+  so the table stays (it is also corpus-grade C6 operator-manual troubleshooting). The "How failures
+  surface" paragraph (the exit-code-trap, this file's named strength) and its `errors.md` pointer are
+  left in place — the cross-doc surfacing-story dedup is R6's scope, not R5's.
 - **The style guide lives in `docs/design-docs/`, not `shared/references/`.** It guides authors
   and reviewers (contributor-facing), not the runtime skills (agent-facing) — putting it in
   `shared/references/` would bundle ~300 lines into every skill for no runtime benefit.
