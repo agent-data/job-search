@@ -5,9 +5,10 @@
     {
       "id": 1,
       "scenario": "first-run happy",
-      "prompt": "Fresh sandbox (setup-onboarding.sh), env as in harness, JOBSEARCH_TEST_SCENARIO=happy. Invoke the job-search skill (resolve returns first_run:true, source:none). Canned answers — interview a few prefs: situation='passively looking'; role='senior AI engineer, individual contributor, NOT management'; location='remote in the US, or SF Bay onsite'. When asked for the search: keywords='AI engineer', location='United States'. Frequency: 'daily'. Scheduling: 'yes'. Complete onboarding end-to-end.",
+      "prompt": "Fresh sandbox (setup-onboarding.sh), env as in harness, JOBSEARCH_TEST_SCENARIO=happy. Invoke the job-search skill (resolve returns first_run:true, source:none). Canned answers — brief depth: 'standard'; interview a few prefs: situation='passively looking'; role='senior AI engineer, individual contributor, NOT management'; location='remote in the US, or SF Bay onsite'. When asked for the search: keywords='AI engineer', location='United States'. Frequency: 'daily'. Scheduling: 'yes'. Complete onboarding end-to-end.",
       "expectations": [
-        "Checks prerequisites first — runs `agent-data whoami` (free) BEFORE any search-jobs / metered call",
+        "The FIRST user-facing text is the onboarding welcome — reference reads may precede it silently; no prerequisite check, workspace command, or narration appears before it",
+        "Checks prerequisites immediately after the welcome — runs `agent-data whoami` (free) BEFORE any search-jobs / metered call",
         "Creates <tmp>/.job-search/ containing config.yaml, preferences.md, an (initially empty) jobs.jsonl, .gitignore (deny-all), and runs/ + reports/ directories",
         "preferences.md is prose with the five sections (Summary, Must-haves/dealbreakers, Strong preferences, Nice-to-haves, Red flags) and a created_at line; the IC-not-management dealbreaker appears — NO numbers/weights",
         "Writes the registry at <tmp>/registry.json with active_workspace = <tmp>/.job-search (via osctl set-active)",
@@ -16,6 +17,8 @@
         "Records the scheduling marker (osctl set-scheduled → schedule-status now installed:true, mechanism:loop) AND prints the verbatim /loop recipe block (namespaced /job-search-os:job-search-run target when running as a plugin)",
         "Prints the home view at the end (status line · latest digest · pipeline · quick actions)",
         "Every setup question carries one short plain-English sentence of context (what the thing is / why it's asked) — e.g. the workspace ask explains it's the private folder holding preferences, searches, and matched jobs; the brief ask explains it's the 'what I want' every posting is judged against",
+        "The four closed choices — workspace location, interview-or-import, frequency, scheduling — each arrive as a 2–4-option multiple-choice question (the question box; numbered prose options acceptable only if the box tool is unavailable in the harness)",
+        "The interview hand-off carries only onboarding context + the workspace write path (no depth or method in args), and the depth choice (quick sketch / standard / thorough) is offered after 'Interview me' is picked",
         "No internal jargon in any user-facing line — never 'headless', 'dedup', 'database', 'event log', 'JSONL', 'registry', 'contract references', or skill/reference filenames as narration; live-run progress is narrated as user outcomes ('Searching…', 'N are new — reading them in full…')",
         "After the interview, the finished brief is shown rendered in the reply (not inside a code fence, not just a file path)",
         "NO numeric score, NO category weights, NO credit/dollar/budget math anywhere in the output"
