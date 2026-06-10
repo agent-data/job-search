@@ -497,7 +497,7 @@ Effort: S (<30 min) / M (half-day) / L (day+). Order within a tier = suggested e
   maxim+why; convert config-recipes / run-health / symptom→fix tables to pointers into the
   bundled references they restate; standardize frontmatter extras across the five skills (keep
   `version` everywhere or nowhere). *Verify:* build no-op; plugin validate.
-- [ ] **R6 [TUNE, S] One owner for the blocked-run surfacing story.** RELIABILITY §4 keeps the
+- [x] **R6 [TUNE, S] One owner for the blocked-run surfacing story.** RELIABILITY §4 keeps the
   doc-level narration; INTERFACE and onboarding §6 compress to one line + pointer. *Verify:* the
   three-channel list appears in exactly one pillar doc.
 - [ ] **R7 [TUNE, M] job-search-run readability pass** per §2.1 — headed Voice/References
@@ -653,6 +653,7 @@ depends on R13 landing with it.)*
 - 2026-06-09 — R3: fixed the two dead filenames in plan-b-d-design (→ `2026-06-05-os-design.md`, `2026-06-05-plan-b-d-handoff.md`); landed a historical-snapshot banner under the handoff H1 covering the 13 `~/cookbooks` + 5 `~/job-search-os` machine-local paths (no in-repo equivalent — left as text under the banner; no `~/job-search-os/<subpath>` pointers exist to re-root). No literal username present (`/Users/<u>` placeholder only). Gates: Done-when grep satisfied (banner is hit #1), doc_lint clean, pytest 92 green.
 - 2026-06-09 — R4: snapshot-bannered `2026-06-05-os-design.md` (blockquote under the H1) and folded its two inline "Revision (2026-06-08)" notes into it, then removed both notes from the body (only change to the body prose). The banner names the two frozen excerpts — the inlined `config.yaml` predating the live `search:` section (verified: the live `search:` keys (`freshness`/`detail_model`) are present in `shared/references/conventions.md` and absent from os-design's inlined `config.yaml` block) and the E-QUOTA message reproduced near-verbatim from `shared/references/errors.md` (verified shared) — and states the cron/launchd option was dropped per core-beliefs 7 (`/loop`-only). Confirmed the handoff banner (landed with R3) already satisfies R4's quoted wording; left it unchanged. Cold-read: with the banner up top, the OPTION A/OS-cron block in Scheduling UX reads as a dropped historical snapshot, not live. Gates: doc_lint clean, pytest 92 green.
 - 2026-06-09 — R5: reworked `skills/job-search-agent/SKILL.md` per Rewrite A — boundary-first opener ("You are working on the agent itself — … not running a search"), one-paragraph system context, stance lead-in over the five philosophy bullets (kept verbatim; the description was already landed in R2 and untouched). Converted the two duplicated tables to pointers: config-recipes → `internals.md` "Config read/update recipes" (+ `conventions.md` status_changed event, kept because internals doesn't own the status vocabulary; + `customization.md` query-pausing); run-health → `errors.md` (four states + surfacing) and `conventions.md` digest "Run health" line. Kept the symptom→fix table (not owned by a single reference — only the E-QUOTA and empty-results rows are duplicated; see Decision log). Dropped per-skill frontmatter `version`/`metadata` (only job-search-agent carried them; nothing reads them). Gates: build no-op (`git status --porcelain skills` empty), `claude plugin validate .` passes, doc_lint clean, pytest green.
+- 2026-06-09 — R6: RELIABILITY §4 is now the sole owner of the blocked-run surfacing story (the three-channel list + exit-code trap). Compressed INTERFACE's "## Error surfacing as UX" numbered three-channel list to one concept+pointer line (interface-side framing: the blocked digest + home view the user meets, desktop notification ceded to RELIABILITY), and onboarding §6 to a one-line pointer for surfacing + a kept onboarding-specific note (likeliest blocks `E-QUOTA`/`E-SERVICE-DOWN`); also trimmed §6's run-loop re-narration to a pointer (restores the spec's "names each step… does not restate mechanics" promise). Both pointers use RELIABILITY §4's real anchor (`#4-run-health--blocked-surfacing--visible-without-the-exit-code`, matching the existing core-beliefs anchor convention). No orphaned facts (digest path literal survives in INTERFACE's "## The digest"; run-loop + taxonomy owned by `references/onboarding.md`; notify-flag config owned by RELIABILITY §4). Verify: enumeration grep shows the three-channel list in exactly one pillar doc (RELIABILITY); `PRODUCT_SENSE.md` (no-cloud non-goal exception) and `design-docs/core-beliefs.md` (belief #4, delegates ownership) carry single mentions, not the list — both out of scope. Gates: doc_lint clean, pytest 92 green.
 
 ## Decision log
 
@@ -701,6 +702,31 @@ depends on R13 landing with it.)*
 - **The style guide lives in `docs/design-docs/`, not `shared/references/`.** It guides authors
   and reviewers (contributor-facing), not the runtime skills (agent-facing) — putting it in
   `shared/references/` would bundle ~300 lines into every skill for no runtime benefit.
+- **R6 kept in onboarding §6 exactly what is onboarding-specific; compressed only mechanics owned
+  elsewhere.** §6 mixed three things: (a) the run-loop enumeration (search / dedup / judge /
+  detail-read / digest — owned by `skills/job-search/references/onboarding.md`), (b) the
+  blocked-run surfacing story (owned by RELIABILITY §4), and (c) genuinely step-specific facts.
+  Compressed (a) and (b) to pointers; **kept** (c): the magical-moment outcome the user sees ("Here
+  are N jobs… found seconds ago.") and the step-specific likeliest blocks (`E-QUOTA` — the only
+  point where API limits surface, reactively — and `E-SERVICE-DOWN`). Cutting (a) also restores
+  the spec's own "names each step… does not restate mechanics" promise (the §2.3 finding) — the
+  minimal cut, not the broader E1 "promising ones" rewrite, which is a separate finding left for
+  its own task.
+- **R6 scope: the verify "exactly one pillar doc" excludes design-docs and the non-goal mention.**
+  Pillar docs counted = `docs/*.md` + `docs/product-specs/*.md`. Two other surviving mentions were
+  checked and left as out-of-scope, neither being the three-channel enumeration: `PRODUCT_SENSE.md`
+  names a desktop notification once as the *narrow local exception* to the no-cloud-notifications
+  non-goal (product-boundary reasoning, not a surfacing list), and `design-docs/core-beliefs.md`
+  belief #4 states the principle and immediately delegates ownership to the references — a
+  different genre the audit did not flag for triplication (§2.6 notes the exit-code trap is
+  intentionally "stated with its reason in three genres"). The five `skills/*/SKILL.md` and
+  `shared/references/` copies are likewise untouched (plugin self-containment; `errors.md` is the
+  runtime source of truth).
+- **R6 found no orphaned facts.** The only fact INTERFACE's old passage carried that RELIABILITY
+  §4 lacks is the literal digest path `reports/<date>-digest.md` — already owned by INTERFACE's own
+  "## The digest" section (line ~86), so it survives the cut. The notify-flag/`config.yaml` detail
+  is carried by RELIABILITY §4 (line 92); the conventions.md config-schema pointer it linked is
+  also already present elsewhere in INTERFACE. Nothing dropped silently.
 - **Descriptions stay honest to current behavior.** R2's re-cuts add phrasings and fences but
   claim no capability the bodies don't have — triggering accuracy means routing right, not
   marketing.

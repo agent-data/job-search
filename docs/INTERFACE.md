@@ -100,16 +100,12 @@ persist step), see [`../skills/job-search-run/SKILL.md`](../skills/job-search-ru
 
 ## Error surfacing as UX
 
-When a scheduled run is blocked, the failure is surfaced through three channels — not
-through the process exit code (a headless `claude -p` run returns 0 even when blocked):
-
-1. **The blocked digest** — written to `reports/<date>-digest.md` with the named error
-   as its body, replacing the normal match listing.
-2. **The home view** — on the user's next `/job-search`, the home view reads the newest
-   `runs/<id>.json` and names the blocking error with its cause and fix.
-3. **A desktop notification** — fired when the relevant notify flag is set in `config.yaml`
-   (see [`../shared/references/conventions.md`](../shared/references/conventions.md) for
-   the config schema).
+A blocked run still reaches the user — it never relies on the process exit code (a headless
+`claude -p` run returns 0 even when blocked). *How* it surfaces — every channel, and the
+exit-code trap — is owned by
+[`RELIABILITY.md`](RELIABILITY.md#4-run-health--blocked-surfacing--visible-without-the-exit-code);
+from the interface's side, what the user meets is the blocked digest in place of the normal
+match listing and the same blocked state named in the home view on their next `/job-search`.
 
 Every failure is named (e.g. `E-NO-AUTH`, `E-QUOTA`, `E-SERVICE-DOWN`) with a
 cause-and-fix message the user can act on. There are no silent failures.

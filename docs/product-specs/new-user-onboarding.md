@@ -96,17 +96,18 @@ Config schema and the derive/edit recipes are owned by
 
 ### 6. First live search — the magical moment
 
-The skill invokes `job-search-run` against the new workspace. It searches each enabled query,
-skips postings it has already seen, judges each new posting against the brief
-(qualitatively: relevant or not, and if relevant weak/moderate/strong), reads full descriptions
-for the promising ones, and writes a digest. The agent presents strong and moderate matches as a
-discovery — "Here are N jobs matching your brief, found seconds ago."
+The skill invokes `job-search-run` against the new workspace (the run loop itself — search,
+dedup, judge, detail-read, digest — is owned by
+[`skills/job-search/references/onboarding.md`](../../skills/job-search/references/onboarding.md)).
+What the user sees at this step is the payoff: the agent presents strong and moderate matches as
+a discovery — "Here are N jobs matching your brief, found seconds ago."
 
-Blocked-run handling: any failure surfaces a named error from
-[`shared/references/errors.md`](../../shared/references/errors.md). The most likely at this step
-are `E-QUOTA` (the only point where API limits surface, reactively) and `E-SERVICE-DOWN`.
-Mechanics and the full run-result taxonomy are in
-[`skills/job-search/references/onboarding.md`](../../skills/job-search/references/onboarding.md).
+If the run is blocked instead, the user meets a named error in the digest and the home view; how
+that surfacing works is owned by
+[`../RELIABILITY.md`](../RELIABILITY.md#4-run-health--blocked-surfacing--visible-without-the-exit-code).
+Onboarding-specific note: the likeliest blocks here are `E-QUOTA` (the only point where API
+limits surface, reactively) and `E-SERVICE-DOWN`, both catalogued in
+[`shared/references/errors.md`](../../shared/references/errors.md).
 
 ### 7. Schedule offer (native `/loop`)
 
