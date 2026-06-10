@@ -7,11 +7,15 @@ code_refs: [scripts/philosophy_guard.py, hooks/guard-scheduled-tasks.py, scripts
 ---
 # Core Beliefs — Agent-First Operating Principles
 
-These are the non-negotiable beliefs that define how the agent — and the people who change it —
-operate. Read this before you change product behavior: a change that regresses one of these is
-almost always the wrong direction, and several are mechanically blocked in CI. The beliefs
-themselves are the canonical framing in [CONTRIBUTING.md](../../CONTRIBUTING.md#project-philosophy-please-dont-regress-these);
-this doc adds the *enforcement* — for each belief, where it lives in the code and how to check it.
+These are the beliefs that define how the agent — and the people who change it — operate. Read
+this before you change product behavior: a change that regresses one of these is almost always the
+wrong direction. They split by how they hold. Most are non-negotiable because they are
+mechanically blocked in CI — a guard, a build check, or a hook fails the PR, so the regression
+can't land. The rest are cultural: held by review and habit rather than tooling, and each belief's
+**Enforced by** says so honestly (some are wholly cultural; a couple have a mechanical backstop
+plus a residual judgment review must catch). The beliefs themselves are the canonical framing in
+[CONTRIBUTING.md](../../CONTRIBUTING.md#project-philosophy-please-dont-regress-these); this doc adds
+the *enforcement* — for each belief, where it lives in the code and how to check it.
 
 Each belief is written in four parts:
 
