@@ -5,6 +5,7 @@ are archived here.
 
 ## Active
 - [Documentation Knowledge Base](active/2026-06-07-doc-knowledge-base.md)
+- [Prompt & Doc Style — Corpus Style Guide and Conformance Audit](active/2026-06-09-prompt-style-conformance.md)
 
 ## Completed
 - [Job Search OS — Foundation & Core (Plan A)](completed/2026-06-05-foundation-core.md)
