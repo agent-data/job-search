@@ -24,5 +24,6 @@ working on this repo** — a map, not the territory. Start here, then follow the
 
 ## Working here
 - **Single source of truth:** edit `shared/references/` + `scripts/`, then run `./scripts/build.sh`; never hand-edit `skills/*/references` or `skills/*/scripts`.
+- All prompts and docs are held to the [prompt & doc style guide](docs/design-docs/prompt-style-guide.md).
 - Stdlib-only Python; scoped conventional commits; `python3 scripts/doc_lint.py --root .` and `python3 -m pytest -q` must be green before a PR.
 - Daily contributor docs: [README](README.md) · [CONTRIBUTING](CONTRIBUTING.md) · [TESTING](TESTING.md)

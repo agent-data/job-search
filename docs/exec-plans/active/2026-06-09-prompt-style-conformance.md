@@ -470,7 +470,7 @@ Effort: S (<30 min) / M (half-day) / L (day+). Order within a tier = suggested e
 
 ### P0 — do first
 
-- [ ] **R1 [TUNE, S] Land the style guide as a doc.** Extract Part 1 verbatim to
+- [x] **R1 [TUNE, S] Land the style guide as a doc.** Extract Part 1 verbatim to
   `docs/design-docs/prompt-style-guide.md` with design-doc frontmatter (`title`, `status:
   current`, `verified`, `last_reviewed`, `code_refs`); add it to `design-docs/index.md` (Living)
   and a one-line pointer in `AGENTS.md` + `CONTRIBUTING.md` ("all prompts and docs follow
@@ -647,6 +647,8 @@ depends on R13 landing with it.)*
 - 2026-06-09 — Plan created: corpus read end-to-end, style guide derived, audit run (4 reviewers,
   findings spot-verified), recommendations and rewrites drafted. No repo files modified yet
   beyond this plan and the exec-plans index entry.
+- 2026-06-09 — R1: style guide landed as docs/design-docs/prompt-style-guide.md (verbatim Part 1);
+  pointers added in AGENTS.md + CONTRIBUTING.md + design-docs index.
 
 ## Decision log
 
@@ -668,3 +670,7 @@ depends on R13 landing with it.)*
 - **Descriptions stay honest to current behavior.** R2's re-cuts add phrasings and fences but
   claim no capability the bodies don't have — triggering accuracy means routing right, not
   marketing.
+- **The style guide ships `verified: partial`, not `verified`.** Its quotes were checked against
+  the corpus at authoring time, but the corpus lives outside the repo (machine-local Piebald
+  extraction), so a future reviewer can't re-verify the claim with repo tooling. This matches the
+  only sibling Living design doc, core-beliefs.md, which also claims `partial`.

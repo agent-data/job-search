@@ -6,6 +6,7 @@ contracts now live in `shared/references/`).
 
 ## Living
 - [Core Beliefs — Agent-First Operating Principles](core-beliefs.md) — _status: current_
+- [Prompt & Doc Style Guide](prompt-style-guide.md) — _status: current_
 
 ## Historical design snapshots
 - [Job Search OS — Original Design Spec](2026-06-05-os-design.md) — _status: historical_
