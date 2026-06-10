@@ -32,7 +32,11 @@ decision log matters for future readers. These are Markdown files that live in v
 
 - **In-flight:** `docs/exec-plans/active/`
 - **Done:** `docs/exec-plans/completed/`
-- **Live exemplar:** [`exec-plans/active/2026-06-07-doc-knowledge-base.md`](exec-plans/active/2026-06-07-doc-knowledge-base.md)
+- **Exemplar (completed):** [`exec-plans/completed/2026-06-09-voice-and-onboarding-clarity.md`](exec-plans/completed/2026-06-09-voice-and-onboarding-clarity.md)
+  — closest match for the body format below (a Non-goals fence, scoped per-task logs, verification
+  baked into each task). For an active plan that models the full upgraded template — including the
+  Done-when gate and `[BLOCKS]`/`[TUNE]` tags — see
+  [`exec-plans/active/2026-06-09-prompt-style-conformance.md`](exec-plans/active/2026-06-09-prompt-style-conformance.md).
 
 Use an execution plan when: the work has more than one logical phase, involves trade-off decisions
 worth recording, or when multiple commits will touch related files over time.
@@ -57,16 +61,34 @@ mechanically by the `frontmatter-schema` rule in [`../scripts/doc_lint.py`](../s
 
 ### Body format
 
+A plan is read cold by an executor who wasn't in the room. Lead with **why this change** (a Goal
+paragraph), name the critical files, and show each pattern once with a representative path — do not
+re-enumerate every file the change touches or inline whole file bodies (a diff does that; the plan
+rots when the file moves). State commands you actually intend to run, and verify rather than assume.
+
 Plans follow the [commit + message conventions in CONTRIBUTING.md](../CONTRIBUTING.md#commit-message-conventions):
 
-- **Bite-sized red → green TDD steps** — each task writes a failing test first, then the minimal
-  implementation, then refactors; commands are written out exactly.
+- **Bite-sized red → green TDD steps, each tagged `[BLOCKS]` or `[TUNE]`** — each task writes a
+  failing test first, then the minimal implementation, then refactors; commands are written out
+  exactly. The tag says why the task matters — `[BLOCKS]` for a correctness, routing, or publishing
+  issue, `[TUNE]` for quality or readability — so an executor on a budget does the blocking work
+  first and a reviewer knows which gaps are load-bearing.
+- **Non-goals** — an explicit fence naming what the plan will *not* do and, where it isn't obvious,
+  why; a reviewer shouldn't have to re-litigate scope the author already closed, and "I assumed you
+  also wanted…" is how a bounded change sprawls.
+- **A single "Done when" gate** — one checklist of verifiable commands and criteria (`doc_lint`
+  clean, tests green, a grep that returns 0, a cross-read), run once before the plan flips to
+  completed — not done-ness scattered across sections where no one can see the whole bar at a glance.
 - **Frequent scoped commits** — one commit per logical task, using Conventional-Commit prefixes
   (`feat(scope):`, `docs(scope):`, `test(scope):`, `ci:`).
 - **Progress log** — a running append-only section at the bottom of the file; each task adds a
   line with its commit SHA when done.
 - **Decision log** — also at the bottom; each non-obvious design choice is recorded with its
   rationale so future readers understand *why*, not just *what*.
+- **Self-Review** — a required pass the author makes over their own plan before execution begins:
+  re-read it as the cold executor would, confirm every named file and command is real, and check
+  that the Non-goals and Done-when gate actually fence the work. Catching a wrong path or a missing
+  gate here costs a sentence; catching it mid-execution costs a wasted task.
 
 Both logs are updated as part of the commit that completes each task.
 

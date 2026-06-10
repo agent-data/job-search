@@ -6,7 +6,7 @@ created: 2026-06-07
 
 # Documentation Knowledge Base — Execution Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking. This is the CHECKED-IN execution plan; it carries the live Progress Log and Decision Log at the bottom — every task appends to them as part of its commit.
+> **For agentic workers:** Execute this plan task-by-task with the superpowers:subagent-driven-development sub-skill (or superpowers:executing-plans for a separate review session). Steps use checkbox (`- [ ]`) syntax for tracking. This is the CHECKED-IN execution plan; it carries the live Progress Log and Decision Log at the bottom — every task appends to them as part of its commit.
 
 **Goal:** Build a documentation knowledge base that puts all required context in-repo, so a coding agent (Claude Code) working *on* `job-search-os` can reason about the project from a small, stable entry point (`AGENTS.md`) that points to deeper sources (progressive disclosure) — and so CI fails any PR that lets the knowledge base rot. The knowledge base is enforced mechanically by a stdlib doc-linter (run in CI) and semantically by a `doc-reviewer` agent (per-commit during implementation, and on-demand as a doc-gardening sweep). The single biggest risk this plan guards hardest against is the knowledge base *re-stating* the runtime contracts that already live in `shared/references/` and silently drifting from them — recreating the exact problem `build.sh` exists to prevent. The knowledge base **points to** `shared/references/`; it never duplicates it. A dedicated, tested lint rule enforces this.
 
