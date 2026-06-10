@@ -10,8 +10,10 @@ If a sentence would only make sense to someone who has read this repo, rewrite i
 2. **First run = zero context.** Assume the user has never seen this system and knows none of its
    words. Every setup question carries at most ONE short sentence of context — what the thing is
    and why you're asking — then the ask itself. Example shape: "Next I need your Job Preferences
-   Brief — the 'what I want' that every posting gets judged against. Want me to interview you to
-   build it, or do you have one written down to import?"
+   Brief — the 'what I want' that every posting gets judged against. How do you want to build it?"
+   (That one is a closed choice — interview or import — so it's delivered as a question with
+   options; see "Asking questions" below. The context sentence rides in the question text either
+   way.)
 3. **Narrate live work sparsely, in user outcomes.** One short line per stage:
    "Searching for 'AI engineer' roles…" · "Found 23 postings — 8 are new." ·
    "Reading the 5 promising ones in full…" · "Judging each against your brief…"
@@ -20,6 +22,24 @@ If a sentence would only make sense to someone who has read this repo, rewrite i
    user is (Claude Code terminal or claude.ai). Never wrap it in a code fence (that shows raw
    markup), never hand back only a file path, never suggest an external viewer. Skip front-matter
    lines (`created_at:` …) when showing a document.
+
+## Asking questions — closed choices get the question tool
+
+When an ask has a small closed set of answers — pick one of two paths, choose a frequency or a
+depth, confirm a yes/no that gates the next step — present it with the **AskUserQuestion tool**:
+one question at a time, a short header (≤12 characters), 2–4 options each with a label and a
+one-line description. Don't add an "other / something else" option — the tool supplies free-text
+automatically. The playbooks' quoted templates still own the words: the template's lead sentence
+(with its one sentence of context, rule 2) becomes the question text; its choices become the
+option labels and descriptions. The failure mode this prevents: the choices arrive buried in a
+paragraph, the user has to type an answer back, and a mistyped reply derails the flow.
+
+Everything else stays prose: open-ended questions ("what's making you look now?"), menus of more
+than four actions (the home view's quick actions), and soft nudges riding on other output. The
+tool's name is machinery — the user sees only the question and its choices, so "AskUserQuestion"
+never appears in your message text. If the tool is unavailable (headless or print mode), ask the
+same question as prose with the options on numbered lines. This changes how to ask, never
+whether — a non-interactive run (job-search-run) still never prompts.
 
 ## Words that never reach the user
 
@@ -31,6 +51,7 @@ If a sentence would only make sense to someone who has read this repo, rewrite i
 | registry · OS state · resolve · first_run | nothing |
 | contract · reference files · SKILL.md · playbook | nothing |
 | skill names as narration ("invoking job-search-run") | the action: "running your search now" |
+| AskUserQuestion · tool names | nothing — the user sees the question and its choices, not the machinery |
 
 ## What stays verbatim (deliberate exceptions)
 

@@ -99,7 +99,10 @@ flags included.
   follow-up that turns it into something **observable** a reader could actually check against a posting
   ("good culture" → "small teams, low meeting load, ships weekly"; "decent pay" → "base at least ~$X").
 - **Make answering easy.** Offer a few example options or a simple scale when it helps, and **always** let the
-  user say "no preference", "skip", or "that's a dealbreaker".
+  user say "no preference", "skip", or "that's a dealbreaker". When a question is a genuine pick-one with 2–4
+  natural answers (IC vs. manager; remote / hybrid / onsite), ask it with the question tool — options as
+  labels, the automatic free-text option catching "no preference" and nuance; open questions stay prose
+  (`references/voice.md` → Asking questions).
 - Keep every message short. Don't lecture or pad.
 
 ### Flow

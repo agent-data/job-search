@@ -14,7 +14,8 @@ configure everything by **chatting** — the user never hand-edits a file. No sc
 
 **Assume zero context.** A first-run user has never seen this system and doesn't know its words. Per
 `voice.md`: give every question below one short plain-English sentence of what the thing is and why you're
-asking — then ask. No internal vocabulary, ever.
+asking — then ask, closed choices through the question tool (`voice.md` → Asking questions). No internal
+vocabulary, ever.
 
 ---
 
@@ -76,10 +77,12 @@ rather than re-interviewing or re-scaffolding.
 
 Otherwise, default to **`~/.job-search/`**:
 
-1. **Confirm the location, with one line of context first** — a new user doesn't know what a "workspace"
-   is ("Everything your job search learns and finds — your preferences, saved searches, and matched jobs —
-   lives in one private folder on your machine. I'll put it at `~/.job-search/` — good, or somewhere
-   else?").
+1. **Confirm the location with the question tool** (`voice.md` → Asking questions) — a new user doesn't
+   know what a "workspace" is, so the context rides in the question text. Header `Workspace`; question:
+   "Everything your job search learns and finds — your preferences, saved searches, and matched jobs —
+   lives in one private folder on your machine. Where should I put it?"; options: **`~/.job-search`** —
+   "the default: private and out of the way" · **Somewhere else** — "name any folder; I'll use that". (A
+   path typed via the free-text option is equally fine.)
 2. Create the directory plus `runs/` and `reports/`.
 3. Copy `templates/config.example.yaml` → `<workspace>/config.yaml` and
    `templates/workspace.gitignore` → `<workspace>/.gitignore`.
@@ -92,11 +95,15 @@ where they're hunting, and matched jobs live here and shouldn't be committed to 
 ## 4. Preferences — interview or import (a fork)
 
 The system needs a **Job Preferences Brief** (prose `preferences.md`) — the "what I want" half that the
-runner reads against each posting. Ask which path the user wants, leading with what the brief is:
+runner reads against each posting. This is a closed two-way choice, so ask it with the question tool
+(`voice.md` → Asking questions), the what-it-is context riding in the question text. Header `Brief`;
+question: "Next I need your **Job Preferences Brief** — the plain-English 'what I want' that every posting
+gets judged against. How do you want to build it?"; options:
 
-> "Next I need your **Job Preferences Brief** — the plain-English 'what I want' that every posting gets
-> judged against. Shall I **interview** you to build it, or do you already have one written down to
-> **import**?"
+- **Interview me** — "I'll ask questions and write the brief from your answers — you pick how deep to go."
+- **Import one** — "you already have it written down — paste it or give me the path."
+
+Then route on the answer:
 
 - **Interview** → invoke the **`job-preference-interview`** skill. It asks one question at a time and writes
   the prose brief (Summary, Must-haves/dealbreakers, Strong preferences, Nice-to-haves, Red flags) to
@@ -145,13 +152,20 @@ user to name keywords.** They can retune anytime; the goal here is zero upfront 
    the gap — lead with derivation, never a blank "what should I search for?".
    The config already comes preset with a recency window (recent postings only) and a fast model for reading
    posting details — both are tunable anytime just by asking.
-4. **Pick a frequency.** Ask how often to pull, with the plain-language nudge — **no credit or cost math**:
+4. **Pick a frequency — with the question tool** (`voice.md` → Asking questions), the plain-language nudge
+   carried by the recommended-first option — **no credit or cost math**. Header `Frequency`; question:
+   "How often should I check for new postings? You can change this anytime by just telling me."; options,
+   recommended first:
 
-   > "How often should I check for new postings? **Daily suits most searches; choose hourly only if you're
-   > in a fast-moving, active search.** You can change this anytime by just telling me."
+   - **Daily (Recommended)** — "suits most searches"
+   - **Hourly** — "only for a fast-moving, active search"
+   - **Every 6 hours** — "a few times a day, without the firehose"
+   - **Weekly** — "a slow-burn watch"
 
-   Set `schedule.frequency` to one of the allowed values: `hourly | every-2-hours | every-6-hours | daily |
-   weekly`. **Never** add a budget, cost, or score/weight field — those don't exist in this system.
+   Set `schedule.frequency` to the chosen allowed value: `hourly | every-2-hours | every-6-hours | daily |
+   weekly` — `every-2-hours` has no button, so map a typed answer ("every couple of hours") to the nearest
+   allowed value and say which one you set. **Never** add a budget, cost, or score/weight field — those
+   don't exist in this system.
 
 ## 6. First live sample run — the magical moment
 
@@ -193,8 +207,10 @@ Offer to keep the search running automatically. Job Search OS schedules with Cla
 to the user's machine (no crontab, no launchd). Follow `internals.md`. Say it plainly, including the one
 tradeoff: it runs **while you have a Claude session open**.
 
-Ask a simple **yes/no**: "Want me to keep checking automatically while you have Claude open? New matches
-will land in a digest without you having to ask."
+Ask it with the question tool (`voice.md` → Asking questions). Header `Schedule`; question: "Want me to
+keep checking automatically while you have Claude open? New matches will land in a digest without you
+having to ask."; options: **Yes, keep checking** — "runs while a Claude session is open; stops when it
+ends" · **No, I'll run it myself** — "a one-off search stays one command away".
 
 **On yes:**
 
@@ -246,5 +262,7 @@ runs", "update my preferences", "show the latest digest").
       acknowledged; `schedule.frequency` set (plain-language nudge, **no cost math**)
 - [ ] first **live** `job-search-run` done; strong/moderate matches shown — or the named error if blocked
 - [ ] scheduling offered via native `/loop`; on yes started + `set-scheduled`; `/loop` recipe shown either way
-- [ ] every ask carried one line of plain-English context; no internal vocabulary reached the user (`voice.md`)
+- [ ] every ask carried one line of plain-English context; the four closed choices (workspace location,
+      interview-or-import, frequency, scheduling) went through the question tool; no internal vocabulary
+      reached the user (`voice.md`)
 - [ ] home view printed
