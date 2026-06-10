@@ -105,9 +105,13 @@ gets judged against. How do you want to build it?"; options:
 
 Then route on the answer:
 
-- **Interview** → invoke the **`job-preference-interview`** skill. It asks one question at a time and writes
-  the prose brief (Summary, Must-haves/dealbreakers, Strong preferences, Nice-to-haves, Red flags) to
-  `<workspace>/preferences.md`. Tell it this is onboarding so it writes to the workspace you just set up.
+- **Interview** → invoke the **`job-preference-interview`** skill, passing exactly two things: that this is
+  onboarding, and where to write — e.g. args: `onboarding — write the brief to <workspace>/preferences.md`.
+  Nothing else: no depth, no question count, no description of its method. That skill opens by letting the
+  **user** choose how deep to go, and an invocation that says "standard" or "one question at a time" reads
+  as a depth already chosen — the ask silently disappears and the user never learns a one-question sketch
+  existed. It ends with the brief (Summary, Must-haves/dealbreakers, Strong preferences, Nice-to-haves,
+  Red flags) written to `<workspace>/preferences.md`.
 - **Import** → also hand off to **`job-preference-interview`**, which accepts a file path or pasted prose,
   validates it's usable (prose with at least a Summary and Must-haves), converts any numeric rubric/weights
   to prose (this system is qualitative only), enriches thin sections with a few targeted questions, and

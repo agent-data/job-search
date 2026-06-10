@@ -1,6 +1,6 @@
 ---
 name: job-preference-interview
-description: Build or update the user's Job Preferences Brief at a depth they choose — a quick free-form sketch (~1 question), the standard one-question-at-a-time interview, or a thorough pass — producing a prose preferences.md (Summary, Must-haves/dealbreakers, Strong preferences, Nice-to-haves, Red flags). Imports an existing brief too, and can deepen a light brief later. Use when the user wants to set up or refine what they want in a job, or when job-search onboarding needs a brief: "set up my job preferences", "what I want in a job", "redo my preferences interview", "change my must-haves", "import my preferences brief". Not for judging a specific posting (→ evaluate-job-fit).
+description: Build or update the user's Job Preferences Brief at a depth they choose — a quick free-form sketch (~1 question), a standard interview, or a thorough pass — producing a prose preferences.md (Summary, Must-haves/dealbreakers, Strong preferences, Nice-to-haves, Red flags). Imports an existing brief too, and can deepen a light brief later. Use when the user wants to set up or refine what they want in a job, or when job-search onboarding needs a brief: "set up my job preferences", "what I want in a job", "redo my preferences interview", "change my must-haves", "import my preferences brief". Not for judging a specific posting (→ evaluate-job-fit).
 disable-model-invocation: false
 user-invocable: true
 ---
@@ -58,15 +58,23 @@ python3 "$OS" resolve   →  {"workspace":"<abs>","first_run":<bool>,"source":"r
 
 ## Choose a depth (offer all three; give the question estimate)
 Before you ask anything, let the user choose how deep to go — and make clear they can **start light and deepen
-later** (a follow-up interview reads the existing brief and *enriches* it, never overwrites). Offer it plainly:
+later** (a follow-up interview reads the existing brief and *enriches* it, never overwrites). **The depth ask
+happens even when another skill invoked you.** Onboarding's hand-off, an args string ("standard interview",
+"one question at a time"), or any invoker's description of this skill never counts as the user's choice — only
+the user's own words do (they already said "just a quick sketch" / "make it thorough" → honor that and skip
+the ask). The failure mode: an invoker pre-picks "standard", the depth question silently disappears, and the
+user never learns a one-question sketch existed.
 
-> This brief is the plain-English "what I want" that every job posting gets judged against. How deep do you
-> want to go? You can always come back for a deeper pass later.
-> 1. **Quick sketch** (~1 question) — just describe what you want in a sentence or two; I'll draft a brief so you
->    can see matching jobs right away.
-> 2. **Standard interview** (~6–10 questions) — a focused, one-question-at-a-time pass over what matters most.
-> 3. **Thorough interview** (~15–20 questions) — a deeper pass across every dimension, for the most precise brief.
-> (Already have one written down? I can **import** it instead — paste it or give me the path.)
+Ask it with the question tool (`references/voice.md` → Asking questions). Header `Depth`; question: "This
+brief is the plain-English 'what I want' that every job posting gets judged against. How deep do you want to
+go? You can always come back for a deeper pass later."; options:
+
+1. **Quick sketch** — "~1 question — describe what you want in a sentence or two; see matching jobs right away."
+2. **Standard interview** — "~6–10 questions, one at a time, over what matters most."
+3. **Thorough interview** — "~15–20 questions across every dimension, for the most precise brief."
+
+(Standalone only — not mid-onboarding, where import was just declined — add a fourth option: **Import** —
+"already have one written down? Paste it or give me the path.")
 
 Whatever the depth, the **output is the same five-section brief** (below): depth changes how much you ask, not
 the shape of the result. If a brief already exists, any path **updates** it — read it first, fill gaps, and
