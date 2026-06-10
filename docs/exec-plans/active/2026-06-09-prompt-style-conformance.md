@@ -484,7 +484,7 @@ Effort: S (<30 min) / M (half-day) / L (day+). Order within a tier = suggested e
   `2026-06-05-plan-b-d-design.md:12-13`; in the handoff, re-root in-repo pointers and banner the
   13 machine-local `~/cookbooks` / `~/job-search-os` paths as historical artifacts (publishing
   blocker — they leak a personal directory layout). *Verify:* grep per Done-when.
-- [ ] **R4 [BLOCKS, S] Snapshot-banner the historical design docs.** Top-of-file banner on
+- [x] **R4 [BLOCKS, S] Snapshot-banner the historical design docs.** Top-of-file banner on
   `2026-06-05-os-design.md` (and the handoff): "Historical snapshot (2026-06-05). Superseded
   details: schemas/errors live in `shared/references/`; scheduling is `/loop`-only per
   core-beliefs 7." Consolidate the two inline Revision notes into it. *Verify:* doc-reviewer
@@ -651,6 +651,7 @@ depends on R13 landing with it.)*
   pointers added in AGENTS.md + CONTRIBUTING.md + design-docs index.
 - 2026-06-09 — R2: five descriptions re-cut per the §2.2 ownership map (job-search cedes "find me jobs"; agent drops caps + "set up, use"; all five gain quoted phrasings + negative triggers).
 - 2026-06-09 — R3: fixed the two dead filenames in plan-b-d-design (→ `2026-06-05-os-design.md`, `2026-06-05-plan-b-d-handoff.md`); landed a historical-snapshot banner under the handoff H1 covering the 13 `~/cookbooks` + 5 `~/job-search-os` machine-local paths (no in-repo equivalent — left as text under the banner; no `~/job-search-os/<subpath>` pointers exist to re-root). No literal username present (`/Users/<u>` placeholder only). Gates: Done-when grep satisfied (banner is hit #1), doc_lint clean, pytest 92 green.
+- 2026-06-09 — R4: snapshot-bannered `2026-06-05-os-design.md` (blockquote under the H1) and folded its two inline "Revision (2026-06-08)" notes into it, then removed both notes from the body (only change to the body prose). The banner names the two frozen excerpts — the inlined `config.yaml` predating the live `search:` section (verified: the live `search:` keys (`freshness`/`detail_model`) are present in `shared/references/conventions.md` and absent from os-design's inlined `config.yaml` block) and the E-QUOTA message reproduced near-verbatim from `shared/references/errors.md` (verified shared) — and states the cron/launchd option was dropped per core-beliefs 7 (`/loop`-only). Confirmed the handoff banner (landed with R3) already satisfies R4's quoted wording; left it unchanged. Cold-read: with the banner up top, the OPTION A/OS-cron block in Scheduling UX reads as a dropped historical snapshot, not live. Gates: doc_lint clean, pytest 92 green.
 
 ## Decision log
 
@@ -698,3 +699,32 @@ depends on R13 landing with it.)*
   (`2026-06-05-job-search-os-design.md` → `2026-06-05-os-design.md`,
   `…-job-search-os-plan-b-d-handoff.md` → `2026-06-05-plan-b-d-handoff.md`) and leaves the
   sentence otherwise intact rather than introducing link syntax the file doesn't use.
+- **R4 compressed the two Revision notes into one "Revised 2026-06-08:" clause, preserving each
+  note's substance.** Note 1 (locked-decision §1) and note 2 (Scheduling UX) said largely the same
+  thing — narrowed to native `/loop` only, cron/launchd generation removed, current flow in
+  `internals.md` — so a per-note clause would have repeated itself. The banner names *both* affected
+  sections ("the locked-decision and Scheduling-UX sections were narrowed to …") and carries every
+  distinct fact across the two notes: `/loop`-only, cron/launchd removed, `/schedule` still excluded
+  with its reason (a cloud routine can't reach the local workspace or `agent-data` auth — unique to
+  note 1), and the live-flow pointer to `internals.md` (in both). The one inline link the notes used
+  (to `internals.md`) is kept in the banner — it is the only superseded-detail pointer the body still
+  needs, and matches os-design's one existing link target.
+- **R4 banner register matches the handoff banner, not os-design's two old links.** The handoff
+  banner (R3) writes "core-beliefs 7" as plain prose and `shared/references/` in bare backticks; the
+  os-design banner does the same for parallelism, rather than linking core-beliefs (the doc body has
+  no core-beliefs link to match) — its only link is the `internals.md` pointer inherited from the
+  consolidated notes.
+- **R4 named the reproduced error in the banner.** §2.4 flagged "an error message reproduced
+  near-verbatim" without naming it; R4 identified it as the E-QUOTA message and verified the same text
+  lives in `shared/references/errors.md`, so the banner cites that file by name rather than asserting a
+  vague "an error message" — making the snapshot claim checkable.
+- **R4 banner gained a roster/invocation/workspace sentence beyond R4's approved text.** A
+  doc-review pass verified three further divergences that the approved "Superseded details:" list
+  didn't cover and that a reader would act on: the doc's six-skill roster (incl. `job-search-setup`,
+  `resume-compare`, `resume-tailor`) vs the live five (none of those names); its invocation policy
+  (only run + evaluate model-invocable, rest `disable-model-invocation: true`) vs live (all five
+  `false`); and its `~/job-search/` default vs the live `~/.job-search/`. Without a flag these read
+  as live. Rather than enumerate three corrections in the banner — that would make it a changelog
+  duplicating the live docs, which the single-source rule forbids — the banner gained ONE pointer
+  sentence directing the reader to the live set (`skills/` + `shared/references/conventions.md`); the
+  three facts each verified (one `ls`, two greps) before writing.
