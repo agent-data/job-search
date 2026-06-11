@@ -49,12 +49,21 @@ agent-data`, and confirm it's authenticated — `agent-data whoami` should repor
 - **Already set up** → say so as a verified fact in one short line ("agent-data is ready ✓") and continue.
 - **Missing or not authenticated** → **set it up for the user; don't stop.** Lead with the solution, not an
   error. The internal codes for this state (`E-NO-AGENT-DATA`, `E-NO-AUTH`) are for your reasoning only —
-  **never show them to the user** (`voice.md`). Walk them through it, following the canonical setup doc
-  (<https://agent-data.dev/setup/claude-code.md> — keep these steps in sync with it):
+  **never show them to the user** (`voice.md`). Two starting points, one path — a **missing** CLI starts at
+  step 1; one that's on `PATH` but **unauthenticated** starts at step 2. Keep these steps in sync with the
+  canonical setup doc (<https://agent-data.dev/setup/claude-code.md>):
 
-  1. **Say what's happening, solution-first** — e.g. "Looks like agent-data isn't set up yet — it's what
-     pulls and reads live postings. I'll get it installed and connect your account."
-  2. **Get an API key — give the full steps, not just "paste a key":**
+  1. **Install it now — this step needs nothing from the user** (the API key comes later, at the connect
+     step). Say why and what's happening first — e.g. "agent-data pulls and reads live job postings — it's
+     a dependency of this plugin. It isn't installed yet, so I'm installing it now." Then immediately run:
+
+     ```
+     npm install -g agent-data
+     ```
+
+     Confirm the install took with `agent-data --version` before moving on — no pre-claimed success.
+  2. **Connect their account.** (Start here when `agent-data` was already on `PATH` but `whoami` reported
+     `api_key_set: false` — don't reinstall.) Get an API key — give the full steps, not just "paste a key":
      - Open **<https://agent-data.motie.dev/settings/account>** (sign in, or create a free account if you
        don't have one yet).
      - On the Account settings page, click **Generate API Key**.
@@ -62,16 +71,16 @@ agent-data`, and confirm it's authenticated — `agent-data whoami` should repor
 
      Ask for the key as a plain prose question — it's a free-text secret, not a closed choice, so don't use
      the question tool.
-  3. **Install and authenticate in one step**, substituting the key they pasted:
+  3. **Authenticate**, substituting the key they pasted:
 
      ```
-     npx -y agent-data init --claude-code --api-key <KEY> --yes
+     agent-data init --claude-code --api-key <KEY> --yes
      ```
 
-     This installs agent-data and saves the key to `~/.agent-data/config.json`.
-  4. **Verify it worked** — run `agent-data --version`, then re-check auth with `agent-data whoami`
-     (`api_key_set: true`). If it still reports `api_key_set: false` or you see `401 Invalid API key`, the
-     key was wrong — ask them to generate a fresh one and paste it again.
+     This saves the key to `~/.agent-data/config.json` and installs the Claude Code discovery skill.
+  4. **Verify it worked** — re-check auth with `agent-data whoami` (`api_key_set: true`). If it still
+     reports `api_key_set: false` or you see `401 Invalid API key`, the key was wrong — ask them to
+     generate a fresh one and paste it again.
   5. If Claude Code is older than `2.1.0`, a session restart may be needed for the new tool to load;
      `2.1.0`+ hot-loads, so no restart is needed.
 
@@ -280,9 +289,11 @@ runs", "update my preferences", "show the latest digest").
 
 - [ ] the welcome was the FIRST user-facing text — reference reads silent before it; no check, command,
       or narration preceded it
-- [ ] agent-data ready — checked via the pinned `command -v agent-data` + auth probe; if missing or
-      unauthenticated, **installed + authenticated for the user** (key-generation steps → `npx agent-data
-      init` → live verify), solution-first, **no raw error code shown**, no premature claim, no duration promise
+- [ ] agent-data ready — checked via the pinned `command -v agent-data` + auth probe; if **missing**,
+      **installed first, then connected** (`npm install -g agent-data` → `agent-data --version` →
+      key-generation steps → `agent-data init` → live `whoami` verify); if only **unauthenticated**, key
+      steps → init → verify, no reinstall — solution-first, **no raw error code shown**, no premature
+      claim, no duration promise
 - [ ] workspace adopted-or-created; **never clobbered** an existing `config.yaml` / `preferences.md` /
       `jobs.jsonl`; `set-active` recorded
 - [ ] `preferences.md` exists (interview or import via `job-preference-interview`)

@@ -4,7 +4,8 @@
 Scenario via env JOBSEARCH_TEST_SCENARIO (default "happy"); fixtures dir via JOBSEARCH_FIXTURES.
 Scenarios: happy | zero-empty | stretch | quota | bad-query | invalid-pair | detail-fetch-failed | degraded | down.
 Error-injection scenarios reuse the "happy" fixtures (fallback) for any data they don't override.
-JOBSEARCH_TEST_NOAUTH=1 makes whoami report unauthenticated.
+JOBSEARCH_TEST_NOAUTH=1 makes whoami report unauthenticated. `--version` answers (onboarding's
+post-install check); `init` is NOT shimmed — evals stub it in the case prompt.
 """
 import json, os, sys
 
@@ -47,6 +48,9 @@ def fixture(name):
 def main(argv):
     if not argv:
         err("usage", "no command", False)
+    if argv[0] == "--version":
+        print("0.0.0-fake")
+        sys.exit(0)
     if argv[0] == "whoami":
         out({"api_key_set": os.environ.get("JOBSEARCH_TEST_NOAUTH") != "1",
              "api_key_source": "config", "base_url": "https://example.test"})

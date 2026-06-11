@@ -2,7 +2,7 @@
 title: New-User Onboarding
 status: current
 verified: partial
-last_reviewed: 2026-06-09
+last_reviewed: 2026-06-11
 code_refs: [skills/job-search/SKILL.md, skills/job-search/references/onboarding.md, scripts/osctl.py]
 ---
 
@@ -50,10 +50,14 @@ PATH (`command -v agent-data`) and authenticated (`agent-data whoami` reports `a
 
 The agent leads with *why* it's checking and never pre-claims a result it hasn't verified. If the check
 passes, it says so as a verified fact and continues. If `agent-data` is missing or unauthenticated,
-**interactive onboarding remediates rather than stopping** — it walks the user through generating an API
-key (with explicit steps), installs and authenticates in one step
-(`npx -y agent-data init --claude-code --api-key <KEY> --yes`, per the canonical setup doc
-<https://agent-data.dev/setup/claude-code.md>), and verifies before continuing. The internal codes for
+**interactive onboarding remediates rather than stopping** — install first, then connect. A missing CLI
+is installed immediately and without user input (`npm install -g agent-data`, verified with
+`agent-data --version`) — the agent says why first (agent-data is a dependency of this plugin; it pulls
+and reads live job postings). Then — and starting here when the CLI was present but unauthenticated —
+the agent walks the user through generating an API key (with explicit steps), authenticates
+(`agent-data init --claude-code --api-key <KEY> --yes`), and verifies with `agent-data whoami` before
+continuing. The API key is requested only at this connect step, never before the install. Steps stay in
+sync with the canonical setup doc <https://agent-data.dev/setup/claude-code.md>. The internal codes for
 this state (`E-NO-AGENT-DATA`, `E-NO-AUTH`, owned by
 [`shared/references/errors.md`](../../shared/references/errors.md)) are never shown to the user. The
 **headless runner** (`job-search-run`) can't prompt, so it still halts on these with a blocked digest.
@@ -142,9 +146,9 @@ All failure paths surface a named `E-*` code. Wording and fixes are owned by
 [`shared/references/errors.md`](../../shared/references/errors.md); they are not restated here.
 
 - **Missing prerequisites** — `agent-data` missing or unauthenticated. Interactive onboarding
-  **remediates** (guided install + auth) rather than halting; the headless runner halts with
-  `E-NO-AGENT-DATA` / `E-NO-AUTH` before any workspace is touched. Codes stay internal — never shown
-  to the user.
+  **remediates** (immediate install — no user input — then guided key + auth) rather than halting;
+  the headless runner halts with `E-NO-AGENT-DATA` / `E-NO-AUTH` before any workspace is touched.
+  Codes stay internal — never shown to the user.
 - **No preferences yet** — `E-NO-PREFERENCES`; the first run halts and directs the user to
   `/job-preference-interview`.
 - **Sparse market** — not a named error; zero search results prompt the agent to offer keyword

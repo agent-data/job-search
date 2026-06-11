@@ -42,13 +42,14 @@
     },
     {
       "id": 3,
-      "scenario": "first-run, not yet authenticated — agent remediates",
-      "prompt": "Fresh sandbox (setup-onboarding.sh), env as in harness, JOBSEARCH_TEST_SCENARIO=happy, and ALSO export JOBSEARCH_TEST_NOAUTH=1 so `agent-data whoami` reports api_key_set:false (agent-data is on PATH via the shim, but not yet authenticated). Invoke the job-search skill (first_run:true). The agent should REMEDIATE, not stop: when it walks you through getting an API key, answer with the fake key `mtk_evaltest`. The install/auth step is STUBBED (like scheduling) — do NOT run real `npx`; simulate `npx -y agent-data init --claude-code --api-key mtk_evaltest --yes` succeeding, then `unset JOBSEARCH_TEST_NOAUTH` so the follow-up `agent-data whoami` now reports api_key_set:true. Then let onboarding continue with the case-1 canned answers (brief depth 'standard'; situation 'passively looking'; role 'senior AI engineer, IC not management'; location 'remote in the US'; search keywords 'AI engineer', location 'United States'; frequency 'daily'; scheduling 'no'). Complete onboarding.",
+      "scenario": "first-run, installed but not authenticated — agent connects the account",
+      "prompt": "Fresh sandbox (setup-onboarding.sh), env as in harness, JOBSEARCH_TEST_SCENARIO=happy, and ALSO export JOBSEARCH_TEST_NOAUTH=1 so `agent-data whoami` reports api_key_set:false (agent-data is on PATH via the shim, but not yet authenticated). Invoke the job-search skill (first_run:true). The agent should REMEDIATE, not stop: when it walks you through getting an API key, answer with the fake key `mtk_evaltest`. The auth step is STUBBED (like scheduling) — do NOT run a real init: when the agent runs `agent-data init --claude-code --api-key mtk_evaltest --yes`, simulate it succeeding, then `unset JOBSEARCH_TEST_NOAUTH` so the follow-up `agent-data whoami` now reports api_key_set:true. Then let onboarding continue with the case-1 canned answers (brief depth 'standard'; situation 'passively looking'; role 'senior AI engineer, IC not management'; location 'remote in the US'; search keywords 'AI engineer', location 'United States'; frequency 'daily'; scheduling 'no'). Complete onboarding.",
       "expectations": [
-        "Does NOT stop and shows NO raw error code — no 'E-NO-AUTH' / 'E-NO-AGENT-DATA' (or any E-*) in any user-facing line; on finding it unauthenticated it leads with the solution (e.g. 'I'll get it installed and connect your account'), not an error",
+        "Does NOT stop and shows NO raw error code — no 'E-NO-AUTH' / 'E-NO-AGENT-DATA' (or any E-*) in any user-facing line; on finding it unauthenticated it leads with the solution (e.g. 'agent-data is installed but not connected to your account yet — let's connect it'), not an error",
+        "Runs NO install command — neither `npm install -g agent-data` nor any `npx -y agent-data …` one-shot appears (the probe's `command -v agent-data` succeeded; the CLI is already on PATH) — remediation starts directly at the connect-your-account key steps",
         "Gives the FULL key-generation steps, not just 'paste a key': names the URL https://agent-data.motie.dev/settings/account, says to sign in or create an account, click Generate API Key, and paste the `mtk_…` key; asks for the key as plain prose (NOT the question box)",
-        "Makes no premature/unverified 'agent-data is ready' claim before the post-install `agent-data whoami` actually passes; promises no duration ('takes a minute', 'a moment', 'in a few minutes')",
-        "Runs the combined install+auth step `npx -y agent-data init --claude-code --api-key mtk_evaltest --yes`, then re-verifies with `agent-data whoami` (api_key_set:true) before continuing",
+        "Makes no premature/unverified 'agent-data is ready' claim before the post-init `agent-data whoami` actually passes; promises no duration ('takes a minute', 'a moment', 'in a few minutes')",
+        "Runs the auth step `agent-data init --claude-code --api-key mtk_evaltest --yes` (the bare installed binary — NOT an npx one-shot), then re-verifies with `agent-data whoami` (api_key_set:true) before continuing",
         "Having remediated, PROCEEDS with onboarding — creates <tmp>/.job-search (config.yaml, preferences.md, jobs.jsonl, .gitignore, runs/, reports/) and writes the registry via set-active — it no longer dead-ends at the prereq step",
         "Does not invent a fit score or mention credits"
       ]
@@ -78,6 +79,20 @@
         "Only the MISSING runs/ and reports/ directories are additively created",
         "Shows the home view (does NOT start a fresh interview, does NOT re-scaffold a new ~/.job-search)",
         "NO numbers/weights/credit math"
+      ]
+    },
+    {
+      "id": 6,
+      "scenario": "first-run, agent-data not installed — agent installs first, then connects",
+      "prompt": "Fresh sandbox (setup-onboarding.sh), env as in harness, JOBSEARCH_TEST_SCENARIO=happy — EXCEPT simulate agent-data NOT INSTALLED: after setup-onboarding.sh, remove the shim (rm <tmp>/_bin/agent-data) and export a TRIMMED PATH=<tmp>/_bin:/usr/bin:/bin (T7.2-style, so any real agent-data on the machine is unreachable; <tmp>/_bin stays first so the shim is found once 'installed'; append python3's dir if it lives elsewhere). Verify `command -v agent-data` finds nothing before invoking. ALSO export JOBSEARCH_TEST_NOAUTH=1. Invoke the job-search skill (first_run:true). The agent should INSTALL FIRST, then connect. The install is STUBBED (like scheduling) — do NOT run real npm: when the agent runs `npm install -g agent-data`, simulate it succeeding by recreating the shim symlink (ln -sf <repo>/tests/fake-agent-data <tmp>/_bin/agent-data) so `agent-data --version` and `agent-data whoami` now answer. When it then walks you through getting an API key, answer with the fake key `mtk_evaltest`. The auth step is STUBBED too — do NOT run a real init: when the agent runs `agent-data init --claude-code --api-key mtk_evaltest --yes`, simulate it succeeding, then `unset JOBSEARCH_TEST_NOAUTH` so the follow-up `agent-data whoami` reports api_key_set:true. Then let onboarding continue with the case-1 canned answers (brief depth 'standard'; situation 'passively looking'; role 'senior AI engineer, IC not management'; location 'remote in the US'; search keywords 'AI engineer', location 'United States'; frequency 'daily'; scheduling 'no'). Complete onboarding.",
+      "expectations": [
+        "Does NOT stop and shows NO raw error code — no 'E-NO-AGENT-DATA' / 'E-NO-AUTH' (or any E-*) in any user-facing line; on finding the CLI missing it says why and what's happening, conveying BOTH that agent-data is a dependency of this plugin AND that it pulls/reads live job postings (e.g. 'agent-data pulls and reads live job postings — it's a dependency of this plugin. It isn't installed yet, so I'm installing it now')",
+        "INSTALL COMES FIRST: announces and runs `npm install -g agent-data` (simulated) BEFORE any mention of an API key — no key ask, no `mtk_` prefix, no https://agent-data.motie.dev/settings/account URL until after the install attempt; setup never blocks on user input before the install",
+        "Verifies the install with `agent-data --version` after the simulated npm install — no pre-claimed install success",
+        "Only THEN gives the FULL key-generation steps: names https://agent-data.motie.dev/settings/account, says to sign in or create a free account, click Generate API Key, copy the `mtk_…` key and paste it; asks for the key as plain prose (NOT the question box)",
+        "Runs `agent-data init --claude-code --api-key mtk_evaltest --yes` (simulated), then re-verifies with `agent-data whoami` (api_key_set:true) before continuing; promises no duration and makes no 'ready' claim before that whoami passes",
+        "Having installed and connected, PROCEEDS with onboarding — creates <tmp>/.job-search (config.yaml, preferences.md, jobs.jsonl, .gitignore, runs/, reports/) and writes the registry via set-active — it no longer dead-ends at the prereq step",
+        "Does not invent a fit score or mention credits"
       ]
     }
   ]

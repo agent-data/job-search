@@ -10,6 +10,11 @@ def shim(args, scenario="happy", extra_env=None):
         env.update(extra_env)
     return subprocess.run([SHIM, *args], capture_output=True, text=True, env=env)
 
+def test_version_flag_supported():
+    # onboarding's install branch verifies with `agent-data --version` right after npm install
+    r = shim(["--version"])
+    assert r.returncode == 0 and r.stdout.strip()
+
 def test_whoami_authed_by_default():
     r = shim(["whoami"])
     assert r.returncode == 0 and json.loads(r.stdout)["api_key_set"] is True
