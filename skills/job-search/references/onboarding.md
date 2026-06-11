@@ -59,9 +59,10 @@ agent-data`, and confirm it's authenticated — `agent-data whoami` should repor
   step 1; one that's on `PATH` but **unauthenticated** starts at step 2. Keep these steps in sync with the
   canonical setup doc (<https://agent-data.dev/setup/claude-code.md>):
 
-  1. **Install it — this step needs nothing from the user** (the API key comes later, at the connect
-     step). Tell them it isn't installed and that you're installing it — they already know what agent-data
-     is from the check, so don't re-define it — and run:
+  1. **Install it.** Don't ask the user for anything here — no key yet, no confirmation; the API key
+     belongs to the connect step. (And don't narrate that — "this needs nothing from you" is non-event
+     noise, `voice.md` rule 5.) Tell them it isn't installed and that you're installing it — they already
+     know what agent-data is from the check, so don't re-define it — and run:
 
      ```
      npm install -g agent-data

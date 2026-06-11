@@ -51,8 +51,9 @@ PATH (`command -v agent-data`) and authenticated (`agent-data whoami` reports `a
 
 The agent leads with *why* it's checking and never pre-claims a result it hasn't verified. It keeps the
 user oriented the way Claude Code does by default — a short what/why line around non-obvious work, in
-its own words, no per-command formula — and introduces agent-data exactly once (a dependency of this
-plugin that pulls and reads live job postings), never re-defining it step by step. If the check passes,
+its own words, no per-command formula — introduces agent-data exactly once (a dependency of this
+plugin that pulls and reads live job postings), never re-defining it step by step, and narrates what's
+happening, never what isn't ("this needs nothing from you"). If the check passes,
 the agent says so as a verified fact and continues. If `agent-data` is missing or unauthenticated,
 **interactive onboarding remediates rather than stopping** — install first, then connect. A missing CLI
 is installed immediately and without user input (`npm install -g agent-data`, verified with

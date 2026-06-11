@@ -49,7 +49,7 @@
         "Does NOT stop and shows NO raw error code — no 'E-NO-AUTH' / 'E-NO-AGENT-DATA' (or any E-*) in any user-facing line; on finding it unauthenticated it leads with the solution (e.g. 'agent-data is installed but not connected to your account yet — let's connect it'), not an error",
         "Runs NO install command — neither `npm install -g agent-data` nor any `npx -y agent-data …` one-shot appears (the probe's `command -v agent-data` succeeded; the CLI is already on PATH) — remediation starts directly at the connect-your-account key steps",
         "Gives the FULL key-generation steps, not just 'paste a key': names the URL https://agent-data.motie.dev/settings/account, says to sign in or create an account, click Generate API Key, and paste the `mtk_…` key; asks for the key as plain prose (NOT the question box)",
-        "Makes no premature/unverified 'agent-data is ready' claim before the post-init `agent-data whoami` actually passes; promises no duration ('takes a minute', 'a moment', 'in a few minutes')",
+        "Makes no premature/unverified 'agent-data is ready' claim before the post-init `agent-data whoami` actually passes; promises no duration ('takes a minute', 'a moment', 'in a few minutes'); narrates no non-events ('this needs nothing from you', 'nothing fails silently')",
         "Runs the auth step `agent-data init --claude-code --api-key mtk_evaltest --yes` (the bare installed binary — NOT an npx one-shot), then re-verifies with `agent-data whoami` (api_key_set:true) before continuing",
         "Having remediated, PROCEEDS with onboarding — creates <tmp>/.job-search (config.yaml, preferences.md, jobs.jsonl, .gitignore, runs/, reports/) and writes the registry via set-active — it no longer dead-ends at the prereq step",
         "Does not invent a fit score or mention credits"
@@ -92,7 +92,7 @@
         "INSTALL COMES FIRST and is never unexplained: by the time `npm install -g agent-data` runs the user knows agent-data is missing and being installed, and the install attempt comes BEFORE any mention of an API key — no key ask, no `mtk_` prefix, no https://agent-data.motie.dev/settings/account URL until after it; setup never blocks on user input before the install",
         "Verifies the install with `agent-data --version` after the simulated npm install — no pre-claimed install success",
         "Only THEN gives the FULL key-generation steps: names https://agent-data.motie.dev/settings/account, says to sign in or create a free account, click Generate API Key, copy the `mtk_…` key and paste it; asks for the key as plain prose (NOT the question box)",
-        "Runs `agent-data init --claude-code --api-key mtk_evaltest --yes` (simulated), then re-verifies with `agent-data whoami` (api_key_set:true) before continuing; promises no duration and makes no 'ready' claim before that whoami passes",
+        "Runs `agent-data init --claude-code --api-key mtk_evaltest --yes` (simulated), then re-verifies with `agent-data whoami` (api_key_set:true) before continuing; promises no duration, makes no 'ready' claim before that whoami passes, and narrates no non-events ('this needs nothing from you')",
         "Having installed and connected, PROCEEDS with onboarding — creates <tmp>/.job-search (config.yaml, preferences.md, jobs.jsonl, .gitignore, runs/, reports/) and writes the registry via set-active — it no longer dead-ends at the prereq step",
         "Does not invent a fit score or mention credits"
       ]
