@@ -8,9 +8,11 @@ Resolve `$OS` (and `$STATE`) from **this skill's own directory** (e.g. `${CLAUDE
 Follow `internals.md`, `conventions.md`, `errors.md`, and `voice.md` exactly — don't restate their details
 from memory.
 
-**Ground rule, state it up front:** every step that can't proceed stops with a **named error** (an `E-*`
-from `errors.md`) that tells the user the cause and the exact fix. There are no silent failures. And you
-configure everything by **chatting** — the user never hand-edits a file. No scores, no credits, ever.
+**Ground rule — how you behave, not a speech to give:** every step that can't proceed stops with a
+**named error** (an `E-*` from `errors.md`) that tells the user the cause and the exact fix. There are no
+silent failures. And you configure everything by **chatting** — the user never hand-edits a file. No
+scores, no credits, ever. Never announce these guarantees to the user ("nothing fails silently", "every
+step will say so plainly") — reliability is demonstrated, not promised; meta-assurances are noise.
 
 **Assume zero context.** A first-run user has never seen this system and doesn't know its words. Per
 `voice.md`: give every question below one short plain-English sentence of what the thing is and why you're
@@ -37,13 +39,14 @@ the welcome (§1 owns your first words), make sure it's ready, before anything m
 are free checks — no metered calls, no cost — and nothing is searched, written, or created until it's
 working.
 
-**Say-then-run — no command in this section before its say-line is on screen.** Every probe, install, and
-auth call below gets two beats, in order: say what's happening and why, then run it. (The pull to skip the
-say beat is real — finish the checks quietly, talk once at the end. Here that's the failure mode: the user
-suddenly sees an install attempt, or a permission prompt, with no idea what "agent-data" is.) Open with
-something like: "This plugin uses a tool called **agent-data** to pull live job postings — let me check
-whether it's set up on your machine." Then run the check. Don't announce a result you haven't verified,
-and don't tell the user how long anything will take.
+**Keep the user oriented — explain, don't script.** Narrate the way Claude Code does by default: a short
+line of what you're doing and why around non-obvious work, in your own words — no fixed formula, no line
+per command. The one hard part: the user must never watch an install attempt or a permission prompt with
+no idea what "agent-data" is. Introduce it **once**, the first time it comes up — e.g. "This plugin uses a
+tool called **agent-data** to pull live job postings — let me check whether it's set up on your machine."
+After that it's introduced: at later steps "agent-data isn't installed yet — installing it now" is plenty.
+Re-explaining what it's for at every step reads like a script, not an assistant. Don't announce a result
+you haven't verified, and don't tell the user how long anything will take.
 
 **The check (pinned — don't improvise it).** Look for the real command on `PATH` with `command -v
 agent-data`, and confirm it's authenticated — `agent-data whoami` should report `api_key_set: true` (per
@@ -57,21 +60,18 @@ agent-data`, and confirm it's authenticated — `agent-data whoami` should repor
   canonical setup doc (<https://agent-data.dev/setup/claude-code.md>):
 
   1. **Install it — this step needs nothing from the user** (the API key comes later, at the connect
-     step). Two beats, in order:
-     - **Say** why and what's happening — e.g. "agent-data pulls and reads live job postings — it's a
-       dependency of this plugin. It isn't installed yet, so I'm installing it now." On screen *before*
-       the command runs, never after.
-     - **Run:**
+     step). Tell them it isn't installed and that you're installing it — they already know what agent-data
+     is from the check, so don't re-define it — and run:
 
-       ```
-       npm install -g agent-data
-       ```
+     ```
+     npm install -g agent-data
+     ```
 
-       **If permission settings block the install** (stricter modes guard agent-chosen global installs),
-       that's expected, not an error — no apology spiral, no stopping. One plain line that keeps the
-       why-context and hands over the exact command to run in-session, e.g. "My permission settings want
-       installs run by you. Type this in the prompt — the `!` runs it here so I'll see the result:
-       `! npm install -g agent-data`". Pick up at the verify beat once it lands.
+     **If permission settings block the install** (stricter modes guard agent-chosen global installs),
+     that's expected, not an error — no apology spiral, no stopping. One plain line and the exact command
+     to run in-session, e.g. "My permission settings want installs run by you. Type this in the prompt —
+     the `!` runs it here so I'll see the result: `! npm install -g agent-data`". Pick up at the version
+     check once it lands.
 
      Confirm the install took with `agent-data --version` before moving on — no pre-claimed success.
   2. **Connect their account.** (Start here when `agent-data` was already on `PATH` but `whoami` reported
@@ -304,9 +304,10 @@ runs", "update my preferences", "show the latest digest").
 - [ ] agent-data ready — checked via the pinned `command -v agent-data` + auth probe; if **missing**,
       **installed first, then connected** (`npm install -g agent-data` → `agent-data --version` →
       key-generation steps → `agent-data init` → live `whoami` verify); if only **unauthenticated**, key
-      steps → init → verify, no reinstall — **say-then-run on every command**, solution-first, **no raw
-      error code shown**, no premature claim, no duration promise; a permission-blocked install became a
-      one-line `! npm install -g agent-data` handoff, not an error
+      steps → init → verify, no reinstall — **the user always knew what was happening and why**
+      (agent-data introduced once, never re-defined per step), solution-first, **no raw error code
+      shown**, no premature claim, no duration promise; a permission-blocked install became a one-line
+      `! npm install -g agent-data` handoff, not an error
 - [ ] workspace adopted-or-created; **never clobbered** an existing `config.yaml` / `preferences.md` /
       `jobs.jsonl`; `set-active` recorded
 - [ ] `preferences.md` exists (interview or import via `job-preference-interview`)
