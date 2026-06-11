@@ -48,12 +48,16 @@ first search, real matches — in a few minutes, nothing fails silently.
 A free check before any workspace is created or any metered call is made: is `agent-data` present on
 PATH (`command -v agent-data`) and authenticated (`agent-data whoami` reports `api_key_set: true`)?
 
-The agent leads with *why* it's checking and never pre-claims a result it hasn't verified. If the check
-passes, it says so as a verified fact and continues. If `agent-data` is missing or unauthenticated,
-**interactive onboarding remediates rather than stopping** — install first, then connect. A missing CLI
-is installed immediately and without user input (`npm install -g agent-data`, verified with
-`agent-data --version`) — the agent says why first (agent-data is a dependency of this plugin; it pulls
-and reads live job postings). Then — and starting here when the CLI was present but unauthenticated —
+The agent leads with *why* it's checking and never pre-claims a result it hasn't verified —
+**say-then-run**: every command in this step is announced on screen before it runs; none runs silently.
+If the check passes, the agent says so as a verified fact and continues. If `agent-data` is missing or
+unauthenticated, **interactive onboarding remediates rather than stopping** — install first, then
+connect. A missing CLI is installed immediately and without user input (`npm install -g agent-data`,
+verified with `agent-data --version`) — the agent says why first (agent-data is a dependency of this
+plugin; it pulls and reads live job postings). If permission settings block the install, that's a
+one-line handoff, not an error: the agent gives the exact in-session command
+(`! npm install -g agent-data`) and resumes once it lands. Then — and starting here when the CLI was
+present but unauthenticated —
 the agent walks the user through generating an API key (with explicit steps), authenticates
 (`agent-data init --claude-code --api-key <KEY> --yes`), and verifies with `agent-data whoami` before
 continuing. The API key is requested only at this connect step, never before the install. Steps stay in

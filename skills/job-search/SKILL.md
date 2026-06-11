@@ -38,9 +38,12 @@ python3 "$OS" resolve   →  {"workspace":"<abs>","first_run":<bool>,"source":"r
 ```
 
 - `first_run: true` → **say the welcome, then** follow **`references/onboarding.md`** (the first-run
-  playbook). Greet the moment `resolve` reports `first_run: true` — before you open the playbook, before
-  any check. This is the one place text comes before tools; a silent read-streak swallows the greeting and
-  the user's first minute opens with machinery instead. The welcome, verbatim or close to it:
+  playbook). Greet the moment `resolve` reports `first_run: true` — emit the welcome as a message **now**,
+  before your next tool call: before you open the playbook, before any check, long before the end of the
+  turn. The pull to defer it is strong — finish the silent prep, batch the talking into one final message.
+  Resist it: that batching is this skill's known failure mode, and whatever goes wrong next (a failed
+  check, a blocked install) must land on a user who has already been greeted and told what's happening.
+  About to run a tool without having greeted? Stop — greet first. The welcome, verbatim or close to it:
 
   > "Let's set up your job search. I'll check a couple of prerequisites, make you a private workspace,
   > learn what you're looking for, save your first search, and then actually pull live postings and show

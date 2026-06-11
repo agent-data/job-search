@@ -37,10 +37,13 @@ the welcome (§1 owns your first words), make sure it's ready, before anything m
 are free checks — no metered calls, no cost — and nothing is searched, written, or created until it's
 working.
 
-**Lead with *why*, then check — never pre-claim.** Open with something like: "This plugin uses a tool
-called **agent-data** to pull live job postings — let me check whether it's set up on your machine." Then
-actually check. Don't announce a result you haven't verified, and don't tell the user how long anything
-will take.
+**Say-then-run — no command in this section before its say-line is on screen.** Every probe, install, and
+auth call below gets two beats, in order: say what's happening and why, then run it. (The pull to skip the
+say beat is real — finish the checks quietly, talk once at the end. Here that's the failure mode: the user
+suddenly sees an install attempt, or a permission prompt, with no idea what "agent-data" is.) Open with
+something like: "This plugin uses a tool called **agent-data** to pull live job postings — let me check
+whether it's set up on your machine." Then run the check. Don't announce a result you haven't verified,
+and don't tell the user how long anything will take.
 
 **The check (pinned — don't improvise it).** Look for the real command on `PATH` with `command -v
 agent-data`, and confirm it's authenticated — `agent-data whoami` should report `api_key_set: true` (per
@@ -53,13 +56,22 @@ agent-data`, and confirm it's authenticated — `agent-data whoami` should repor
   step 1; one that's on `PATH` but **unauthenticated** starts at step 2. Keep these steps in sync with the
   canonical setup doc (<https://agent-data.dev/setup/claude-code.md>):
 
-  1. **Install it now — this step needs nothing from the user** (the API key comes later, at the connect
-     step). Say why and what's happening first — e.g. "agent-data pulls and reads live job postings — it's
-     a dependency of this plugin. It isn't installed yet, so I'm installing it now." Then immediately run:
+  1. **Install it — this step needs nothing from the user** (the API key comes later, at the connect
+     step). Two beats, in order:
+     - **Say** why and what's happening — e.g. "agent-data pulls and reads live job postings — it's a
+       dependency of this plugin. It isn't installed yet, so I'm installing it now." On screen *before*
+       the command runs, never after.
+     - **Run:**
 
-     ```
-     npm install -g agent-data
-     ```
+       ```
+       npm install -g agent-data
+       ```
+
+       **If permission settings block the install** (stricter modes guard agent-chosen global installs),
+       that's expected, not an error — no apology spiral, no stopping. One plain line that keeps the
+       why-context and hands over the exact command to run in-session, e.g. "My permission settings want
+       installs run by you. Type this in the prompt — the `!` runs it here so I'll see the result:
+       `! npm install -g agent-data`". Pick up at the verify beat once it lands.
 
      Confirm the install took with `agent-data --version` before moving on — no pre-claimed success.
   2. **Connect their account.** (Start here when `agent-data` was already on `PATH` but `whoami` reported
@@ -292,8 +304,9 @@ runs", "update my preferences", "show the latest digest").
 - [ ] agent-data ready — checked via the pinned `command -v agent-data` + auth probe; if **missing**,
       **installed first, then connected** (`npm install -g agent-data` → `agent-data --version` →
       key-generation steps → `agent-data init` → live `whoami` verify); if only **unauthenticated**, key
-      steps → init → verify, no reinstall — solution-first, **no raw error code shown**, no premature
-      claim, no duration promise
+      steps → init → verify, no reinstall — **say-then-run on every command**, solution-first, **no raw
+      error code shown**, no premature claim, no duration promise; a permission-blocked install became a
+      one-line `! npm install -g agent-data` handoff, not an error
 - [ ] workspace adopted-or-created; **never clobbered** an existing `config.yaml` / `preferences.md` /
       `jobs.jsonl`; `set-active` recorded
 - [ ] `preferences.md` exists (interview or import via `job-preference-interview`)
