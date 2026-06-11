@@ -52,11 +52,15 @@ whether — a non-interactive run (job-search-run) still never prompts.
 | contract · reference files · SKILL.md · playbook | nothing |
 | skill names as narration ("invoking job-search-run") | the action: "running your search now" |
 | AskUserQuestion · tool names | nothing — the user sees the question and its choices, not the machinery |
+| error codes — `E-NO-AGENT-DATA`, `E-QUOTA`, any `E-*` | the plain cause+fix from `errors.md` — never the code itself |
 
 ## What stays verbatim (deliberate exceptions)
 
-- **Named errors.** E-* cause+fix wording from `errors.md` is quoted exactly — fixes name real
-  commands and files because the user must run or edit them.
+- **Named errors — the fix, not the code.** The cause+fix *wording* from `errors.md` (the "What the
+  user sees" column) is quoted exactly — fixes name real commands and files the user must run or edit.
+  But the error *code* itself (`E-*`) is an internal identifier and never appears in user-facing text:
+  surface the plain cause+fix, never "E-NO-AGENT-DATA". The one exception is the `job-search-agent`
+  operator manual (for whoever configures the agent), which may name codes when troubleshooting.
 - **Things the user types.** The `/loop` recipe and slash commands are shown verbatim.
 - **Where data lives, when asked.** `config.yaml` / `preferences.md` may be named when the user
   asks where something is stored. "Digest" and "brief" are product vocabulary — fine everywhere.

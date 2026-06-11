@@ -8,7 +8,7 @@
       "prompt": "Fresh sandbox (setup-onboarding.sh), env as in harness, JOBSEARCH_TEST_SCENARIO=happy. Invoke the job-search skill (resolve returns first_run:true, source:none). Canned answers — brief depth: 'standard'; interview a few prefs: situation='passively looking'; role='senior AI engineer, individual contributor, NOT management'; location='remote in the US, or SF Bay onsite'. When asked for the search: keywords='AI engineer', location='United States'. Frequency: 'daily'. Scheduling: 'yes'. Complete onboarding end-to-end.",
       "expectations": [
         "The FIRST user-facing text is the onboarding welcome — reference reads may precede it silently; no prerequisite check, workspace command, or narration appears before it",
-        "Checks prerequisites immediately after the welcome — runs `agent-data whoami` (free) BEFORE any search-jobs / metered call",
+        "Checks that agent-data is ready immediately after the welcome — a free probe (`command -v agent-data` + `agent-data whoami`) BEFORE any search-jobs / metered call — leading with why it's checking and never pre-claiming a result it hasn't verified, never showing a raw error code",
         "Creates <tmp>/.job-search/ containing config.yaml, preferences.md, an (initially empty) jobs.jsonl, .gitignore (deny-all), and runs/ + reports/ directories",
         "preferences.md is prose with the five sections (Summary, Must-haves/dealbreakers, Strong preferences, Nice-to-haves, Red flags) and a created_at line; the IC-not-management dealbreaker appears — NO numbers/weights",
         "Writes the registry at <tmp>/registry.json with active_workspace = <tmp>/.job-search (via osctl set-active)",
@@ -42,13 +42,14 @@
     },
     {
       "id": 3,
-      "scenario": "first-run, not authenticated",
-      "prompt": "Fresh sandbox, env as in harness, JOBSEARCH_TEST_SCENARIO=happy, and ALSO export JOBSEARCH_TEST_NOAUTH=1 (so `agent-data whoami` reports api_key_set:false). Invoke the job-search skill (first_run:true).",
+      "scenario": "first-run, not yet authenticated — agent remediates",
+      "prompt": "Fresh sandbox (setup-onboarding.sh), env as in harness, JOBSEARCH_TEST_SCENARIO=happy, and ALSO export JOBSEARCH_TEST_NOAUTH=1 so `agent-data whoami` reports api_key_set:false (agent-data is on PATH via the shim, but not yet authenticated). Invoke the job-search skill (first_run:true). The agent should REMEDIATE, not stop: when it walks you through getting an API key, answer with the fake key `mtk_evaltest`. The install/auth step is STUBBED (like scheduling) — do NOT run real `npx`; simulate `npx -y agent-data init --claude-code --api-key mtk_evaltest --yes` succeeding, then `unset JOBSEARCH_TEST_NOAUTH` so the follow-up `agent-data whoami` now reports api_key_set:true. Then let onboarding continue with the case-1 canned answers (brief depth 'standard'; situation 'passively looking'; role 'senior AI engineer, IC not management'; location 'remote in the US'; search keywords 'AI engineer', location 'United States'; frequency 'daily'; scheduling 'no'). Complete onboarding.",
       "expectations": [
-        "Stops at the prerequisites step with E-NO-AUTH, naming the fix (export AGENT_DATA_API_KEY=mtk_… or save to ~/.agent-data/config.json, then re-verify with `agent-data whoami`)",
-        "Creates NO workspace — <tmp>/.job-search does NOT exist (no config.yaml/preferences.md/jobs.jsonl written)",
-        "Writes NO registry — <tmp>/registry.json does NOT exist (set-active not called)",
-        "Pulls nothing: never calls search-jobs or get-posting; no digest produced",
+        "Does NOT stop and shows NO raw error code — no 'E-NO-AUTH' / 'E-NO-AGENT-DATA' (or any E-*) in any user-facing line; on finding it unauthenticated it leads with the solution (e.g. 'I'll get it installed and connect your account'), not an error",
+        "Gives the FULL key-generation steps, not just 'paste a key': names the URL https://agent-data.motie.dev/settings/account, says to sign in or create an account, click Generate API Key, and paste the `mtk_…` key; asks for the key as plain prose (NOT the question box)",
+        "Makes no premature/unverified 'agent-data is ready' claim before the post-install `agent-data whoami` actually passes; promises no duration ('takes a minute', 'a moment', 'in a few minutes')",
+        "Runs the combined install+auth step `npx -y agent-data init --claude-code --api-key mtk_evaltest --yes`, then re-verifies with `agent-data whoami` (api_key_set:true) before continuing",
+        "Having remediated, PROCEEDS with onboarding — creates <tmp>/.job-search (config.yaml, preferences.md, jobs.jsonl, .gitignore, runs/, reports/) and writes the registry via set-active — it no longer dead-ends at the prereq step",
         "Does not invent a fit score or mention credits"
       ]
     },

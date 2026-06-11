@@ -30,21 +30,53 @@ machinery talk instead of a greeting.
 
 Then go, one step at a time. Keep the user oriented but don't over-explain.
 
-## 2. Prerequisites (free)
+## 2. Prerequisites — get agent-data ready (free)
 
-These are free checks — no metered calls, no cost. Run them immediately after the welcome and before
-anything metered or persistent — nothing is searched, written, or created until both pass. After the
-welcome, never before it: §1 owns your first words.
+This plugin runs on a tool called **agent-data** — it's what pulls and reads live job postings. Right after
+the welcome (§1 owns your first words), make sure it's ready, before anything metered or persistent. These
+are free checks — no metered calls, no cost — and nothing is searched, written, or created until it's
+working.
 
-1. **Is the `agent-data` CLI installed?** If it's not found on `PATH` →
-   **`E-NO-AGENT-DATA`**: tell the user the agent-data CLI isn't installed; the fix is
-   `npm install -g agent-data`, then `agent-data whoami` to authenticate. **Stop here** — nothing was set up.
-2. **Is it authenticated?** Run `agent-data whoami`. If it reports `api_key_set: false` →
-   **`E-NO-AUTH`**: tell the user agent-data isn't authenticated; the fix is to
-   `export AGENT_DATA_API_KEY=mtk_…` (or save the key to `~/.agent-data/config.json`), then re-verify with
-   `agent-data whoami`. **Stop here.**
+**Lead with *why*, then check — never pre-claim.** Open with something like: "This plugin uses a tool
+called **agent-data** to pull live job postings — let me check whether it's set up on your machine." Then
+actually check. Don't announce a result you haven't verified, and don't tell the user how long anything
+will take.
 
-When both pass, say so in one line ("agent-data is installed and authenticated ✓") and continue.
+**The check (pinned — don't improvise it).** Look for the real command on `PATH` with `command -v
+agent-data`, and confirm it's authenticated — `agent-data whoami` should report `api_key_set: true` (per
+`agent-data-contract.md`).
+
+- **Already set up** → say so as a verified fact in one short line ("agent-data is ready ✓") and continue.
+- **Missing or not authenticated** → **set it up for the user; don't stop.** Lead with the solution, not an
+  error. The internal codes for this state (`E-NO-AGENT-DATA`, `E-NO-AUTH`) are for your reasoning only —
+  **never show them to the user** (`voice.md`). Walk them through it, following the canonical setup doc
+  (<https://agent-data.dev/setup/claude-code.md> — keep these steps in sync with it):
+
+  1. **Say what's happening, solution-first** — e.g. "Looks like agent-data isn't set up yet — it's what
+     pulls and reads live postings. I'll get it installed and connect your account."
+  2. **Get an API key — give the full steps, not just "paste a key":**
+     - Open **<https://agent-data.motie.dev/settings/account>** (sign in, or create a free account if you
+       don't have one yet).
+     - On the Account settings page, click **Generate API Key**.
+     - Copy the key — it starts with `mtk_` — and paste it here.
+
+     Ask for the key as a plain prose question — it's a free-text secret, not a closed choice, so don't use
+     the question tool.
+  3. **Install and authenticate in one step**, substituting the key they pasted:
+
+     ```
+     npx -y agent-data init --claude-code --api-key <KEY> --yes
+     ```
+
+     This installs agent-data and saves the key to `~/.agent-data/config.json`.
+  4. **Verify it worked** — run `agent-data --version`, then re-check auth with `agent-data whoami`
+     (`api_key_set: true`). If it still reports `api_key_set: false` or you see `401 Invalid API key`, the
+     key was wrong — ask them to generate a fresh one and paste it again.
+  5. If Claude Code is older than `2.1.0`, a session restart may be needed for the new tool to load;
+     `2.1.0`+ hot-loads, so no restart is needed.
+
+  Once it verifies, confirm in one line and continue. If setup genuinely can't finish (e.g. they can't get a
+  key right now), explain plainly where things stand and what's left — still no raw error code.
 
 ## 3. Workspace
 
@@ -167,8 +199,7 @@ user to name keywords.** They can retune anytime; the goal here is zero upfront 
 
 This is the payoff. Disclose it plainly first, then do it:
 
-> "Now I'll run your first search for real — this makes **live calls** to pull and read postings.
-> Give me a moment…"
+> "Now I'll run your first search for real — this makes **live calls** to pull and read postings."
 
 Invoke **`job-search-run`** against the workspace (pass `--workspace <workspace>`). It probes the
 source, searches each enabled query, skips postings already seen, judges each new posting against the
@@ -249,8 +280,9 @@ runs", "update my preferences", "show the latest digest").
 
 - [ ] the welcome was the FIRST user-facing text — reference reads silent before it; no check, command,
       or narration preceded it
-- [ ] agent-data installed → else **E-NO-AGENT-DATA** (stop)
-- [ ] agent-data authenticated → else **E-NO-AUTH** (stop)
+- [ ] agent-data ready — checked via the pinned `command -v agent-data` + auth probe; if missing or
+      unauthenticated, **installed + authenticated for the user** (key-generation steps → `npx agent-data
+      init` → live verify), solution-first, **no raw error code shown**, no premature claim, no duration promise
 - [ ] workspace adopted-or-created; **never clobbered** an existing `config.yaml` / `preferences.md` /
       `jobs.jsonl`; `set-active` recorded
 - [ ] `preferences.md` exists (interview or import via `job-preference-interview`)

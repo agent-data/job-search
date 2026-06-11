@@ -45,14 +45,18 @@ first search, real matches — in a few minutes, nothing fails silently.
 
 ### 2. Preflight prerequisites
 
-Two free checks before any workspace is created or any metered call is made.
+A free check before any workspace is created or any metered call is made: is `agent-data` present on
+PATH (`command -v agent-data`) and authenticated (`agent-data whoami` reports `api_key_set: true`)?
 
-- Is the `agent-data` CLI present on PATH?
-- Is it authenticated (`agent-data whoami` reports `api_key_set: true`)?
-
-Either failure halts immediately with a named error. Failure wording and fix instructions are
-owned by [`shared/references/errors.md`](../../shared/references/errors.md) (`E-NO-AGENT-DATA`,
-`E-NO-AUTH`). Nothing is set up before these pass.
+The agent leads with *why* it's checking and never pre-claims a result it hasn't verified. If the check
+passes, it says so as a verified fact and continues. If `agent-data` is missing or unauthenticated,
+**interactive onboarding remediates rather than stopping** — it walks the user through generating an API
+key (with explicit steps), installs and authenticates in one step
+(`npx -y agent-data init --claude-code --api-key <KEY> --yes`, per the canonical setup doc
+<https://agent-data.dev/setup/claude-code.md>), and verifies before continuing. The internal codes for
+this state (`E-NO-AGENT-DATA`, `E-NO-AUTH`, owned by
+[`shared/references/errors.md`](../../shared/references/errors.md)) are never shown to the user. The
+**headless runner** (`job-search-run`) can't prompt, so it still halts on these with a blocked digest.
 
 ### 3. Workspace creation or adoption
 
@@ -137,8 +141,10 @@ pipeline, quick actions) instead of restarting onboarding.
 All failure paths surface a named `E-*` code. Wording and fixes are owned by
 [`shared/references/errors.md`](../../shared/references/errors.md); they are not restated here.
 
-- **Missing prerequisites** — `E-NO-AGENT-DATA` or `E-NO-AUTH`; onboarding halts before any
-  workspace is touched.
+- **Missing prerequisites** — `agent-data` missing or unauthenticated. Interactive onboarding
+  **remediates** (guided install + auth) rather than halting; the headless runner halts with
+  `E-NO-AGENT-DATA` / `E-NO-AUTH` before any workspace is touched. Codes stay internal — never shown
+  to the user.
 - **No preferences yet** — `E-NO-PREFERENCES`; the first run halts and directs the user to
   `/job-preference-interview`.
 - **Sparse market** — not a named error; zero search results prompt the agent to offer keyword

@@ -44,8 +44,7 @@ python3 "$OS" resolve   →  {"workspace":"<abs>","first_run":<bool>,"source":"r
 
   > "Let's set up your job search. I'll check a couple of prerequisites, make you a private workspace,
   > learn what you're looking for, save your first search, and then actually pull live postings and show
-  > you the matches — all in a few minutes. Every step that needs something from you will say so plainly;
-  > nothing fails silently."
+  > you the matches. Every step that needs something from you will say so plainly; nothing fails silently."
 
   Onboarding owns the workspace and tells the delegated skills where to write.
 - `first_run: false` → follow **`references/home.md`** (the returning-user home). Gather its state
