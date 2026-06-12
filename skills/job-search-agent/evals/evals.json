@@ -1,15 +1,15 @@
 {
   "skill_name": "job-search-agent",
-  "harness": "Cases that need a workspace: run skills/job-search-run/evals/files/setup-workspace.sh <tmp> to build a workspace + _bin/agent-data shim symlink. Prepend <tmp>/_bin to PATH and set JOBSEARCH_TEST_SCENARIO=happy (or the per-case scenario) so all agent-data calls hit the fake shim (no real credits). Use `osctl set-active <tmp>` (or equivalent registry env var) so resolve() returns the temp workspace. Pre-seed jobs.jsonl where required by running `python3 <repo>/scripts/state.py append --jobs <tmp>/jobs.jsonl --event '<json>'`. Cases without a workspace (e.g. capabilities overview) need no harness setup.",
+  "harness": "Cases that need a workspace: run skills/job-search-run/evals/files/setup-workspace.sh <tmp> to build a workspace + _bin/agent-data shim symlink. Prepend <tmp>/_bin to PATH and set JOBSEARCH_TEST_SCENARIO=happy (or the per-case scenario) so all agent-data calls hit the fake shim (no real credits). Export JOBSEARCH_OS_REGISTRY=<tmp>/registry.json and write that file as {\"version\":1,\"active_workspace\":\"<tmp>\"} so discovery returns the temp workspace. Pre-seed jobs.jsonl where required with `printf '%s\\n' '<event json>' >> <tmp>/jobs.jsonl` (one single-line JSON object per line). Cases without a workspace (e.g. capabilities overview) need no harness setup.",
   "evals": [
     {
       "id": 1,
       "scenario": "explicit score request — honored in reply, not persisted",
-      "prompt": "Build a temp workspace + shim (setup-workspace.sh). Pre-seed <tmp>/jobs.jsonl with two evaluated matches by running `python3 <repo>/scripts/state.py append --jobs <tmp>/jobs.jsonl --event '{\"event\":\"evaluated\",\"source_id\":\"1001\",\"title\":\"Senior AI Engineer\",\"company_name\":\"Acme\",\"status\":\"new\",\"relevant\":true,\"match\":\"strong\"}'` and the same for source_id 1002 (title: 'ML Platform Engineer', company_name: 'Beta Corp'). Then prompt the agent: 'give each of my matches a fit score out of 100.'",
+      "prompt": "Build a temp workspace + shim (setup-workspace.sh). Pre-seed <tmp>/jobs.jsonl with two evaluated matches by running `printf '%s\\n' '{\"event\":\"evaluated\",\"source_id\":\"1001\",\"title\":\"Senior AI Engineer\",\"company_name\":\"Acme\",\"status\":\"new\",\"relevant\":true,\"match\":\"strong\"}' >> <tmp>/jobs.jsonl` and the same for source_id 1002 (title: 'ML Platform Engineer', company_name: 'Beta Corp'). Then prompt the agent: 'give each of my matches a fit score out of 100.'",
       "expectations": [
         "Provides the requested 0–100 scores for both matches in the reply (honors the explicit user request — flexible on the exact numbers)",
         "Notes once — briefly, without lecturing — that numeric scoring is non-default and that the qualitative bands (strong / moderate / weak) plus the written reasoning are the real signal",
-        "Does NOT write any numeric score field into jobs.jsonl; `python3 scripts/state.py fold --jobs <tmp>/jobs.jsonl` shows no 'score' key on any evaluated event",
+        "Does NOT write any numeric score field into jobs.jsonl; `grep -c '\"score\"' <tmp>/jobs.jsonl` returns 0 (no score key on any event)",
         "Does NOT write any numeric score into any reports/*.md digest file",
         "If the user were to ask 'save those scores', the agent would write a side file (e.g. reports/<date>-scored.md) rather than appending score fields to the canonical jobs.jsonl log"
       ]

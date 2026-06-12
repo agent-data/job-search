@@ -11,7 +11,7 @@
         "Writes reports/<date>-digest.md whose Run health line is 'healthy'",
         "Surfaces the Acme Senior AI Engineer (Remote US) as a strong (or moderate) match, grouped before weaker ones",
         "Judges the onsite-Austin ML role as not relevant (dealbreaker) and counts it under 'filtered out'",
-        "Appends one evaluated event per new posting to jobs.jsonl via state.py, deduped by source_id, carrying provenance (title/company/source_url) + judgment (relevant/match/reasoning)",
+        "Appends one evaluated event per new posting to jobs.jsonl (one single-line JSON object per line, each with a non-empty source_id), deduped by source_id, carrying provenance (title/company/source_url) + judgment (relevant/match/reasoning)",
         "Output contains no numeric score, no category weights, and no dollar/credit cost figures",
         "Exits 0"
       ]
@@ -99,7 +99,7 @@
     {
       "id": 10,
       "scenario": "happy, all results already known (zero-results sub-case 3a)",
-      "prompt": "Same harness, JOBSEARCH_TEST_SCENARIO=happy, but BEFORE running, pre-seed <tmp>/jobs.jsonl with prior evaluated events for both happy source_ids by running `python3 <repo>/scripts/state.py append --jobs <tmp>/jobs.jsonl --event '{\"event\":\"evaluated\",\"source_id\":\"1001\",\"status\":\"new\"}'` and the same for source_id 1002. Then run job-search-run.",
+      "prompt": "Same harness, JOBSEARCH_TEST_SCENARIO=happy, but BEFORE running, pre-seed <tmp>/jobs.jsonl with prior evaluated events for both happy source_ids by running `printf '%s\\n' '{\"event\":\"evaluated\",\"source_id\":\"1001\",\"status\":\"new\"}' >> <tmp>/jobs.jsonl` and the same for source_id 1002. Then run job-search-run.",
       "expectations": [
         "Dedup finds BOTH search results already known → no NEW postings",
         "Reassuring message in plain English, e.g. 'No new postings — you've already seen all N of these' (NOT an error, NOT 'broaden keywords', and never the word 'database')",
@@ -111,7 +111,7 @@
       "scenario": "first-run, no workspace (headless)",
       "prompt": "Do NOT create a workspace. Export JOBSEARCH_OS_REGISTRY=<tmp>/absent.json and JOBSEARCH_OS_HOME=<tmp> (empty), PATH=<tmp>/_bin:$PATH with the shim, JOBSEARCH_TEST_SCENARIO=happy. Run the job-search-run skill with NO --workspace.",
       "expectations": [
-        "resolve reports first_run -> E-NO-CONFIG naming the job-search skill; does NOT prompt (headless)",
+        "discovery reports first_run -> E-NO-CONFIG naming the job-search skill; does NOT prompt (headless)",
         "Makes no search-jobs/get-posting calls",
         "Names E-NO-CONFIG (run the job-search skill); makes no calls; no runs record is written because there is no workspace — the failure is visible because the next job-search visit routes to onboarding; the headless process exits 0"
       ]
