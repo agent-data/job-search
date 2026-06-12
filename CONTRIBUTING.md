@@ -8,26 +8,25 @@ self-contained — please read these before opening a PR.
 ## Single source of truth — never hand-edit a skill's synced copies
 
 Each skill folder (`skills/<skill>/`) is shipped **self-contained**: it carries its own copy of the shared
-references and helper scripts so it works as a loose skill with no plugin system. Those copies are
-**generated**, not authored.
+references so it works as a loose skill with no plugin system. Those copies are **generated**, not authored.
 
 **Edit the source, then build:**
 
-- Shared references live in **`shared/references/*.md`**.
-- Helper scripts live in **`scripts/*`** (`state.py`, `osctl.py`, `build.sh`).
-- After editing either, run the build to re-sync every skill's bundled copies:
+- Shared references live in **`shared/references/*.md`** (dev tooling lives in `scripts/` — `build.sh` plus
+  the Python linters; none of it ships in the skills).
+- After editing a shared reference, run the build to re-sync every skill's bundled copies:
 
   ```bash
   ./scripts/build.sh
   ```
 
-**Never hand-edit** the synced copies under `skills/<skill>/references/` or `skills/<skill>/scripts/` — your
-changes there will be silently overwritten by the next build. If you find yourself editing a file in those
-folders, stop and edit the source in `shared/references/` or `scripts/` instead, then re-run `build.sh` and
-commit the regenerated copies along with the source change.
+**Never hand-edit** the synced copies under `skills/<skill>/references/` — your changes there will be
+silently overwritten by the next build. If you find yourself editing a file in that folder, stop and edit
+the source in `shared/references/` instead, then re-run `build.sh` and commit the regenerated copies along
+with the source change.
 
 A skill's own `SKILL.md` and its `evals/` and `references/onboarding.md`-style playbooks *are* authored in
-place — only the *synced* `references/*.md` and `scripts/*` are generated.
+place — only the *synced* `references/*.md` are generated.
 
 ## Before you open a PR: everything must be green
 
@@ -36,7 +35,7 @@ All prompts and docs are held to [`docs/design-docs/prompt-style-guide.md`](docs
 Run all of these and make sure they pass:
 
 ```bash
-# 1) Unit tests (state.py, osctl.py, the agent-data shim) — no real API calls; also exercises doc-lint + philosophy-guard coverage
+# 1) Unit tests (the doc linter, the philosophy guard, the agent-data shim) — no real API calls
 python3 -m pytest -q
 
 # 2) Doc-lint (knowledge base) + philosophy guard (shipped output) — both run in CI too
@@ -73,7 +72,7 @@ Examples:
 
 ```
 feat(job-search): add returning-user pipeline summary to home
-fix(osctl): tolerate a missing ~/.config dir when writing the registry
+fix(internals): pin the registry-wins rule in the discovery procedure
 test(job-search-run): cover the E-QUOTA halt path
 docs(packaging): docs-as-product README + real examples + CONTRIBUTING
 ```

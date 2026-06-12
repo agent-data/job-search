@@ -2,8 +2,8 @@
 title: Core Beliefs — Agent-First Operating Principles
 status: current
 verified: partial
-last_reviewed: 2026-06-07
-code_refs: [scripts/philosophy_guard.py, hooks/guard-scheduled-tasks.py, scripts/build.sh, .github/workflows/ci.yml, scripts/osctl.py, scripts/state.py]
+last_reviewed: 2026-06-11
+code_refs: [scripts/philosophy_guard.py, scripts/doc_lint.py, scripts/build.sh, .github/workflows/ci.yml, shared/references/internals.md, shared/references/conventions.md]
 ---
 # Core Beliefs — Agent-First Operating Principles
 
@@ -90,11 +90,11 @@ and are linked, never restated here — this doc is a live design-doc subject to
 
 ## 5. Single source of truth
 
-- **Statement.** You edit `shared/references/` and `scripts/`, then run the build; you never hand-edit
-  a skill's synced copies.
-- **Why.** Each skill ships self-contained (its own bundled references + helper scripts) so it works
-  as a loose skill with no plugin system. Those copies are *generated* — editing them by hand creates
-  drift that the next build silently erases.
+- **Statement.** You edit `shared/references/`, then run the build; you never hand-edit a skill's
+  synced copies.
+- **Why.** Each skill ships self-contained (its own bundled references) so it works as a loose skill
+  with no plugin system. Those copies are *generated* — editing them by hand creates drift that the
+  next build silently erases.
 - **Enforced by.** [scripts/build.sh](../../scripts/build.sh) regenerates every skill's bundled copies
   from the source, and CI ([.github/workflows/ci.yml](../../.github/workflows/ci.yml)) runs the build
   and fails if it changed any tracked `skills/` file — so a PR with stale or hand-edited copies is
@@ -104,32 +104,42 @@ and are linked, never restated here — this doc is a live design-doc subject to
 
 ## 6. Deterministic, testable, headless
 
-- **Statement.** The mechanics are deterministic, dependency-free stdlib Python; the headless run
-  reports outcomes through records and the digest, not through process exit codes.
-- **Why.** The model handles judgment; everything else — dedup, folding the event log, schedule lines,
-  workspace discovery — must be deterministic so it can be unit-tested and trusted. And because a
-  scheduled `claude -p` returns 0 even when it halted, success must be read from the written record,
-  never from the exit code.
-- **Enforced by.** The pytest suite over [scripts/state.py](../../scripts/state.py) and
-  [scripts/osctl.py](../../scripts/osctl.py) (`tests/test_state.py`, `tests/test_osctl.py`) pins the
-  deterministic behavior; CI runs it on every push and PR. The "read the record, not the exit code"
-  contract is owned by [shared/references/errors.md](../../shared/references/errors.md).
-- **How to verify.** `python3 -m pytest -q` → all tests pass.
+- **Statement.** The mechanics — dedup, the event log, schedule lines, workspace discovery — are
+  pinned written contracts (exact procedures and portable one-liners) that Claude Code executes
+  natively, with **zero runtime dependencies** on the user's machine; the headless run reports
+  outcomes through records and the digest, not through process exit codes.
+- **Why.** The model handles judgment; everything else must be *specified* deterministically so any
+  skill performs it identically — but it must not require an interpreter the user may not have
+  (Python is not assumed). The named tradeoff, accepted 2026-06-11: the mechanics are model-executed
+  against a pinned contract rather than script-executed, so they are verified by the skill evals and
+  the TESTING.md matrix, not by unit tests. And because a scheduled `claude -p` returns 0 even when
+  it halted, success must be read from the written record, never from the exit code.
+- **Enforced by.** The contracts are owned by
+  [shared/references/internals.md](../../shared/references/internals.md) (registry, discovery,
+  scheduling marker) and [shared/references/conventions.md](../../shared/references/conventions.md)
+  (the `jobs.jsonl` event-line contract + operations); the skill evals assert on the artifacts those
+  procedures produce (registry bytes, event lines). The "read the record, not the exit code" contract
+  is owned by [shared/references/errors.md](../../shared/references/errors.md).
+- **How to verify.** Run the skill evals (e.g. "run the evals for job-search-run") and the TESTING.md
+  state/discovery checks; confirm registry writes and `jobs.jsonl` lines match the pinned contracts.
 
 ## 7. Consent-gated autonomy
 
-- **Statement.** Scheduling is Claude Code's native `/loop`; the model never writes the user's machine. A
-  PreToolUse safety-net hook **denies** any model-initiated `crontab`/launchd install outright and points
-  back to `/loop`.
+- **Statement.** Scheduling is Claude Code's native `/loop`; the agent never initiates a write to the
+  user's machine (no crontab, no launchd) — and scheduling itself is offered as a yes/no, never assumed.
 - **Why.** Installing a system scheduler is a privileged, persistent change to someone's machine. With a
-  native, session-bound `/loop` there's no reason for the agent to touch crontab or launchd at all — so the
-  safest rule is the simplest one: it can't. (The user stays free to run cron by hand in their own shell; the
-  guard only gates the agent's Bash tool calls.)
-- **Enforced by.** [hooks/guard-scheduled-tasks.py](../../hooks/guard-scheduled-tasks.py) decides from the
-  command alone — deny a cron/launchd *install*; defer reads, removals, `/loop`, and mere *mentions* (a
-  `grep` or `echo`). Detection is anchored to a shell command position, so searching for these words is never
-  flagged.
-- **How to verify.** `python3 -m pytest -q tests/test_guard_scheduled_tasks.py` → the deny/defer cases pass.
+  native, session-bound `/loop` there's no reason for the agent to *initiate* a crontab or launchd write
+  at all. The user's own machine stays theirs: if they explicitly ask for cron, the skills show the
+  `/loop` recipe first and then defer to the user's choice (decision recorded 2026-06-11 — the former
+  PreToolUse deny-hook was removed; it required Python on the user's machine and gated something the
+  user is entitled to do).
+- **Enforced by.** **Instruction-level + evals** — there is no runtime hook. The stance is pinned in
+  [shared/references/internals.md](../../shared/references/internals.md) (Scheduling setup) and
+  `skills/job-search-agent/references/scheduling-and-consent.md`, stated user-facing in
+  [docs/SECURITY.md](../SECURITY.md), and exercised by the job-search evals (scheduling is verified
+  via the composed `/loop` line + the registry marker; the harness forbids crontab/launchctl writes).
+- **How to verify.** Run the job-search evals and confirm no crontab/launchd write occurs and the
+  `/loop` recipe + registry marker carry the schedule.
 
 ## 8. Conversational-first configuration
 

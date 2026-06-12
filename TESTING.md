@@ -26,9 +26,9 @@ it reports; a few checks are pure shell or visual.
 claude --version                 # ≥ 2.1.x
 agent-data whoami                # api_key_set: true   (else: set AGENT_DATA_API_KEY and re-check)
 agent-data call f9a6ec16-0bfd-44d8-b3ee-073776745ee7 status   # {"status":"ok"}  (free)
-python3 --version                # ≥ 3.9
+python3 --version                # ≥ 3.9 — DEV SUITE ONLY (§0.3 pytest + linters); the shipped skills need no Python
 ```
-**Expected:** all four succeed; `whoami` shows `api_key_set: true`; status is `ok`.
+**Expected:** the first three succeed; `whoami` shows `api_key_set: true`; status is `ok`.
 **Result:** ⬜
 
 ### 0.2 Create an isolated sandbox — 👤 (run once per test session)
@@ -43,12 +43,15 @@ Now the registry and the default (`$JSOS_TEST/.job-search`) + legacy (`$JSOS_TES
 live under the temp dir.
 
 **Isolation pre-flight — run before any destructive/live test (cheap insurance).** Prove the redirect is live so
-nothing can reach your real data:
+nothing can reach your real data (this evaluates the same registry expression the skills' Discovery procedure
+uses — `shared/references/internals.md`):
 ```bash
-python3 "$JSOS/scripts/osctl.py" resolve | python3 -c 'import json,os,sys; r=json.load(sys.stdin); ws=r["workspace"]; t=os.environ["JSOS_TEST"]; assert ws.startswith(t), f"LEAK: workspace {ws} is outside {t}"; assert os.environ.get("JOBSEARCH_OS_REGISTRY","").startswith(t), "LEAK: registry outside sandbox"; print("isolation OK →", ws)'
+REG="${JOBSEARCH_OS_REGISTRY:-${XDG_CONFIG_HOME:-${JOBSEARCH_OS_HOME:-$HOME}/.config}/job-search-os/config.json}"
+case "$REG" in "$JSOS_TEST"/*) echo "isolation OK → registry $REG" ;; *) echo "LEAK: registry $REG outside $JSOS_TEST" ;; esac
+case "${JOBSEARCH_OS_HOME:-$HOME}" in "$JSOS_TEST") echo "isolation OK → workspaces under $JSOS_TEST" ;; *) echo "LEAK: workspace home outside sandbox" ;; esac
 ```
-**Expected:** `isolation OK → …/.job-search` under `$JSOS_TEST`. A `LEAK:` / `AssertionError` means the env vars
-aren't set in this shell — **stop and re-run the exports** before any test that writes or pulls.
+**Expected:** both lines print `isolation OK`. A `LEAK:` line means the env vars aren't set in this shell —
+**stop and re-run the exports** before any test that writes or pulls.
 
 **Launch Claude Code from this same shell** so the skills inherit the env:
 ```bash
@@ -71,9 +74,10 @@ in `-p` commands anyway so the skill is invoked deterministically.
 ```bash
 cd "$JSOS" && python3 -m pytest -q
 ```
-**Expected:** `62 passed` **and `0 failed`** — treat **`0 failed`** as the real gate (the exact count grows as
-tests are added; bump this number when it does). Covers `state.py` + `osctl.py` + the fake-shim self-tests
-(incl. the `bad-query` scenario behind T7.12).
+**Expected:** `56 passed` **and `0 failed`** — treat **`0 failed`** as the real gate (the exact count grows as
+tests are added; bump this number when it does). Covers the doc linter, the philosophy guard, and the
+fake-shim self-tests (incl. the `bad-query` scenario behind T7.12) — dev tooling only; the runtime state
+procedures are exercised by the live tests below and the skill evals.
 **Result:** ⬜
 
 ### 0.4 Canonical test persona (use for every LIVE test) — 👤
@@ -114,10 +118,10 @@ claude --plugin-dir "$JSOS" -p "reply with the single word LOADED and do nothing
 ### T1.3 Loose-skills self-containment — 👤
 ```bash
 cd "$JSOS" && ./scripts/build.sh && git status --short
-ls skills/*/scripts/osctl.py skills/*/references/internals.md
+ls skills/*/references/internals.md
 ```
 **Expected:** build prints the sync line; `git status` is **empty** (committed copies are in sync); every skill
-has its own bundled `scripts/osctl.py` + `references/internals.md`.
+has its own bundled `references/internals.md`.
 **Result:** ⬜
 
 ### T1.4 Trigger resolves — 🤖
@@ -133,9 +137,11 @@ that's T2.1.)*
 ## 2. First-run onboarding — the magical moment
 
 ### T2.1 Full first-run, end to end (LIVE) — 🤖 + 👤  ★ flagship test
-**Setup:** fresh sandbox (§0.2), Claude launched from that shell. Confirm first-run:
+**Setup:** fresh sandbox (§0.2), Claude launched from that shell. Confirm first-run (no registry, no
+workspace candidates yet — Discovery will report `first_run:true, source:none`):
 ```bash
-python3 "$JSOS/scripts/osctl.py" resolve     # first_run:true, source:none, workspace:$JSOS_TEST/.job-search
+cat "$JOBSEARCH_OS_REGISTRY" 2>/dev/null              # no such file
+ls "$JSOS_TEST/.job-search/config.yaml" "$JSOS_TEST/job-search/config.yaml" 2>/dev/null   # nothing
 ```
 **Steps (🤖):** Start the TTFV clock, then say **"set up job search"** (or `/job-search-os:job-search`). Drive it from the
 **canonical persona** (§0.4): when asked for preferences, either answer with `$JSOS_CANON_ROLE` in
@@ -223,14 +229,14 @@ Say: **"change how often it runs to weekly."**
 ### T4.4 Turn the schedule off — *verify*, don't just take its word — 🤖 + 👤
 Seed a "schedule running" marker first (registry only), so there's something to turn off:
 ```bash
-python3 "$JSOS/scripts/osctl.py" set-scheduled   # mechanism defaults to loop; schedule-status now {"installed":true,...}
+printf '{\n  "version": 1,\n  "active_workspace": "%s/.job-search",\n  "scheduling": {"installed": true, "mechanism": "loop", "set_at": "2026-06-11T00:00:00+00:00"}\n}\n' "$JSOS_TEST" > "$JOBSEARCH_OS_REGISTRY"
 ```
 Then say: **"actually, turn off the schedule for now."**
-**Expected:** Claude (a) tells you to stop the loop (end the session / cancel the pending wakeup), (b) runs
-`set-unscheduled` to clear the marker, (c) confirms it's off — and never touches your `crontab`.
+**Expected:** Claude (a) tells you to stop the loop (end the session / cancel the pending wakeup), (b) clears
+the scheduling marker in the registry, (c) confirms it's off — and never touches your `crontab`.
 **Verify (👤):**
 ```bash
-python3 "$JSOS/scripts/osctl.py" schedule-status   # SHOULD read {"installed": false, ...}
+grep -A2 '"scheduling"' "$JOBSEARCH_OS_REGISTRY"    # "installed": false, mechanism null
 crontab -l 2>/dev/null | grep -c job-search-run     # 0 — your real crontab is untouched
 ```
 **Result:** ⬜
@@ -241,8 +247,8 @@ Say: **"update my preferences"** → it re-invokes the interview and rewrites `p
 
 ### T4.6 Mark a job's status — 🤖
 After a run has populated `jobs.jsonl`, say: **"mark the <company> role as interested."**
-**Verify (👤):** `python3 "$JSOS/scripts/state.py" fold --jobs "$JSOS_TEST/.job-search/jobs.jsonl"` → that
-posting's `status` is `interested`; the home pipeline count reflects it.
+**Verify (👤):** `tail -1 "$JSOS_TEST/.job-search/jobs.jsonl"` → a single-line `status_changed` event for that
+posting's `source_id` with `"status":"interested"`; the home pipeline count reflects it.
 **Result:** ⬜
 
 ### T4.7 Conversational robustness — the interface IS the product — 🤖
@@ -326,9 +332,9 @@ ls -t "$JSOS_TEST/.job-search/reports/"*.md | head -1   # a digest exists / was 
 (Run health line, counts line, Strong→Moderate→Weak); the summary lands in `cron.log`. Fresh matches **or** a clean
 "you've already seen all N of these" dedup digest are both passes (dedup if T5.1 already searched this workspace);
 0 live results → §0.4 fallback.
-**Cross-check** `/loop` runs this same skill headlessly each interval:
-`python3 "$JSOS/scripts/osctl.py" loop-command --frequency daily --namespace job-search-os` →
-`/loop 24h /job-search-os:job-search-run` (omit `--namespace` for loose-skill installs → `/loop 24h /job-search-run`).
+**Cross-check** `/loop` runs this same skill headlessly each interval — per the interval table in
+`shared/references/internals.md`, daily composes to
+`/loop 24h /job-search-os:job-search-run` (loose-skill installs → `/loop 24h /job-search-run`).
 **Result:** ⬜
 
 ### T5.5 Non-healthy digest shape — `blocked` must replace the body — 👤 (fake shim)
@@ -391,8 +397,8 @@ PATH="/usr/bin:/bin" JOBSEARCH_OS_HOME="$T4" JOBSEARCH_OS_REGISTRY="$T4/reg.json
   claude --plugin-dir "$JSOS" -p "/job-search-os:job-search-run --workspace $T4/.job-search"  # agent-data not on this PATH
 echo "exit: $?"; rm -rf "$T4"
 ```
-**Expected:** **E-NO-AGENT-DATA** naming the `npm install -g agent-data` fix; writes a `runs/<id>.json` with `run_health: blocked` naming **E-NO-AGENT-DATA**, so the next job-search home view surfaces it; the headless `claude -p` process returns **0**, so do not assert on `$?`. *(Skip if `python3`
-isn't on the trimmed PATH on your system — rely on the eval; or add the python dir to PATH.)*
+**Expected:** **E-NO-AGENT-DATA** naming the `npm install -g agent-data` fix; writes a `runs/<id>.json` with `run_health: blocked` naming **E-NO-AGENT-DATA**, so the next job-search home view surfaces it; the headless `claude -p` process returns **0**, so do not assert on `$?`. *(The trimmed
+PATH needs no python3 — the skills are zero-dependency; see T9.4.)*
 **Result:** ⬜
 
 ### T7.3 E-NO-CONFIG — covered by T5.3. **Result:** ⬜
@@ -514,26 +520,13 @@ unchanged. (All tests used `$JSOS_TEST`/temp dirs + declined real scheduling.)
 
 ## 9. Scheduling (native `/loop`)
 
-### T9.1 `loop-command` emits the right `/loop` line per frequency — ⚙️
-```bash
-for f in hourly every-2-hours every-6-hours daily weekly; do
-  python3 "$JSOS/scripts/osctl.py" loop-command --frequency "$f"
-done
-python3 "$JSOS/scripts/osctl.py" loop-command --frequency daily --namespace job-search-os
-```
-**Expected:** `/loop 1h /job-search-run`, `/loop 2h /job-search-run`, `/loop 6h /job-search-run`,
-`/loop 24h /job-search-run`, `/loop 168h /job-search-run` respectively (the bare loose-skill form), then
-`/loop 24h /job-search-os:job-search-run` for the namespaced plugin form.
-**Result:** ⬜
-
-### T9.2 The safety-net guard denies a machine write, ignores mentions — ⚙️
-```bash
-printf '%s' '{"tool_input":{"command":"(crontab -l; echo job) | crontab -"}}' | python3 "$JSOS/hooks/guard-scheduled-tasks.py"
-printf '%s' '{"tool_input":{"command":"grep -rE \"crontab|launchd\" docs"}}'  | python3 "$JSOS/hooks/guard-scheduled-tasks.py"
-```
-**Expected:** the **first** prints a JSON `"permissionDecision":"deny"` pointing to `/loop`; the **second**
-prints **nothing** (a search that merely mentions the words is never flagged). The full decision table is
-covered by `python3 -m pytest -q tests/test_guard_scheduled_tasks.py`.
+### T9.1 The composed `/loop` line matches the pinned interval table — 🤖
+In a sandboxed session, for each frequency ask: **"if my schedule were <frequency>, what's the exact /loop
+line?"** (or read it off the scheduling offers in T2.1/T4.3).
+**Expected:** exactly the interval table in `shared/references/internals.md` → Scheduling setup —
+`hourly → /loop 1h …`, `every-2-hours → /loop 2h …`, `every-6-hours → /loop 6h …`, `daily → /loop 24h …`,
+`weekly → /loop 168h …`; the target is `/job-search-os:job-search-run` in this plugin suite (bare
+`/job-search-run` only for loose-skill installs). Any other interval or target is a ❌.
 **Result:** ⬜
 
 ### T9.3 `/loop` scheduling — nothing installed on the machine — 🤖 + 👤
@@ -544,9 +537,27 @@ as the plugin, so the target is namespaced; matching your configured frequency �
 the mechanism — **without** writing any crontab line or launchd plist.
 **Verify (👤):**
 ```bash
-python3 "$JSOS/scripts/osctl.py" schedule-status   # {"installed": true, "mechanism": "loop", ...}
+grep -A2 '"scheduling"' "$JOBSEARCH_OS_REGISTRY"    # "installed": true, "mechanism": "loop"
 crontab -l 2>/dev/null | grep -c job-search-run     # 0 — nothing installed in cron
 ```
+**Result:** ⬜
+
+### T9.4 Zero-Python user path — the headline guarantee — 👤
+The shipped skills must work on a machine with **no Python at all**. Mask `python3` and run a full headless
+pass (fake shim, so it's free):
+```bash
+T9=$(mktemp -d); MASK=$(mktemp -d)
+printf '#!/bin/sh\necho "python3: command not found" >&2\nexit 127\n' > "$MASK/python3"; chmod +x "$MASK/python3"
+"$JSOS/skills/job-search-run/evals/files/setup-workspace.sh" "$T9"
+PATH="$MASK:$T9/_bin:$PATH" JOBSEARCH_FIXTURES="$JSOS/tests/fixtures" JOBSEARCH_TEST_SCENARIO=happy \
+  JOBSEARCH_OS_HOME="$T9" JOBSEARCH_OS_REGISTRY="$T9/reg.json" \
+  claude --plugin-dir "$JSOS" -p "/job-search-os:job-search-run --workspace $T9"
+ls "$T9/reports/"*.md && grep -c '"source_id"' "$T9/jobs.jsonl"
+rm -rf "$T9" "$MASK"
+```
+**Expected:** the run completes identically to T7's happy path — digest written, single-line events with
+`source_id` appended — with `python3` resolving to the failing mask the whole time. Any "python3: command
+not found" surfacing as a run error is a ❌ (the skills must never invoke it).
 **Result:** ⬜
 
 ---
@@ -651,10 +662,10 @@ built, mark **N/A (pending build)**.
 - ⬜ Relevance is **qualitative** (relevant + weak/moderate/strong + reasoning); dealbreakers reject; unknowns flag, never reject (§6)
 - ⬜ Every blocked path is a **named `E-*`** with its fix — auth, no-CLI, no-config, **config-version**, no-prefs, quota, down, stretch, **bad-query**, invalid-pair, detail-fetch-failed, degraded, zero/all-known (§7)
 - ⬜ **Never clobbers** real data; adopts an existing workspace byte-identically; real `~/.job-search`/`~/job-search`/crontab untouched (§8)
-- ⬜ Scheduling correct (`loop-command` emits `/loop <interval>` per frequency; the guard **denies** model-initiated crontab/launchd writes; `/loop` sets `mechanism:loop`) (§9)
+- ⬜ Scheduling correct (the composed `/loop <interval>` matches the pinned table per frequency; `/loop` sets `mechanism:loop`; **zero-Python user path** proven with python3 masked) (§9)
 - ⬜ **No numeric scores/weights/credit knobs** in files **or chat**; frequency is the only cost lever (§10)
 - ⬜ Docs match reality (install commands, error table, sample digest) (§11)
-- ⬜ Full regression green: `pytest` (**90**; gate on `0 failed`) + all four skills' evals (§0.3, §12)
+- ⬜ Full regression green: `pytest` (**56**; gate on `0 failed`) + all four skills' evals (§0.3, §12)
 - ⬜ Planned config slash-command tests are marked **N/A (pending build)**, not green (§13)
 
 **Teardown:** `rm -rf "$JSOS_TEST"` and any `$T*`/`$SH*` dirs you kept.

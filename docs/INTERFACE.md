@@ -123,9 +123,10 @@ session (the one-off form is the same target without `/loop`). Users set this up
 conversationally through the `/job-search` home view; nothing is installed on their
 machine (no cron, no launchd).
 
-`osctl.py` and `state.py` are deterministic internal CLIs that skills call to read and
-write OS state (workspace discovery, registry, the local jobs file, schedule markers).
-They are not user-facing; users never interact with them directly.
+The OS state — the registry, the local jobs file, the schedule marker — is plain files that
+Claude Code reads and writes natively, following the pinned procedures in
+`shared/references/`. None of it is user-facing; users never interact with those files
+directly.
 
-For the full CLI surface, internal scripts, and how the scheduling mechanisms work, see
+For the full surface and how the scheduling mechanisms work, see
 [`../ARCHITECTURE.md`](../ARCHITECTURE.md).

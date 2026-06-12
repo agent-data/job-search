@@ -1,8 +1,8 @@
 # Architecture
 
 Job Search OS turns **Claude Code** into a private, local-first **job-search operating system**: a plugin
-of five skills, a deterministic stdlib-Python core, a single-source-of-truth `shared/references/` tree, a
-consent hook, and a pytest + fake-shim + eval harness. It searches LinkedIn postings through the agent-data
+of five skills, a single-source-of-truth `shared/references/` tree whose pinned contracts Claude Code
+executes natively (no bundled runtime — no Python), and a pytest + fake-shim + eval harness. It searches LinkedIn postings through the agent-data
 marketplace, judges each one qualitatively against your prose preferences brief, and writes human digests
 into a workspace that never touches source control.
 
@@ -22,10 +22,10 @@ The product framing is an operating system whose userland is your job search:
 |---|---|
 | Kernel / shell | Claude Code itself — runs the skills, holds the conversation |
 | Programs | the five skills (the front door, the runner, the interview, the judge, the operator manual) |
-| Shared libraries | `shared/references/` (contracts) + `scripts/` (deterministic helpers) |
+| Shared libraries | `shared/references/` — the contracts and pinned procedures Claude Code executes |
 | Filesystem | the private per-user workspace (default `~/.job-search/`), never committed |
 | System calls | the agent-data CLI — the one job source the runner shells out to |
-| Cron | the schedule — Claude Code's native `/loop`; a safety-net hook keeps it off the machine |
+| Cron | the schedule — Claude Code's native `/loop`; nothing is installed on the machine |
 
 Where the OS state lives and how the workspace is discovered is specified in
 [shared/references/internals.md](shared/references/internals.md); the on-disk file layout is in
@@ -39,7 +39,8 @@ the `shared/references/` file that owns its contract.
 ### discovery-search
 Find postings: run each saved query against the agent-data Job Postings API, dedup new results against the
 local record of already-seen postings, and respect retry / outage rules. Implemented by the [job-search-run](skills/job-search-run/SKILL.md)
-skill over [scripts/state.py](scripts/state.py) (dedup + persistence). The CLI routes, fields, and retry
+skill over the `jobs.jsonl` operations in [shared/references/conventions.md](shared/references/conventions.md)
+(dedup + persistence). The CLI routes, fields, and retry
 semantics are owned by [shared/references/agent-data-contract.md](shared/references/agent-data-contract.md).
 
 ### preferences-judgment
@@ -51,17 +52,18 @@ relevance verdict. The brief shape and the relevance vocabulary are defined in
 
 ### workspace-state
 Persist everything durably and discoverably: the workspace, config, the append-only job-event log, run
-audit logs, and digests. The deterministic engines are [scripts/osctl.py](scripts/osctl.py) (registry +
-workspace discovery) and [scripts/state.py](scripts/state.py) (the event log). File contracts live in
-[shared/references/conventions.md](shared/references/conventions.md); registry and discovery internals in
-[shared/references/internals.md](shared/references/internals.md).
+audit logs, and digests. The engines are pinned procedures executed natively by Claude Code: the registry +
+workspace-discovery rules in [shared/references/internals.md](shared/references/internals.md) and the
+event-log operations in [shared/references/conventions.md](shared/references/conventions.md), which also
+owns the file contracts.
 
 ### scheduling-consent
 Run on a cadence the user controls, using Claude Code's native `/loop` — and never write the user's machine.
-The [job-search](skills/job-search/SKILL.md) skill offers setup; [scripts/osctl.py](scripts/osctl.py) emits
-the `/loop` command and records the schedule marker; [hooks/guard-scheduled-tasks.py](hooks/guard-scheduled-tasks.py)
-is a safety net that denies any model-initiated cron/launchd install. The `/loop` flow and cadence options
-live in [shared/references/internals.md](shared/references/internals.md).
+The [job-search](skills/job-search/SKILL.md) skill offers setup, composes the `/loop` line from the pinned
+interval table, and records the schedule marker in the registry. The never-install-cron stance is an
+instruction-level design rule carried by every skill ([docs/SECURITY.md](docs/SECURITY.md)), not a runtime
+control. The `/loop` flow and cadence options live in
+[shared/references/internals.md](shared/references/internals.md).
 
 ### error-surfacing
 Make every failure named and visible — no silent failures. Each blocked path is a named `E-*` error that
@@ -74,18 +76,19 @@ cause + fix wording, run effect, run-health states) is owned by
 Five canonical layers describe *how the system is built*, bottom-up.
 
 ### deterministic-core
-Stdlib-only Python helpers under [scripts/](scripts/osctl.py) that do the non-judgment work the skills must
-not improvise: [scripts/osctl.py](scripts/osctl.py) (registry, workspace resolution, schedule artifacts) and
-[scripts/state.py](scripts/state.py) (the `jobs.jsonl` engine). Skills call these by absolute path resolved
-from their own directory. `osctl`'s full subcommand surface is generated at
-[docs/generated/osctl-commands.md](docs/generated/osctl-commands.md).
+The pinned contracts for the non-judgment work the skills must not improvise: the registry schema + write
+rules, the workspace-discovery precedence, the scheduling marker, and the `jobs.jsonl` operations
+(known-ids / append / fold). They are defined once — as exact procedures and portable shell one-liners in
+[shared/references/internals.md](shared/references/internals.md) and
+[shared/references/conventions.md](shared/references/conventions.md) — and Claude Code executes them with
+its native tools. No helper binary or script ships with the skills.
 
 ### shared-references
 The single source of truth for every runtime contract:
 [errors.md](shared/references/errors.md), [conventions.md](shared/references/conventions.md),
 [agent-data-contract.md](shared/references/agent-data-contract.md), and
-[internals.md](shared/references/internals.md). [scripts/build.sh](scripts/build.sh) fans this tree (and the
-core scripts) into each skill so loose-skill installs are self-contained.
+[internals.md](shared/references/internals.md). [scripts/build.sh](scripts/build.sh) fans this tree into
+each skill so loose-skill installs are self-contained.
 
 ### skill-layer
 The five programs: [job-search](skills/job-search/SKILL.md) (front door / home view),
@@ -93,29 +96,31 @@ The five programs: [job-search](skills/job-search/SKILL.md) (front door / home v
 [job-preference-interview](skills/job-preference-interview/SKILL.md) (brief builder),
 [evaluate-job-fit](skills/evaluate-job-fit/SKILL.md) (single-posting judge), and
 [job-search-agent](skills/job-search-agent/SKILL.md) (the operator manual). Skills hold playbooks and
-prose; they delegate determinism to the core and defer every contract to the references.
+prose; they execute the deterministic core's pinned procedures and defer every contract to the references.
 
 ### hooks-guards
-Deterministic guardrails: [hooks/guard-scheduled-tasks.py](hooks/guard-scheduled-tasks.py) is a PreToolUse
-hook that asks or denies scheduling installs based on a short-lived consent marker, and
-[scripts/philosophy_guard.py](scripts/philosophy_guard.py) runs in CI to reject numeric scores or
-budget/cost fields leaking into shipped artifacts.
+CI guardrails (dev-side only — nothing executable ships to user machines):
+[scripts/philosophy_guard.py](scripts/philosophy_guard.py) rejects numeric scores or budget/cost fields
+leaking into shipped artifacts, and [scripts/doc_lint.py](scripts/doc_lint.py) keeps the knowledge base
+structurally sound. The scheduling stance is instruction-level (see scheduling-consent above).
 
 ### tests-evals
-The deterministic test bed under [tests/](tests/): pytest suites for the core, hooks, and the doc linter; a
-fake `agent-data` PATH shim (`tests/fake-agent-data`) so runs are exercised with no network and no credits;
-and per-skill `evals/` measured by the skill-creator harness. See [TESTING.md](TESTING.md) for the matrix.
+The deterministic test bed under [tests/](tests/): pytest suites for the dev tooling (the doc linter, the
+philosophy guard, the agent-data shim's self-checks); a fake `agent-data` PATH shim
+(`tests/fake-agent-data`) so runs are exercised with no network and no credits; and per-skill `evals/`
+measured by the skill-creator harness — the evals are what verify the pinned runtime procedures end-to-end.
+See [TESTING.md](TESTING.md) for the matrix.
 
 ## Package layering & data flow
 
-**Dependency direction.** Skills depend downward only: a skill calls [scripts/](scripts/osctl.py) for
-determinism and reads [shared/references/](shared/references/conventions.md) for contracts. The core and the
-references depend on nothing in the skills, so contracts stay authoritative and testable in isolation.
+**Dependency direction.** Skills depend downward only: a skill reads
+[shared/references/](shared/references/conventions.md) for its contracts and the pinned procedures it
+executes. The references depend on nothing in the skills, so contracts stay authoritative and verifiable in
+isolation.
 
-**Single source of truth + the build.** Authors edit `shared/references/*.md` and `scripts/`, then run
-[scripts/build.sh](scripts/build.sh), which copies the references and the helper scripts into every skill's
-bundled `references/` and `scripts/`. **Never hand-edit a skill's synced copies** — the next build overwrites
-them silently.
+**Single source of truth + the build.** Authors edit `shared/references/*.md`, then run
+[scripts/build.sh](scripts/build.sh), which copies the references into every skill's bundled `references/`.
+**Never hand-edit a skill's synced copies** — the next build overwrites them silently.
 
 **Distribution.** Two modes ship from one tree: as a **plugin** (declared in `.claude-plugin/plugin.json`)
 where the skills load together, or as **loose skills** where each folder is self-contained because the build
@@ -123,7 +128,8 @@ bundled its dependencies. Either way the contracts are identical. Install steps 
 
 **Headless run flow.** A scheduled pass runs [job-search-run](skills/job-search-run/SKILL.md): free preflight
 gates (CLI present, config, auth, brief, service status), then one metered search per enabled query, dedup via
-[scripts/state.py](scripts/state.py), qualitative judgment per new posting, detail reads for the promising
+the known-ids operation ([shared/references/conventions.md](shared/references/conventions.md)), qualitative
+judgment per new posting, detail reads for the promising
 ones, and finally a persisted run record plus a digest. Any blocked gate writes a named-error record so the
 next home view surfaces it. Detail and failure modes are in
 [docs/product-specs/index.md](docs/product-specs/index.md) and
@@ -131,7 +137,7 @@ next home view surfaces it. Detail and failure modes are in
 
 **Onboarding flow.** On first run [job-search](skills/job-search/SKILL.md) walks the user end-to-end —
 prereqs, workspace, the preferences interview, queries + cadence, a first live search, and optional
-(consent-guarded) scheduling — ending with real matches. The full flow is specified in
+scheduling (offered as a yes/no, never assumed) — ending with real matches. The full flow is specified in
 [docs/product-specs/index.md](docs/product-specs/index.md); the design rationale in
 [docs/design-docs/index.md](docs/design-docs/index.md).
 

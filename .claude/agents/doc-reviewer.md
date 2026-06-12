@@ -13,7 +13,7 @@ doc's checkable claims match the current source?**
 
 ## What counts as a checkable claim
 A statement that can be confirmed or refuted against code:
-- a command / subcommand name (e.g. an `osctl` subcommand) and its flags
+- a command or pinned recipe (e.g. the known-ids one-liner in `shared/references/conventions.md`) and its exact flags
 - a field a function returns, or a key an event / record / config contains
 - an error code (`E-*`) and where / when it fires
 - a config key or its allowed values

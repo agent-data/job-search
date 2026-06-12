@@ -3,7 +3,7 @@ title: New-User Onboarding
 status: current
 verified: partial
 last_reviewed: 2026-06-11
-code_refs: [skills/job-search/SKILL.md, skills/job-search/references/onboarding.md, scripts/osctl.py]
+code_refs: [skills/job-search/SKILL.md, skills/job-search/references/onboarding.md, shared/references/internals.md]
 ---
 
 # New-User Onboarding
@@ -23,10 +23,11 @@ that moment or gates it safely; none is bureaucratic overhead.
 ## Trigger and routing
 
 The **job-search** skill is the front door (`/job-search-os:job-search` as a plugin — plugin skills
-are only invocable namespaced; bare `/job-search` for loose-skill installs). On every invocation the skill calls `python3 "$OS" resolve` to
-read the workspace state. When `resolve` returns `first_run: true` the skill routes to the
+are only invocable namespaced; bare `/job-search` for loose-skill installs). On every invocation the skill runs the workspace-discovery
+procedure to read the workspace state. When discovery reports `first_run: true` the skill routes to the
 first-run playbook; when `first_run: false` it routes to the returning-user home. The routing
-logic and both playbooks are owned by [`skills/job-search/SKILL.md`](../../skills/job-search/SKILL.md).
+logic and both playbooks are owned by [`skills/job-search/SKILL.md`](../../skills/job-search/SKILL.md);
+the discovery procedure by [`shared/references/internals.md`](../../shared/references/internals.md).
 
 ## The onboarding flow
 
@@ -70,11 +71,11 @@ this state (`E-NO-AGENT-DATA`, `E-NO-AUTH`, owned by
 
 ### 3. Workspace creation or adoption
 
-The skill calls `python3 "$OS" resolve` to discover the workspace path and first-run status. The
-discovery order, never-clobber adoption rule, and `set-active` write are owned by
+The skill runs the workspace-discovery procedure to find the workspace path and first-run status. The
+discovery order, never-clobber adoption rule, and registry write rules are owned by
 [`shared/references/internals.md`](../../shared/references/internals.md).
 
-- **Adopt** an existing workspace: record it with `set-active`; additively create only missing
+- **Adopt** an existing workspace: record it in the registry; additively create only missing
   subdirectories; never overwrite existing `config.yaml`, `preferences.md`, or `jobs.jsonl`.
 - **Create fresh**: default path `~/.job-search/`; confirm with the user; scaffold directories
   and copy starter templates.
@@ -127,9 +128,9 @@ limits surface, reactively) and `E-SERVICE-DOWN`, both catalogued in
 
 The skill offers to keep the search running automatically with Claude Code's native `/loop` — it
 re-runs the search on an interval inside an open Claude session and never writes the user's machine
-(no crontab, no launchd). The user answers yes/no; on yes the skill runs the `/loop` line emitted by
-`loop-command` and records it with `set-scheduled`. The `/loop` recipe is shown either way. The
-scheduling protocol and the safety-net guard hook are owned by
+(no crontab, no launchd). The user answers yes/no; on yes the skill runs the `/loop` line it composes
+from the interval table and records the scheduling marker in the registry. The `/loop` recipe is shown
+either way. The scheduling protocol is owned by
 [`shared/references/internals.md`](../../shared/references/internals.md).
 
 ## What the user sees / success criteria
@@ -142,7 +143,7 @@ At the end of onboarding all of the following are true:
 - An **optional `/loop` schedule** is running and recorded in the OS registry if the user consented
   (session-bound; nothing is installed on the user's machine).
 
-On a **returning session**, `python3 "$OS" resolve` returns `first_run: false` because
+On a **returning session**, discovery reports `first_run: false` because
 `config.yaml` exists in the workspace, and the skill routes to the home view (latest digest,
 pipeline, quick actions) instead of restarting onboarding.
 

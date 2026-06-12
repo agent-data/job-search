@@ -35,7 +35,8 @@ See a full one in [`examples/sample-digest.md`](examples/sample-digest.md).
   Not authenticated? Generate a key at [agent-data.motie.dev](https://agent-data.motie.dev) (Profile → API
   Key), then either `export AGENT_DATA_API_KEY=mtk_…` or save it to `~/.agent-data/config.json`, and re-run
   `agent-data whoami`.
-- **Python 3.9+** — the bundled helper scripts are dependency-free.
+
+That's it — no Python, no other runtime. Claude Code performs every operation itself.
 
 ---
 
@@ -74,7 +75,7 @@ ln -s "$PWD/skills/job-preference-interview" ~/.claude/skills/job-preference-int
 ```
 
 (Prefer copies that won't change under you? `cp -R` each folder instead of symlinking. After editing anything
-under `shared/references/` or `scripts/`, re-run `./scripts/build.sh` to re-sync the bundled copies — see
+under `shared/references/`, re-run `./scripts/build.sh` to re-sync the bundled copies — see
 [CONTRIBUTING.md](CONTRIBUTING.md).)
 
 Contributing or exploring the codebase with an AI agent? See [AGENTS.md](AGENTS.md) — the agent-facing map of the repo (architecture, design beliefs, plans, quality).

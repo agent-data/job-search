@@ -1,9 +1,10 @@
 # job-search-os — Agent Map
 
-Claude Code as a private, local-first **job-search OS**: a plugin with five skills, a deterministic
-stdlib Python core, a single-source-of-truth `shared/references/` tree, a consent hook, and a
-pytest + fake-shim + skill-creator eval harness. **This file is the entry point for coding agents
-working on this repo** — a map, not the territory. Start here, then follow the pointers.
+Claude Code as a private, local-first **job-search OS**: a plugin with five skills, a
+single-source-of-truth `shared/references/` tree whose pinned contracts Claude Code executes natively
+(nothing ships to user machines but markdown), and a pytest + fake-shim + skill-creator eval harness.
+**This file is the entry point for coding agents working on this repo** — a map, not the territory.
+Start here, then follow the pointers.
 
 ## Start here
 - **[ARCHITECTURE.md](ARCHITECTURE.md)** — the five product domains × five layers and how they fit; read before any change.
@@ -23,7 +24,7 @@ working on this repo** — a map, not the territory. Start here, then follow the
 - [Plans methodology](docs/PLANS.md) · [Exec-plans index](docs/exec-plans/index.md)
 
 ## Working here
-- **Single source of truth:** edit `shared/references/` + `scripts/`, then run `./scripts/build.sh`; never hand-edit `skills/*/references` or `skills/*/scripts` — build.sh regenerates them and your edit is silently lost.
+- **Single source of truth:** edit `shared/references/`, then run `./scripts/build.sh`; never hand-edit `skills/*/references` — build.sh regenerates them and your edit is silently lost.
 - All prompts and docs are held to the [prompt & doc style guide](docs/design-docs/prompt-style-guide.md).
-- Stdlib-only Python; scoped conventional commits; `python3 scripts/doc_lint.py --root .` and `python3 -m pytest -q` must be green before a PR.
+- Dev tooling is stdlib-only Python (nothing Python ships in the skills); scoped conventional commits; `python3 scripts/doc_lint.py --root .` and `python3 -m pytest -q` must be green before a PR.
 - Daily contributor docs: [README](README.md) · [CONTRIBUTING](CONTRIBUTING.md) · [TESTING](TESTING.md)

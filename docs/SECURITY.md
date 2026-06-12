@@ -44,19 +44,15 @@ data had leaked into a generated example.
 
 Scheduling is Claude Code's native `/loop` — `/loop <interval> /job-search-os:job-search-run` (plugin
 installs; loose-skill installs use the bare `/job-search-run` target) re-runs the search inside an
-open Claude session. The agent never installs a cron line or a launchd plist; nothing scheduling-related is
-written to your machine. A PreToolUse hook
-([`../hooks/guard-scheduled-tasks.py`](../hooks/guard-scheduled-tasks.py)) is a defense-in-depth backstop that
-enforces this on the agent's Bash tool calls:
+open Claude session. The agent never initiates a cron line or a launchd plist; nothing scheduling-related is
+written to your machine.
 
-- **Deny** — any model-initiated `crontab` or launchd *install* (the message points back to `/loop`).
-- **Defer** — reads (`crontab -l`), list commands, schedule removal, `/loop`, and any command that merely
-  *mentions* these words (a `grep`, an `echo`). Detection is anchored to a shell command position, so
-  searching for these terms is never blocked.
-
-You remain free to run cron or launchd by hand in your own shell — the guard only gates the agent. The
-`/loop` flow is documented in [`../shared/references/internals.md`](../shared/references/internals.md) (see
-the scheduling section). Do not reproduce the hook's exact decision strings here — link the source.
+This is an **instruction-level design rule**, carried by every skill's pinned references — there is no
+runtime hook enforcing it (the former PreToolUse guard was removed: it required Python on your machine and
+gated something you're entitled to do). If you explicitly ask the agent for cron or launchd, it will show
+you the no-install `/loop` recipe first, then defer to your choice — your machine, your call. You also
+remain free to run cron or launchd by hand in your own shell, as always. The `/loop` flow is documented in
+[`../shared/references/internals.md`](../shared/references/internals.md) (see the scheduling section).
 
 ## Auth and secrets
 

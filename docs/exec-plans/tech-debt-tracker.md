@@ -26,24 +26,33 @@ pending-build tests to live.
 **Linked tests:** [`TESTING.md`](../../TESTING.md) §13 (T13.1–T13.3, currently pending-build).
 **Depends on:** deciding command names + argument grammar.
 
-## P2 — turn-off doesn't clear the schedule marker (`TODO-SCHED-OFF`)
-**What:** Add an `osctl.py set-unscheduled` (or `set-scheduled --installed false`) command and call it from the
-home/onboarding "turn off the schedule" flow.
-**Why:** `set-scheduled` can set `installed: true` but nothing clears it; the turn-off flow ([`home.md:79-80`](../../skills/job-search/references/home.md)) only
-removes the OS artifact, so `schedule-status` keeps reporting a **stale `installed: true`** after a turn-off — the
-home view and T4.4 then misreport the schedule as on.
-**Impact:** *verified the described failure no longer holds* — `set-unscheduled` now exists (`scripts/osctl.py`, `cmd_set_unscheduled`, writing `{"installed": false, "mechanism": null}`), the turn-off flow in [`home.md`](../../skills/job-search/references/home.md) already calls it, and [`TESTING.md` T4.4](../../TESTING.md) asserts `schedule-status` reads `installed: false` afterward; so no stale marker is left and the home view does not misreport. This item reads as **substantively resolved in code** — flag for a maintainer to confirm and close.
-**How to apply:** Add the command (mirrors `set-scheduled`, writing `{"installed": false, "mechanism": null}`);
-have the turn-off path call it after removing the cron line / `launchctl unload`. Then T4.4's marker check passes.
-**Linked tests:** [`TESTING.md`](../../TESTING.md) T4.4 (marker assertion, flagged ⚠), §13 T13.3.
+## P2 — turn-off doesn't clear the schedule marker (`TODO-SCHED-OFF`) — ✅ resolved (closed 2026-06-11)
+**Resolved.** The clear-the-marker operation exists and the turn-off flow calls it: the scheduling marker's
+set/clear procedures are pinned in [`../../shared/references/internals.md`](../../shared/references/internals.md)
+(Registry → scheduling marker; the former `osctl.py set-unscheduled` was its script-era shape), the turn-off
+flow in [`home.md`](../../skills/job-search/references/home.md) clears the marker so it reads
+`installed: false`, and [`TESTING.md` T4.4](../../TESTING.md) asserts it. No stale marker is left; closed.
+**Linked tests:** [`TESTING.md`](../../TESTING.md) T4.4 (marker assertion), §13 T13.3.
+
+## P3 — jobs.jsonl grows unboundedly; the in-context fold cost grows with it (`TODO-JOBS-COMPACTION`)
+**What:** The home view's pipeline folds `jobs.jsonl` in-context (per the fold operation in
+[`../../shared/references/conventions.md`](../../shared/references/conventions.md)); a long-lived workspace
+accumulates events without bound, so the read cost of the fold grows with history.
+**Why:** Watch-only for now — realistic logs (hundreds of postings) fold cheaply, the append-only design is
+the corruption-safety property we keep, and compaction would add a mutating code path with real risk.
+**Impact:** very large logs make the home view slower/heavier to render; nothing corrupts and nothing
+misreports — cost, not correctness.
+**How to apply:** if it bites in the field, add an explicit, user-visible compaction ("archive my rejected
+postings") that writes a new file and never edits in place. Do not build preemptively.
+**Linked tests:** none (watch item).
 
 ## P3 — untested config fields & edges
 **What:** `notify.desktop_notify_on_block` (blocked-run desktop alert), `schedule.timezone` runtime behavior, and
 concurrency / interrupted-run recovery (two overlapping runs; a hard-kill mid-run).
 **Why:** Each is environment-dependent or an edge for v0.1; `jobs.jsonl` is append-only so corruption risk is low.
-**Impact:** verified all three carry **zero tests** (no hit in `tests/` for `desktop_notify_on_block`, `schedule.timezone`, or any concurrency/interrupted-run case; `schedule.timezone` is informational-only under `/loop` per `osctl.py`) — a regression in any of them ships silently and only surfaces in the field; blast radius stays low because the append-only `jobs.jsonl` (`scripts/state.py`) bounds the corruption risk.
+**Impact:** verified all three carry **zero tests** (no hit in `tests/` for `desktop_notify_on_block`, `schedule.timezone`, or any concurrency/interrupted-run case; `schedule.timezone` is informational-only under `/loop` per the scheduling section of [`../../shared/references/internals.md`](../../shared/references/internals.md)) — a regression in any of them ships silently and only surfaces in the field; blast radius stays low because the append-only `jobs.jsonl` contract ([`../../shared/references/conventions.md`](../../shared/references/conventions.md)) bounds the corruption risk.
 **How to apply:** Add targeted tests when these surfaces are exercised in the field.
 **Linked tests:** none yet.
 
-## P3 — osctl schedule-line accepts an out-of-range --time (`TODO-TIME-RANGE`) — ✅ resolved (obsolete)
-**Resolved 2026-06-08 by removal.** The cron/launchd generators (`schedule-line`, `cron_schedule()`, `launchd_cal()`) no longer exist — scheduling is native `/loop` (see [`../../shared/references/internals.md`](../../shared/references/internals.md)). `loop-command` takes only `--frequency` (no `--time`), so there is no time value to range-check. No action needed.
+## P3 — schedule-line accepts an out-of-range --time (`TODO-TIME-RANGE`) — ✅ resolved (obsolete)
+**Resolved 2026-06-08 by removal.** The cron/launchd generators no longer exist — scheduling is native `/loop` (see [`../../shared/references/internals.md`](../../shared/references/internals.md)). The `/loop` line is composed from `schedule.frequency` alone (no `--time`), so there is no time value to range-check. No action needed.

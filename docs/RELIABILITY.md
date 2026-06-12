@@ -21,32 +21,33 @@ the named `E-*` errors themselves (cause + fix wording) are not in this doc — 
 | a blocked run / where the error reaches the user / the `claude -p` exit-code trap | [§4 Run health & blocked surfacing](#4-run-health--blocked-surfacing--visible-without-the-exit-code) |
 | why a call was (or wasn't) retried, the circuit-breaker | [§3 Retry & circuit-breaker](#3-retry--circuit-breaker--patient-then-it-stops) |
 | "is this a silent failure?" / what every `E-*` covers | [§2 No silent failures](#2-no-silent-failures--every-blocked-path-is-named) |
-| state that looks corrupted or non-reproducible | [§1 Determinism](#1-determinism--the-core-is-stdlib-and-reproducible) |
+| state that looks corrupted or non-reproducible | [§1 Determinism](#1-determinism--the-core-is-a-pinned-contract-and-reproducible) |
 | whether the scheduled (headless) run hung on a prompt | [§5 Headless-first](#5-headless-first--the-scheduled-run-never-blocks-on-a-human) |
 | "what actually proves any of this" — tests, evals, the fake shim | [§6 Testing & evals](#6-testing--evals--what-actually-guarantees-the-above) |
 | a doc that drifted from the contract it points at | [§7 Reliability of the docs](#7-reliability-of-the-docs-themselves) |
 
 ---
 
-## 1. Determinism — the core is stdlib and reproducible
+## 1. Determinism — the core is a pinned contract and reproducible
 
-The mechanics that must never improvise are pure, dependency-free Python:
-[../scripts/osctl.py](../scripts/osctl.py) (registry, workspace discovery, schedule artifacts)
-and [../scripts/state.py](../scripts/state.py) (the job-event log). They take JSON/text in and
-emit JSON/text out with no network and no clock-dependent behavior beyond an explicit
-timestamp, so **identical inputs produce identical outputs**: the same frequency always generates
-the same `/loop` command, and the same event log always folds to the same current state.
+The mechanics that must never improvise — workspace discovery, registry writes, the schedule
+line, dedup, the event-log fold — are **pinned written contracts**: exact precedence rules,
+portable shell one-liners, and byte-level write rules that Claude Code executes natively with
+no runtime dependency (no Python on the user's machine). The *specification* is deterministic —
+the same frequency always maps to the same `/loop` command, and the same event log always folds
+to the same current state — while the *executor* is the model following the contract verbatim.
+The named tradeoff: the runtime mechanics are verified by the skill evals and the TESTING.md
+matrix (artifact assertions on registry bytes and event lines), no longer by a unit-test suite.
 
 State is an **append-only event log**, not a mutable record: `jobs.jsonl` is a sequence of
 events, and current state is computed by folding them by dedup key (last-write-wins per field).
 Re-running is therefore safe — nothing is overwritten in place, and a crash mid-run can at
 worst leave a trailing partial line, never a corrupted record. The schema of those events, the
-fold rule, and the on-disk layout (`jobs.jsonl`, `runs/<id>.json`) are owned by
+event-line contract, the operations (known-ids / append / fold), and the on-disk layout
+(`jobs.jsonl`, `runs/<id>.json`) are owned by
 [../shared/references/conventions.md](../shared/references/conventions.md); the scheduling
-artifacts and the registry are owned by
-[../shared/references/internals.md](../shared/references/internals.md). Both engines are
-verified by the unit suite (see §6), so the non-judgment work is provably correct independent
-of the model.
+artifacts, the registry write rules, and the discovery precedence are owned by
+[../shared/references/internals.md](../shared/references/internals.md).
 
 Because the deterministic pieces are isolated from the LLM judgment, the parts that *can* be
 proven correct *are* — the model is left to do only what genuinely needs judgment (relevance),
@@ -131,10 +132,10 @@ surfacing rules are specified in
 
 Reliability claims are only as good as their tests. Four layers back this system:
 
-- **A pytest suite over the deterministic core** ([../tests/](../tests/)) exercises
-  [../scripts/state.py](../scripts/state.py) and [../scripts/osctl.py](../scripts/osctl.py) — the
-  fold/dedup logic, workspace discovery, the schedule artifacts — plus the hooks and the doc
-  linter itself. This is the layer that proves the non-judgment mechanics.
+- **A pytest suite over the dev tooling** ([../tests/](../tests/)) exercises the doc linter, the
+  philosophy guard, and the fake agent-data shim's own behavior. The runtime mechanics (discovery,
+  registry writes, dedup, the fold) are pinned contracts executed by the model, so the layer that
+  proves them is the evals + the TESTING.md matrix below, not pytest.
 - **A credit-free fake `agent-data` shim** (a PATH shim under [../tests/](../tests/)) lets a
   whole run be driven with deterministic, injectable upstream behavior — quota, outage, stale
   links, degraded service — with **no network and no metered calls**, so the error and retry
@@ -147,8 +148,9 @@ Reliability claims are only as good as their tests. Four layers back this system
 
 Honest scope (per [QUALITY_SCORE.md](QUALITY_SCORE.md)): the per-skill evals and the live
 acceptance pass run **outside CI** — via the skill-creator harness and the manual
-[../TESTING.md](../TESTING.md) matrix — so CI proves the deterministic core and the docs, not the
-model's runtime behavior. That gap is tracked, not papered over. The green-gate commands and the
+[../TESTING.md](../TESTING.md) matrix — so CI proves the dev tooling and the docs, not the
+model's runtime behavior (which now includes executing the pinned state procedures). That gap is
+tracked, not papered over. The green-gate commands and the
 contributor workflow are in [../CONTRIBUTING.md](../CONTRIBUTING.md); the full acceptance matrix
 is [../TESTING.md](../TESTING.md).
 
