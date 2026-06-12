@@ -30,15 +30,11 @@ This skill is **interactive only** — it asks questions and waits for answers. 
 scheduled run.
 
 ## Where it writes
-Resolve `$OS` (`scripts/osctl.py`) from **this skill's own directory** (`${CLAUDE_SKILL_DIR}/scripts/…` as a
-plugin), never cwd; find the workspace with `python3 "$OS" resolve` and never hard-code its path.
-
-```
-python3 "$OS" resolve   →  {"workspace":"<abs>","first_run":<bool>,"source":"registry|default|legacy|none"}
-```
+Find the workspace with the **Discovery procedure** in `references/internals.md` (one fact-gathering
+command, then its precedence rules) and never hard-code its path.
 
 - Write the brief to `<workspace>/<config.workspace.preferences_path>` (default `preferences.md`).
-- If `resolve` reports `first_run: true` **and** you were invoked standalone (no workspace set up yet), write
+- If discovery reports `first_run: true` **and** you were invoked standalone (no workspace set up yet), write
   to the resolved default path anyway and tell the user exactly where it went. (If onboarding owns the
   workspace, it tells you where to write.)
 - If a `preferences.md` already exists, you are **updating** it — read it first, fill gaps, and confirm changes

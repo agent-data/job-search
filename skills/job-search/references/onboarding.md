@@ -1,10 +1,9 @@
 # Onboarding — the first-run playbook
 
-You routed here because `python3 "$OS" resolve` returned `first_run: true`. Your job: take the user from
-nothing to **real job matches found seconds ago**, in a few minutes, end-to-end. Be warm and brisk — this
-should feel magical, not like filling out a form.
+You routed here because the Discovery procedure (`internals.md`) reported `first_run: true`. Your job: take
+the user from nothing to **real job matches found seconds ago**, in a few minutes, end-to-end. Be warm and
+brisk — this should feel magical, not like filling out a form.
 
-Resolve `$OS` (and `$STATE`) from **this skill's own directory** (e.g. `${CLAUDE_SKILL_DIR}/scripts/...`).
 Follow `internals.md`, `conventions.md`, `errors.md`, and `voice.md` exactly — don't restate their details
 from memory.
 
@@ -24,7 +23,7 @@ vocabulary, ever.
 ## 1. Welcome
 
 The router (SKILL.md Step 0) already said the welcome — your first user-facing words, spoken the moment
-`resolve` returned `first_run: true`, **before this playbook was opened**. If that somehow hasn't happened,
+discovery reported `first_run: true`, **before this playbook was opened**. If that somehow hasn't happened,
 say it now (the template lives in Step 0) before anything else: no prerequisite check, no workspace
 command, no tool call the user can see comes before the welcome — in every mode, headless included. "Let
 me read the references / run some checks first" is the failure mode: it opens the user's first minute with
@@ -102,7 +101,7 @@ agent-data`, and confirm it's authenticated — `agent-data whoami` should repor
 
 ## 3. Workspace
 
-Run `python3 "$OS" resolve` and look at `source`.
+Look at the `source` that Discovery (SKILL.md Step 0) already determined.
 
 ### Adopt an existing workspace (never clobber)
 
@@ -110,7 +109,8 @@ If `source` is `legacy` — or you otherwise detect an existing workspace (a dir
 `config.yaml`, `preferences.md`, or `jobs.jsonl`) — **adopt it; do not recreate it**:
 
 1. Tell the user: **"Found an existing workspace at `<path>` — using it."**
-2. Record it: `python3 "$OS" set-active --workspace <path>` (this writes **only** the registry).
+2. Record it as the active workspace in the registry (`internals.md` → Registry write rules — this writes
+   **only** the registry).
 3. Additively create only what's **missing**: ensure `runs/` and `reports/` exist.
 4. **Never overwrite** an existing `config.yaml`, `preferences.md`, or `jobs.jsonl`. (See the never-clobber
    rule in `internals.md`.)
@@ -133,7 +133,7 @@ Otherwise, default to **`~/.job-search/`**:
 3. Copy `templates/config.example.yaml` → `<workspace>/config.yaml` and
    `templates/workspace.gitignore` → `<workspace>/.gitignore`.
 4. Create an empty `<workspace>/jobs.jsonl`.
-5. Record it: `python3 "$OS" set-active --workspace <workspace>`.
+5. Record it as the active workspace in the registry (`internals.md` → Registry write rules).
 
 Mention briefly that this workspace is **private** (the bundled `.gitignore` is deny-all) — preferences,
 where they're hunting, and matched jobs live here and shouldn't be committed to a public repo.
@@ -263,14 +263,14 @@ ends" · **No, I'll run it myself** — "a one-off search stays one command away
 
 **On yes:**
 
-1. Get the deterministic command for the chosen frequency:
-   `python3 "$OS" loop-command --frequency <f>` → prints e.g. `/loop 24h /job-search-run`.
+1. Compose the command for the chosen frequency from the interval table in `internals.md` → Scheduling
+   setup — e.g. daily → `/loop 24h /job-search-run`.
    **Match the target to the install:** plugin skills are only invocable namespaced, so when these skills
-   run as a plugin (this skill appears as `job-search-os:…` in your skill list — the usual install), add
-   `--namespace job-search-os` so it prints `/loop 24h /job-search-os:job-search-run`. Loose skills in
-   `~/.claude/skills/` use the bare form.
-2. **Start it** by running that `/loop …` command, then record it so you don't re-ask:
-   `python3 "$OS" set-scheduled` (records `mechanism: loop`).
+   run as a plugin (this skill appears as `job-search-os:…` in your skill list — the usual install), the
+   target is `/loop 24h /job-search-os:job-search-run`. Loose skills in `~/.claude/skills/` use the bare
+   form.
+2. **Start it** by running that `/loop …` command, then record it so you don't re-ask: set the scheduling
+   marker (`internals.md` → Registry write rules — records `mechanism: loop`).
 3. Show the user the exact `/loop` line so they can restart it anytime (it stops when the session ends).
 
 **On no:** leave it unscheduled — tell them they can turn it on later by just asking, and that a one-off run
@@ -310,12 +310,12 @@ runs", "update my preferences", "show the latest digest").
       shown**, no premature claim, no duration promise; a permission-blocked install became a one-line
       `! npm install -g agent-data` handoff, not an error
 - [ ] workspace adopted-or-created; **never clobbered** an existing `config.yaml` / `preferences.md` /
-      `jobs.jsonl`; `set-active` recorded
+      `jobs.jsonl`; the active workspace recorded in the registry
 - [ ] `preferences.md` exists (interview or import via `job-preference-interview`)
 - [ ] 2–3 `queries[]` **derived from the brief** and written (no upfront keyword-picking); searches
       acknowledged; `schedule.frequency` set (plain-language nudge, **no cost math**)
 - [ ] first **live** `job-search-run` done; strong/moderate matches shown — or the named error if blocked
-- [ ] scheduling offered via native `/loop`; on yes started + `set-scheduled`; `/loop` recipe shown either way
+- [ ] scheduling offered via native `/loop`; on yes started + marker set; `/loop` recipe shown either way
 - [ ] every ask carried one line of plain-English context; the four closed choices (workspace location,
       interview-or-import, frequency, scheduling) went through the question tool; no internal vocabulary
       reached the user (`voice.md`)

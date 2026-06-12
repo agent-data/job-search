@@ -1,26 +1,25 @@
 # Home — the returning-user playbook
 
-You routed here because `python3 "$OS" resolve` returned `first_run: false`. Your job: show a **compact,
-glanceable home** for the user's job search, then let them drive the next action by **chatting**. Think
-dashboard, not log dump — a few lines they can scan in seconds.
+You routed here because the Discovery procedure (`internals.md`) reported `first_run: false`. Your job:
+show a **compact, glanceable home** for the user's job search, then let them drive the next action by
+**chatting**. Think dashboard, not log dump — a few lines they can scan in seconds.
 
-Resolve `$OS` and `$STATE` from **this skill's own directory** (e.g. `${CLAUDE_SKILL_DIR}/scripts/...`).
 Follow `internals.md`, `conventions.md`, `errors.md`, and `voice.md` exactly. No numeric scores, no
 credits — the only time cost appears is reactively as **`E-QUOTA`** in a run's health.
 
 ## Gather
 
-Resolve the workspace once: `python3 "$OS" resolve` → use its `workspace` as `<ws>` throughout.
+Use the workspace Discovery (SKILL.md Step 0) already found as `<ws>` throughout.
 
 Read just what the home view needs (all local, all free):
 
-- **Schedule marker:** `python3 "$OS" schedule-status` →
+- **Schedule marker:** read it from the registry (`internals.md` → Registry) →
   `{"installed":<bool>,"mechanism":"loop"|null,"set_at":<iso>|null}`.
 - **Brief age:** the `updated_at:` line near the top of `<ws>/preferences.md` (fall back to `created_at` if absent).
 - **Last run health:** the newest `<ws>/runs/*.json` (its `run_health`), or fall back to the **Run health**
   line of the latest digest.
 - **Latest digest:** the newest `<ws>/reports/<date>-digest.md` — its date and its **counts line**.
-- **Pipeline:** `python3 "$STATE" fold --jobs <ws>/jobs.jsonl` → a JSON array of current jobs (one per
+- **Pipeline:** fold `<ws>/jobs.jsonl` per the fold operation in `conventions.md` → current jobs (one per
   `source_id`, last-write-wins). Count by `status` and tally how many have `needs_human_check: true`.
 
 If the workspace is somehow missing its `config.yaml` (e.g. the directory was deleted out from under the
@@ -51,8 +50,8 @@ What next? Just tell me:
 Notes on each part:
 
 - **Status line.** Workspace path; brief age from `preferences.md:updated_at` (fallback `created_at`); schedule from
-  `schedule-status` (on + mechanism, or off) — the **frequency** to render (e.g. "daily" in "daily via /loop")
-  comes from `config.yaml:schedule.frequency`, since `schedule-status` carries only on/off + mechanism;
+  the registry's scheduling marker (on + mechanism, or off) — the **frequency** to render (e.g. "daily" in "daily via /loop")
+  comes from `config.yaml:schedule.frequency`, since the marker carries only on/off + mechanism;
   last-run health from the newest `runs/*.json` `run_health` (or the latest digest's Run health line). Run
   health is one of `healthy | partial (N errors) | degraded (LinkedIn flaky) | blocked (action needed)`.
 - **Latest digest.** Read the newest `reports/<date>-digest.md`; show its date and reproduce its **counts
@@ -84,10 +83,10 @@ Offer these and apply each by **chatting**, editing `config.yaml` per the `inter
   refreshing `updated_at`).
 - **Show your preferences brief** → print `<ws>/preferences.md`'s body in your reply as normal message text
   (rendered markdown — no code fence, skip the front-matter lines, never just the path).
-- **Change or turn off the schedule** → re-run the scheduling flow in `onboarding.md`: get the line with
-  `python3 "$OS" loop-command --frequency <f>`, run that `/loop …`, then `python3 "$OS" set-scheduled`; always
-  show the verbatim `/loop` recipe from `internals.md`. To turn it off, stop the loop (end the session or
-  cancel the pending wakeup), then `python3 "$OS" set-unscheduled` so `schedule-status` reads
+- **Change or turn off the schedule** → re-run the scheduling flow in `onboarding.md`: compose the
+  `/loop …` line from the interval table in `internals.md` → Scheduling setup, run it, then set the
+  scheduling marker; always show the verbatim `/loop` recipe from `internals.md`. To turn it off, stop the
+  loop (end the session or cancel the pending wakeup), then clear the scheduling marker so it reads
   `installed: false`, and tell the user it's off.
 - **Show the latest digest** → print the newest `reports/<date>-digest.md` (strong → moderate → weak →
   filtered-out) unchanged, as normal message text in your reply (rendered markdown — never inside a code

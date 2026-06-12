@@ -12,7 +12,9 @@ The **workspace** (default the hidden `~/.job-search/`; an existing visible `~/j
   reports/<date>-digest.md   # human digest per run
   .gitignore                 # deny-all (from templates/workspace.gitignore)
 ```
-**Discovery & OS state:** skills never hard-code the workspace path — they resolve it with `osctl.py resolve` (registry → `~/.job-search/` → legacy `~/job-search/` → first-run). The registry and the discovery/first-run/scheduling rules live in `internals.md`.
+**Discovery & OS state:** skills never hard-code the workspace path — they find it with the Discovery
+procedure in `internals.md` (registry → `~/.job-search/` → legacy `~/job-search/` → first-run). The registry
+and the discovery/first-run/scheduling rules live in `internals.md`.
 
 ## config.yaml
 ```yaml
@@ -52,6 +54,25 @@ Current state = fold by `source_id`, last-write-wins per field. Two event types:
 { "event":"status_changed", "ts":"<iso>", "source_id":"…", "status":"interested", "note":"…" }
 ```
 Allowed `status`: `new | interested | applied | rejected | archived`.
+
+**Event-line contract** (the operations below depend on it): one event per line; each line is a single-line
+JSON object — never pretty-printed; every event carries a non-empty `"source_id"`; the literal key
+`"source_id"` appears exactly once per line. Validate an event against this contract before appending it.
+
+Operations (no helper script — perform these exactly):
+- **Known ids** (the dedup set; missing file = empty set):
+  ```bash
+  grep -o '"source_id"[[:space:]]*:[[:space:]]*"[^"]*"' "$WS/jobs.jsonl" 2>/dev/null | cut -d'"' -f4 | sort -u
+  ```
+- **Append one event** (the heredoc keeps quoting safe — apostrophes in `reasoning` are fine):
+  ```bash
+  cat >> "$WS/jobs.jsonl" <<'EOF'
+  {"event":"evaluated","ts":"…","source_id":"…",…}
+  EOF
+  ```
+- **Current state (fold):** Read `jobs.jsonl` and fold in-context — group events by `source_id`, later
+  events override earlier per field, drop the `event` key. The pipeline view = the folded records tallied
+  by `status` (plus the `needs_human_check: true` count).
 
 ## runs/<run_id>.json — audit log
 ```jsonc

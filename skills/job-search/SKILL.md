@@ -11,7 +11,7 @@ user-invocable: true
 > capabilities), use the **job-search-agent** skill — the operator manual.
 
 The **OS shell** for Job Search OS — the front door you run when you want to set the system up or check on
-it. Mental model: this skill is the **login shell + home screen**; `osctl.py` is the **OS state** that
+it. Mental model: this skill is the **login shell + home screen**; the **registry** is the OS state that
 remembers your workspace and schedule; `job-search-run` is the **scheduled job** that pulls and judges
 postings; `job-preference-interview` is the tool that **builds the brief** the runner reads. You drive
 everything from here and delegate the heavy lifting to those skills.
@@ -25,20 +25,16 @@ This skill has two modes and almost no logic of its own — it **routes**, then 
 - **Returning** → show the job-search home (latest digest, new matches, pipeline) with conversational quick
   actions.
 
-Resolve `$OS` (`scripts/osctl.py`) and `$STATE` (`scripts/state.py`) from **this skill's own directory**
-(`${CLAUDE_SKILL_DIR}/scripts/…` as a plugin), never cwd; find the workspace with `python3 "$OS" resolve` and
-never hard-code its path.
+Find the workspace with the **Discovery procedure** in `references/internals.md` (one fact-gathering
+command, then its precedence rules); never hard-code its path.
 
 ## Step 0 — route
 
-Run:
-
-```
-python3 "$OS" resolve   →  {"workspace":"<abs>","first_run":<bool>,"source":"registry|default|legacy|none"}
-```
+Run the Discovery procedure (`references/internals.md`) → a workspace, **first_run** yes/no, and a source
+(`registry | default | legacy | none`).
 
 - `first_run: true` → **say the welcome, then** follow **`references/onboarding.md`** (the first-run
-  playbook). Greet the moment `resolve` reports `first_run: true` — emit the welcome as a message **now**,
+  playbook). Greet the moment discovery reports `first_run: true` — emit the welcome as a message **now**,
   before your next tool call: before you open the playbook, before any check, long before the end of the
   turn. The pull to defer it is strong — finish the silent prep, batch the talking into one final message.
   Resist it: that batching is this skill's known failure mode, and whatever goes wrong next (a failed
@@ -54,7 +50,7 @@ python3 "$OS" resolve   →  {"workspace":"<abs>","first_run":<bool>,"source":"r
   silently; the home view itself is your first words.
 
 That's the whole router. Everything else is in the two playbooks; read the one you routed to and follow it.
-Step 0 is mechanical — do it **silently**: no `resolve` / "OS state" / `registry` / `first_run` talk in your
+Step 0 is mechanical — do it **silently**: no "discovery" / "OS state" / `registry` / `first_run` talk in your
 reply (`references/voice.md`). Your first user-facing words are the onboarding welcome (already said, above,
 before the playbook was opened) or the home view.
 

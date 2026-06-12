@@ -14,7 +14,10 @@ Run ONE headless job-search pass over the workspace. Free gates before metered c
 **Shape:** search → dedup/freshen → **scan summaries in this (primary) context** → **fan out one parallel
 subagent per promising posting** for the detail read → **consolidate** into a digest.
 
-Resolve the workspace with `python3 "$OS" resolve` (bundled `scripts/osctl.py`; registry → `~/.job-search/` → legacy `~/job-search/`) UNLESS `--workspace <path>` is given, which overrides. Resolve `$OS` (and `$STATE`) from this skill's own directory (e.g. `${CLAUDE_SKILL_DIR}/scripts/...` as a plugin) — never assume cwd. This run is HEADLESS: never prompt. If `resolve` reports `first_run` (no workspace/config yet) → E-NO-CONFIG naming the **job-search** skill as the fix (HALT, exit 1); onboarding is interactive and lives in the `job-search` skill, not here. The job source listing id is `f9a6ec16-0bfd-44d8-b3ee-073776745ee7`.
+Find the workspace with the **Discovery procedure** in `references/internals.md` UNLESS `--workspace <path>`
+is given, which overrides. This run is HEADLESS: never prompt. If discovery reports `first_run` (no
+workspace/config yet) → E-NO-CONFIG naming the **job-search** skill as the fix (HALT, exit 1); onboarding is
+interactive and lives in the `job-search` skill, not here. The job source listing id is `f9a6ec16-0bfd-44d8-b3ee-073776745ee7`.
 
 **Retries:** branch only on the error envelope's `retryable` boolean (`true` → retry with backoff up to 3×;
 `false` → never retry), not on the error `code` string — see `references/agent-data-contract.md`.
@@ -50,7 +53,8 @@ Read these before running, and follow them exactly:
      **Two consecutive queries that fail entirely (all retries exhausted) → E-UPSTREAM-STRETCH: stop searching the rest.**
    - `422`/`400 unsupported_field` → E-BAD-QUERY (name the bad param from `details[].loc`), skip that query.
    - A quota/limit/payment failure (see errors.md detection) → E-QUOTA (HALT, exit 1).
-2. **Dedup + freshen (free).** `python3 "$STATE" known-ids --jobs <workspace>/jobs.jsonl` → the known set;
+2. **Dedup + freshen (free).** The **known-ids** operation (`references/conventions.md` §jobs.jsonl) over
+   `<workspace>/jobs.jsonl` → the known set;
    NEW = results whose non-null `source_id` is not in it (this is the dedup mechanism the no-reprocessing
    guarantee rests on — see Idempotency). Then apply `search.freshness` (default `past-2-weeks`):
    drop NEW rows whose `posted_at` is older than the window — the API has no date parameter, so this is a
@@ -80,8 +84,9 @@ Read these before running, and follow them exactly:
    **No cap** — every queued posting gets a subagent; the scan (relevance), not a count, decided how many. Running
    them in parallel is the point: it cuts wall-clock, keeps full JDs out of this context, and lets a
    faster/cheaper model do the bulk reads.
-5. **Consolidate + persist + report.** Collect the parallel subagents' verdicts and **validate each before it lands**: `match` must be `strong | moderate | weak`, or `null` when `relevant` is false — coerce anything else (a faster delegated model can emit a stray number or out-of-vocab band) and never let a numeric score reach `jobs.jsonl` or the digest. Then for each NEW posting (the deduped set from step 2 — see Idempotency) append the FULL `evaluated` event (complete schema in
-   conventions.md §jobs.jsonl) via `python3 "$STATE" append --jobs <workspace>/jobs.jsonl --event '<json>'`.
+5. **Consolidate + persist + report.** Collect the parallel subagents' verdicts and **validate each before it lands**: `match` must be `strong | moderate | weak`, or `null` when `relevant` is false — coerce anything else (a faster delegated model can emit a stray number or out-of-vocab band) and never let a numeric score reach `jobs.jsonl` or the digest — and every event MUST carry a non-empty `source_id`. Then for each NEW posting (the deduped set from step 2 — see Idempotency) append the FULL `evaluated` event
+   to `<workspace>/jobs.jsonl` via the **append** operation (complete schema + event-line contract in
+   conventions.md §jobs.jsonl).
    The event MUST carry provenance — `event:"evaluated"`, `ts`, `run_id`, `source:"linkedin"`, `query_id`,
    `title`, `company_name`, `location_display`, `salary_display`, `posted_at`, `source_url`,
    `posting_id_at_seen` (the `jp_` id), `detail_read` — AND the judgment — `source_id`, `relevant`, `match`,

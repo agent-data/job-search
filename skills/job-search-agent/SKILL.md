@@ -33,28 +33,19 @@ Hold these stances in every change you make — each exists for a reason, and se
 
 ---
 
-## Quick reference (deterministic core)
+## Quick reference (OS state)
 
-The deterministic OS state lives in `scripts/osctl.py` (bundled into each skill). Resolve its absolute path from the skill's own directory — never assume cwd, never hard-code workspace paths. Always use `osctl resolve`.
+There is no helper script — the OS state is plain files, and every operation on it is a pinned procedure in the bundled references. Never hard-code workspace paths; follow the procedure for each operation exactly as written.
 
-**`osctl.py` subcommands:**
-
-| Subcommand | What it does |
+| Operation | Pinned where |
 |---|---|
-| `resolve` | Print active workspace, `first_run`, and `source` as JSON — the one correct way to find the workspace |
-| `set-active --workspace P` | Write the active workspace path to the registry |
-| `loop-command --frequency F [--namespace job-search-os]` | Emit the `/loop` scheduling line for a frequency — `--namespace job-search-os` for plugin installs (plugin skills are only invocable namespaced); bare for loose skills |
-| `schedule-status` | Print the scheduling marker (installed mechanism) as JSON |
-| `set-scheduled [--mechanism loop]` | Record that a `/loop` schedule is running |
-| `set-unscheduled` | Clear the scheduling marker when turning scheduling off |
-
-**`state.py` subcommands:**
-
-| Subcommand | What it does |
-|---|---|
-| `known-ids --jobs <path>` | Print one `source_id` per line — the dedup set |
-| `append --jobs <path> --event '<json>'` | Append one evaluated or status-changed event |
-| `fold --jobs <path>` | Print current state as a JSON array (folded by `source_id`, last-write-wins) |
+| Find the active workspace + `first_run` + `source` | `references/internals.md` → Workspace discovery — the one correct way to find the workspace |
+| Record the active workspace in the registry | `references/internals.md` → Registry write rules |
+| Compose the `/loop` scheduling line for a frequency | `references/internals.md` → Scheduling setup (interval table; namespaced target for plugin installs — plugin skills are only invocable namespaced; bare for loose skills) |
+| Read / set / clear the scheduling marker | `references/internals.md` → Registry (the `scheduling` object) |
+| Known ids — the dedup set from `jobs.jsonl` | `references/conventions.md` → §jobs.jsonl operations |
+| Append one evaluated or status-changed event | `references/conventions.md` → §jobs.jsonl operations |
+| Current state (fold by `source_id`, last-write-wins) | `references/conventions.md` → §jobs.jsonl operations |
 
 ---
 
@@ -62,7 +53,7 @@ The deterministic OS state lives in `scripts/osctl.py` (bundled into each skill)
 
 The user changes configuration by chatting — you apply it by reading `config.yaml`, editing it minimally (preserving comments and structure), and writing it back.
 
-For every supported edit — adding, editing, or pausing a query (`enabled: false`); the `search` block (`freshness`, `detail_model`, `queries[].limit`); `schedule.frequency`/`time`; the never-clobber adoption rule; and exact field schemas — see `references/internals.md` → "Config read/update recipes". Marking a job status (`new | interested | applied | rejected | archived`) is a `status_changed` event written via `state.py append`, not a `config.yaml` edit — see `references/conventions.md` → the `status_changed` event. To update the brief itself, run `job-preference-interview` or edit `preferences.md` directly.
+For every supported edit — adding, editing, or pausing a query (`enabled: false`); the `search` block (`freshness`, `detail_model`, `queries[].limit`); `schedule.frequency`/`time`; the never-clobber adoption rule; and exact field schemas — see `references/internals.md` → "Config read/update recipes". Marking a job status (`new | interested | applied | rejected | archived`) is a `status_changed` event appended to `jobs.jsonl` (the append operation in `references/conventions.md` → §jobs.jsonl), not a `config.yaml` edit. To update the brief itself, run `job-preference-interview` or edit `preferences.md` directly.
 
 **Invariants — never break these:**
 - Always preserve `version: 1` in `config.yaml`.
@@ -81,14 +72,13 @@ The agent is designed to be extended — add queries, swap the brief, point the 
 
 ## Scheduling
 
-Scheduling is Claude Code's native **`/loop`** — the only mechanism. `/loop <interval> /job-search-os:job-search-run`
-(plugin installs; loose skills drop the `job-search-os:` prefix) re-runs the search on an interval inside an
-open Claude session; nothing is installed on the user's machine (no crontab, no launchd). Get the line with
-`osctl loop-command --frequency <f> [--namespace job-search-os]`, run it, and record it with
-`osctl set-scheduled`. The one tradeoff: it runs only while a Claude session is open.
-
-A `PreToolUse` safety-net hook **denies** any model-initiated crontab/launchd install (and ignores reads,
-removals, `/loop`, and mere mentions) — see `references/scheduling-and-consent.md`.
+Scheduling is Claude Code's native **`/loop`** — the only mechanism the agent sets up.
+`/loop <interval> /job-search-os:job-search-run` (plugin installs; loose skills drop the `job-search-os:`
+prefix) re-runs the search on an interval inside an open Claude session; nothing is installed on the user's
+machine (no crontab, no launchd). Compose the line from the interval table in `references/internals.md` →
+Scheduling setup, run it, and set the scheduling marker. The one tradeoff: it runs only while a Claude
+session is open. The agent never initiates a crontab/launchd install itself; the user remains free to set
+one up in their own shell — see `references/scheduling-and-consent.md`.
 
 ---
 
@@ -107,7 +97,7 @@ For the full `E-*` table with exact cause and fix wording: see `references/error
 | Runs complete but 0 matches even though real postings exist | Query keywords don't match the brief's must-haves | Broaden the query in `config.yaml`, or run the **job-preference-interview** skill to align the brief |
 | 0 results (literally empty) | Keywords too narrow or location too specific | Broaden `keywords` or `location` in the query |
 | Last run: blocked — E-QUOTA | API limit reached for the period | Lower `schedule.frequency` (e.g. `daily` instead of `hourly`), or upgrade your plan at agent-data.motie.dev |
-| Schedule isn't firing | The `/loop` isn't running (its Claude session closed) | Run `python3 "$OS" schedule-status`; restart it with the line from `osctl loop-command` (namespaced `/job-search-os:job-search-run` for plugin installs) |
+| Schedule isn't firing | The `/loop` isn't running (its Claude session closed) | Check the scheduling marker in the registry (`references/internals.md`); restart it with the `/loop` line from the interval table (namespaced `/job-search-os:job-search-run` for plugin installs) |
 | "Stale brief" nudge in the digest | `preferences.md` hasn't been updated in a long time | Run the **job-preference-interview** skill to refresh it |
 
 ---
@@ -120,25 +110,25 @@ For the full `E-*` table with exact cause and fix wording: see `references/error
 | Every `E-*` error with cause + fix | `references/errors.md` |
 | OS registry, workspace discovery, config recipes, scheduling | `references/internals.md` |
 | agent-data CLI contract (routes, retry rules, listing ID) | `references/agent-data-contract.md` |
-| The active workspace path | `python3 "$OS" resolve` |
-| Scheduling status | `python3 "$OS" schedule-status` |
+| The active workspace path | the Discovery procedure — `references/internals.md` |
+| Scheduling status | the registry's scheduling marker — `references/internals.md` |
 | Customization and flexibility workflows | `references/customization.md` |
 | Parallel-by-default principle + how to brief a subagent | `references/parallelism.md` |
 | How skills talk to the user (voice, banned jargon, rendering briefs/digests) | `references/voice.md` |
-| Scheduling consent workflow and hook behavior | `references/scheduling-and-consent.md` |
+| Scheduling consent workflow | `references/scheduling-and-consent.md` |
 | This operator manual | `job-search-agent` skill |
 
 ---
 
 ## Extending & contributing
 
-**Single source of truth.** Shared references live in `shared/references/*.md`; helper scripts live in `scripts/`. Skills bundle their own copies — but those copies are generated, not authored. After editing a shared reference or script, run `./scripts/build.sh` to re-sync every skill's bundled copies. Never hand-edit files under `skills/<skill>/references/` or `skills/<skill>/scripts/` — the next build will overwrite them silently.
+**Single source of truth.** Shared references live in `shared/references/*.md`. Skills bundle their own copies — but those copies are generated, not authored. After editing a shared reference, run `./scripts/build.sh` to re-sync every skill's bundled copies. Never hand-edit files under `skills/<skill>/references/` — the next build will overwrite them silently.
 
-**Adding a new skill.** Create a folder under `skills/<skill>/` with a `SKILL.md` and an `evals/evals.json`. Run `./scripts/build.sh` to sync the shared refs and scripts into the new skill. Write evals that cover the happy path and the named-error HALT paths.
+**Adding a new skill.** Create a folder under `skills/<skill>/` with a `SKILL.md` and an `evals/evals.json`. Run `./scripts/build.sh` to sync the shared refs into the new skill. Write evals that cover the happy path and the named-error HALT paths.
 
 **Evals are credit-free.** Evals run through the fake `agent-data` shim in `tests/` — no metered API calls, nothing billed. When you add a code path that calls `agent-data`, route the eval through the shim rather than the live CLI.
 
-**Philosophy guard.** `scripts/philosophy_guard.py` runs in CI (`python3 scripts/philosophy_guard.py`) and rejects any file that introduces numeric scores, budget/cost/credit fields, or score-threshold config into the shipped default output (`examples/`, `templates/`). Keep the guard green before opening a PR.
+**Philosophy guard.** The repo's CI runs a philosophy guard that rejects any file introducing numeric scores, budget/cost/credit fields, or score-threshold config into the shipped default output (`examples/`, `templates/`). Keep the guard green before opening a PR (exact commands in `CONTRIBUTING.md`).
 
 **Versioning.** `config.yaml` carries `version: 1`. If a breaking schema change is needed, bump the major version and add the corresponding `E-CONFIG-VERSION` detection to the runner's preflight.
 
