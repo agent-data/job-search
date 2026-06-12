@@ -18,12 +18,19 @@ i.e. `~/.config/job-search-os/config.json` by default. Schema:
 ```
 The registry is machine state; the workspace's `config.yaml` stays the user-facing config.
 
+The resolved `$REG` is **the one and only registry**: evaluate the expression in Bash and use the path it
+prints for every read and write. Never consult or touch any other location — in particular, when
+`$JOBSEARCH_OS_REGISTRY` resolves it elsewhere, the default `~/.config/...` path is out of bounds entirely
+(reading it can only mix two registries and confuse the result).
+
 **Write rules (every registry write).** Read the current file first (it may not exist), apply the change to
-the parsed object, and Write the whole file back with the file tools — never shell redirection. Preserve any
-keys you don't own; always keep `"version": 1`; store `active_workspace` as an absolute path (expand `~`);
-2-space indent; trailing newline; `mkdir -p` the parent directory first. If the file exists but is not valid
-JSON, stop and tell the user (offer to rewrite it from the known workspace) — never guess or silently fall
-through; guessing could switch workspaces.
+the parsed object, and Write the whole file back with the file tools — never shell redirection — at the
+resolved `$REG` path. Preserve any keys you don't own; always keep `"version": 1`; store `active_workspace`
+as an absolute path (expand `~`); 2-space indent; trailing newline; `mkdir -p` the parent directory first.
+If the file exists but is not valid JSON, stop and tell the user (offer to rewrite it from the known
+workspace) — never guess or silently fall through; guessing could switch workspaces. Only the **job-search**
+front door (onboarding / adoption) and the scheduling flows write the registry; the headless runner never
+does.
 
 - **Record the active workspace** (adoption and onboarding both end here): merge
   `{"version": 1, "active_workspace": "<abs path>"}` per the write rules. This writes ONLY the registry; it
@@ -41,10 +48,11 @@ Gather the facts with one command, then apply the precedence rules:
 ```bash
 REG="${JOBSEARCH_OS_REGISTRY:-${XDG_CONFIG_HOME:-${JOBSEARCH_OS_HOME:-$HOME}/.config}/job-search-os/config.json}"
 H="${JOBSEARCH_OS_HOME:-$HOME}"
-echo "--registry--"; cat "$REG" 2>/dev/null
+echo "registry: $REG"; cat "$REG" 2>/dev/null
 test -f "$H/.job-search/config.yaml" && echo DEFAULT_HAS_CONFIG
 test -f "$H/job-search/config.yaml"  && echo LEGACY_HAS_CONFIG
 ```
+The printed `registry:` path is the one to use for any later registry write in this session.
 First match decides — the result is a workspace path, a `source`, and whether this is a **first run**:
 1. The registry parses and has a non-empty `active_workspace` W → workspace = W, source `registry`;
    first-run only if W has no `config.yaml` (check: `test -f "<W>/config.yaml"`). **The registry wins

@@ -87,6 +87,14 @@ with the named gate (doc_lint / pytest / grep / a live run) rather than a unit t
 ## Progress log
 
 - 2026-06-11 — plan created.
+- 2026-06-11 — tasks 1–5 done (c61a954, 3693ed8, 183caa5, da5c063, ed26e31, a218e24): contracts pinned,
+  skills + evals + KB docs converted, all Python artifacts deleted. Dev gates green (pytest 56, build
+  no-op, doc_lint, philosophy_guard, `claude plugin validate --strict`).
+- 2026-06-11 — verification: headless E-NO-CONFIG ✅; legacy adoption (registry write byte-contract +
+  never-clobber sha256-identical) ✅; home-view in-context fold ✅; schedule-marker off-toggle ✅;
+  **python3-masked** full runner pass + dedup re-run + home view ✅ (shim-backed). Sandboxed home-view
+  testing surfaced one robustness gap — fixed and re-verified (see Decision log). Live-API pass pending
+  an agent-data key.
 
 ## Decision log
 
@@ -103,3 +111,10 @@ with the named gate (doc_lint / pytest / grep / a live run) rather than a unit t
   `sed 's/.*"//'` strips the whole match (greedy); `cut` is BSD+GNU portable. The recipe is
   contract-dependent (one event per line, key once per line), so those bullets are pinned in
   conventions.md §jobs.jsonl.
+- **The resolved `$REG` is the only registry — pinned after a live test caught drift.** In an
+  env-redirected sandbox, a home-view run also *read* the default `~/.config/...` registry path and
+  produced a confused report mixing the two registries (no write escaped; the user's pre-existing
+  registry file was misattributed). The script era never had this failure because `osctl` evaluated the
+  env chain in code. Fix: internals.md now prints the resolved path in the Discovery snippet and forbids
+  consulting any other location; it also pins that only the front door / scheduling flows write the
+  registry — the headless runner never does. Masked re-test passed.
