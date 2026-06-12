@@ -95,6 +95,10 @@ with the named gate (doc_lint / pytest / grep / a live run) rather than a unit t
   **python3-masked** full runner pass + dedup re-run + home view ✅ (shim-backed). Sandboxed home-view
   testing surfaced one robustness gap — fixed and re-verified (see Decision log). Live-API pass pending
   an agent-data key.
+- 2026-06-11 — owner decision: owner runs the live-API pass themselves (the CLI is installed but
+  unauthenticated on this machine). The plan stays **active** and the version stays unbumped until that
+  pass is green — then flip to completed and release `0.3.0` (task 7). Everything else is committed
+  through 64c346b.
 
 ## Decision log
 
