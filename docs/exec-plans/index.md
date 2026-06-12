@@ -5,6 +5,7 @@ are archived here.
 
 ## Active
 - [Documentation Knowledge Base](active/2026-06-07-doc-knowledge-base.md)
+- [Zero-Python Shipped Surface](active/2026-06-11-zero-python-shipped-surface.md)
 
 ## Completed
 - [Job Search OS — Foundation & Core (Plan A)](completed/2026-06-05-foundation-core.md)
