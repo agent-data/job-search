@@ -7,7 +7,6 @@ open a public issue:
 
 - Use GitHub's private vulnerability reporting: the **"Report a vulnerability"** button on this
   repository's **Security** tab.
-- (Optional, if configured) email the maintainers at the address listed on the repository profile.
 
 We aim to acknowledge a report within 5 business days and will coordinate a fix and disclosure
 with you.
