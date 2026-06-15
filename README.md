@@ -2,6 +2,9 @@
 
 **Turn Claude Code into the operating system for your job search.**
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+![Tested on Claude Code](https://img.shields.io/badge/tested%20on-Claude%20Code-6b46c1)
+
 Within about five minutes of installing, you'll see real job postings judged against *your* stated
 preferences — relevant or not, and how strong a match, with plain-language reasoning — and then keep getting
 them on a schedule you control. You don't script anything: you run one slash command and Claude Code sets up
