@@ -85,6 +85,8 @@ under `shared/references/`, re-run `./scripts/build.sh` to re-sync the bundled c
 
 Contributing or exploring the codebase with an AI agent? See [AGENTS.md](AGENTS.md) — the agent-facing map of the repo (architecture, design beliefs, plans, quality).
 
+This project has a [Code of Conduct](CODE_OF_CONDUCT.md).
+
 After any of the above, run the front door for your install:
 
 ```

@@ -5,6 +5,8 @@ self-contained — please read these before opening a PR.
 
 > Coding agent, or want the map of this repo? Start with [AGENTS.md](AGENTS.md) — the agent-facing entry point.
 
+This project follows a [Code of Conduct](CODE_OF_CONDUCT.md) — by participating you agree to uphold it.
+
 ## Single source of truth — never hand-edit a skill's synced copies
 
 Each skill folder (`skills/<skill>/`) is shipped **self-contained**: it carries its own copy of the shared
