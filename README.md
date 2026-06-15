@@ -72,6 +72,7 @@ ln -s "$PWD/skills/job-search"       ~/.claude/skills/job-search
 ln -s "$PWD/skills/job-search-run"   ~/.claude/skills/job-search-run
 ln -s "$PWD/skills/evaluate-job-fit" ~/.claude/skills/evaluate-job-fit
 ln -s "$PWD/skills/job-preference-interview" ~/.claude/skills/job-preference-interview
+ln -s "$PWD/skills/job-search-agent"         ~/.claude/skills/job-search-agent
 ```
 
 (Prefer copies that won't change under you? `cp -R` each folder instead of symlinking. After editing anything
