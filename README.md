@@ -38,6 +38,10 @@ See a full one in [`examples/sample-digest.md`](examples/sample-digest.md).
 
 That's it — no Python, no other runtime. Claude Code performs every operation itself.
 
+### Supported environments
+
+Tested on **Claude Code (CLI)** on macOS and Linux. Claude Code's IDE and desktop builds run the same plugin and are *expected* to work but are **not yet tested**. Other Claude surfaces (claude.ai and other hosts) are **untested** — the scheduled pass relies on Claude Code's native `/loop`, which those surfaces don't provide. If you try it elsewhere, the interactive parts may work; the scheduling won't.
+
 ---
 
 ## Install from source (works today)
