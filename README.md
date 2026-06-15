@@ -122,6 +122,34 @@ Then run `/job-search-os:job-search` as above.
 
 ---
 
+## What your first run looks like
+
+You don't configure anything by hand. After install, run the front door and answer a few
+questions — here's the shape of it:
+
+```text
+You:    /job-search-os:job-search          (or just: "set up job search")
+
+Claude: Looks like this is your first run. I'll create a private workspace at ~/.job-search/
+        and ask a few questions to learn what you're after. What kind of role are you looking for?
+
+You:    senior product designer, remote in the US or hybrid in the PNW
+
+Claude: Got it. (a few more questions — level, must-haves, dealbreakers, what to search,
+        how often) … I'll search "product designer" in the United States. Run it now?
+
+You:    yes
+
+Claude: 9 new postings · 2 strong · 2 moderate · 2 weak · 3 filtered out.
+        Strongest: Senior Product Designer — Tidewater Health — Remote (US) …
+```
+
+Seconds later you have a ranked digest of real postings judged against your brief — see
+[`examples/sample-digest.md`](examples/sample-digest.md) for a full one. Claude then offers to
+keep it running on a schedule you choose (you can always say no).
+
+---
+
 ## What it does
 
 **Qualitative relevance — never a score.** Claude reads each posting against your plain-English brief and
