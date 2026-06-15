@@ -150,6 +150,25 @@ keep it running on a schedule you choose (you can always say no).
 
 ---
 
+## Everyday use — just say what you want
+
+Everything is conversational. You never have to remember a command or hand-edit a file:
+
+| To… | Say something like… |
+|---|---|
+| Set up / onboard | "set up job search" |
+| Run a search now | "find me jobs" · "run a job search now" |
+| Check status & latest digest | "check my job search" |
+| Add or change a search | "also search for staff product designer roles" |
+| Change how often it runs | "run this daily instead of hourly" |
+| Update your preferences | "update my preferences — I'm open to fully remote now" |
+| Pause / resume scheduling | "pause the scheduled search" |
+
+Prefer slash commands? Use `/job-search-os:job-search` (plugin installs) or `/job-search`
+(loose-skill installs).
+
+---
+
 ## What it does
 
 **Qualitative relevance — never a score.** Claude reads each posting against your plain-English brief and
