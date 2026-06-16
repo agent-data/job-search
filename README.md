@@ -2,6 +2,8 @@
 
 Job Search is a plugin that turns Claude Code into a job search assistant. Describe what you want, and Claude pulls fresh job postings, judges each against your preferences, and generates a ranked digest of the matches.
 
+https://github.com/user-attachments/assets/298b781a-6b88-4c08-9d33-e4a01bbf331e
+
 ## How it works
 
 1. Run `/job-search` and Claude asks what you're after: the role, the level, your must-haves, dealbreakers, and where you want to work.
