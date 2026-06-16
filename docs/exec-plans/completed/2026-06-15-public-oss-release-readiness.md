@@ -1,7 +1,8 @@
 ---
 title: Public OSS Release Readiness — docs + community files for a public launch
-state: active
+state: completed
 created: 2026-06-15
+completed: 2026-06-15
 ---
 
 # Public OSS Release Readiness
@@ -513,6 +514,7 @@ adds fall under it.
 ## Progress Log
 
 - 2026-06-15 — plan created (this commit). Author self-review done (above). Awaiting execution mode choice.
+- 2026-06-15 — executed via subagent-driven-development; all 5 phases complete, each spec- and quality-reviewed. Phase 1 (identity + README accuracy: `0b40267`, `2dbe011`, `d28675e`), Phase 2 (community/security files + contact-wording polish: `3cedb01`, `f2f234d`, `5bff77d`, `e234d6d`), Phase 3 (README walkthrough/phrasebook/badges: `607301e`, `a816f05`, `fcb1be3`), Phase 4 (zero-Python plan completed `bcbc4b0`; released 0.3.0 `0916bc6`), Phase 5 (final whole-branch review green; security-policy wording polish `2b09896`; this plan flipped to completed). Done-when gate green: pytest 56 passed, doc_lint clean (default + --strict-fresh), philosophy_guard clean, build.sh no-op, `claude plugin validate . --strict` passed.
 
 ## Decision Log
 
