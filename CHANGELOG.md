@@ -17,7 +17,7 @@ First public release.
 
 ### Added
 - Public-release docs: a first-run walkthrough and an everyday-use phrasebook in the README, an
-  honest supported-environments note, this `CHANGELOG`, a `CODE_OF_CONDUCT`, a security policy
+  honest supported-environments note, this `CHANGELOG`, a security policy
   (`.github/SECURITY.md`), and issue/pull-request templates.
 
 ### Fixed
