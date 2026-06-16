@@ -24,9 +24,9 @@ See an example digest in [`examples/sample-digest.md`](examples/sample-digest.md
    claude
    ```
    ```
-  /plugin marketplace add /path/to/job-search-os
-  /plugin install job-search-os@agent-data
-  ```
+   /plugin marketplace add /path/to/job-search-os
+   /plugin install job-search-os@agent-data
+   ```
 3. **Kick off your job search.** Run `/job-search`
 
 ## What's inside
