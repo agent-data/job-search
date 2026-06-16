@@ -4,14 +4,19 @@ Job Search is a plugin that turns Claude Code into a job search assistant. Descr
 
 ## How it works
 
-Run `/job-search` and Claude asks what you're after: the role, the level, your must-haves, dealbreakers, and where you want to work. Claude stores your preferences then runs a live search, comparing each job posting against those preferences. Claude filters out irrelevant postings and generates a digest with the postings worth your attention, along with its reasoning for each. Finally, it offers to run your search on a schedule, surfacing new postings only when they match your preferences.
+1. Run `/job-search` and Claude asks what you're after: the role, the level, your must-haves, dealbreakers, and where you want to work.
+2. Claude stores your preferences then runs a live search, comparing each job posting against those preferences.
+3. Claude filters out irrelevant postings and generates a digest with the postings worth your attention, along with its reasoning for each. 
+4. Finally, Claude offers to run your search on a schedule, surfacing new postings only when they match your preferences.
 
 See an example digest in [`examples/sample-digest.md`](examples/sample-digest.md).
 
 ## Requirements
 
 - **[Claude Code](https://claude.com/claude-code)**
-- **The `agent-data` CLI** — the job-data source. Generate an API key at [agent-data.motie.dev](https://agent-data.motie.dev) (Profile → API Key), then `export AGENT_DATA_API_KEY=mtk_…` (or save it to `~/.agent-data/config.json`) and verify with `agent-data whoami`. *Note: agent-data currently provides job postings from the following sources: LinkedIn Jobs.*
+- **The `agent-data` CLI** — the job-data source. Generate an API key at [agent-data.motie.dev](https://agent-data.motie.dev) (Profile → API Key), then `export AGENT_DATA_API_KEY=mtk_…` (or save it to `~/.agent-data/config.json`) and verify with `agent-data whoami`. 
+
+  *Note: agent-data currently provides job postings from the following sources: LinkedIn Jobs.*
 
 ## Quick start
 
@@ -20,9 +25,6 @@ See an example digest in [`examples/sample-digest.md`](examples/sample-digest.md
    export AGENT_DATA_API_KEY=mtk_…
    ```
 2. **Launch Claude Code then register the local clone as a marketplace:**
-   ```bash
-   claude
-   ```
    ```
    /plugin marketplace add /path/to/job-search-os
    /plugin install job-search-os@agent-data
@@ -31,7 +33,7 @@ See an example digest in [`examples/sample-digest.md`](examples/sample-digest.md
 
 ## What's inside
 
-Five skills, each triggered by what you say:
+### Skills Library
 
 - **job-search** — the front door: onboarding, status, and your home view.
 - **job-preference-interview** — builds your plain-English preferences brief.
@@ -50,37 +52,19 @@ Clone the repo, then pick an install path.
 /plugin install job-search-os@agent-data
 ```
 
-**One session, no install.** `--plugin-dir` is a launch flag, so run it in your shell, then run `/job-search-os:job-search` in the session it opens:
+**One session, no install.** 
+
+Launch Claude Code with the `--plugin-dir` launch flag:
 
 ```bash
 claude --plugin-dir /path/to/job-search-os
 ```
 
-<details>
-<summary><strong>No plugin system? Install loose skills.</strong></summary>
-
-Build the bundled copies, then symlink the skills into `~/.claude/skills/`:
-
-```bash
-cd /path/to/job-search-os
-./scripts/build.sh
-mkdir -p ~/.claude/skills
-for s in job-search job-search-run evaluate-job-fit job-preference-interview job-search-agent; do
-  ln -s "$PWD/skills/$s" ~/.claude/skills/$s
-done
-```
-
-Re-run `./scripts/build.sh` after pulling updates. In this mode the skills are invocable bare: `/job-search`, or just say "set up job search."
-
-</details>
-
-After installing, run the front door, or just say what you want:
+After installing, run the front door slash command, or just say what you want:
 
 ```
 /job-search-os:job-search
 ```
-
-Natural language works in every mode: "set up job search," "find me jobs," "check my job search." A one-step marketplace install is coming once the plugin is published.
 
 ## Contributing
 
