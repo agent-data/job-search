@@ -15,5 +15,5 @@ with you.
 
 Job Search OS handles career-sensitive data **locally**. How that data is kept on your machine and
 out of any public repository — the deny-all workspace `.gitignore`, the no-PII-in-repo rule, the
-credit-free test shim — and the **explicit out-of-scope** items (a compromised machine,
+offline test shim — and the **explicit out-of-scope** items (a compromised machine,
 prompt-injection in fetched postings) are documented in [`docs/SECURITY.md`](../docs/SECURITY.md).
