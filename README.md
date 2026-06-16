@@ -5,14 +5,23 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 ![Tested on Claude Code](https://img.shields.io/badge/tested%20on-Claude%20Code-6b46c1)
 
-Within about five minutes of installing, you'll see real job postings judged against *your* stated
-preferences — relevant or not, and how strong a match, with plain-language reasoning — and then keep getting
-them on a schedule you control. You don't script anything: you run one slash command and Claude Code sets up
-the whole thing by asking you a few questions.
+Job Search OS is a Claude Code plugin that runs your job search. Describe what you want once, in
+plain English; Claude pulls fresh postings, judges each against your brief, and hands you a ranked
+digest — then keeps doing it on a schedule you control.
 
-You define what you want once, in plain English. Claude pulls fresh postings, reads each one against your
-brief, and hands you a ranked digest. No dashboards, no scoring spreadsheets, no credit math — the data lives
-in a private folder on your own machine.
+## How it works
+
+It starts the moment you install. You run one command and Claude asks what you're after — the role,
+the level, your must-haves and dealbreakers, where you want to work. You answer in plain English;
+there are no forms or config files to fill in.
+
+As soon as your brief is ready, Claude runs a live search right then, so within a few minutes of
+installing you're looking at real postings — each judged against *your* brief, marked relevant or
+not and weak / moderate / strong, with plain-language reasoning. Then it offers to keep running on a
+schedule you pick — hourly, daily, weekly — and you can always say no.
+
+After that it stays conversational. "Find me jobs." "Also search staff roles." "Run this daily
+instead of hourly." You never edit a file or memorize a command.
 
 ```
 # Job search digest — 2026-06-05
@@ -26,136 +35,64 @@ Run health: healthy
 
 See a full one in [`examples/sample-digest.md`](examples/sample-digest.md).
 
----
-
 ## Requirements
 
 - **[Claude Code](https://claude.com/claude-code)** — this is a Claude Code plugin.
-- **The `agent-data` CLI, authenticated** — it's the job-data source.
-  ```bash
-  agent-data whoami        # should show  api_key_set: true
-  ```
-  Not authenticated? Generate a key at [agent-data.motie.dev](https://agent-data.motie.dev) (Profile → API
-  Key), then either `export AGENT_DATA_API_KEY=mtk_…` or save it to `~/.agent-data/config.json`, and re-run
-  `agent-data whoami`.
+- **The `agent-data` CLI, authenticated** — the job-data source. Verify with `agent-data whoami` (it
+  should show `api_key_set: true`). No key yet? Generate one at
+  [agent-data.motie.dev](https://agent-data.motie.dev) (Profile → API Key), then `export
+  AGENT_DATA_API_KEY=mtk_…` (or save it to `~/.agent-data/config.json`) and re-check.
 
-That's it — no Python, no other runtime. Claude Code performs every operation itself.
+Tested on **Claude Code** (macOS and Linux). Other Anthropic surfaces — Claude AI, Claude Cowork —
+should work but aren't tested yet.
 
-### Supported environments
+## Installation
 
-Tested on **Claude Code (CLI)** on macOS and Linux. Claude Code's IDE and desktop builds run the same plugin and are *expected* to work but are **not yet tested**. Other Claude surfaces (claude.ai and other hosts) are **untested** — the scheduled pass relies on Claude Code's native `/loop`, which those surfaces don't provide. If you try it elsewhere, the interactive parts may work; the scheduling won't.
+Clone the repo, then pick how permanent you want it.
 
----
-
-## Install from source (works today)
-
-Clone the repo and pick the option that fits how permanent you want it.
-
-**A — Try it in one session (non-persistent).** Launch Claude Code with the plugin loaded — `--plugin-dir`
-is a *launch* flag, so run this in your **shell**, not inside a Claude Code session that's already open:
+**One session (no install).** `--plugin-dir` is a launch flag, so run it in your shell, then run
+`/job-search-os:job-search` in the session it opens:
 
 ```bash
 claude --plugin-dir /path/to/job-search-os
 ```
 
-That command **starts a new** Claude Code session with the plugin available; run `/job-search-os:job-search`
-inside it. (Already in a running session? Use option **B** instead.)
-
-**B — Install it persistently from a local clone.** Register the clone as a local marketplace, then install:
+**Persistent (local marketplace).** Register the clone, then install:
 
 ```
 /plugin marketplace add /path/to/job-search-os
 /plugin install job-search-os@agent-data
 ```
 
-**C — Loose skills (no plugin system).** Each skill folder is self-contained. Build the bundled copies, then
-copy or symlink the skills you want into `~/.claude/skills/`:
+**Loose skills (no plugin system).** Build the bundled copies, then symlink the skills into
+`~/.claude/skills/`:
 
 ```bash
 cd /path/to/job-search-os
 ./scripts/build.sh
 mkdir -p ~/.claude/skills
-ln -s "$PWD/skills/job-search"       ~/.claude/skills/job-search
-ln -s "$PWD/skills/job-search-run"   ~/.claude/skills/job-search-run
-ln -s "$PWD/skills/evaluate-job-fit" ~/.claude/skills/evaluate-job-fit
-ln -s "$PWD/skills/job-preference-interview" ~/.claude/skills/job-preference-interview
-ln -s "$PWD/skills/job-search-agent"         ~/.claude/skills/job-search-agent
+for s in job-search job-search-run evaluate-job-fit job-preference-interview job-search-agent; do
+  ln -s "$PWD/skills/$s" ~/.claude/skills/$s
+done
 ```
 
-(Prefer copies that won't change under you? `cp -R` each folder instead of symlinking. After editing anything
-under `shared/references/`, re-run `./scripts/build.sh` to re-sync the bundled copies — see
-[CONTRIBUTING.md](CONTRIBUTING.md).)
+(Re-run `./scripts/build.sh` after pulling updates.) A one-step marketplace install is coming once
+the plugin is published.
 
-Contributing or exploring the codebase with an AI agent? See [AGENTS.md](AGENTS.md) — the agent-facing map of the repo (architecture, design beliefs, plans, quality).
-
-This project has a [Code of Conduct](CODE_OF_CONDUCT.md).
-
-After any of the above, run the front door for your install:
+After installing, run the front door — or just say what you want:
 
 ```
-/job-search-os:job-search        # plugin installs (options A and B)
-/job-search                      # loose skills (option C)
+/job-search-os:job-search     # plugin install
+/job-search                   # loose-skill install
 ```
 
-(Plugin skills are only invocable **namespaced** — `/plugin-name:skill-name` — so the bare `/job-search`
-form exists only when the skills are installed loose, option C.)
+Natural language works in every mode: "set up job search," "find me jobs," "check my job search."
+(Plugin skills are only invocable namespaced as `/plugin:skill`; the bare `/job-search` exists only
+for loose-skill installs.)
 
-Claude sets up everything by asking you a few questions — it checks the prerequisites, creates your private
-workspace, interviews you to build a preferences brief, helps you pick your search queries and how often to
-run, does a **first live search right then** so you see real matches seconds later, and offers to schedule it.
+## Everyday use
 
-You don't have to remember any slash command. Natural language works in **every** install mode:
-
-> "set up job search" · "find me jobs" · "check my job search"
-
----
-
-## Install from the marketplace (once published)
-
-Once this plugin is published to the agent-data marketplace, install will be a single step — but that
-publication is not live yet, so the commands below will not work today. When it is published, the golden
-one-step path will be:
-
-```
-/plugin marketplace add agent-data/job-search-os
-/plugin install job-search-os@agent-data
-```
-
-Then run `/job-search-os:job-search` as above.
-
----
-
-## What your first run looks like
-
-You don't configure anything by hand. After install, run the front door and answer a few
-questions — here's the shape of it:
-
-```text
-You:    /job-search-os:job-search          (or just: "set up job search")
-
-Claude: Looks like this is your first run. I'll create a private workspace at ~/.job-search/
-        and ask a few questions to learn what you're after. What kind of role are you looking for?
-
-You:    senior product designer, remote in the US or hybrid in the PNW
-
-Claude: Got it. (a few more questions — level, must-haves, dealbreakers, what to search,
-        how often) … I'll search "product designer" in the United States. Run it now?
-
-You:    yes
-
-Claude: 9 new postings · 2 strong · 2 moderate · 2 weak · 3 filtered out.
-        Strongest: Senior Product Designer — Tidewater Health — Remote (US) …
-```
-
-Seconds later you have a ranked digest of real postings judged against your brief — see
-[`examples/sample-digest.md`](examples/sample-digest.md) for a full one. Claude then offers to
-keep it running on a schedule you choose (you can always say no).
-
----
-
-## Everyday use — just say what you want
-
-Everything is conversational. You never have to remember a command or hand-edit a file:
+Everything is conversational — you never have to remember a command or hand-edit a file:
 
 | To… | Say something like… |
 |---|---|
@@ -167,127 +104,54 @@ Everything is conversational. You never have to remember a command or hand-edit 
 | Update your preferences | "update my preferences — I'm open to fully remote now" |
 | Pause / resume scheduling | "pause the scheduled search" |
 
-Prefer slash commands? Use `/job-search-os:job-search` (plugin installs) or `/job-search`
-(loose-skill installs).
+## What's inside
 
----
+Five skills, each triggered by what you say:
 
-## What it does
+- **job-search** — the front door: onboarding, status, and your home view.
+- **job-preference-interview** — builds your plain-English preferences brief.
+- **job-search-run** — one headless search pass; this is what the schedule runs.
+- **evaluate-job-fit** — judges a single posting you paste in.
+- **job-search-agent** — the operator manual Claude reaches for to configure, extend, or
+  troubleshoot the system.
 
-**Qualitative relevance — never a score.** Claude reads each posting against your plain-English brief and
-decides two things: **relevant or not** (false only when a must-have or dealbreaker is clearly violated), and
-if relevant, **weak / moderate / strong** — always with reasoning. There are **no 0–100 fit scores, no
-category weights, no points.** Importance lives in *which bucket* you put a preference in (must-have vs.
-strong-preference vs. nice-to-have), not in math. Anything a posting doesn't state is flagged "unknown" and
-**never counted against it**; if a dealbreaker can't be confirmed, the digest tells you exactly what to
-check before applying.
+## Philosophy
 
-**You control frequency, not a budget.** You tune the system in human terms — how often it runs (`hourly`,
-`every-2-hours`, `every-6-hours`, `daily`, `weekly`) — by chatting with Claude. There is no budget knob and
-nothing about credits to reason about.
-
-**Private and local.** Your preferences, the jobs it's matched, your run logs, and your digests live in a
-hidden workspace on your own machine (`~/.job-search/`). Nothing personal is uploaded to this repo or
-anywhere else.
-
----
-
-## Cost, honestly
-
-Most of what the system does is **free**. On the `agent-data` CLI, `search`, `docs`, `status`, and `whoami`
-are free; **only `search-jobs` and `get-posting` are metered.**
-
-The system is frugal *by behavior*, not by making you do arithmetic:
-
-- It **judges from the free posting summary first** and only spends a metered detail read on postings that
-  already look promising.
-- It **remembers every posting it has already seen** (in a local file inside your workspace), so it never
-  re-pulls or re-evaluates one.
-- One search per query per run, plus a detail read only for the promising matches.
-
-If the API limit for the period is ever reached, you get a **plain-language note** — never credit math:
-
-> "agent-data's API limit for this period has been reached, so no new postings were pulled. This usually
-> means searches are running very often — lower `schedule.frequency` in `config.yaml` (e.g. `daily` instead
-> of `hourly`), or upgrade your plan at agent-data.motie.dev. Your existing matches are unaffected."
-
-That's the only place cost ever shows up, and the fix is always a frequency change or a plan upgrade — you're
-never asked to reason about credits.
-
----
-
-## Privacy
-
-Your workspace (default `~/.job-search/`) is **private, personal data** — your preferences, where you're
-job-hunting, the postings you've matched, and (later) your resume. It ships with a **deny-all `.gitignore`**:
-
-```gitignore
-# job-search workspace is PRIVATE — do not commit to a public repo
-*
-!.gitignore
-```
-
-**Never commit your workspace to a public repo.** The code in *this* repository contains no personal data.
-
----
+- **Qualitative relevance, never a score.** Claude reads each posting against your brief and decides
+  *relevant or not*, then *weak / moderate / strong* — always with reasoning. No 0–100 scores, no
+  weights, no points. What a posting doesn't state is marked "unknown" and never counted against it.
+- **You control frequency, not a budget.** You tune how often it runs in plain terms (hourly …
+  weekly). There's no credit math to reason about.
+- **Frugal by behavior.** It judges from the free posting summary first and spends a metered detail
+  read only on promising matches, and it never re-pulls a posting it has already seen.
+- **Private and local.** Your preferences, matches, logs, and digests live in `~/.job-search/` on
+  your own machine, behind a deny-all `.gitignore`. Nothing personal is uploaded anywhere.
 
 ## Troubleshooting
 
-Every failure mode is **named and visible** — no silent failures. Blocked runs never fail silently: each writes a **blocked digest** (the named error + its
-fix as the body), fires a **desktop notification**, and is named in your **home view** the
-next time you open the job-search skill. (A headless `claude -p` run itself exits 0 even when
-blocked — the surfacing is the digest/notification/home, not the shell exit code.) The digest's
-**Run health** line is one of `healthy | partial (N errors) | degraded (LinkedIn flaky) | blocked (action
-needed)`.
+Failures are named and visible — never silent. Every error carries its cause and fix in plain
+language, right where you'll see it. A blocked run writes a digest explaining what happened, fires a
+desktop notification, and surfaces the next time you open the job-search skill. The digest's **Run
+health** line reads `healthy`, `partial`, `degraded`, or `blocked (action needed)`.
 
-| Code | When | What you see (cause + fix) | Run effect |
-|---|---|---|---|
-| **E-NO-AGENT-DATA** | the `agent-data` CLI is not found on PATH (prereq check, before `whoami`) | "The agent-data CLI isn't installed. Install it (`npm install -g agent-data`), then run `agent-data whoami` to authenticate. Nothing was pulled." | HALT, exit 1 |
-| **E-NO-CONFIG** | `config.yaml` missing in the workspace | "No `config.yaml` found in <workspace>. Run the job-search skill (say 'set up job search') to set it up." | HALT, exit 1 |
-| **E-NO-AUTH** | `agent-data whoami` shows `api_key_set:false` | "agent-data is not authenticated. Run `export AGENT_DATA_API_KEY=mtk_…` (or save it to `~/.agent-data/config.json`), then verify with `agent-data whoami`. No data was pulled." | HALT, exit 1 |
-| **E-CONFIG-VERSION** | `config.yaml` `version` major is newer than this code supports | "This `config.yaml` was written by a newer version. Update the job-search-os skills, or check `version:` in config." | HALT, exit 1 |
-| **E-NO-PREFERENCES** | `preferences.md` missing/empty (the no-preferences run path) | "No Job Preferences Brief found. Run the job-preference-interview skill to build one, or point `config.yaml:workspace.preferences_path` at your own prose brief. Nothing was pulled." | HALT, exit 1 |
-| **E-SERVICE-DOWN** | `status` route unreachable / non-200 | "The job source is unreachable right now. This is usually temporary — the next scheduled run will retry." | HALT, exit 1, write "service down" digest |
-| **E-BAD-QUERY** | `422 invalid_request` / `400 unsupported_field` on a search | "Query '<id>' is invalid: <param from details[].loc>. Fix it in `config.yaml` under `queries`." | skip that query, continue |
-| **E-UPSTREAM-STRETCH** | 2 consecutive `search-jobs` 502s | "LinkedIn was unreachable this run (repeated upstream errors). Partial or no results; the next scheduled run will retry." | stop searching, partial digest |
-| **E-QUOTA** | agent-data reports its API limit reached (metered call rejected for quota/payment) | "agent-data's API limit for this period has been reached, so no new postings were pulled. This usually means searches are running very often — lower `schedule.frequency` in `config.yaml` (e.g. `daily` instead of `hourly`), or upgrade your plan at agent-data.motie.dev. Your existing matches are unaffected." | HALT, exit 1 |
-
-**Expected non-errors** (these show up as footnotes, not failures):
-
-- A posting's detail link went stale (LinkedIn re-indexed) — Claude judges it from the summary and adds a
-  footnote. Not an error.
-- "No new postings — you've already seen all of these." Reassuring, not a failure.
-- "Searches ran but returned 0 results." Actionable: broaden your keywords in `config.yaml`.
-
----
-
-## See a real digest before you install
-
-Output speaks louder than a README. Two realistic, fictional examples ship in this repo:
-
-- **[`examples/sample-digest.md`](examples/sample-digest.md)** — a full digest in the real format: the
-  Run-health line, the counts line, strong → moderate → weak matches with reasoning and `view` links,
-  `⚠ confirm:` flags where a dealbreaker can't be confirmed, the filtered-out list with one-line reasons, and
-  footnotes.
-- **[`examples/sample-preferences.md`](examples/sample-preferences.md)** — the kind of plain-English
-  preferences brief Claude builds with you: a short summary, must-haves/dealbreakers, strong preferences,
-  nice-to-haves, and red flags. (Yours is built by the interview during onboarding.)
-
----
+Full error reference: [`shared/references/errors.md`](shared/references/errors.md).
 
 ## Roadmap
 
-This release covers **discovery + qualitative relevance + local scheduling**: the front-door
-**job-search** onboarding, the preferences interview, the scheduled runner, single-posting evaluation, and a
-private local workspace.
+This release covers discovery, qualitative relevance, and local scheduling: onboarding, the
+preferences interview, the scheduled runner, single-posting evaluation, and a private local
+workspace.
 
-**Operator manual:** the `job-search-agent` skill is the reference Claude reaches for to configure, extend, or troubleshoot the agent.
+**Coming next:** resume tools — `resume-compare` (a read-only, qualitative look at how your resume
+lines up against a posting, with gaps) and `resume-tailor` (truthful, provenance-checked tailoring
+that never invents experience you don't have).
 
-**Coming next (Plan C):** resume tools — `resume-compare` (a qualitative read of how your resume lines up
-against a posting, with gaps; read-only) and `resume-tailor` (truthful, provenance-checked tailoring that
-never invents experience you don't have).
+## Contributing
 
----
+Building on or exploring the repo with an AI agent? Start at [AGENTS.md](AGENTS.md) — the map of the
+architecture, design beliefs, and plans. See [CONTRIBUTING.md](CONTRIBUTING.md) for the dev workflow
+and [TESTING.md](TESTING.md) for the test harness. This project has a
+[Code of Conduct](CODE_OF_CONDUCT.md).
 
 ## License
 
