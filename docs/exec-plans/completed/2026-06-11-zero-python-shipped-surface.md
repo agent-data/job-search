@@ -1,7 +1,8 @@
 ---
 title: Zero-Python shipped surface — native procedures replace osctl.py / state.py
-state: active
+state: completed
 created: 2026-06-11
+completed: 2026-06-15
 ---
 
 # Zero-Python shipped surface
@@ -99,6 +100,7 @@ with the named gate (doc_lint / pytest / grep / a live run) rather than a unit t
   unauthenticated on this machine). The plan stays **active** and the version stays unbumped until that
   pass is green — then flip to completed and release `0.3.0` (task 7). Everything else is committed
   through 64c346b.
+- 2026-06-15 — live-API acceptance pass green (owner). Plan complete; released in 0.3.0.
 
 ## Decision log
 
