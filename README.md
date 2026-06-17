@@ -6,10 +6,10 @@ Job Search is a plugin that turns Claude Code into a job search assistant. Descr
 
 ## How it works
 
-1. Run `/job-search` and Claude asks what you're after: the role, the level, your must-haves, dealbreakers, and where you want to work.
-2. Claude stores your preferences then runs a live search, comparing each job posting against those preferences.
-3. Claude filters out irrelevant postings and generates a digest with the postings worth your attention, along with its reasoning for each. 
-4. Finally, Claude offers to run your search on a schedule, surfacing new postings only when they match your preferences.
+1. Install the plugin and run /job-search
+2. Claude will ask a few questions to understand the roles you’re interested in and save your preferences locally.
+3. Claude will then pull live job postings, compare posts against your preferences, and generate a digest with only the posts that are relevant.
+*Optional* Claude can also run your search on a schedule (e.g., daily) to surface new posts matching your preferences over time.
 
 See an example digest in [`examples/sample-digest.md`](examples/sample-digest.md).
 
