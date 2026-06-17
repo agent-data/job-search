@@ -6,7 +6,7 @@
     {
       "name": "job-search",
       "source": ".",
-      "description": "Onboard with /job-search:job-search; qualitative relevance, frequency-not-budget, private local workspace.",
+      "description": "Define your preferences and start your first job search with /job-search.",
       "category": "productivity"
     }
   ]
