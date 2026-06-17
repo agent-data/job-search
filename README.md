@@ -6,10 +6,10 @@ Job Search is a plugin that turns Claude Code into a job search assistant. Descr
 
 ## How it works
 
-1. Install the plugin and run /job-search
+1. Install the plugin and run `/job-search`
 2. Claude will ask a few questions to understand the roles you’re interested in and save your preferences locally.
 3. Claude will then pull live job postings, compare posts against your preferences, and generate a digest with only the posts that are relevant.
-*Optional* Claude can also run your search on a schedule (e.g., daily) to surface new posts matching your preferences over time.
+4. *Optionally* Claude can also run your search on a schedule (e.g., daily) to surface new posts matching your preferences over time.
 
 See an example digest in [`examples/sample-digest.md`](examples/sample-digest.md).
 
@@ -54,9 +54,7 @@ Clone the repo, then pick an install path.
 /plugin install job-search-os@agent-data
 ```
 
-**One session, no install.** 
-
-Launch Claude Code with the `--plugin-dir` launch flag:
+**One session, no install.** Launch Claude Code with the `--plugin-dir` launch flag:
 
 ```bash
 claude --plugin-dir /path/to/job-search-os
