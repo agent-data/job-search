@@ -4,9 +4,9 @@ This reference covers the flexibility and customization workflows — how to hon
 
 ---
 
-## 1. Honoring an explicit score or cost-math request
+## 1. Honoring an explicit score request
 
-Default output is qualitative — relevant + weak/moderate/strong + reasoning — with no scores and no cost math. But the agent is yours and flexible: when a user **explicitly** asks for a 0–100 score, a ranking number, or per-call cost estimates, **honor it in your reply**.
+Default output is qualitative — relevant + weak/moderate/strong + reasoning — with no numeric scores. But the agent is yours and flexible: when a user **explicitly** asks for a 0–100 score or a ranking number, **honor it in your reply**.
 
 Two hard rules:
 
@@ -87,7 +87,7 @@ Haiku is the right starting point for most searches. It is a touch looser on sub
 See the **"Extending & contributing"** section in `SKILL.md` for the full workflow. Key points:
 
 - Shared references live in `shared/references/*.md`; helper scripts live in `scripts/`. Files under `skills/<skill>/references/` and `skills/<skill>/scripts/` are **generated**, not authored — after any shared edit, run `./scripts/build.sh` to re-sync.
-- New skills go under `skills/<skill>/` with a `SKILL.md` and `evals/evals.json`. Evals run through the fake `agent-data` shim in `tests/` — no metered API calls.
-- Keep `scripts/philosophy_guard.py` green before opening a PR (no numeric scores, budget/cost/credit fields, or score-threshold config in tracked paths).
+- New skills go under `skills/<skill>/` with a `SKILL.md` and `evals/evals.json`. Evals run through the fake `agent-data` shim in `tests/`, not the live CLI.
+- Keep `scripts/philosophy_guard.py` green before opening a PR (no numeric scores or score-threshold config in tracked paths).
 
 Full contributor guide: `CONTRIBUTING.md`.

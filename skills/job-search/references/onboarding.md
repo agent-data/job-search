@@ -10,7 +10,7 @@ from memory.
 **Ground rule — how you behave, not a speech to give:** every step that can't proceed stops with a
 **named error** (an `E-*` from `errors.md`) that tells the user the cause and the exact fix. There are no
 silent failures. And you configure everything by **chatting** — the user never hand-edits a file. No
-scores, no credits, ever. Never announce these guarantees to the user ("nothing fails silently", "every
+scores, ever. Never announce these guarantees to the user ("nothing fails silently", "every
 step will say so plainly") — reliability is demonstrated, not promised; meta-assurances are noise.
 
 **Assume zero context.** A first-run user has never seen this system and doesn't know its words. Per
@@ -31,12 +31,11 @@ machinery talk instead of a greeting.
 
 Then go, one step at a time. Keep the user oriented but don't over-explain.
 
-## 2. Prerequisites — get agent-data ready (free)
+## 2. Prerequisites — get agent-data ready
 
 This plugin runs on a tool called **agent-data** — it's what pulls and reads live job postings. Right after
-the welcome (§1 owns your first words), make sure it's ready, before anything metered or persistent. These
-are free checks — no metered calls, no cost — and nothing is searched, written, or created until it's
-working.
+the welcome (§1 owns your first words), make sure it's ready, before anything persistent. Nothing is
+searched, written, or created until it's working.
 
 **Keep the user oriented — explain, don't script.** Narrate the way Claude Code does by default: a short
 line of what you're doing and why around non-obvious work, in your own words — no fixed formula, no line
@@ -203,7 +202,7 @@ user to name keywords.** They can retune anytime; the goal here is zero upfront 
    The config already comes preset with a recency window (recent postings only) and a fast model for reading
    posting details — both are tunable anytime just by asking.
 4. **Pick a frequency — with the question tool** (`voice.md` → Asking questions), the plain-language nudge
-   carried by the recommended-first option — **no credit or cost math**. Header `Frequency`; question:
+   carried by the recommended-first option. Header `Frequency`; question:
    "How often should I check for new postings? You can change this anytime by just telling me."; options,
    recommended first:
 
@@ -214,7 +213,7 @@ user to name keywords.** They can retune anytime; the goal here is zero upfront 
 
    Set `schedule.frequency` to the chosen allowed value: `hourly | every-2-hours | every-6-hours | daily |
    weekly` — `every-2-hours` has no button, so map a typed answer ("every couple of hours") to the nearest
-   allowed value and say which one you set. **Never** add a budget, cost, or score/weight field — those
+   allowed value and say which one you set. **Never** add a score or weight field — those
    don't exist in this system.
 
 ## 6. First live sample run — the magical moment
@@ -238,7 +237,7 @@ Handle whatever the run reports, in plain language:
   from `errors.md` and stop the magical framing. Most likely here:
   - **`E-QUOTA`** — agent-data's API limit for this period was reached, so nothing new was pulled. Fix: pull
     less often (e.g. `daily` instead of `hourly` in `config.yaml`) or upgrade the plan. Existing matches are
-    unaffected. (This is the **only** time cost ever surfaces — reactively.)
+    unaffected.
   - **`E-SERVICE-DOWN`** — the source is unreachable right now; usually temporary, the next run retries.
   - (Auth/config/preferences errors shouldn't appear if steps 2–5 succeeded; if one does, name it and fix
     the gap.)
@@ -247,7 +246,7 @@ Handle whatever the run reports, in plain language:
 - **Zero results, literally empty** → actionable: offer to broaden the keywords in the query (and apply it
   conversationally).
 
-Don't show run internals, credits, or scores — just the matches and, if relevant, the named error.
+Don't show run internals or scores — just the matches and, if relevant, the named error.
 
 ## 7. Scheduling (offer it; native `/loop`, nothing touches the machine)
 
@@ -313,7 +312,7 @@ runs", "update my preferences", "show the latest digest").
       `jobs.jsonl`; the active workspace recorded in the registry
 - [ ] `preferences.md` exists (interview or import via `job-preference-interview`)
 - [ ] 2–3 `queries[]` **derived from the brief** and written (no upfront keyword-picking); searches
-      acknowledged; `schedule.frequency` set (plain-language nudge, **no cost math**)
+      acknowledged; `schedule.frequency` set (plain-language nudge)
 - [ ] first **live** `job-search-run` done; strong/moderate matches shown — or the named error if blocked
 - [ ] scheduling offered via native `/loop`; on yes started + marker set; `/loop` recipe shown either way
 - [ ] every ask carried one line of plain-English context; the four closed choices (workspace location,

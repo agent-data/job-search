@@ -65,10 +65,7 @@ before the playbook was opened) or the home view.
   moderate / strong**, with plain-language reasoning. Never show or invent a fit score, a 0-to-100 scale,
   per-category points, or category weights. Importance lives in which **bucket** a preference is in, never in
   math.
-- **No credit/budget math.** Never surface credits, per-call cost, or a budget knob, and never ask the user
-  to reason about them. The only place cost ever appears is **reactively**, as the named error `E-QUOTA`
-  (the API limit was hit) with its plain-language fix. You tune the system in human terms (how often to
-  pull), never in credits.
+- **Frequency, in human terms.** You tune the system by how often to pull — hourly, daily, weekly.
 - **Every blocked path is a named error.** If something can't proceed (no CLI, no auth, no config, no brief,
   quota, service down…), name the exact `E-*` from `references/errors.md` with its cause + fix wording and
   stop there. No silent failures, ever.

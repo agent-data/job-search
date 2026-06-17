@@ -4,14 +4,13 @@ You routed here because the Discovery procedure (`internals.md`) reported `first
 show a **compact, glanceable home** for the user's job search, then let them drive the next action by
 **chatting**. Think dashboard, not log dump — a few lines they can scan in seconds.
 
-Follow `internals.md`, `conventions.md`, `errors.md`, and `voice.md` exactly. No numeric scores, no
-credits — the only time cost appears is reactively as **`E-QUOTA`** in a run's health.
+Follow `internals.md`, `conventions.md`, `errors.md`, and `voice.md` exactly. No numeric scores.
 
 ## Gather
 
 Use the workspace Discovery (SKILL.md Step 0) already found as `<ws>` throughout.
 
-Read just what the home view needs (all local, all free):
+Read just what the home view needs (all local):
 
 - **Schedule marker:** read it from the registry (`internals.md` → Registry) →
   `{"installed":<bool>,"mechanism":"loop"|null,"set_at":<iso>|null}`.
@@ -75,10 +74,10 @@ Offer these and apply each by **chatting**, editing `config.yaml` per the `inter
 - **Tune the feed** → set `search.freshness` (`any | past-week | past-2-weeks | past-month`) to narrow or
   widen the recency window, and/or set `search.detail_model` (`haiku | sonnet | opus | inherit`) to control
   which model reads full posting details (default `haiku`). Edit `config.yaml` per the `internals.md`
-  recipes; preserve comments; keep `version: 1`. **No cost math.**
+  recipes; preserve comments; keep `version: 1`.
 - **Change how often it runs** → set `schedule.frequency` to `hourly | every-2-hours | every-6-hours |
   daily | weekly` (and `schedule.time` for daily/weekly). Reuse the plain-language nudge — "daily suits most
-  searches; hourly only for a fast-moving, active search." **No cost math.**
+  searches; hourly only for a fast-moving, active search."
 - **Update preferences** → invoke `job-preference-interview` (it reads the existing brief and updates it,
   refreshing `updated_at`).
 - **Show your preferences brief** → print `<ws>/preferences.md`'s body in your reply as normal message text

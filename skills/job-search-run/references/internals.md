@@ -91,7 +91,7 @@ The user changes config by **chatting**; manual editing is an escape hatch. To a
   (role synonyms, key locations, remote variants), run often, and dedup; distinct postings accumulate across runs.
 - **Change frequency:** set `schedule.frequency` to one of `hourly | every-2-hours | every-6-hours | daily | weekly`.
 - **Change run time:** set `schedule.time` (HH:MM, used for daily/weekly).
-- Always keep `version: 1`. NEVER add a budget, cost, or score/weight field (philosophy).
+- Always keep `version: 1`. NEVER add a score or weight field (philosophy).
 
 ## Scheduling setup (native `/loop` — nothing is installed on the user's machine)
 Job Search schedules with Claude Code's native **`/loop`**: it re-runs the search on an interval inside an

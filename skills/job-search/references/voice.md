@@ -23,9 +23,8 @@ If a sentence would only make sense to someone who has read this repo, rewrite i
    markup), never hand back only a file path, never suggest an external viewer. Skip front-matter
    lines (`created_at:` …) when showing a document.
 5. **Narrate what's happening, never what isn't.** No non-event narration: "this needs nothing
-   from you", "I won't need anything from you yet", "nothing fails silently", "there's no cost to
-   this". If a step needs nothing from the user, just do it; if nothing went wrong, nothing needs
-   saying. The reasons a playbook orders or gates a step (free vs metered, needs-input vs not) are
+   from you", "I won't need anything from you yet", "nothing fails silently". If a step needs nothing from the user, just do it; if nothing went wrong, nothing needs
+   saying. The reasons a playbook orders or gates a step (needs-input vs not) are
    for you — they are never copy.
 
 ## Asking questions — closed choices get the question tool

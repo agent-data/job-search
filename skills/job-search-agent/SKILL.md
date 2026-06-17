@@ -14,7 +14,7 @@ The system in one paragraph: a private, local-first job-search agent. It searche
 Hold these stances in every change you make — each exists for a reason, and several are CI-enforced:
 
 - **Qualitative-by-default.** Relevance is expressed as relevant or not, and if relevant as weak / moderate / strong with plain-language reasoning. No score is computed or stored unless you explicitly ask — and even then a numeric score is never written into your saved digests, `jobs.jsonl`, or preferences brief.
-- **Frequency-not-budget.** You tune the system in human terms (how often to pull: hourly, daily, weekly). Credits and per-call cost are never surfaced except reactively as the named error `E-QUOTA` when the API limit is actually hit.
+- **Frequency, in human terms.** You tune the system by how often to pull: hourly, daily, weekly.
 - **Private-local.** All data lives under `~/.job-search/` (hidden, deny-all `.gitignore`). Nothing is ever committed to a public repo by the agent.
 - **Every blocked path is a named error.** If anything can't proceed, the agent names the exact `E-*` with its cause and fix, then stops. No silent failures.
 - **Conversational-first config.** You change anything — a query, the frequency, your preferences — by chatting. The agent edits `config.yaml` minimally and writes it back. Hand-editing files is an escape hatch you can always use, not a required step.
@@ -58,13 +58,13 @@ For every supported edit — adding, editing, or pausing a query (`enabled: fals
 **Invariants — never break these:**
 - Always preserve `version: 1` in `config.yaml`.
 - Always preserve existing comments and structure when editing.
-- Never add a `budget`, `cost`, `score`, or `weight` field anywhere.
+- Never add a `score` or `weight` field anywhere.
 
 ---
 
 ## Customizing & extending it
 
-The agent is designed to be extended — add queries, swap the brief, point the runner at a different workspace, or build new skills that slot into the same conventions. For the full flexibility workflows — including how to honor an explicit score or cost-math request without polluting the clean data — see `references/customization.md`.
+The agent is designed to be extended — add queries, swap the brief, point the runner at a different workspace, or build new skills that slot into the same conventions. For the full flexibility workflows — including how to honor an explicit score request without polluting the clean data — see `references/customization.md`.
 
 **Run architecture.** Each run scans new posting summaries in the primary context (cheaply rejecting clear dealbreakers), then fans out one detail-read subagent per promising posting in parallel (model = `search.detail_model`, each follows the `evaluate-job-fit` skill), then consolidates and validates all verdicts before persisting. See `references/parallelism.md` for the parallel-by-default principle and how to brief a subagent; see `references/customization.md` for the recency, model, and feed-size knobs.
 
@@ -126,9 +126,9 @@ For the full `E-*` table with exact cause and fix wording: see `references/error
 
 **Adding a new skill.** Create a folder under `skills/<skill>/` with a `SKILL.md` and an `evals/evals.json`. Run `./scripts/build.sh` to sync the shared refs into the new skill. Write evals that cover the happy path and the named-error HALT paths.
 
-**Evals are credit-free.** Evals run through the fake `agent-data` shim in `tests/` — no metered API calls, nothing billed. When you add a code path that calls `agent-data`, route the eval through the shim rather than the live CLI.
+**Evals use the fake shim.** Evals run through the fake `agent-data` shim in `tests/`, not the live CLI. When you add a code path that calls `agent-data`, route its eval through the shim.
 
-**Philosophy guard.** The repo's CI runs a philosophy guard that rejects any file introducing numeric scores, budget/cost/credit fields, or score-threshold config into the shipped default output (`examples/`, `templates/`). Keep the guard green before opening a PR (exact commands in `CONTRIBUTING.md`).
+**Philosophy guard.** The repo's CI runs a philosophy guard that rejects any file introducing numeric scores or score-threshold config into the shipped default output (`examples/`, `templates/`). Keep the guard green before opening a PR (exact commands in `CONTRIBUTING.md`).
 
 **Versioning.** `config.yaml` carries `version: 1`. If a breaking schema change is needed, bump the major version and add the corresponding `E-CONFIG-VERSION` detection to the runner's preflight.
 

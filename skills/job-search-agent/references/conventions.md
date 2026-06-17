@@ -4,7 +4,7 @@ The **workspace** (default the hidden `~/.job-search/`; an existing visible `~/j
 
 ```
 ~/.job-search/
-  config.yaml                # queries + schedule (human terms only; NO budgets/score thresholds)
+  config.yaml                # queries + schedule (human terms only; no score thresholds)
   preferences.md             # Job Preferences Brief — prose only
   resumes/master.md          # base resume; resumes/tailored/ for generated ones (Plan C)
   jobs.jsonl                 # append-only EVENT log; current state = fold by source_id
@@ -84,7 +84,6 @@ Operations (no helper script — perform these exactly):
                "retryable":true, "attempts":3, "final":"gave_up", "request_id":"…" } ],
   "run_health":"healthy|partial|degraded|blocked" }
 ```
-No budget block, no credit/USD fields.
 
 ## preferences.md — prose brief (the model reads this; NO machine-readable contract, NO weights)
 Sections: a 2–3 sentence **Summary**; **Must-haves / dealbreakers** (the binary filters); **Strong

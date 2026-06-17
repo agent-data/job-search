@@ -17,7 +17,7 @@ degraded (LinkedIn flaky) | blocked (action needed)`.
 | **E-SERVICE-DOWN** | `status` route unreachable / non-200 | "The job source is unreachable right now. This is usually temporary — the next scheduled run will retry." | HALT, exit 1, write "service down" digest |
 | **E-BAD-QUERY** | `422 invalid_request` / `400 unsupported_field` on a search | "Query '<id>' is invalid: <param from details[].loc>. Fix it in `config.yaml` under `queries`." | skip that query, continue |
 | **E-UPSTREAM-STRETCH** | 2 consecutive `search-jobs` 502s | "LinkedIn was unreachable this run (repeated upstream errors). Partial or no results; the next scheduled run will retry." | stop searching, partial digest |
-| **E-QUOTA** | agent-data reports its API limit reached (metered call rejected for quota/payment) | "agent-data's API limit for this period has been reached, so no new postings were pulled. This usually means searches are running very often — lower `schedule.frequency` in `config.yaml` (e.g. `daily` instead of `hourly`), or upgrade your plan at agent-data.motie.dev. Your existing matches are unaffected." | HALT, exit 1 |
+| **E-QUOTA** | agent-data reports its API limit reached (a call rejected for quota/payment) | "agent-data's API limit for this period has been reached, so no new postings were pulled. This usually means searches are running very often — lower `schedule.frequency` in `config.yaml` (e.g. `daily` instead of `hourly`), or upgrade your plan at agent-data.motie.dev. Your existing matches are unaffected." | HALT, exit 1 |
 
 ### Expected non-errors (footnotes, not failures)
 - **invalid_pair** (`400`, `retryable:false`) on `get-posting`: the `jp_`/`source_url` pair went stale (LinkedIn
@@ -29,6 +29,6 @@ degraded (LinkedIn flaky) | blocked (action needed)`.
 
 ### Detecting E-QUOTA vs E-NO-AUTH from the CLI
 Both surface as a non-zero `agent-data call`. Distinguish by: run `agent-data whoami` first (covers auth). If
-auth is fine but a metered call fails with a payment/quota/limit signal in stderr (e.g. HTTP 402/429, or a
-message mentioning credits/quota/limit), treat as E-QUOTA. Anything else upstream is treated per its
+auth is fine but an agent-data call fails with a payment/quota/limit signal in stderr (e.g. HTTP 402/429, or a
+message mentioning quota/limit), treat as E-QUOTA. Anything else upstream is treated per its
 `retryable` flag (502 → retry; otherwise record + continue).

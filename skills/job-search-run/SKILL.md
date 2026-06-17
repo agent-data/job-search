@@ -10,7 +10,7 @@ user-invocable: true
 > To configure, extend, customize, or troubleshoot the agent itself (or understand its
 > capabilities), use the **job-search-agent** skill — the operator manual.
 
-Run ONE headless job-search pass over the workspace. Free gates before metered calls; no silent failures.
+Run ONE headless job-search pass over the workspace. Preflight gates before searching; no silent failures.
 **Shape:** search → dedup/freshen → **scan summaries in this (primary) context** → **fan out one parallel
 subagent per promising posting** for the detail read → **consolidate** into a digest.
 
@@ -31,7 +31,7 @@ Read these before running, and follow them exactly:
 - `references/voice.md` — how any user-facing line is worded (see **Narrating** below).
 
 ## Loop
-0. **Preflight (free).**
+0. **Preflight.**
    - `agent-data` not found on PATH → E-NO-AGENT-DATA (HALT, exit 1).
    - No `config.yaml` → E-NO-CONFIG (HALT, exit 1).
    - `agent-data whoami`; `api_key_set:false` → E-NO-AUTH (HALT, exit 1).
@@ -44,7 +44,7 @@ Read these before running, and follow them exactly:
    > Before exiting on ANY E-* HALT where a workspace exists (E-NO-AUTH, E-NO-PREFERENCES,
    > E-CONFIG-VERSION, E-SERVICE-DOWN, E-QUOTA), write `runs/<run_id>.json` with
    > `run_health:"blocked"` + the error, so the next home view surfaces it.
-1. **Search the feed (one metered `search-jobs` per enabled query; run the queries concurrently).** For each
+1. **Search the feed (one `search-jobs` per enabled query; run the queries concurrently).** For each
    `queries[]` with `enabled:true`, call `search-jobs` with `--keywords` (+ `--location`, `--limit`) and `--fields id,source_id,source_url,title,company_name,location_display,salary_display,posted_at,detail_available,source`.
    `limit` is the feed size (1–100, **default 25**) — pull generously and lean on **breadth** (several varied
    queries beat one giant pull; there's no pagination and re-runs reorder). See remote-derivation and "as many
@@ -53,7 +53,7 @@ Read these before running, and follow them exactly:
      **Two consecutive queries that fail entirely (all retries exhausted) → E-UPSTREAM-STRETCH: stop searching the rest.**
    - `422`/`400 unsupported_field` → E-BAD-QUERY (name the bad param from `details[].loc`), skip that query.
    - A quota/limit/payment failure (see errors.md detection) → E-QUOTA (HALT, exit 1).
-2. **Dedup + freshen (free).** The **known-ids** operation (`references/conventions.md` §jobs.jsonl) over
+2. **Dedup + freshen.** The **known-ids** operation (`references/conventions.md` §jobs.jsonl) over
    `<workspace>/jobs.jsonl` → the known set;
    NEW = results whose non-null `source_id` is not in it (this is the dedup mechanism the no-reprocessing
    guarantee rests on — see Idempotency). Then apply `search.freshness` (default `past-2-weeks`):

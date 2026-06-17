@@ -5,19 +5,17 @@ The only job source in v1. Accessed via the `agent-data` CLI (JSON stdout, error
 - **Listing id:** `f9a6ec16-0bfd-44d8-b3ee-073776745ee7`
 - **CLI shape:** `agent-data call <listing-id> <slug> [--flag value ...]`. Add `--dry-run` to print the
   resolved request without executing. `agent-data whoami` reports auth.
-- **Free vs metered:** `whoami`, `search`, `docs`, and the listing's `status` route are FREE. The
-  `search-jobs` and `get-posting` calls are metered. **Never surface credits to the user** — see `errors.md` (E-QUOTA).
 - **Dedup key:** the LinkedIn-native **`source_id`** (stable across searches). The row's `id` (format
   `jp_<12-hex>`) is listing-scoped and NOT stable — use it only as a short-lived pairing token with `source_url`.
 
-## Route: status  (free, run this first)
+## Route: status  (run this first)
 ```
 agent-data call f9a6ec16-0bfd-44d8-b3ee-073776745ee7 status
 ```
 Returns `{"status": "ok"}` healthy or `{"status": "degraded"}` when upstream fetches are failing at a high
-rate. Does not consume the fetch budget. A fresh service is `ok` by default.
+rate. A fresh service is `ok` by default.
 
-## Route: search-jobs  (metered)
+## Route: search-jobs
 ```
 agent-data call f9a6ec16-0bfd-44d8-b3ee-073776745ee7 search-jobs \
   --keywords "<required>" [--location "<optional>"] [--limit <1-100, default 20>] \
@@ -31,7 +29,7 @@ agent-data call f9a6ec16-0bfd-44d8-b3ee-073776745ee7 search-jobs \
 - **Errors:** `422 invalid_request` (`details[].loc` names the bad param), `400 unsupported_field`
   (bad `fields=` name), `502 search_failed` (`retryable:true`).
 
-## Route: get-posting  (metered; needs the id+source_url PAIR from one search row)
+## Route: get-posting  (needs the id+source_url PAIR from one search row)
 ```
 agent-data call f9a6ec16-0bfd-44d8-b3ee-073776745ee7 get-posting \
   --posting_id "<jp_ id from the row>" --source_url "<source_url from the SAME row>" \
