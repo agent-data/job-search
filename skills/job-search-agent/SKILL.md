@@ -73,7 +73,7 @@ The agent is designed to be extended — add queries, swap the brief, point the 
 ## Scheduling
 
 Scheduling is Claude Code's native **`/loop`** — the only mechanism the agent sets up.
-`/loop <interval> /job-search-os:job-search-run` (plugin installs; loose skills drop the `job-search-os:`
+`/loop <interval> /job-search:job-search-run` (plugin installs; loose skills drop the `job-search:`
 prefix) re-runs the search on an interval inside an open Claude session; nothing is installed on the user's
 machine (no crontab, no launchd). Compose the line from the interval table in `references/internals.md` →
 Scheduling setup, run it, and set the scheduling marker. The one tradeoff: it runs only while a Claude
@@ -97,7 +97,7 @@ For the full `E-*` table with exact cause and fix wording: see `references/error
 | Runs complete but 0 matches even though real postings exist | Query keywords don't match the brief's must-haves | Broaden the query in `config.yaml`, or run the **job-preference-interview** skill to align the brief |
 | 0 results (literally empty) | Keywords too narrow or location too specific | Broaden `keywords` or `location` in the query |
 | Last run: blocked — E-QUOTA | API limit reached for the period | Lower `schedule.frequency` (e.g. `daily` instead of `hourly`), or upgrade your plan at agent-data.motie.dev |
-| Schedule isn't firing | The `/loop` isn't running (its Claude session closed) | Check the scheduling marker in the registry (`references/internals.md`); restart it with the `/loop` line from the interval table (namespaced `/job-search-os:job-search-run` for plugin installs) |
+| Schedule isn't firing | The `/loop` isn't running (its Claude session closed) | Check the scheduling marker in the registry (`references/internals.md`); restart it with the `/loop` line from the interval table (namespaced `/job-search:job-search-run` for plugin installs) |
 | "Stale brief" nudge in the digest | `preferences.md` hasn't been updated in a long time | Run the **job-preference-interview** skill to refresh it |
 
 ---

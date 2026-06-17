@@ -1,7 +1,7 @@
 {
-  "name": "job-search-os",
+  "name": "job-search",
   "version": "0.3.0",
-  "description": "Claude Code as a job-search OS: a private, local-first workspace that pulls postings, judges each one's relevance against your prose preferences (qualitative — no scores), and digests the matches on a schedule you control. Run /job-search-os:job-search to onboard end-to-end.",
+  "description": "Claude Code as a job-search assistant: a private, local-first workspace that pulls postings, judges each one's relevance against your prose preferences (qualitative — no scores), and digests the matches on a schedule you control. Run /job-search:job-search to onboard end-to-end.",
   "author": { "name": "Aptiq Labs, Inc." },
   "homepage": "https://github.com/agent-data/job-search",
   "repository": "https://github.com/agent-data/job-search",

@@ -67,7 +67,7 @@ You only report; the controller decides whether to fix now or log it.
    a doc — docs follow code, not the reverse.
 4. Keep the gates green, then open a fix-up PR (never push to main, never force-merge):
 ```bash
-cd ~/job-search-os
+cd ~/job-search
 DATE=$(date +%F)
 git switch -c "doc-gardening/$DATE"
 # ... apply the confident fixes ...

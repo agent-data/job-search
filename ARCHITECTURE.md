@@ -1,6 +1,6 @@
 # Architecture
 
-Job Search OS turns **Claude Code** into a private, local-first **job-search operating system**: a plugin
+Job Search turns **Claude Code** into a private, local-first **job-search operating system**: a plugin
 of five skills, a single-source-of-truth `shared/references/` tree whose pinned contracts Claude Code
 executes natively (no bundled runtime — no Python), and a pytest + fake-shim + eval harness. It searches LinkedIn postings through the agent-data
 marketplace, judges each one qualitatively against your prose preferences brief, and writes human digests
@@ -18,7 +18,7 @@ entry point. Companion grading: [docs/QUALITY_SCORE.md](docs/QUALITY_SCORE.md) s
 
 The product framing is an operating system whose userland is your job search:
 
-| OS concept | In Job Search OS |
+| OS concept | In Job Search |
 |---|---|
 | Kernel / shell | Claude Code itself — runs the skills, holds the conversation |
 | Programs | the five skills (the front door, the runner, the interview, the judge, the operator manual) |

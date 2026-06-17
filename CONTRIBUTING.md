@@ -1,4 +1,4 @@
-# Contributing to Job Search OS
+# Contributing to Job Search
 
 Thanks for helping out. This project has a few hard rules that keep the codebase honest and the skills
 self-contained — please read these before opening a PR.

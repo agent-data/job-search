@@ -28,8 +28,8 @@ See an example digest in [`examples/sample-digest.md`](examples/sample-digest.md
    ```
 2. **Launch Claude Code then register the local clone as a marketplace:**
    ```
-   /plugin marketplace add /path/to/job-search-os
-   /plugin install job-search-os@agent-data
+   /plugin marketplace add /path/to/job-search
+   /plugin install job-search@agent-data
    ```
 3. **Kick off your job search.** Run `/job-search`
 
@@ -50,20 +50,20 @@ Clone the repo, then pick an install path.
 **Persistent (recommended).** Register the local clone as a marketplace, then install:
 
 ```
-/plugin marketplace add /path/to/job-search-os
-/plugin install job-search-os@agent-data
+/plugin marketplace add /path/to/job-search
+/plugin install job-search@agent-data
 ```
 
 **One session, no install.** Launch Claude Code with the `--plugin-dir` launch flag:
 
 ```bash
-claude --plugin-dir /path/to/job-search-os
+claude --plugin-dir /path/to/job-search
 ```
 
 After installing, run the front door slash command, or just say what you want:
 
 ```
-/job-search-os:job-search
+/job-search:job-search
 ```
 
 ## Contributing

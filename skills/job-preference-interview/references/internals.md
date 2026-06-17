@@ -8,9 +8,9 @@ written; they are the contract every skill shares.
 ## Registry (machine-managed OS state — JSON, not YAML)
 Location (tests/evals redirect it via `$JOBSEARCH_OS_REGISTRY`):
 ```bash
-REG="${JOBSEARCH_OS_REGISTRY:-${XDG_CONFIG_HOME:-${JOBSEARCH_OS_HOME:-$HOME}/.config}/job-search-os/config.json}"
+REG="${JOBSEARCH_OS_REGISTRY:-${XDG_CONFIG_HOME:-${JOBSEARCH_OS_HOME:-$HOME}/.config}/job-search/config.json}"
 ```
-i.e. `~/.config/job-search-os/config.json` by default. Schema:
+i.e. `~/.config/job-search/config.json` by default. Schema:
 ```json
 { "version": 1,
   "active_workspace": "/Users/<u>/.job-search",
@@ -46,7 +46,7 @@ does.
 ## Workspace discovery & first-run detection
 Gather the facts with one command, then apply the precedence rules:
 ```bash
-REG="${JOBSEARCH_OS_REGISTRY:-${XDG_CONFIG_HOME:-${JOBSEARCH_OS_HOME:-$HOME}/.config}/job-search-os/config.json}"
+REG="${JOBSEARCH_OS_REGISTRY:-${XDG_CONFIG_HOME:-${JOBSEARCH_OS_HOME:-$HOME}/.config}/job-search/config.json}"
 H="${JOBSEARCH_OS_HOME:-$HOME}"
 echo "registry: $REG"; cat "$REG" 2>/dev/null
 test -f "$H/.job-search/config.yaml" && echo DEFAULT_HAS_CONFIG
@@ -94,7 +94,7 @@ The user changes config by **chatting**; manual editing is an escape hatch. To a
 - Always keep `version: 1`. NEVER add a budget, cost, or score/weight field (philosophy).
 
 ## Scheduling setup (native `/loop` — nothing is installed on the user's machine)
-Job Search OS schedules with Claude Code's native **`/loop`**: it re-runs the search on an interval inside an
+Job Search schedules with Claude Code's native **`/loop`**: it re-runs the search on an interval inside an
 open Claude session. There is **no privileged write** — no crontab, no launchd, nothing on the user's machine.
 The one tradeoff: it runs only while a Claude session is open. Never initiate a crontab/launchd install
 yourself; if the user explicitly asks for cron, it's their machine and their call — show the `/loop` recipe
@@ -105,20 +105,20 @@ every-2-hours→`2h`, every-6-hours→`6h`, daily→`24h`, weekly→`168h`. (`sc
 /loop — the loop fires on an interval from when it's started; intervals are hour-based, e.g. `24h` not `1d`,
 since /loop's duration parser is not guaranteed to accept a day unit.) **Match the /loop target to the
 install:** plugin skills are only invocable namespaced, so when these skills run as a plugin (this skill
-appears as `job-search-os:…` in your skill list — the usual install) the target is
-`/job-search-os:job-search-run`; loose skills copied into `~/.claude/skills/` use the bare `/job-search-run`.
+appears as `job-search:…` in your skill list — the usual install) the target is
+`/job-search:job-search-run`; loose skills copied into `~/.claude/skills/` use the bare `/job-search-run`.
 Offer it as a yes/no; on yes, run that `/loop` command and set the scheduling marker (write rules above).
 Check the marker before offering so you never re-ask. ALWAYS also show this recipe verbatim (in the form for
 THIS install) so the user can start or restart it themselves:
 
 ```
 Recurring (runs while a Claude session is open — nothing installed on your machine):
-  /loop <interval> /job-search-os:job-search-run      # hourly → 1h · daily → 24h · weekly → 168h
+  /loop <interval> /job-search:job-search-run      # hourly → 1h · daily → 24h · weekly → 168h
 One-off run anytime:
-  /job-search-os:job-search-run
+  /job-search:job-search-run
 ```
 
-(For loose-skill installs, drop the `job-search-os:` prefix from both lines.)
+(For loose-skill installs, drop the `job-search:` prefix from both lines.)
 
 To turn scheduling off: stop the loop (end the session, or cancel the pending wakeup), then clear the
 scheduling marker (write rules above — no more stale `installed: true`).

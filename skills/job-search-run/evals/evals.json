@@ -121,7 +121,7 @@
       "scenario": "config written by newer version (E-CONFIG-VERSION)",
       "prompt": "Build a temp workspace + shim (setup-workspace.sh), PATH=<tmp>/_bin:$PATH, JOBSEARCH_TEST_SCENARIO=happy, JOBSEARCH_FIXTURES=<repo>/tests/fixtures. Then bump the config version: `sed -i.bak 's/^version: 1/version: 2/' <tmp>/config.yaml`. Run the job-search-run skill with --workspace <tmp>.",
       "expectations": [
-        "Halts at preflight with E-CONFIG-VERSION (config written by a newer version; update the job-search-os skills); makes NO search-jobs/get-posting calls",
+        "Halts at preflight with E-CONFIG-VERSION (config written by a newer version; update the job-search skills); makes NO search-jobs/get-posting calls",
         "Writes runs/<id>.json with run_health 'blocked' naming E-CONFIG-VERSION so the home view surfaces it; a headless run exits 0 (do not assert non-zero)",
         "jobs.jsonl is untouched"
       ]

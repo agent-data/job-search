@@ -10,7 +10,7 @@ code_refs: [skills/job-search/SKILL.md, skills/job-search/references/onboarding.
 
 ## Goal and the magical moment
 
-Within approximately five minutes of installing Job Search OS, a new user sees real, live job
+Within approximately five minutes of installing Job Search, a new user sees real, live job
 postings judged against their own stated preferences — strong, moderate, or weak matches with
 plain-language reasoning — without writing a single file by hand. That first digest, produced
 seconds after the interview ends, is the **magical moment**: the system is no longer abstract; it
@@ -22,7 +22,7 @@ that moment or gates it safely; none is bureaucratic overhead.
 
 ## Trigger and routing
 
-The **job-search** skill is the front door (`/job-search-os:job-search` as a plugin — plugin skills
+The **job-search** skill is the front door (`/job-search:job-search` as a plugin — plugin skills
 are only invocable namespaced; bare `/job-search` for loose-skill installs). On every invocation the skill runs the workspace-discovery
 procedure to read the workspace state. When discovery reports `first_run: true` the skill routes to the
 first-run playbook; when `first_run: false` it routes to the returning-user home. The routing

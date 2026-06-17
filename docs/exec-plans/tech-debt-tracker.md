@@ -1,6 +1,6 @@
 # Technical Debt Tracker
 
-The canonical, itemised technical-debt backlog for job-search-os. The high-level maturity view is
+The canonical, itemised technical-debt backlog for job-search. The high-level maturity view is
 in [QUALITY_SCORE.md](../QUALITY_SCORE.md); this is the detailed list. (Migrated from the former
 root `TODOS.md`, which now points here.)
 

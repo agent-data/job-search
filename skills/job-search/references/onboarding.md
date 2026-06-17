@@ -251,7 +251,7 @@ Don't show run internals, credits, or scores — just the matches and, if releva
 
 ## 7. Scheduling (offer it; native `/loop`, nothing touches the machine)
 
-Offer to keep the search running automatically. Job Search OS schedules with Claude Code's **native
+Offer to keep the search running automatically. Job Search schedules with Claude Code's **native
 `/loop`** — it re-runs the search on an interval **inside an open Claude session** and never writes anything
 to the user's machine (no crontab, no launchd). Follow `internals.md`. Say it plainly, including the one
 tradeoff: it runs **while you have a Claude session open**.
@@ -266,15 +266,15 @@ ends" · **No, I'll run it myself** — "a one-off search stays one command away
 1. Compose the command for the chosen frequency from the interval table in `internals.md` → Scheduling
    setup — e.g. daily → `/loop 24h /job-search-run`.
    **Match the target to the install:** plugin skills are only invocable namespaced, so when these skills
-   run as a plugin (this skill appears as `job-search-os:…` in your skill list — the usual install), the
-   target is `/loop 24h /job-search-os:job-search-run`. Loose skills in `~/.claude/skills/` use the bare
+   run as a plugin (this skill appears as `job-search:…` in your skill list — the usual install), the
+   target is `/loop 24h /job-search:job-search-run`. Loose skills in `~/.claude/skills/` use the bare
    form.
 2. **Start it** by running that `/loop …` command, then record it so you don't re-ask: set the scheduling
    marker (`internals.md` → Registry write rules — records `mechanism: loop`).
 3. Show the user the exact `/loop` line so they can restart it anytime (it stops when the session ends).
 
 **On no:** leave it unscheduled — tell them they can turn it on later by just asking, and that a one-off run
-is always one slash command away (`/job-search-os:job-search-run` as a plugin; `/job-search-run` as loose
+is always one slash command away (`/job-search:job-search-run` as a plugin; `/job-search-run` as loose
 skills).
 
 **Either way, show this recipe verbatim** (in the form for THIS install) so the user can start or restart it
@@ -282,12 +282,12 @@ themselves (from `internals.md`):
 
 ```
 Recurring (runs while a Claude session is open — nothing installed on your machine):
-  /loop <interval> /job-search-os:job-search-run      # hourly → 1h · daily → 24h · weekly → 168h
+  /loop <interval> /job-search:job-search-run      # hourly → 1h · daily → 24h · weekly → 168h
 One-off run anytime:
-  /job-search-os:job-search-run
+  /job-search:job-search-run
 ```
 
-(For loose-skill installs, drop the `job-search-os:` prefix from both lines.)
+(For loose-skill installs, drop the `job-search:` prefix from both lines.)
 
 ## 8. Home
 

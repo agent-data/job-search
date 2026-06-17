@@ -16,7 +16,7 @@ refuses to become and why, which is the part most likely to be re-litigated. Jum
 
 ## Who this is for
 
-Job Search OS is built for a single persona: a technically comfortable job seeker who wants their
+Job Search is built for a single persona: a technically comfortable job seeker who wants their
 search to run itself. They have Claude Code installed and can follow a five-minute setup, but they
 do not want to babysit a dashboard, tune a scoring rubric, or reason about API credits. They
 describe what they want once, in plain English, and then expect the system to surface relevant

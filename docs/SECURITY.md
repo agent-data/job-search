@@ -1,6 +1,6 @@
 # Security & Privacy
 
-Job Search OS handles career-sensitive PII: the preferences brief, every posting judged against
+Job Search handles career-sensitive PII: the preferences brief, every posting judged against
 it, run logs, and (in future) resumes. The threat model is one sentence — **keep that data on the
 user's machine and out of any public repository.** This document maps each mechanism that enforces
 that posture and says plainly where enforcement is human review, not automation.
@@ -42,7 +42,7 @@ data had leaked into a generated example.
 
 ## Scheduling never writes your machine
 
-Scheduling is Claude Code's native `/loop` — `/loop <interval> /job-search-os:job-search-run` (plugin
+Scheduling is Claude Code's native `/loop` — `/loop <interval> /job-search:job-search-run` (plugin
 installs; loose-skill installs use the bare `/job-search-run` target) re-runs the search inside an
 open Claude session. The agent never initiates a cron line or a launchd plist; nothing scheduling-related is
 written to your machine.

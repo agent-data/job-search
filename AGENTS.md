@@ -1,6 +1,6 @@
-# job-search-os — Agent Map
+# job-search — Agent Map
 
-Claude Code as a private, local-first **job-search OS**: a plugin with five skills, a
+Claude Code as a private, local-first **job-search** operating system: a plugin with five skills, a
 single-source-of-truth `shared/references/` tree whose pinned contracts Claude Code executes natively
 (nothing ships to user machines but markdown), and a pytest + fake-shim + skill-creator eval harness.
 **This file is the entry point for coding agents working on this repo** — a map, not the territory.

@@ -1,6 +1,6 @@
 # Plans
 
-This doc explains **how we plan** in job-search-os — which kind of plan to use, how to structure
+This doc explains **how we plan** in job-search — which kind of plan to use, how to structure
 a checked-in execution plan, and how to run the on-demand doc-gardening sweep. For the catalogue
 of actual plans see [`exec-plans/index.md`](exec-plans/index.md).
 

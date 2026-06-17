@@ -1,6 +1,6 @@
 # Reliability
 
-How Job Search OS stays trustworthy: a deterministic core, named failures, bounded retries,
+How Job Search stays trustworthy: a deterministic core, named failures, bounded retries,
 and failures that surface where the user will actually see them. This doc describes the
 *mechanisms*. It does **not** restate any runtime contract — every concrete value (error
 wording, run-health states, the frequency enum, the `run_id` format, the digest counts line,

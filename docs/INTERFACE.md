@@ -1,6 +1,6 @@
 # Interface — human-facing surfaces
 
-Job Search OS has no web frontend and no graphical application. The product's human
+Job Search has no web frontend and no graphical application. The product's human
 interface is three things: a **conversational chat** (Claude Code), a **CLI/headless
 scheduled run**, and **Markdown artifacts** (the digest, the home view). This document
 maps those surfaces.
@@ -14,7 +14,7 @@ maps those surfaces.
 - [The CLI / headless surface](#cli--headless-surface) — the scheduled `/loop` run
 
 Slash commands in this doc use the **short skill names** as shorthand. The typed form depends on
-the install: plugin installs (the usual case) are namespaced — `/job-search-os:job-search` — because
+the install: plugin installs (the usual case) are namespaced — `/job-search:job-search` — because
 plugin skills are only invocable as `/plugin-name:skill-name`; the bare `/job-search` form exists
 only for loose-skill installs into `~/.claude/skills/`. See README → Install.
 
@@ -117,7 +117,7 @@ Full error catalog with exact cause+fix wording:
 
 ## CLI / headless surface
 
-The recurring run is Claude Code's native `/loop` — `/loop <interval> /job-search-os:job-search-run`
+The recurring run is Claude Code's native `/loop` — `/loop <interval> /job-search:job-search-run`
 (plugin installs; loose skills drop the prefix) re-runs the search inside an open Claude
 session (the one-off form is the same target without `/loop`). Users set this up
 conversationally through the `/job-search` home view; nothing is installed on their

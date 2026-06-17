@@ -5,7 +5,7 @@ How the Job Search Agent schedules its recurring run with Claude Code's native `
 
 ## Mechanism: native `/loop` (the only one the agent sets up)
 
-Job Search OS schedules with Claude Code's native **`/loop`**: `/loop <interval> /job-search-os:job-search-run`
+Job Search schedules with Claude Code's native **`/loop`**: `/loop <interval> /job-search:job-search-run`
 (plugin installs — plugin skills are only invocable namespaced; loose-skill installs drop the prefix) re-runs the
 search on an interval inside an **open Claude session**. There is no privileged write — nothing is added to
 the user's crontab or launchd, and nothing persists on their machine. The tradeoff: it runs only while a
@@ -14,7 +14,7 @@ have the local workspace or `agent-data` auth.)
 
 | Step | How | Notes |
 |------|-----|-------|
-| Compose the line | interval table in `internals.md` → Scheduling setup | hourly→`1h`, every-2-hours→`2h`, every-6-hours→`6h`, daily→`24h`, weekly→`168h`. Namespaced target (`/job-search-os:job-search-run`) when running as a plugin (this skill appears as `job-search-os:…` in the skill list); bare for loose skills. |
+| Compose the line | interval table in `internals.md` → Scheduling setup | hourly→`1h`, every-2-hours→`2h`, every-6-hours→`6h`, daily→`24h`, weekly→`168h`. Namespaced target (`/job-search:job-search-run`) when running as a plugin (this skill appears as `job-search:…` in the skill list); bare for loose skills. |
 | Start it (on yes) | run the composed `/loop …` line | Runs in the current session; stops when the session ends. |
 | Record it | set the scheduling marker (`internals.md` → Registry write rules) | Records `mechanism: loop` so the home view shows the schedule and you don't re-ask. |
 | Turn it off | stop the loop, then clear the scheduling marker | The marker reads `installed: false` afterwards. |
