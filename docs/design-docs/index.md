@@ -13,6 +13,10 @@ contracts now live in `shared/references/`).
 - [Plan B/D — Design Delta & Resolved Decisions](2026-06-05-plan-b-d-design.md) — _status: historical_
 - [Plan B/D — Handoff](2026-06-05-plan-b-d-handoff.md) — _status: historical_
 
+## Forward-looking (aspirational)
+- [Codex Portability — What It Takes to Run job-search on OpenAI Codex](codex-portability.md) — _status: aspirational_
+- [Multi-Harness Portability — Research Dossier](multi-harness-portability.md) — _status: aspirational_
+
 ---
 
 ## Status vocabularies
