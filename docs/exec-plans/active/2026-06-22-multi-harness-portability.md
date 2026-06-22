@@ -202,6 +202,8 @@ The relaxed rule's real teeth — three doc contradictions the dossier surfaced 
   `references/platform/` (guarded glob, idempotent); added the Codex adapter
   `shared/references/platform/codex.md`. Red→green verified (0→5 skills carry the adapter); `doc_lint`
   clean, 56 tests green.
+- **T0.3** — added `.codex-plugin/plugin.json` (valid JSON; `skills: "./skills/"` → the same one tree,
+  no per-platform bundle), harness-neutral description, job-search metadata reused from `.claude-plugin/`.
 
 ## Decision log
 

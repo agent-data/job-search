@@ -1,0 +1,26 @@
+{
+  "name": "job-search",
+  "version": "0.3.0",
+  "description": "A private, local-first job-search assistant: pulls postings, judges each one's relevance against your prose preferences (qualitative — no scores), and digests the matches on a schedule you control.",
+  "author": { "name": "Aptiq Labs, Inc." },
+  "homepage": "https://github.com/agent-data/job-search",
+  "repository": "https://github.com/agent-data/job-search",
+  "license": "MIT",
+  "keywords": ["job-search", "career", "agent-data", "linkedin", "skills", "automation"],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Job Search",
+    "shortDescription": "Pulls postings, judges fit against your prose preferences, and digests matches on a cadence you control",
+    "longDescription": "Set up and run a private, local-first job search: build a prose preferences brief, save searches, pull live postings, judge each one's relevance qualitatively (no scores), and get a digest of matches — on a schedule you control.",
+    "developerName": "Aptiq Labs, Inc.",
+    "category": "Productivity",
+    "capabilities": ["Interactive", "Read", "Write"],
+    "defaultPrompt": [
+      "Help me set up my job search.",
+      "Check for new job matches."
+    ],
+    "websiteURL": "https://github.com/agent-data/job-search",
+    "brandColor": "#2563EB",
+    "screenshots": []
+  }
+}
