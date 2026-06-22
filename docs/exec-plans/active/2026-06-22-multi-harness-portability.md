@@ -211,6 +211,12 @@ The relaxed rule's real teeth — three doc contradictions the dossier surfaced 
   a caught data discrepancy). Discovered + recorded the least-privilege sandbox egress config
   (`--sandbox workspace-write -c sandbox_workspace_write.network_access=true`) the dossier had flagged
   untested, and folded it back into `platform/codex.md`. **P0 complete.**
+- **T1.1** — authored `shared/references/platform/claude.md`, the **byte-identity anchor**: 12 sections
+  mirroring `codex.md`, carrying today's exact Claude literals — the `/loop` recipe `diff`-identical to
+  `internals.md` L114-121, the `AskUserQuestion` constraints, `claude -p` exit-0, `init --claude-code`,
+  and the `fast→haiku | balanced→sonnet | high→opus` tier mapping + legacy aliases. `build.sh` synced it
+  into all 5 skills; `doc_lint` clean, 56 tests green. Task review: spec ✅, quality approved (2 Minor,
+  non-blocking — accurate synthesized context, not drift).
 
 ## Decision log
 
@@ -238,6 +244,12 @@ The relaxed rule's real teeth — three doc contradictions the dossier surfaced 
 - **Codex sandbox egress config is now verified, not a PIN** (P0): agent-data reaches the network from
   inside `codex exec` under `--sandbox workspace-write -c sandbox_workspace_write.network_access=true`
   (plain workspace-write blocks it). Resolves the dossier's "agent-data egress allowlist untested" risk.
+- **`claude.md` is the sole owner of the literal Claude model-name mapping + legacy aliases**
+  (`haiku|sonnet|opus`). The Done-when neutralization grep must return only `platform/claude.md` for
+  those tokens, so neutralized loader prose (`internals.md`) defers model resolution to the active
+  adapter without naming them, and every other adapter names only its own model ids. **Consequence:**
+  `codex.md`'s legacy-alias line (L108) currently names `haiku|sonnet|opus`; it is reworded to avoid the
+  literals in P4.T4.1 (the model-tier task), keeping the grep exception to `claude.md` alone.
 
 ## Self-Review
 
