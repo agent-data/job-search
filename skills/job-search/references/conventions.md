@@ -26,18 +26,20 @@ queries:
   - { id: "ai-eng-remote", keywords: "AI engineer", location: "United States", limit: 25, enabled: true }
 search:
   freshness: "past-2-weeks"  # any | past-week | past-2-weeks | past-month — client-side recency filter on posted_at (no API date param)
-  detail_model: "haiku"      # model the per-posting detail subagents use: haiku | sonnet | opus | inherit
+  detail_model: "fast"       # portable tier the per-posting detail reads use: fast | balanced | high | inherit (the model id each maps to → your platform's adapter → Model tiers)
 schedule:
-  frequency: "daily"         # hourly | every-2-hours | every-6-hours | daily | weekly → /loop interval (24h for daily)
-  time: "08:00"              # informational under /loop (loop fires on an interval, not at a wall-clock time)
+  frequency: "daily"         # hourly | every-2-hours | every-6-hours | daily | weekly — the cadence the schedule runs on (its mapping for the active scheduler → your platform's adapter → Scheduling)
+  time: "08:00"              # HH:MM, honored when the active scheduler is wall-clock-based (a Tier-2 cron/launchd schedule); ignored when it is interval-only (a Tier-1 in-session loop) — see your platform's adapter → Scheduling
   timezone: "America/Los_Angeles"
 notify:
   digest_path_template: "reports/{date}-digest.md"
   desktop_notify_on_block: true
 ```
 The **`search` block** tunes the feed: `freshness` is a client-side recency window on `posted_at` (the API has
-no date param; `any` = no filter); `detail_model` is the model the runner's per-posting detail subagents use
-(`inherit` = the run's own model). **`queries[].limit`** (1–100, default 25) is the per-query feed size — pull
+no date param; `any` = no filter); `detail_model` is a portable tier token (`fast | balanced | high | inherit`)
+the runner's per-posting detail reads use — the model each maps to lives in your platform's adapter → Model
+tiers, and the fan-out itself defers to → Concurrent detail reads (`inherit` = the run's own model).
+**`queries[].limit`** (1–100, default 25) is the per-query feed size — pull
 generously across several varied queries rather than one giant pull; there is no pagination, so breadth +
 frequency + dedup accumulate coverage. Query construction (incl. deriving "remote") lives in `internals.md`.
 
@@ -70,7 +72,7 @@ Operations (no helper script — perform these exactly):
   {"event":"evaluated","ts":"…","source_id":"…",…}
   EOF
   ```
-- **Current state (fold):** Read `jobs.jsonl` and fold in-context — group events by `source_id`, later
+- **Current state (fold):** read `jobs.jsonl` and fold in-context — group events by `source_id`, later
   events override earlier per field, drop the `event` key. The pipeline view = the folded records tallied
   by `status` (plus the `needs_human_check: true` count).
 

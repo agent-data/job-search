@@ -1,9 +1,9 @@
 # OS internals — registry, workspace discovery, config & scheduling
 
 The "OS state" that survives across sessions so any skill finds the user's data identically. There is no
-helper script: Claude Code performs these procedures itself, with the file tools (Read/Write) and the exact
-shell lines below. Never hard-code or re-derive the paths and precedence rules — follow the procedures as
-written; they are the contract every skill shares.
+helper script: the host agent performs these procedures itself, with its file tools (see your platform's
+adapter → Tool map / Whole-file write) and the exact shell lines below. Never hard-code or re-derive the
+paths and precedence rules — follow the procedures as written; they are the contract every skill shares.
 
 ## Registry (machine-managed OS state — JSON, not YAML)
 Location (tests/evals redirect it via `$JOBSEARCH_OS_REGISTRY`):
@@ -24,9 +24,11 @@ prints for every read and write. Never consult or touch any other location — i
 (reading it can only mix two registries and confuse the result).
 
 **Write rules (every registry write).** Read the current file first (it may not exist), apply the change to
-the parsed object, and Write the whole file back with the file tools — never shell redirection — at the
-resolved `$REG` path. Preserve any keys you don't own; always keep `"version": 1`; store `active_workspace`
-as an absolute path (expand `~`); 2-space indent; trailing newline; `mkdir -p` the parent directory first.
+the parsed object, and write the whole file back atomically at the resolved `$REG` path — a full replace in
+place (see your platform's adapter → Whole-file write), never a streamed or redirected partial, which can
+truncate or interleave a structured-state file. Preserve any keys you don't own; always keep `"version": 1`;
+store `active_workspace` as an absolute path (expand `~`); 2-space indent; trailing newline; `mkdir -p` the
+parent directory first.
 If the file exists but is not valid JSON, stop and tell the user (offer to rewrite it from the known
 workspace) — never guess or silently fall through; guessing could switch workspaces. Only the **job-search**
 front door (onboarding / adoption) and the scheduling flows write the registry; the headless runner never
@@ -37,9 +39,10 @@ does.
   never touches workspace files.
 - **Read the scheduling marker:** the registry's `scheduling` object, defaulting to
   `{"installed": false, "mechanism": null, "set_at": null}` when absent.
-- **Set the scheduling marker** (a `/loop` was started): merge
-  `"scheduling": {"installed": true, "mechanism": "loop", "set_at": "<UTC ISO>"}` — timestamp from
-  `date -u +%Y-%m-%dT%H:%M:%S+00:00`.
+- **Set the scheduling marker** (a recurring run was started): merge
+  `"scheduling": {"installed": true, "mechanism": "<active mechanism>", "set_at": "<UTC ISO>"}` — record the
+  mechanism actually used (see your platform's adapter → Scheduling for its value), and take the timestamp
+  from `date -u +%Y-%m-%dT%H:%M:%S+00:00`.
 - **Clear the scheduling marker** (turn-off): merge
   `"scheduling": {"installed": false, "mechanism": null, "set_at": null}`.
 
@@ -81,44 +84,36 @@ The user changes config by **chatting**; manual editing is an escape hatch. To a
   `location` — then **acknowledge** what you saved rather than asking them to pick.
 - **Tune the feed (`search` block):** `search.freshness` (`any | past-week | past-2-weeks | past-month` — a
   client-side recency filter on `posted_at`; the API has no date param) and `search.detail_model`
-  (`haiku | sonnet | opus | inherit` — the model the runner's per-posting detail subagents use). `queries[].limit`
-  (1–100, default 25) is the per-query feed size.
+  (`fast | balanced | high | inherit` — a portable tier token the runner's per-posting detail reads use; the
+  literal model each maps to lives in your platform's adapter → Model tiers, and the fan-out itself defers to
+  → Concurrent detail reads). `queries[].limit` (1–100, default 25) is the per-query feed size.
 - **Derive "remote" into the query:** `search-jobs` has no remote flag, so when the brief requires remote (or
   rejects onsite-elsewhere), fold `remote` into the query `keywords` and/or set `location` to the brief's allowed
   geographies — otherwise the feed fills with onsite roles the judge then filters out.
 - **Pull as many NEW as possible:** there's no pagination and re-runs reorder, so breadth + frequency + dedup do
   the work, not a giant single pull — keep `limit` sensible (default 25, up to 100), run several varied queries
   (role synonyms, key locations, remote variants), run often, and dedup; distinct postings accumulate across runs.
-- **Change frequency:** set `schedule.frequency` to one of `hourly | every-2-hours | every-6-hours | daily | weekly`.
+- **Change frequency:** set `schedule.frequency` to one of `hourly | every-2-hours | every-6-hours | daily | weekly`
+  (the cadence→interval mapping for the active scheduler lives in your platform's adapter → Run recipe).
 - **Change run time:** set `schedule.time` (HH:MM, used for daily/weekly).
 - Always keep `version: 1`. NEVER add a score or weight field (philosophy).
 
-## Scheduling setup (native `/loop` — nothing is installed on the user's machine)
-Job Search schedules with Claude Code's native **`/loop`**: it re-runs the search on an interval inside an
-open Claude session. There is **no privileged write** — no crontab, no launchd, nothing on the user's machine.
-The one tradeoff: it runs only while a Claude session is open. Never initiate a crontab/launchd install
-yourself; if the user explicitly asks for cron, it's their machine and their call — show the `/loop` recipe
-first and let them decide.
+## Scheduling setup
+Schedule the recurring run on the cadence the user picks, using the host's scheduler — the MECHANISM lives in
+your platform's adapter → Scheduling. Read it: it is **two-tier**. **Tier 1** — a native LOCAL scheduler
+(consent-based, installs nothing on the user's machine): use it where the adapter names one. **Tier 2** — no
+native local scheduler: a consent-gated machine-level cron/launchd schedule is the **sanctioned fallback** —
+only on an explicit user yes, with the exact line shown before it is written, never silent, never
+auto-installed, and user-removable. A cloud scheduler that cannot see the local `~/.job-search` workspace or
+the local agent-data auth does **not** qualify on either tier — it is skipped (a run that cannot reach the
+user's data and credentials produces nothing).
 
-Compose the scheduling line from `schedule.frequency`: `/loop <interval> /job-search-run` with hourly→`1h`,
-every-2-hours→`2h`, every-6-hours→`6h`, daily→`24h`, weekly→`168h`. (`schedule.time` is informational under
-/loop — the loop fires on an interval from when it's started; intervals are hour-based, e.g. `24h` not `1d`,
-since /loop's duration parser is not guaranteed to accept a day unit.) **Match the /loop target to the
-install:** plugin skills are only invocable namespaced, so when these skills run as a plugin (this skill
-appears as `job-search:…` in your skill list — the usual install) the target is
-`/job-search:job-search-run`; loose skills copied into `~/.claude/skills/` use the bare `/job-search-run`.
-Offer it as a yes/no; on yes, run that `/loop` command and set the scheduling marker (write rules above).
-Check the marker before offering so you never re-ask. ALWAYS also show this recipe verbatim (in the form for
-THIS install) so the user can start or restart it themselves:
+The ACTIONS are the same across hosts. Compose the cadence from `schedule.frequency` (the adapter's Run
+recipe carries the cadence→interval/cron mapping). Offer scheduling as a yes/no; check the scheduling marker
+first so you never re-ask. On yes, start the schedule and set the scheduling marker (write rules above —
+recording the mechanism actually used). ALWAYS also show the **recurring-run recipe** and the **one-off-run
+recipe** verbatim — copy them exactly as written in your platform's adapter → Run recipe; do not reconstruct
+those tokens here.
 
-```
-Recurring (runs while a Claude session is open — nothing installed on your machine):
-  /loop <interval> /job-search:job-search-run      # hourly → 1h · daily → 24h · weekly → 168h
-One-off run anytime:
-  /job-search:job-search-run
-```
-
-(For loose-skill installs, drop the `job-search:` prefix from both lines.)
-
-To turn scheduling off: stop the loop (end the session, or cancel the pending wakeup), then clear the
-scheduling marker (write rules above — no more stale `installed: true`).
+To turn scheduling off, stop the active schedule (the adapter's Scheduling section gives the teardown for
+Tier 1 vs Tier 2), then clear the scheduling marker (write rules above — no more stale `installed: true`).

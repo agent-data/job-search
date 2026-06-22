@@ -217,6 +217,20 @@ The relaxed rule's real teeth — three doc contradictions the dossier surfaced 
   and the `fast→haiku | balanced→sonnet | high→opus` tier mapping + legacy aliases. `build.sh` synced it
   into all 5 skills; `doc_lint` clean, 56 tests green. Task review: spec ✅, quality approved (2 Minor,
   non-blocking — accurate synthesized context, not drift).
+- **T1.2** — neutralized the five shared references (`internals`, `conventions`, `voice`, `errors`,
+  `parallelism`; `agent-data-contract` already agnostic — skipped) to speak in actions and defer every
+  Claude literal to the active platform's adapter (`references/platform/<your-platform>.md`, self-select).
+  Applied the dossier-§3 patterns per file: scheduling sections now carry the **two-tier relaxed rule**
+  (Tier-1 native-local / Tier-2 consent-gated, cloud-rejection rationale preserved), the model enum is
+  `fast|balanced|high|inherit`, and the parallel eager-batch imperative is kept inline. The master grep
+  over `shared/references` now returns only the two adapters (`claude.md`; `codex.md`'s L108 legacy-alias
+  line is the lone expected residue, reworded in P4.T4.1). `build.sh` synced all five into the skill
+  copies; `doc_lint` clean, 56 tests green. Reviews: internals ✅ (validated as the idiom template);
+  conventions/voice/errors/parallelism ✅ (batch) — all spec-pass, quality approved (6 Minor density nits
+  total, non-blocking).
+- **T1.3** — the self-select adapter-pointer convention (`references/platform/<your-platform>.md`, **no
+  `<active>` placeholder**) is established by T1.2 and verified repo-wide; the skill-layer inline tool
+  mentions are neutralized in P2 per-file (single-touch — see Decision log). **P1 complete.**
 
 ## Decision log
 
@@ -250,6 +264,12 @@ The relaxed rule's real teeth — three doc contradictions the dossier surfaced 
   adapter without naming them, and every other adapter names only its own model ids. **Consequence:**
   `codex.md`'s legacy-alias line (L108) currently names `haiku|sonnet|opus`; it is reworded to avoid the
   literals in P4.T4.1 (the model-tier task), keeping the grep exception to `claude.md` alone.
+- **T1.3 (self-select repoint) is realized through the per-file neutralization, not a separate skill-body
+  edit pass.** The self-select convention (`references/platform/<your-platform>.md`; no `<active>`) is
+  baked into the neutralization protocol every implementer follows; each skill-layer file (the five SKILL
+  bodies + the four hand-authored refs) is neutralized exactly once in P2 (single-touch — avoiding the
+  double edit a separate T1.3-then-T2.5 pass would cause). T1.3's hard gate (no `<active>` placeholder
+  ships) is verified by grep.
 
 ## Self-Review
 

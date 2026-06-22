@@ -1,11 +1,8 @@
 # Named errors (E-*) — cause + fix + what the user sees
 
-Every failure is named and visible (no silent failures). Blocked runs surface three ways — the **blocked digest** (named error as the body), a
-**desktop notification** (`notify.desktop_notify_on_block`), and the **home view** the next
-time the user opens the **job-search** skill (which reads `run_health` from the newest `runs/<id>.json`).
-Do not rely on the process exit code: a headless `claude -p` run returns 0 even when
-blocked. Every HALT therefore writes a `runs/<id>.json` blocked record. The digest's "Run health" line is one of: `healthy | partial (N errors) |
-degraded (LinkedIn flaky) | blocked (action needed)`.
+Every failure is named and visible — no silent failures. The durable guarantee for blocked runs is two **file-backed channels**: the **blocked digest** (named error as the body) and the **home view** (reads `run_health` from the newest `runs/<id>.json`) — both plain file writes that survive on any host. Every HALT therefore writes a `runs/<id>.json` blocked record. An attention-pull alert is capability-gated: it fires only when the `notify.desktop_notify_on_block` knob is set AND the host has an attention-pull channel (see your adapter → Block-alert channel); when it has none, skip it silently — the two file channels still carry the failure.
+
+Surface every outcome through the written record — the record is the contract the home view reads — because a skill cannot set the host's exit code; whether `$?` can also be trusted is per-harness (see your adapter → Headless invocation). The digest's "Run health" line is one of: `healthy | partial (N errors) | degraded (LinkedIn flaky) | blocked (action needed)`.
 
 | Code | When | What the user sees (cause + fix) | Run effect |
 |---|---|---|---|

@@ -9,11 +9,18 @@ keeps the primary context clean and lets a faster, cheaper model do the bulk wor
 The bar is *mutual independence*: if subtask B needs subtask A's result, they're sequential — don't force them
 parallel. If they don't, running them serially is wasted wall-clock.
 
+Whether an isolated-context concurrent subagent primitive is available, any concurrency cap, and the
+**mandatory sequential fallback** (read and judge each item one at a time — never fabricate a dispatch) live in
+the active platform's adapter → **Concurrent detail reads**. Read your adapter before dispatching; a host with
+no concurrent primitive degrades gracefully through that fallback.
+
 ## Briefing a subagent
 
 A fresh subagent starts with **zero context** — it hasn't seen this conversation, what you've tried, or why the
 task matters. Brief it like a sharp colleague who just walked into the room: enough that it can make judgment
-calls, not a terse command (terse command-style prompts produce shallow, generic work). Each brief carries:
+calls, not a terse command (terse command-style prompts produce shallow, generic work). The dispatch verb —
+how you actually invoke a subagent on your platform — is in the active platform's adapter → **Concurrent detail
+reads**. The briefing contract below is harness-agnostic. Each brief carries:
 
 - **The goal, and why it matters** — what you're accomplishing and what its output feeds into.
 - **What you already know or ruled out** — so the subagent doesn't re-derive the obvious or repeat a dead end.
