@@ -249,6 +249,13 @@ The relaxed rule's real teeth — three doc contradictions the dossier surfaced 
   `doc_lint` clean, 56 tests. Review: spec ✅, quality approved (3 Minor non-blocking → final-review triage:
   caps parity w/ internals template, an awkward L34 clause; and the job-search-agent SKILL scheduling
   section it now contradicts — neutralized in T2.5).
+- **T2.3 + T2.4** — neutralized `home.md` (status line drops the `/loop` mechanism label → cadence-only;
+  marker records the active mechanism; detail-model enum → `fast|balanced|high|inherit`; recipe/teardown
+  deferred to the adapter; rendering surface → "wherever the user is reading") and `customization.md`
+  (model-tuning table → tier tokens, model ids + per-subagent-support caveat deferred to the adapter;
+  fan-out deferred). Batch review caught 2 spec misses (a `loop` value re-leaked in home.md; the missing
+  per-subagent-host-support note) + 3 Minor style nits — all fixed in a follow-up wave (grep-verified).
+  Token grep clean; `doc_lint` clean, 56 tests green.
 
 ## Decision log
 

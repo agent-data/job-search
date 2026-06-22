@@ -13,7 +13,8 @@ Use the workspace Discovery (SKILL.md Step 0) already found as `<ws>` throughout
 Read just what the home view needs (all local):
 
 - **Schedule marker:** read it from the registry (`internals.md` → Registry) →
-  `{"installed":<bool>,"mechanism":"loop"|null,"set_at":<iso>|null}`.
+  `{"installed":<bool>,"mechanism":<active-mechanism>|null,"set_at":<iso>|null}` — the mechanism value
+  is recorded by the active platform (see your platform's adapter → Scheduling).
 - **Brief age:** the `updated_at:` line near the top of `<ws>/preferences.md` (fall back to `created_at` if absent).
 - **Last run health:** the newest `<ws>/runs/*.json` (its `run_health`), or fall back to the **Run health**
   line of the latest digest.
@@ -31,7 +32,7 @@ Keep it tight. A good shape:
 
 ```
 Job search — <ws path>
-Brief: updated <date> (<N months ago>)   ·   Schedule: <on, daily via /loop | off>   ·   Last run: <healthy | partial (N) | degraded | blocked>
+Brief: updated <date> (<N months ago>)   ·   Schedule: <on, daily | off>   ·   Last run: <healthy | partial (N) | degraded | blocked>
 
 Latest digest — <date>
   9 new postings · 3 strong · 2 moderate · 1 weak · 3 filtered out · <n> searches · <m> detail reads
@@ -49,8 +50,9 @@ What next? Just tell me:
 Notes on each part:
 
 - **Status line.** Workspace path; brief age from `preferences.md:updated_at` (fallback `created_at`); schedule from
-  the registry's scheduling marker (on + mechanism, or off) — the **frequency** to render (e.g. "daily" in "daily via /loop")
-  comes from `config.yaml:schedule.frequency`, since the marker carries only on/off + mechanism;
+  the registry's scheduling marker — render the cadence (from `config.yaml:schedule.frequency`, e.g. "daily")
+  when installed, or "off" when not; the marker carries only on/off + the mechanism value recorded at install time
+  (the mechanism label is not surfaced in the status line);
   last-run health from the newest `runs/*.json` `run_health` (or the latest digest's Run health line). Run
   health is one of `healthy | partial (N errors) | degraded (LinkedIn flaky) | blocked (action needed)`.
 - **Latest digest.** Read the newest `reports/<date>-digest.md`; show its date and reproduce its **counts
@@ -72,24 +74,25 @@ Offer these and apply each by **chatting**, editing `config.yaml` per the `inter
   **derive** it from their brief (don't make them pick) and acknowledge what you added — same as onboarding
   step 5.
 - **Tune the feed** → set `search.freshness` (`any | past-week | past-2-weeks | past-month`) to narrow or
-  widen the recency window, and/or set `search.detail_model` (`haiku | sonnet | opus | inherit`) to control
-  which model reads full posting details (default `haiku`). Edit `config.yaml` per the `internals.md`
-  recipes; preserve comments; keep `version: 1`.
+  widen the recency window, and/or set `search.detail_model` (`fast | balanced | high | inherit`) to control
+  which model tier reads full posting details (default `fast`; your platform's adapter → Model tiers maps
+  each token to the platform's actual model). Edit `config.yaml` per the `internals.md` recipes; preserve
+  comments; keep `version: 1`.
 - **Change how often it runs** → set `schedule.frequency` to `hourly | every-2-hours | every-6-hours |
   daily | weekly` (and `schedule.time` for daily/weekly). Reuse the plain-language nudge — "daily suits most
   searches; hourly only for a fast-moving, active search."
 - **Update preferences** → invoke `job-preference-interview` (it reads the existing brief and updates it,
   refreshing `updated_at`).
 - **Show your preferences brief** → print `<ws>/preferences.md`'s body in your reply as normal message text
-  (rendered markdown — no code fence, skip the front-matter lines, never just the path).
-- **Change or turn off the schedule** → re-run the scheduling flow in `onboarding.md`: compose the
-  `/loop …` line from the interval table in `internals.md` → Scheduling setup, run it, then set the
-  scheduling marker; always show the verbatim `/loop` recipe from `internals.md`. To turn it off, stop the
-  loop (end the session or cancel the pending wakeup), then clear the scheduling marker so it reads
-  `installed: false`, and tell the user it's off.
+  (wherever the user is reading it — no code fence, skip the front-matter lines, never just the path).
+- **Change or turn off the schedule** → re-run the scheduling flow in `onboarding.md` with the new cadence,
+  then update the scheduling marker. Show the **recurring-run recipe** verbatim from your platform's adapter
+  → Run recipe — copy exactly, do not reconstruct the tokens. To turn it off, apply the teardown for whichever
+  scheduling tier is active (see your platform's adapter → Scheduling), then clear the scheduling marker so
+  it reads `installed: false`, and tell the user it's off.
 - **Show the latest digest** → print the newest `reports/<date>-digest.md` (strong → moderate → weak →
-  filtered-out) unchanged, as normal message text in your reply (rendered markdown — never inside a code
-  fence, never just the file path).
+  filtered-out) unchanged, as normal message text in your reply (wherever the user is reading it — never
+  inside a code fence, never just the file path).
 
 ## Nudges (surface only when they apply)
 

@@ -69,16 +69,18 @@ Sets how many postings each query pulls (1–100, default 25). A higher limit fe
 
 **Detail-read model — `search.detail_model`**
 
-After the primary pass scans summaries, the agent fans out one detail-read subagent per promising posting in parallel (see `references/parallelism.md` for the general pattern). Each subagent follows the `evaluate-job-fit` skill. This key controls which model those subagents use.
+After the primary pass scans summaries, the agent fans out one detail-read subagent per promising posting in parallel (see `references/parallelism.md` for the general pattern; the fan-out primitive and sequential fallback defer to your platform's adapter → Concurrent detail reads). Each subagent follows the `evaluate-job-fit` skill. This key controls which tier those subagents use — the literal model each tier maps to lives in your platform's adapter → Model tiers.
 
 | Value | Behavior |
 |---|---|
-| `haiku` | Fast and light *(default)* |
-| `sonnet` | More deliberate on nuanced qualitative judgments |
-| `opus` | Highest fidelity |
+| `fast` | Fast and light *(default)* |
+| `balanced` | More deliberate on nuanced qualitative judgments |
+| `high` | Highest fidelity |
 | `inherit` | Uses the same model as the top-level run |
 
-Haiku is the right starting point for most searches. It is a touch looser on subtle qualitative calls — occasionally emitting an out-of-vocabulary band or a stray numeric value — but the consolidation step after all subagents return validates and coerces every verdict before anything reaches `jobs.jsonl` or the digest, so no invalid output persists. For roles where the brief's distinctions are fine-grained or the must-have/red-flag list is long, set `detail_model: sonnet` (or `opus`) to improve judgment fidelity. This is a **fidelity/speed tradeoff**, not a quality-gate — the defaults are safe either way.
+`fast` is the right starting point for most searches. It is a touch looser on subtle qualitative calls — occasionally emitting an out-of-vocabulary band or a stray numeric value — but the consolidation step after all subagents return validates and coerces every verdict before anything reaches `jobs.jsonl` or the digest, so no invalid output persists. For roles where the brief's distinctions are fine-grained or the must-have/red-flag list is long, set `detail_model: balanced` (or `high`) to improve judgment fidelity. This is a **fidelity/speed tradeoff**, not a quality-gate — the defaults are safe either way. The literal model each tier maps to lives in your platform's adapter → Model tiers.
+
+> **Note:** Per-subagent tier selection is effective only on hosts that support isolated-context subagents — see your platform's adapter → Concurrent detail reads. The adapter notes whether per-subagent model selection even exists; a single-model host makes the knob inert.
 
 ---
 
