@@ -33,7 +33,7 @@
       "expectations": [
         "Stops at preflight with the E-NO-AUTH message (export AGENT_DATA_API_KEY + verify with whoami)",
         "Does NOT call search-jobs; pulls nothing",
-        "Writes runs/<id>.json with run_health 'blocked' naming E-NO-AUTH (the home view surfaces it on the next job-search visit); does not depend on a non-zero process exit — a headless run returns 0"
+        "Writes runs/<id>.json with run_health 'blocked' naming E-NO-AUTH (the home view surfaces it on the next job-search visit) — this blocked record is the primary, universal contract; the process exit code is the platform-scoped add-on (this suite runs on Claude, where a headless `claude -p` run returns 0 even when blocked, so don't assert a non-zero exit; on a harness with trustworthy exit codes — Codex/opencode/Droid — a blocked run instead exits non-zero)"
       ]
     },
     {
@@ -53,7 +53,7 @@
       "expectations": [
         "Takes the E-NO-PREFERENCES path: names the fix (the job-preference-interview skill, or point preferences_path at a brief)",
         "Spends nothing (no agent-data data calls)",
-        "Writes runs/<id>.json with run_health 'blocked' naming E-NO-PREFERENCES (home surfaces it on the next job-search visit); a headless run exits 0, so don't assert a non-zero exit"
+        "Writes runs/<id>.json with run_health 'blocked' naming E-NO-PREFERENCES (home surfaces it on the next job-search visit) — the blocked record is the primary, universal contract; the exit code is platform-scoped (this suite runs on Claude, where a headless run exits 0 even when blocked, so don't assert a non-zero exit; on a trustworthy-exit-code harness — Codex/opencode/Droid — a blocked run exits non-zero)"
       ]
     },
     {
@@ -63,7 +63,7 @@
       "expectations": [
         "Surfaces E-QUOTA in plain language (lower schedule.frequency, e.g. daily instead of hourly, or upgrade your agent-data plan) — NO credit/dollar math",
         "Does not retry the quota error (retryable:false)",
-        "Halts and writes a runs/<id>.json blocked record + blocked digest naming E-QUOTA (home surfaces it); existing matches in jobs.jsonl are left intact; a headless run exits 0 (do not assert non-zero)"
+        "Halts and writes a runs/<id>.json blocked record + blocked digest naming E-QUOTA (home surfaces it) — that record is the primary, universal contract; existing matches in jobs.jsonl are left intact; the exit code is platform-scoped (this suite runs on Claude, where a headless run exits 0 even when blocked, so do not assert non-zero; on a trustworthy-exit-code harness — Codex/opencode/Droid — a blocked run exits non-zero)"
       ]
     },
     {
@@ -73,7 +73,7 @@
       "expectations": [
         "The status probe failure → E-SERVICE-DOWN; writes a 'service down' digest (Run health: blocked)",
         "Does NOT call search-jobs or get-posting (halts at the status gate)",
-        "Writes runs/<id>.json with run_health 'blocked' (alongside the 'service down' digest) so the home view surfaces it; a headless run exits 0 (do not assert non-zero)"
+        "Writes runs/<id>.json with run_health 'blocked' (alongside the 'service down' digest) so the home view surfaces it — that blocked record is the primary, universal contract; the exit code is platform-scoped (this suite runs on Claude, where a headless run exits 0 even when blocked, so do not assert non-zero; on a trustworthy-exit-code harness — Codex/opencode/Droid — a blocked run exits non-zero)"
       ]
     },
     {
@@ -113,7 +113,7 @@
       "expectations": [
         "discovery reports first_run -> E-NO-CONFIG naming the job-search skill; does NOT prompt (headless)",
         "Makes no search-jobs/get-posting calls",
-        "Names E-NO-CONFIG (run the job-search skill); makes no calls; no runs record is written because there is no workspace — the failure is visible because the next job-search visit routes to onboarding; the headless process exits 0"
+        "Names E-NO-CONFIG (run the job-search skill); makes no calls; no runs record is written because there is no workspace — the failure is visible because the next job-search visit routes to onboarding (that routing is the primary, universal channel here); the exit code is platform-scoped (this suite runs on Claude, where the headless process exits 0, so do not assert non-zero; on a trustworthy-exit-code harness — Codex/opencode/Droid — this blocked run exits non-zero)"
       ]
     },
     {
@@ -122,7 +122,7 @@
       "prompt": "Build a temp workspace + shim (setup-workspace.sh), PATH=<tmp>/_bin:$PATH, JOBSEARCH_TEST_SCENARIO=happy, JOBSEARCH_FIXTURES=<repo>/tests/fixtures. Then bump the config version: `sed -i.bak 's/^version: 1/version: 2/' <tmp>/config.yaml`. Run the job-search-run skill with --workspace <tmp>.",
       "expectations": [
         "Halts at preflight with E-CONFIG-VERSION (config written by a newer version; update the job-search skills); makes NO search-jobs/get-posting calls",
-        "Writes runs/<id>.json with run_health 'blocked' naming E-CONFIG-VERSION so the home view surfaces it; a headless run exits 0 (do not assert non-zero)",
+        "Writes runs/<id>.json with run_health 'blocked' naming E-CONFIG-VERSION so the home view surfaces it — that blocked record is the primary, universal contract; the exit code is platform-scoped (this suite runs on Claude, where a headless run exits 0 even when blocked, so do not assert non-zero; on a trustworthy-exit-code harness — Codex/opencode/Droid — a blocked run exits non-zero)",
         "jobs.jsonl is untouched"
       ]
     },

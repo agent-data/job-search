@@ -289,6 +289,15 @@ The relaxed rule's real teeth — three doc contradictions the dossier surfaced 
 - **T4.2 + T4.3** — CONTROLLER-VERIFIED complete (no edits): closed-choice was fully neutralized in P1.T1.2
   (voice.md decision) + adapters + P2 skills; desktop-notify was demoted in P1.T1.2 (errors.md two
   file-backed channels + capability-gated alert) + P2 SKILLs, with the `desktop_notify_on_block` field kept.
+- **T4.4 (headless exit-code branching + eval init-flag)** — the 3 coupled eval suites are now
+  platform-aware: `--claude-code` dropped from all 6 init sites (rephrased around the harness-neutral
+  `agent-data init … --api-key … --yes` essential, still true for the Claude agent); blocked-path exit-code
+  expectations platform-scoped (record-primary universal; exit-0-on-block = the Claude add-on, non-zero
+  noted for trustworthy-exit harnesses — **never flat-swapped**); success-path "Exits 0" + all
+  blocked-record assertions preserved; job-search-agent L34 "/loop" → "the active scheduler"; the dev-only
+  `/loop`/question-box Claude tests + the stubbing instructions kept. All `evals.json` parse; `doc_lint`
+  clean, 56 tests. Review: spec ✅, quality approved (1 Minor — parenthetical `--claude-code`, judged
+  acceptable; 1 cosmetic doubled-parenthetical at L95/L109, deferred). **P4 complete.**
 
 ## Decision log
 
