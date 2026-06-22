@@ -10,6 +10,12 @@ cd "$REPO"
 for skill in skills/*/; do
   mkdir -p "${skill}references"
   cp shared/references/*.md "${skill}references/"
+  # Per-platform adapters live one level down in shared/references/platform/; copy them too so a
+  # loose-skill install carries every harness adapter and the agent self-selects its own at runtime.
+  if compgen -G "shared/references/platform/*.md" > /dev/null; then
+    mkdir -p "${skill}references/platform"
+    cp shared/references/platform/*.md "${skill}references/platform/"
+  fi
 done
 
 echo "build: synced references into $(ls -d skills/*/ | wc -l | tr -d ' ') skill(s)"

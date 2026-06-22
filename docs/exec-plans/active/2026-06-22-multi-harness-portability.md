@@ -198,7 +198,10 @@ The relaxed rule's real teeth — three doc contradictions the dossier surfaced 
 
 ## Progress log
 
-_(append one line per task with its commit SHA as it lands)_
+- **T0.1 + T0.2** — taught `build.sh` to sync `shared/references/platform/*.md` into every skill's
+  `references/platform/` (guarded glob, idempotent); added the Codex adapter
+  `shared/references/platform/codex.md`. Red→green verified (0→5 skills carry the adapter); `doc_lint`
+  clean, 56 tests green.
 
 ## Decision log
 
