@@ -15,8 +15,7 @@ step will say so plainly") — reliability is demonstrated, not promised; meta-a
 
 **Assume zero context.** A first-run user has never seen this system and doesn't know its words. Per
 `voice.md`: give every question below one short plain-English sentence of what the thing is and why you're
-asking — then ask, closed choices through the question tool (`voice.md` → Asking questions). No internal
-vocabulary, ever.
+asking — then ask, closed choices (`voice.md` → Asking questions). No internal vocabulary, ever.
 
 ---
 
@@ -37,9 +36,9 @@ This plugin runs on a tool called **agent-data** — it's what pulls and reads l
 the welcome (§1 owns your first words), make sure it's ready, before anything persistent. Nothing is
 searched, written, or created until it's working.
 
-**Keep the user oriented — explain, don't script.** Narrate the way Claude Code does by default: a short
-line of what you're doing and why around non-obvious work, in your own words — no fixed formula, no line
-per command. The one hard part: the user must never watch an install attempt or a permission prompt with
+**Keep the user oriented — explain, don't script.** Narrate the way a good assistant does by default: a
+short line of what you're doing and why around non-obvious work, in your own words — no fixed formula, no
+line per command. The one hard part: the user must never watch an install attempt or a permission prompt with
 no idea what "agent-data" is. Introduce it **once**, the first time it comes up — e.g. "This plugin uses a
 tool called **agent-data** to pull live job postings — let me check whether it's set up on your machine."
 After that it's introduced: at later steps "agent-data isn't installed yet — installing it now" is plenty.
@@ -55,7 +54,7 @@ agent-data`, and confirm it's authenticated — `agent-data whoami` should repor
   error. The internal codes for this state (`E-NO-AGENT-DATA`, `E-NO-AUTH`) are for your reasoning only —
   **never show them to the user** (`voice.md`). Two starting points, one path — a **missing** CLI starts at
   step 1; one that's on `PATH` but **unauthenticated** starts at step 2. Keep these steps in sync with the
-  canonical setup doc (<https://agent-data.dev/setup/claude-code.md>):
+  canonical setup doc (see your platform's adapter → agent-data setup for its URL):
 
   1. **Install it.** Don't ask the user for anything here — no key yet, no confirmation; the API key
      belongs to the connect step. (And don't narrate that — "this needs nothing from you" is non-event
@@ -68,9 +67,10 @@ agent-data`, and confirm it's authenticated — `agent-data whoami` should repor
 
      **If permission settings block the install** (stricter modes guard agent-chosen global installs),
      that's expected, not an error — no apology spiral, no stopping. One plain line and the exact command
-     to run in-session, e.g. "My permission settings want installs run by you. Type this in the prompt —
-     the `!` runs it here so I'll see the result: `! npm install -g agent-data`". Pick up at the version
-     check once it lands.
+     for the user to run themselves — `npm install -g agent-data` — e.g. "My permission settings want
+     installs run by you. Run this and I'll pick up once it lands." If your harness has an in-session run
+     affordance (see your platform's adapter → agent-data setup), offer it so you see the result directly.
+     Pick up at the version check once it lands.
 
      Confirm the install took with `agent-data --version` before moving on — no pre-claimed success.
   2. **Connect their account.** (Start here when `agent-data` was already on `PATH` but `whoami` reported
@@ -80,20 +80,16 @@ agent-data`, and confirm it's authenticated — `agent-data whoami` should repor
      - On the Account settings page, click **Generate API Key**.
      - Copy the key — it starts with `mtk_` — and paste it here.
 
-     Ask for the key as a plain prose question — it's a free-text secret, not a closed choice, so don't use
-     the question tool.
-  3. **Authenticate**, substituting the key they pasted:
-
-     ```
-     agent-data init --claude-code --api-key <KEY> --yes
-     ```
-
-     This saves the key to `~/.agent-data/config.json` and installs the Claude Code discovery skill.
+     Ask for the key as a plain prose question — it's a free-text secret, not a closed choice.
+  3. **Authenticate**, substituting the key they pasted into the `init` line from your platform's adapter →
+     agent-data setup (it supplies the exact command and the harness-specific flag — don't reconstruct it
+     here). This saves the key to `~/.agent-data/config.json` and installs the discovery skill for your
+     harness, if any.
   4. **Verify it worked** — re-check auth with `agent-data whoami` (`api_key_set: true`). If it still
      reports `api_key_set: false` or you see `401 Invalid API key`, the key was wrong — ask them to
      generate a fresh one and paste it again.
-  5. If Claude Code is older than `2.1.0`, a session restart may be needed for the new tool to load;
-     `2.1.0`+ hot-loads, so no restart is needed.
+  5. Some harnesses need a session restart before the newly installed discovery tool loads; others
+     hot-load it (see your platform's adapter → agent-data setup for the post-install load/restart note).
 
   Once it verifies, confirm in one line and continue. If setup genuinely can't finish (e.g. they can't get a
   key right now), explain plainly where things stand and what's left — still no raw error code.
@@ -122,7 +118,7 @@ rather than re-interviewing or re-scaffolding.
 
 Otherwise, default to **`~/.job-search/`**:
 
-1. **Confirm the location with the question tool** (`voice.md` → Asking questions) — a new user doesn't
+1. **Confirm the location as a closed choice** (`voice.md` → Asking questions) — a new user doesn't
    know what a "workspace" is, so the context rides in the question text. Header `Workspace`; question:
    "Everything your job search learns and finds — your preferences, saved searches, and matched jobs —
    lives in one private folder on your machine. Where should I put it?"; options: **`~/.job-search`** —
@@ -140,7 +136,7 @@ where they're hunting, and matched jobs live here and shouldn't be committed to 
 ## 4. Preferences — interview or import (a fork)
 
 The system needs a **Job Preferences Brief** (prose `preferences.md`) — the "what I want" half that the
-runner reads against each posting. This is a closed two-way choice, so ask it with the question tool
+runner reads against each posting. This is a closed two-way choice, so ask it as a closed choice
 (`voice.md` → Asking questions), the what-it-is context riding in the question text. Header `Brief`;
 question: "Next I need your **Job Preferences Brief** — the plain-English 'what I want' that every posting
 gets judged against. How do you want to build it?"; options:
@@ -201,7 +197,7 @@ user to name keywords.** They can retune anytime; the goal here is zero upfront 
    the gap — lead with derivation, never a blank "what should I search for?".
    The config already comes preset with a recency window (recent postings only) and a fast model for reading
    posting details — both are tunable anytime just by asking.
-4. **Pick a frequency — with the question tool** (`voice.md` → Asking questions), the plain-language nudge
+4. **Pick a frequency — as a closed choice** (`voice.md` → Asking questions), the plain-language nudge
    carried by the recommended-first option. Header `Frequency`; question:
    "How often should I check for new postings? You can change this anytime by just telling me."; options,
    recommended first:
@@ -233,8 +229,9 @@ text in your reply** (rendered markdown — never a code fence, never just the d
 
 Handle whatever the run reports, in plain language:
 
-- **Blocked** → the run halts on a named error and exits non-zero. Show that error's cause + fix verbatim
-  from `errors.md` and stop the magical framing. Most likely here:
+- **Blocked** → the run halts on a named error, surfaced through the run record (whether it also exits
+  non-zero is per-harness — see your platform's adapter → Headless invocation). Show that error's cause +
+  fix verbatim from `errors.md` and stop the magical framing. Most likely here:
   - **`E-QUOTA`** — agent-data's API limit for this period was reached, so nothing new was pulled. Fix: pull
     less often (e.g. `daily` instead of `hourly` in `config.yaml`) or upgrade the plan. Existing matches are
     unaffected.
@@ -248,45 +245,38 @@ Handle whatever the run reports, in plain language:
 
 Don't show run internals or scores — just the matches and, if relevant, the named error.
 
-## 7. Scheduling (offer it; native `/loop`, nothing touches the machine)
+## 7. Scheduling (offer it)
 
-Offer to keep the search running automatically. Job Search schedules with Claude Code's **native
-`/loop`** — it re-runs the search on an interval **inside an open Claude session** and never writes anything
-to the user's machine (no crontab, no launchd). Follow `internals.md`. Say it plainly, including the one
-tradeoff: it runs **while you have a Claude session open**.
+Offer to keep the search running automatically, using your platform's scheduler (see your platform's
+adapter → Scheduling). Follow `internals.md` — it is **two-tier**: a native **local** scheduler (preferred)
+installs nothing on the user's machine; where none exists, a **consent-gated machine schedule** (cron /
+launchd) is the sanctioned fallback — shown before it's written, started only on an explicit yes, never
+silent, and user-removable. Say it plainly, including the one tradeoff for whichever tier applies (a
+session-bound local loop runs only while a session is open; a machine schedule runs unattended but writes
+a job to the user's machine).
 
-Ask it with the question tool (`voice.md` → Asking questions). Header `Schedule`; question: "Want me to
-keep checking automatically while you have Claude open? New matches will land in a digest without you
-having to ask."; options: **Yes, keep checking** — "runs while a Claude session is open; stops when it
-ends" · **No, I'll run it myself** — "a one-off search stays one command away".
+Ask it as a closed choice (`voice.md` → Asking questions). Header `Schedule`; question: "Want me to keep
+checking automatically? New matches will land in a digest without you having to ask."; options: **Yes, keep
+checking** — "runs on your chosen cadence" · **No, I'll run it myself** — "a one-off search stays one
+command away".
 
 **On yes:**
 
-1. Compose the command for the chosen frequency from the interval table in `internals.md` → Scheduling
-   setup — e.g. daily → `/loop 24h /job-search-run`.
-   **Match the target to the install:** plugin skills are only invocable namespaced, so when these skills
-   run as a plugin (this skill appears as `job-search:…` in your skill list — the usual install), the
-   target is `/loop 24h /job-search:job-search-run`. Loose skills in `~/.claude/skills/` use the bare
-   form.
-2. **Start it** by running that `/loop …` command, then record it so you don't re-ask: set the scheduling
-   marker (`internals.md` → Registry write rules — records `mechanism: loop`).
-3. Show the user the exact `/loop` line so they can restart it anytime (it stops when the session ends).
+1. Compose the cadence for the chosen frequency from `internals.md` → Scheduling setup (the
+   frequency→interval/cron mapping lives in your platform's adapter → Run recipe).
+2. **Start the schedule** with your platform's scheduler (see your platform's adapter → Scheduling). If
+   that's a consent-gated machine schedule (Tier 2), **show the user the exact line first and start it only
+   on their explicit yes** — never write a crontab/launchd entry silently. Then record it so you don't
+   re-ask: set the scheduling marker (`internals.md` → Registry write rules — recording the mechanism
+   actually used).
+3. Show the user the exact recipe so they can restart or remove it anytime.
 
 **On no:** leave it unscheduled — tell them they can turn it on later by just asking, and that a one-off run
-is always one slash command away (`/job-search:job-search-run` as a plugin; `/job-search-run` as loose
-skills).
+is always one command away (the exact invocation is in your platform's adapter → Run recipe).
 
-**Either way, show this recipe verbatim** (in the form for THIS install) so the user can start or restart it
-themselves (from `internals.md`):
-
-```
-Recurring (runs while a Claude session is open — nothing installed on your machine):
-  /loop <interval> /job-search:job-search-run      # hourly → 1h · daily → 24h · weekly → 168h
-One-off run anytime:
-  /job-search:job-search-run
-```
-
-(For loose-skill installs, drop the `job-search:` prefix from both lines.)
+**Either way, show the recurring-run and one-off-run recipes verbatim from your platform's adapter → Run
+recipe** so the user can start or restart it themselves — copy those lines exactly as written; do not
+reconstruct the tokens here.
 
 ## 8. Home
 
@@ -307,15 +297,16 @@ runs", "update my preferences", "show the latest digest").
       steps → init → verify, no reinstall — **the user always knew what was happening and why**
       (agent-data introduced once, never re-defined per step), solution-first, **no raw error code
       shown**, no premature claim, no duration promise; a permission-blocked install became a one-line
-      `! npm install -g agent-data` handoff, not an error
+      `npm install -g agent-data` handoff for the user to run, not an error
 - [ ] workspace adopted-or-created; **never clobbered** an existing `config.yaml` / `preferences.md` /
       `jobs.jsonl`; the active workspace recorded in the registry
 - [ ] `preferences.md` exists (interview or import via `job-preference-interview`)
 - [ ] 2–3 `queries[]` **derived from the brief** and written (no upfront keyword-picking); searches
       acknowledged; `schedule.frequency` set (plain-language nudge)
 - [ ] first **live** `job-search-run` done; strong/moderate matches shown — or the named error if blocked
-- [ ] scheduling offered via native `/loop`; on yes started + marker set; `/loop` recipe shown either way
+- [ ] scheduling offered (two-tier, per the adapter); on yes started + marker set; run recipe shown either
+      way
 - [ ] every ask carried one line of plain-English context; the four closed choices (workspace location,
-      interview-or-import, frequency, scheduling) went through the question tool; no internal vocabulary
+      interview-or-import, frequency, scheduling) asked as closed choices; no internal vocabulary
       reached the user (`voice.md`)
 - [ ] home view printed

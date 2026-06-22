@@ -231,6 +231,15 @@ The relaxed rule's real teeth — three doc contradictions the dossier surfaced 
 - **T1.3** — the self-select adapter-pointer convention (`references/platform/<your-platform>.md`, **no
   `<active>` placeholder**) is established by T1.2 and verified repo-wide; the skill-layer inline tool
   mentions are neutralized in P2 per-file (single-touch — see Decision log). **P1 complete.**
+- **T2.1** — neutralized `skills/job-search/references/onboarding.md` (the densest-coupled file; hand-authored,
+  not build-synced). All 10 coupling sites + 3 in-scope follow-ons deferred to the active adapter: the
+  closed-choice asks, the agent-data setup line (dropping `--claude-code` — site 1/3), the setup-doc URL,
+  the `!`-bang affordance, the version gate, the headless exit-code note, and the **§7 scheduling rewrite**
+  (two-tier relaxed rule, consent gate moved INSIDE the start step, verbatim recipe behind an E7 fence).
+  agent-data product literals (`motie.dev` URL, `mtk_` prefix, `npm install -g agent-data`) correctly kept.
+  Token grep clean; every literal confirmed in claude.md; `doc_lint` clean, 56 tests green. Review: spec ✅,
+  quality approved (1 Minor, intentional consent-gate restatement — no fix). The onboarding UX (welcome-first,
+  one-sentence-context-per-ask, solution-first prereq) preserved.
 
 ## Decision log
 
