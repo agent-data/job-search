@@ -240,6 +240,15 @@ The relaxed rule's real teeth — three doc contradictions the dossier surfaced 
   Token grep clean; every literal confirmed in claude.md; `doc_lint` clean, 56 tests green. Review: spec ✅,
   quality approved (1 Minor, intentional consent-gate restatement — no fix). The onboarding UX (welcome-first,
   one-sentence-context-per-ask, solution-first prereq) preserved.
+- **T2.2** — rewrote `skills/job-search-agent/references/scheduling-and-consent.md` around the two-tier
+  relaxed rule (Tier-1 native-local installs nothing / Tier-2 consent-gated machine schedule). The blanket
+  "never initiate crontab/launchd" prohibition is lifted **only at Tier 2** and replaced by a live consent
+  gate (explicit yes + exact line shown first + never silent + user-removable); the **cloud-rejection
+  rationale** and the "no enforcement hook — a design rule, not a technical control" stance are preserved.
+  The consent gate is unmissable at both action entry points. Token grep clean; literals in claude.md;
+  `doc_lint` clean, 56 tests. Review: spec ✅, quality approved (3 Minor non-blocking → final-review triage:
+  caps parity w/ internals template, an awkward L34 clause; and the job-search-agent SKILL scheduling
+  section it now contradicts — neutralized in T2.5).
 
 ## Decision log
 
