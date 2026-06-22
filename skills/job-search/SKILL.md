@@ -16,7 +16,7 @@ remembers your workspace and schedule; `job-search-run` is the **scheduled job**
 postings; `job-preference-interview` is the tool that **builds the brief** the runner reads. You drive
 everything from here and delegate the heavy lifting to those skills.
 
-Not the place for a headless pull — that's `job-search-run` — or for changing the system's wiring,
+Not the place for a non-interactive run — that's `job-search-run` (see your platform's adapter → Headless invocation) — or for changing the system's wiring,
 which is `job-search-agent`'s manual (see the note above).
 
 This skill has two modes and almost no logic of its own — it **routes**, then follows a playbook:

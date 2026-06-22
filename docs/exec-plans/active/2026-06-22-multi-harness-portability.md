@@ -256,6 +256,13 @@ The relaxed rule's real teeth — three doc contradictions the dossier surfaced 
   fan-out deferred). Batch review caught 2 spec misses (a `loop` value re-leaked in home.md; the missing
   per-subagent-host-support note) + 3 Minor style nits — all fixed in a follow-up wave (grep-verified).
   Token grep clean; `doc_lint` clean, 56 tests green.
+- **T2.5** — neutralized the SKILL bodies: `job-search` (headless naming → adapter); `job-search-run`
+  (fan-out + model tier default `fast` + notify + headless all deferred); `job-search-agent` (scheduling
+  section rewritten to the two-tier rule, now AGREEING with `scheduling-and-consent.md`; notify/headless/
+  fan-out deferred); `job-preference-interview` (closed-choice deferral + the user-facing `preferences.md`
+  footer "Claude reads this brief" → "your job-search assistant reads this brief"). `evaluate-job-fit`
+  verified agnostic (no edit). Frontmatter manifest fields untouched. Batch review: all 4 spec ✅, quality
+  approved (2 Minor non-defects). Token grep clean across all five SKILLs.
 
 ## Decision log
 

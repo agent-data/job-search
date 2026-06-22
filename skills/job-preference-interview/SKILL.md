@@ -61,7 +61,7 @@ the user's own words do (they already said "just a quick sketch" / "make it thor
 the ask). The failure mode: an invoker pre-picks "standard", the depth question silently disappears, and the
 user never learns a one-question sketch existed.
 
-Ask it with the question tool (`references/voice.md` → Asking questions). Header `Depth`; question: "This
+Ask it as a closed choice (see your platform's adapter → Closed-choice question; `references/voice.md` → Asking questions keeps the agnostic decision). Header `Depth`; question: "This
 brief is the plain-English 'what I want' that every job posting gets judged against. How deep do you want to
 go? You can always come back for a deeper pass later."; options:
 
@@ -104,9 +104,8 @@ flags included.
   ("good culture" → "small teams, low meeting load, ships weekly"; "decent pay" → "base at least ~$X").
 - **Make answering easy.** Offer a few example options or a simple scale when it helps, and **always** let the
   user say "no preference", "skip", or "that's a dealbreaker". When a question is a genuine pick-one with 2–4
-  natural answers (IC vs. manager; remote / hybrid / onsite), ask it with the question tool — options as
-  labels, the automatic free-text option catching "no preference" and nuance; open questions stay prose
-  (`references/voice.md` → Asking questions).
+  natural answers (IC vs. manager; remote / hybrid / onsite), ask it as a closed choice (see your platform's
+  adapter → Closed-choice question); open questions stay prose (`references/voice.md` → Asking questions).
 - Keep every message short. Don't lecture or pad.
 
 ### Flow
@@ -161,7 +160,7 @@ internal feeling. Skip an empty section's bullets rather than inventing filler.
 
 End the brief with a one-line **How to use this** note, e.g.:
 
-> _How to use this: Claude reads this brief next to a job posting and judges whether it's relevant, and if so
+> _How to use this: your job-search assistant reads this brief next to each posting and judges whether it's relevant, and if so
 > whether it's a weak, moderate, or strong match — with reasoning. No score._
 
 After writing, **show the user the brief itself** — print `preferences.md`'s body directly in your reply as

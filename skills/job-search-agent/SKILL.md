@@ -26,7 +26,7 @@ Hold these stances in every change you make — each exists for a reason, and se
 | Skill | What it does | When to use it |
 |---|---|---|
 | `job-search` | Front door: onboarding on first run; home view (latest digest, new matches, pipeline) with quick actions on return | Daily use — set up, check in, run now, change anything |
-| `job-search-run` | Headless scheduled pull: preflight → search → dedup → judge → persist → digest | Run by the `/loop` schedule, or manually for a fresh pull without the home view |
+| `job-search-run` | Headless scheduled pull: preflight → search → dedup → judge → persist → digest | Run by the active schedule, or manually for a fresh pull without the home view |
 | `job-preference-interview` | Interactive interview that builds or refines the prose preferences brief | Whenever you want to update what you're looking for |
 | `evaluate-job-fit` | Judge one posting against the current brief | When you paste a single job description and want a fit assessment |
 | `job-search-agent` | This operator manual | Configure, extend, troubleshoot, or understand the agent itself |
@@ -41,7 +41,7 @@ There is no helper script — the OS state is plain files, and every operation o
 |---|---|
 | Find the active workspace + `first_run` + `source` | `references/internals.md` → Workspace discovery — the one correct way to find the workspace |
 | Record the active workspace in the registry | `references/internals.md` → Registry write rules |
-| Compose the `/loop` scheduling line for a frequency | `references/internals.md` → Scheduling setup (interval table; namespaced target for plugin installs — plugin skills are only invocable namespaced; bare for loose skills) |
+| Compose the scheduling run recipe for a frequency | your platform's adapter → Run recipe (interval table and verbatim run recipe; namespaced target for plugin installs — plugin skills are only invocable namespaced; bare for loose skills) |
 | Read / set / clear the scheduling marker | `references/internals.md` → Registry (the `scheduling` object) |
 | Known ids — the dedup set from `jobs.jsonl` | `references/conventions.md` → §jobs.jsonl operations |
 | Append one evaluated or status-changed event | `references/conventions.md` → §jobs.jsonl operations |
@@ -66,19 +66,23 @@ For every supported edit — adding, editing, or pausing a query (`enabled: fals
 
 The agent is designed to be extended — add queries, swap the brief, point the runner at a different workspace, or build new skills that slot into the same conventions. For the full flexibility workflows — including how to honor an explicit score request without polluting the clean data — see `references/customization.md`.
 
-**Run architecture.** Each run scans new posting summaries in the primary context (cheaply rejecting clear dealbreakers), then fans out one detail-read subagent per promising posting in parallel (model = `search.detail_model`, each follows the `evaluate-job-fit` skill), then consolidates and validates all verdicts before persisting. See `references/parallelism.md` for the parallel-by-default principle and how to brief a subagent; see `references/customization.md` for the recency, model, and feed-size knobs.
+**Run architecture.** Each run scans new posting summaries in the primary context (cheaply rejecting clear dealbreakers), then fans out one detail-read subagent per promising posting **at once, in a single batch** — never a one-at-a-time loop (model = `search.detail_model`, each follows the `evaluate-job-fit` skill), then consolidates and validates all verdicts before persisting. The concurrent dispatch primitive and mandatory sequential fallback live in your platform's adapter → Concurrent detail reads. See `references/parallelism.md` for the parallel-by-default principle and how to brief a subagent; see `references/customization.md` for the recency, model, and feed-size knobs.
 
 ---
 
 ## Scheduling
 
-Scheduling is Claude Code's native **`/loop`** — the only mechanism the agent sets up.
-`/loop <interval> /job-search:job-search-run` (plugin installs; loose skills drop the `job-search:`
-prefix) re-runs the search on an interval inside an open Claude session; nothing is installed on the user's
-machine (no crontab, no launchd). Compose the line from the interval table in `references/internals.md` →
-Scheduling setup, run it, and set the scheduling marker. The one tradeoff: it runs only while a Claude
-session is open. The agent never initiates a crontab/launchd install itself; the user remains free to set
-one up in their own shell — see `references/scheduling-and-consent.md`.
+The scheduling **mechanism** lives in your platform's adapter → Scheduling; the **actions** below are the same on every host. The model is **two-tier** — use whichever applies to the active host:
+
+- **Tier 1 — native local scheduler (preferred).** Where the host has one (see your adapter → Scheduling), use it: it runs where it can see the local `~/.job-search` workspace and the local agent-data auth, and **installs nothing on the user's machine** (no crontab, no launchd, no privileged write). The exact recipe lives in the adapter — do not spell it here.
+- **Tier 2 — no native local scheduler.** A **consent-gated** machine-level cron/launchd schedule is the sanctioned fallback — written **only on an explicit user yes, with the exact line shown before it is written**, never silent, never auto-installed, and user-removable.
+- **Cloud schedulers do not qualify** — a cloud agent can't see the local workspace or the agent-data auth, so a run there reaches neither the user's data nor their credentials and produces nothing.
+
+A given host sits on **whichever tier its adapter names** — a Tier-1-only host never reaches for the Tier-2 fallback. Read the adapter to learn which applies.
+
+To start scheduling: offer it as a yes/no (check the scheduling marker first — never re-ask if already set); compose the run recipe from your adapter → Run recipe; start it on an affirmative answer; set the scheduling marker. To turn scheduling off: stop the active schedule (see your adapter → Scheduling for the teardown), then clear the scheduling marker. Always show the user the verbatim run recipe **from your adapter → Run recipe** — copy it exactly as written; do not reconstruct those tokens.
+
+For the full consent workflow — including what to do when the user explicitly asks for cron or launchd — see `references/scheduling-and-consent.md`.
 
 ---
 
@@ -86,7 +90,7 @@ one up in their own shell — see `references/scheduling-and-consent.md`.
 
 The run's outcome is the `run_health` field in `runs/<id>.json` and the digest header — one of `healthy | partial (N errors) | degraded (LinkedIn flaky) | blocked (action needed)`. For what each state means and when it's written, see `references/errors.md` (the four states and the surfacing story) and `references/conventions.md` → the digest "Run health" line. One meaning lives with the runner instead: a `degraded` run still reads promising matches in full — no detail-read cap, relevance decides (see **job-search-run**).
 
-**How failures surface:** a blocked run writes three artifacts — a `runs/<id>.json` record with `run_health:"blocked"`, a `reports/<date>-digest.md` whose body is the named error + fix, and (if `notify.desktop_notify_on_block: true`) a desktop notification. The **home view** the next time you open the **job-search** skill reads `runs/<id>.json` and shows the error there. Do not rely on the process exit code — a headless `claude -p` run returns 0 even when blocked.
+**How failures surface:** a blocked run writes two durable artifacts — a `runs/<id>.json` record with `run_health:"blocked"`, and a `reports/<date>-digest.md` whose body is the named error + fix. The **home view** the next time you open the **job-search** skill reads `runs/<id>.json` and shows the error there. An attention-pull alert (if `notify.desktop_notify_on_block: true`) is capability-gated — see your platform's adapter → Block-alert channel. **The written record is the primary signal on every harness** — whether the host's exit code is also trustworthy is per-harness; see your adapter → Headless invocation.
 
 For the full `E-*` table with exact cause and fix wording: see `references/errors.md`.
 
@@ -97,7 +101,7 @@ For the full `E-*` table with exact cause and fix wording: see `references/error
 | Runs complete but 0 matches even though real postings exist | Query keywords don't match the brief's must-haves | Broaden the query in `config.yaml`, or run the **job-preference-interview** skill to align the brief |
 | 0 results (literally empty) | Keywords too narrow or location too specific | Broaden `keywords` or `location` in the query |
 | Last run: blocked — E-QUOTA | API limit reached for the period | Lower `schedule.frequency` (e.g. `daily` instead of `hourly`), or upgrade your plan at agent-data.motie.dev |
-| Schedule isn't firing | The `/loop` isn't running (its Claude session closed) | Check the scheduling marker in the registry (`references/internals.md`); restart it with the `/loop` line from the interval table (namespaced `/job-search:job-search-run` for plugin installs) |
+| Schedule isn't firing | The active schedule stopped (e.g. the host session closed) | Check the scheduling marker in the registry (`references/internals.md`); restart it with the run recipe from your platform's adapter → Run recipe (namespaced for plugin installs) |
 | "Stale brief" nudge in the digest | `preferences.md` hasn't been updated in a long time | Run the **job-preference-interview** skill to refresh it |
 
 ---

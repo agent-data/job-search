@@ -69,11 +69,13 @@ Read these before running, and follow them exactly:
    location says Austin" or "confirm IC vs manager; seniority unstated". The cheap scan does real work — it
    produces the primary's guidance for each detail review, not just a gate.
 4. **Fan out the detail reads — one subagent per queued posting, in PARALLEL.** The reads are independent, so
-   dispatch all queued postings **at once, in a single batch** of concurrent subagents (model =
-   `search.detail_model`, default `haiku`; `inherit` = this run's own model) — never a one-at-a-time loop. Hand
-   each subagent the **orchestration + the primary's steer**: the posting's `id` + `source_url` pair, the brief's
-   path, the **`evaluate-job-fit` skill to follow**, and the **per-posting steer from the scan** (your provisional
-   read + the specific must-haves/unknowns it should confirm) — brief it like a colleague with zero context (see
+   dispatch all queued postings **at once, in a single batch** of concurrent subagents (tier =
+   `search.detail_model`, default `fast`; `inherit` = this run's own model tier — see your platform's adapter →
+   Model tiers) — **never a one-at-a-time loop** (see your platform's adapter → Concurrent detail reads for the
+   fan-out primitive and sequential fallback when no concurrent primitive is available). Hand each subagent the
+   **orchestration + the primary's steer**: the posting's `id` + `source_url` pair, the brief's path, the
+   **`evaluate-job-fit` skill to follow**, and the **per-posting steer from the scan** (your provisional read +
+   the specific must-haves/unknowns it should confirm) — brief it like a colleague with zero context (see
    **Briefing each detail subagent**). Never a re-stated rubric — that skill's `SKILL.md`
    is the single source of truth for *how* to judge; the primary supplies *what* to judge and *what to confirm*.
    Each subagent calls `get-posting` with the row's `id` (`--posting_id`) AND its `--source_url` (the same-row
@@ -83,7 +85,7 @@ Read these before running, and follow them exactly:
    note "detail link expired"; `502 detail_fetch_failed` (retryable) → retry/backoff, then summary-only + note.
    **No cap** — every queued posting gets a subagent; the scan (relevance), not a count, decided how many. Running
    them in parallel is the point: it cuts wall-clock, keeps full JDs out of this context, and lets a
-   faster/cheaper model do the bulk reads.
+   faster/cheaper model handle the bulk reads.
 5. **Consolidate + persist + report.** Collect the parallel subagents' verdicts and **validate each before it lands**: `match` must be `strong | moderate | weak`, or `null` when `relevant` is false — coerce anything else (a faster delegated model can emit a stray number or out-of-vocab band) and never let a numeric score reach `jobs.jsonl` or the digest — and every event MUST carry a non-empty `source_id`. Then for each NEW posting (the deduped set from step 2 — see Idempotency) append the FULL `evaluated` event
    to `<workspace>/jobs.jsonl` via the **append** operation (complete schema + event-line contract in
    conventions.md §jobs.jsonl).
@@ -133,13 +135,14 @@ Every run ends by writing `runs/<run_id>.json` with at least `{"run_id","run_hea
 "error"|null,"ts"}`. **Every HALT path writes this record with `run_health:"blocked"` and
 its `E-*` BEFORE stopping** — this is the source the home view reads, so a failed scheduled
 run is named on the user's next job-search home view. When a workspace exists, a HALT also writes
-the blocked `reports/<date>-digest.md` (named error + fix as the body). If
-`notify.desktop_notify_on_block` is true, fire one desktop notification on a blocked run.
+the blocked `reports/<date>-digest.md` (named error + fix as the body). When
+`notify.desktop_notify_on_block` is true, fire an attention-pull alert on a blocked run — defer the
+alert mechanism to your platform's adapter → Block-alert channel.
 
-Surfacing is the home view + the blocked digest + the desktop notification — NOT the
-process exit code. A headless `claude -p` run returns 0 even when blocked (a skill cannot
-set the host exit code); do not rely on it, and do not tell the user a cron job's `$?`
-will be non-zero.
+The durable guarantee is two file-backed channels (the blocked digest + the home-view run record);
+the alert supplements them and is capability-gated. **Surfacing is the written record — NOT the process
+exit code.** The record is primary on every harness — surface every blocked outcome through it. Whether
+the host exit code is also trustworthy is per-harness; see your platform's adapter → Headless invocation.
 
 Exception: **E-NO-CONFIG / first_run** means there is no workspace to write into — this is
 inherently visible because the next time the user opens the **job-search** skill it routes
