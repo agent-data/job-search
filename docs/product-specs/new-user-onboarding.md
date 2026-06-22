@@ -2,7 +2,7 @@
 title: New-User Onboarding
 status: current
 verified: partial
-last_reviewed: 2026-06-11
+last_reviewed: 2026-06-22
 code_refs: [skills/job-search/SKILL.md, skills/job-search/references/onboarding.md, shared/references/internals.md]
 ---
 
@@ -51,20 +51,20 @@ A free check before any workspace is created or any metered call is made: is `ag
 PATH (`command -v agent-data`) and authenticated (`agent-data whoami` reports `api_key_set: true`)?
 
 The agent leads with *why* it's checking and never pre-claims a result it hasn't verified. It keeps the
-user oriented the way Claude Code does by default — a short what/why line around non-obvious work, in
-its own words, no per-command formula — introduces agent-data exactly once (a dependency of this
-plugin that pulls and reads live job postings), never re-defining it step by step, and narrates what's
-happening, never what isn't ("this needs nothing from you"). If the check passes,
-the agent says so as a verified fact and continues. If `agent-data` is missing or unauthenticated,
-**interactive onboarding remediates rather than stopping** — install first, then connect. A missing CLI
-is installed immediately and without user input (`npm install -g agent-data`, verified with
-`agent-data --version`). If permission settings block the install, that's a one-line handoff, not an
-error: the agent gives the exact in-session command (`! npm install -g agent-data`) and resumes once it
-lands. Then — and starting here when the CLI was present but unauthenticated —
-the agent walks the user through generating an API key (with explicit steps), authenticates
-(`agent-data init --claude-code --api-key <KEY> --yes`), and verifies with `agent-data whoami` before
-continuing. The API key is requested only at this connect step, never before the install. Steps stay in
-sync with the canonical setup doc <https://agent-data.dev/setup/claude-code.md>. The internal codes for
+user oriented — a short what/why line around non-obvious work, in its own words, no per-command
+formula — introduces agent-data exactly once (a dependency of this plugin that pulls and reads live
+job postings), never re-defining it step by step, and narrates what's happening, never what isn't
+("this needs nothing from you"). If the check passes, the agent says so as a verified fact and
+continues. If `agent-data` is missing or unauthenticated, **interactive onboarding remediates rather
+than stopping** — install first, then connect. A missing CLI is installed immediately and without user
+input (`npm install -g agent-data`, verified with `agent-data --version`). If permission settings block
+the install, that's a one-line handoff, not an error: the agent gives the exact in-session command
+(`! npm install -g agent-data`) and resumes once it lands. Then — and starting here when the CLI was
+present but unauthenticated — the agent walks the user through generating an API key (with explicit
+steps), authenticates using the platform adapter's `agent-data init` line (harness-specific flag +
+`--api-key <KEY> --yes` — see your platform adapter → agent-data setup), and verifies with
+`agent-data whoami` before continuing. The API key is requested only at this connect step, never before
+the install. The canonical setup-doc URL lives in the platform adapter → agent-data setup. The internal codes for
 this state (`E-NO-AGENT-DATA`, `E-NO-AUTH`, owned by
 [`shared/references/errors.md`](../../shared/references/errors.md)) are never shown to the user. The
 **headless runner** (`job-search-run`) can't prompt, so it still halts on these with a blocked digest.
@@ -124,13 +124,13 @@ Onboarding-specific note: the likeliest blocks here are `E-QUOTA` (the only poin
 limits surface, reactively) and `E-SERVICE-DOWN`, both catalogued in
 [`shared/references/errors.md`](../../shared/references/errors.md).
 
-### 7. Schedule offer (native `/loop`)
+### 7. Schedule offer
 
-The skill offers to keep the search running automatically with Claude Code's native `/loop` — it
-re-runs the search on an interval inside an open Claude session and never writes the user's machine
-(no crontab, no launchd). The user answers yes/no; on yes the skill runs the `/loop` line it composes
-from the interval table and records the scheduling marker in the registry. The `/loop` recipe is shown
-either way. The scheduling protocol is owned by
+The skill offers to keep the search running automatically on the user's chosen cadence. The user
+answers yes/no; on yes the skill starts the scheduler (using the mechanism in your platform adapter →
+Scheduling — whichever tier applies) and records the scheduling marker in the registry. The
+recurring-run and one-off-run recipes are shown either way, copied verbatim from the platform
+adapter → Run recipe. The scheduling protocol is owned by
 [`shared/references/internals.md`](../../shared/references/internals.md).
 
 ## What the user sees / success criteria
@@ -140,8 +140,8 @@ At the end of onboarding all of the following are true:
 - A **digest** exists at `<workspace>/reports/<date>-digest.md` with real, judged postings.
 - A **persisted workspace** at `~/.job-search/` (or a user-chosen path) contains `config.yaml`,
   `preferences.md`, and `jobs.jsonl` — all created or adopted without hand-editing.
-- An **optional `/loop` schedule** is running and recorded in the OS registry if the user consented
-  (session-bound; nothing is installed on the user's machine).
+- An **optional recurring schedule** is running and recorded in the OS registry if the user consented
+  (the scheduling mechanism is harness-specific — see platform adapter → Scheduling).
 
 On a **returning session**, discovery reports `first_run: false` because
 `config.yaml` exists in the workspace, and the skill routes to the home view (latest digest,

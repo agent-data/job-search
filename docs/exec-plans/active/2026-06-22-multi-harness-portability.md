@@ -263,6 +263,12 @@ The relaxed rule's real teeth — three doc contradictions the dossier surfaced 
   footer "Claude reads this brief" → "your job-search assistant reads this brief"). `evaluate-job-fit`
   verified agnostic (no edit). Frontmatter manifest fields untouched. Batch review: all 4 spec ✅, quality
   approved (2 Minor non-defects). Token grep clean across all five SKILLs.
+- **T2.6** — neutralized `docs/product-specs/new-user-onboarding.md`: the hard-coded `agent-data init
+  --claude-code` deferred to the adapter (3rd init site), the setup-doc URL deferred, the "Claude Code"
+  framing removed, and §7 generalized to the two-tier schedule offer ("whichever tier applies"). `code_refs`
+  resolve, `last_reviewed` bumped, `doc_lint` clean, 56 tests. Review: spec ✅, quality approved (3 Minor; 1
+  fix-worthy copyedit — a thinned "follow the setup-doc steps" directive — deferred to the final fix wave).
+  **P2 complete:** all four hand-authored refs + all five SKILL bodies + new-user-onboarding neutralized.
 
 ## Decision log
 
