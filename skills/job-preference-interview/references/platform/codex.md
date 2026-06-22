@@ -6,9 +6,10 @@ literal here. Read only the section you need; each is self-contained. Companion 
 `../../../docs/design-docs/multi-harness-portability.md` (the dossier) carries the verification status
 and every "pin on install" caveat.
 
-> **Verification.** Codex is the one harness installed and live-tested locally (`codex-cli 0.140.0`).
-> Items still unconfirmed on a running instance carry a **PIN** tag — confirm them before relying on the
-> line in shipped copy.
+> **Verification.** Codex is the one harness installed and **live-tested end to end** (`codex-cli
+> 0.140.0`): a full `job-search-run` pass returned real postings + a written digest via `codex exec`
+> (P0 spike, 2026-06-22). Items still unconfirmed on a running instance carry a **PIN** tag — confirm
+> them before relying on the line in shipped copy.
 
 ## Identity
 
@@ -38,7 +39,8 @@ invoked by name; there is no Claude-style `job-search:` namespace prefix.
 
 ```
 One-off run anytime:
-  codex exec '$job-search-run'
+  codex exec --skip-git-repo-check --sandbox workspace-write \
+    -c sandbox_workspace_write.network_access=true '$job-search-run'
 Recurring (a native local Automation — see Scheduling):
   set up a Codex Automation that runs $job-search-run on your cadence
 ```
@@ -54,7 +56,7 @@ Codex is **two-tier** (see the dossier §4 scheduling matrix):
   no App is unconfirmed.
 - **Tier 2 — pure CLI (no App): consent-gated machine schedule.** `codex` has no automation subcommand,
   so fall back to a **consent-gated** `crontab`/`launchd` entry wrapping
-  `codex exec --sandbox workspace-write '$job-search-run'`. Show the exact line, get an explicit yes,
+  `codex exec --skip-git-repo-check --sandbox workspace-write -c sandbox_workspace_write.network_access=true '$job-search-run'`. Show the exact line, get an explicit yes,
   never install it silently, and leave it user-removable. Record `scheduling.mechanism: cron` (or
   `launchd`). The relaxed-cron fallback is sanctioned here precisely because Codex offers no native local
   alternative in pure-CLI mode.
@@ -66,11 +68,14 @@ A cloud scheduler (`codex cloud exec`) does **not** qualify — it can't see the
 Run the search pass non-interactively with `codex exec` (alias `e`):
 
 ```
-codex exec --skip-git-repo-check --sandbox workspace-write '$job-search-run'
+codex exec --skip-git-repo-check --sandbox workspace-write \
+  -c sandbox_workspace_write.network_access=true '$job-search-run'
 ```
 
-`--skip-git-repo-check` because the workspace is not a git repo; `--json` / `--output-schema` are
-available for structured output. **Exit codes are real** — a non-zero exit signals infra/MCP/submission/
+`--skip-git-repo-check` because the workspace is not a git repo; `-c
+sandbox_workspace_write.network_access=true` because workspace-write blocks network by default and the
+agent-data call needs egress (verified P0); `--json` / `--output-schema` are available for structured
+output. **Exit codes are real** — a non-zero exit signals infra/MCP/submission/
 git-apply failure, so a Tier-2 cron wrapper may act on `$?`. Still surface every outcome through the
 written record (blocked run record + blocked digest + home view) — the record is the contract the home
 view reads; the trustworthy exit code is an *additional* signal on Codex, not a replacement. PIN: a
@@ -126,8 +131,10 @@ harness-specific discovery skill, which job-search does not need:
 agent-data init --api-key <KEY> -y     # then: agent-data whoami  → api_key_set:true
 ```
 
-The agent-data CLI must be on `PATH` inside Codex's sandbox/approval mode, and its network egress
-permitted. PIN: the exact `--sandbox workspace-write` egress allowlist for agent-data.
+The agent-data CLI must be on `PATH` inside Codex's sandbox and its network egress permitted.
+**Verified (P0 live spike):** under `--sandbox workspace-write` the agent-data call is blocked by default
+and succeeds with `-c sandbox_workspace_write.network_access=true`; the bundled binary on `PATH` resolves
+inside the sandbox, and a full `job-search-run` pass returned real postings + a digest this way.
 
 ## Packaging & install
 

@@ -204,6 +204,13 @@ The relaxed rule's real teeth — three doc contradictions the dossier surfaced 
   clean, 56 tests green.
 - **T0.3** — added `.codex-plugin/plugin.json` (valid JSON; `skills: "./skills/"` → the same one tree,
   no per-platform bundle), harness-neutral description, job-search metadata reused from `.claude-plugin/`.
+- **T0.4** — **live Codex proof.** `codex exec` (gpt-5.5) ran the real `job-search-run` skill against
+  live agent-data and returned **10 real LinkedIn postings → 1 strong + 5 moderate matches + a written
+  digest, exit 0** — with **no neutralization yet**, so the portable core runs as-is on Codex.
+  Artifacts verified real (real companies/IDs/URLs, qualitative judgment with no scores, detail reads,
+  a caught data discrepancy). Discovered + recorded the least-privilege sandbox egress config
+  (`--sandbox workspace-write -c sandbox_workspace_write.network_access=true`) the dossier had flagged
+  untested, and folded it back into `platform/codex.md`. **P0 complete.**
 
 ## Decision log
 
@@ -228,6 +235,9 @@ The relaxed rule's real teeth — three doc contradictions the dossier surfaced 
 - **The dossier is the design doc; this is the exec-plan.** Detail (the 193-coupling inventory, the
   per-platform tables) lives in the dossier and is pointed at, not restated, so this plan stays lean and
   does not rot (per PLANS.md).
+- **Codex sandbox egress config is now verified, not a PIN** (P0): agent-data reaches the network from
+  inside `codex exec` under `--sandbox workspace-write -c sandbox_workspace_write.network_access=true`
+  (plain workspace-write blocks it). Resolves the dossier's "agent-data egress allowlist untested" risk.
 
 ## Self-Review
 
