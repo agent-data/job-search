@@ -105,8 +105,8 @@ judge each posting **sequentially** — never block one read on another, but do 
 | `high` | `gpt-5-codex` / an o-series model |
 | `inherit` | the model this run is already on |
 
-Legacy `haiku|sonnet|opus` values are accepted as aliases for `fast|balanced|high`. PIN: exact current
-Codex model ids.
+A legacy model name carried over from another harness's config maps to the nearest tier (default `fast`).
+PIN: exact current Codex model ids.
 
 ## Whole-file write
 

@@ -279,6 +279,16 @@ The relaxed rule's real teeth — three doc contradictions the dossier surfaced 
   T3.3: `conventions.md` `schedule.time` was already two-tier (P1.T1.2) ✓; the example-config template's
   stale comments are folded into P4.T4.1 (single-touch). Batch review: both spec ✅, quality approved,
   cross-doc agreement confirmed (consent not weakened). `doc_lint` clean, 56 tests. **P3 complete.**
+- **T4.1 (model-tier migration)** — `templates/config.example.yaml` now seeds `detail_model: fast` with the
+  `fast|balanced|high|inherit` enum + adapter pointer, and its `frequency`/`time` comments carry the
+  `/loop`-free two-tier wording; `shared/references/platform/codex.md`'s legacy-alias line was reworded
+  token-free. The `\b(haiku|sonnet|opus)\b` grep over `shared/references`+`skills` now returns **only**
+  `platform/claude.md` (the sole home for literal Claude model names — D3 resolved). Back-compat holds (a
+  live config carrying `haiku` resolves via claude.md's legacy→tier mapping; the loader defers, never
+  hard-rejects). `philosophy_guard` clean (no score/credit field added). Review: spec ✅, quality approved.
+- **T4.2 + T4.3** — CONTROLLER-VERIFIED complete (no edits): closed-choice was fully neutralized in P1.T1.2
+  (voice.md decision) + adapters + P2 skills; desktop-notify was demoted in P1.T1.2 (errors.md two
+  file-backed channels + capability-gated alert) + P2 SKILLs, with the `desktop_notify_on_block` field kept.
 
 ## Decision log
 

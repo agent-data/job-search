@@ -7,10 +7,10 @@ queries:
   - { id: "ml-platform-sf", keywords: "ML platform engineer", location: "San Francisco Bay Area", limit: 25, enabled: true }
 search:
   freshness: "past-2-weeks"    # any | past-week | past-2-weeks | past-month (client-side filter on posted_at)
-  detail_model: "haiku"        # per-posting detail subagents: haiku | sonnet | opus | inherit
+  detail_model: "fast"         # per-posting detail reads: fast | balanced | high | inherit — see your platform's adapter → Model tiers
 schedule:
-  frequency: "daily"           # /loop interval: hourly→1h · every-2-hours→2h · every-6-hours→6h · daily→24h · weekly→168h
-  time: "08:00"                # informational under /loop (the loop fires on an interval, not at a wall-clock time)
+  frequency: "daily"           # hourly | every-2-hours | every-6-hours | daily | weekly — cadence; the schedule mechanism is your platform's (see your adapter → Scheduling)
+  time: "08:00"                # HH:MM — honored when the active scheduler is wall-clock-based (a Tier-2 cron/launchd schedule); ignored when interval-only (a Tier-1 in-session loop) — see your adapter → Scheduling
   timezone: "America/Los_Angeles"
 notify:
   digest_path_template: "reports/{date}-digest.md"
