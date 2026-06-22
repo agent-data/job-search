@@ -40,18 +40,28 @@ philosophy section states the "private and local" rule and names the mechanism t
 CI if it finds numeric scores, budget fields, or other artifacts that would indicate real personal
 data had leaked into a generated example.
 
-## Scheduling never writes your machine
+## Scheduling writes nothing without your explicit consent
 
-Scheduling is Claude Code's native `/loop` — `/loop <interval> /job-search:job-search-run` (plugin
-installs; loose-skill installs use the bare `/job-search-run` target) re-runs the search inside an
-open Claude session. The agent never initiates a cron line or a launchd plist; nothing scheduling-related is
-written to your machine.
+Scheduling uses the host's scheduler, and which one applies decides whether your machine is written
+at all. The model is **two-tier**:
+
+- **Tier 1 — a native *local* scheduler (preferred, where the host has one).** It re-runs the search
+  in-session and **installs nothing on your machine** — no cron line, no launchd plist, no privileged
+  write. The per-host mechanism (for example, an in-session loop) is named by your platform's adapter.
+- **Tier 2 — no native local scheduler.** A machine-level cron/launchd schedule is the sanctioned
+  fallback, written **only on your explicit yes, with the exact line shown to you first** — never
+  silent, never auto-installed, and user-removable.
+
+Either way the agent never initiates a **silent or un-consented** write to your machine: scheduling is
+offered as a yes/no you choose, and a machine schedule lands only after you approve the exact line.
 
 This is an **instruction-level design rule**, carried by every skill's pinned references — there is no
 runtime hook enforcing it (the former PreToolUse guard was removed: it required Python on your machine and
-gated something you're entitled to do). If you explicitly ask the agent for cron or launchd, it will show
-you the no-install `/loop` recipe first, then defer to your choice — your machine, your call. You also
-remain free to run cron or launchd by hand in your own shell, as always. The `/loop` flow is documented in
+gated something you're entitled to do). If you explicitly ask the agent for cron or launchd, it's your
+machine and your call: where a native local scheduler exists, it offers that first so you know the
+no-install option, then helps with what you asked for; where none exists, the consent-gated machine
+schedule is the fallback — the exact line shown first, then written on your yes. You also remain free to
+run cron or launchd by hand in your own shell, as always. The two-tier scheduling flow is documented in
 [`../shared/references/internals.md`](../shared/references/internals.md) (see the scheduling section).
 
 ## Auth and secrets

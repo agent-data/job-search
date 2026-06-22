@@ -269,6 +269,16 @@ The relaxed rule's real teeth — three doc contradictions the dossier surfaced 
   resolve, `last_reviewed` bumped, `doc_lint` clean, 56 tests. Review: spec ✅, quality approved (3 Minor; 1
   fix-worthy copyedit — a thinned "follow the setup-doc steps" directive — deferred to the final fix wave).
   **P2 complete:** all four hand-authored refs + all five SKILL bodies + new-user-onboarding neutralized.
+- **T3.1 + T3.2 + T3.3 (P3 — scheduling relaxation)** — re-scoped the two policy docs to the two-tier
+  relaxed rule, preserving the consent intent. `core-beliefs.md` Belief 7: statement/why/enforced-by/verify
+  re-scoped off `/loop`-only + "the harness forbids crontab/launchctl writes" → "the agent never initiates
+  a **silent/un-consented** privileged write; a shown, user-approved Tier-2 line is allowed"; the
+  verify-step now frames a green eval as offer+compose+record behavior (noting evals stub scheduling), not
+  an enforced prohibition. `docs/SECURITY.md`: heading + body made conditional on the active mechanism (the
+  absolute "never writes your machine" claim gone; the consent gate + design-rule/no-hook framing kept).
+  T3.3: `conventions.md` `schedule.time` was already two-tier (P1.T1.2) ✓; the example-config template's
+  stale comments are folded into P4.T4.1 (single-touch). Batch review: both spec ✅, quality approved,
+  cross-doc agreement confirmed (consent not weakened). `doc_lint` clean, 56 tests. **P3 complete.**
 
 ## Decision log
 

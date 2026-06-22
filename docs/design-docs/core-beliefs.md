@@ -2,7 +2,7 @@
 title: Core Beliefs — Agent-First Operating Principles
 status: current
 verified: partial
-last_reviewed: 2026-06-11
+last_reviewed: 2026-06-22
 code_refs: [scripts/philosophy_guard.py, scripts/doc_lint.py, scripts/build.sh, .github/workflows/ci.yml, shared/references/internals.md, shared/references/conventions.md]
 ---
 # Core Beliefs — Agent-First Operating Principles
@@ -125,21 +125,34 @@ and are linked, never restated here — this doc is a live design-doc subject to
 
 ## 7. Consent-gated autonomy
 
-- **Statement.** Scheduling is Claude Code's native `/loop`; the agent never initiates a write to the
-  user's machine (no crontab, no launchd) — and scheduling itself is offered as a yes/no, never assumed.
-- **Why.** Installing a system scheduler is a privileged, persistent change to someone's machine. With a
-  native, session-bound `/loop` there's no reason for the agent to *initiate* a crontab or launchd write
-  at all. The user's own machine stays theirs: if they explicitly ask for cron, the skills show the
-  `/loop` recipe first and then defer to the user's choice (decision recorded 2026-06-11 — the former
-  PreToolUse deny-hook was removed; it required Python on the user's machine and gated something the
-  user is entitled to do).
-- **Enforced by.** **Instruction-level + evals** — there is no runtime hook. The stance is pinned in
+- **Statement.** Scheduling uses the host's scheduler — a native *local* scheduler where one exists
+  (it installs nothing on the machine), else a consent-gated machine schedule — and whichever applies,
+  the agent never initiates a **silent / un-consented** privileged write; scheduling is offered as a
+  yes/no, never assumed.
+- **Why.** Installing a system scheduler is a privileged, persistent change to someone's machine. Where
+  the host has a native *local* scheduler there's no reason for the agent to write the machine at all —
+  prefer it (it installs nothing). Where none exists, a consent-gated machine schedule is allowed *as a
+  fallback*: the exact line is shown first and written only on an explicit yes, and it stays
+  user-removable — it's the user's machine and their explicit call. Either way the user's own machine
+  stays theirs: scheduling is a yes/no they choose, never a silent install, and if they explicitly ask
+  for cron the skills offer the no-install option first, then defer to their choice (decision recorded
+  2026-06-11 — the former PreToolUse deny-hook was removed; it required Python on the user's machine and
+  gated something the user is entitled to do). The two tiers and the "cloud schedulers don't qualify"
+  test are owned by [shared/references/internals.md](../../shared/references/internals.md) (Scheduling
+  setup).
+- **Enforced by.** **Instruction-level + evals** — there is no runtime hook. The stance asserts **no
+  silent / un-consented privileged write**; a machine schedule shown first and approved by the user (the
+  Tier-2 fallback) is explicitly allowed. It is pinned in
   [shared/references/internals.md](../../shared/references/internals.md) (Scheduling setup) and
   `skills/job-search-agent/references/scheduling-and-consent.md`, stated user-facing in
-  [docs/SECURITY.md](../SECURITY.md), and exercised by the job-search evals (scheduling is verified
-  via the composed `/loop` line + the registry marker; the harness forbids crontab/launchctl writes).
-- **How to verify.** Run the job-search evals and confirm no crontab/launchd write occurs and the
-  `/loop` recipe + registry marker carry the schedule.
+  [docs/SECURITY.md](../SECURITY.md), and exercised by the job-search evals (scheduling is verified via
+  the offered yes/no, the composed schedule line for the cadence, and the registry marker — not by an
+  enforced prohibition).
+- **How to verify.** Run the job-search evals and confirm the agent *offers* scheduling as a yes/no,
+  composes the correct schedule line for the chosen cadence, records the registry marker on a yes, and
+  never writes a privileged schedule *without* consent. The evals stub scheduling (no real
+  crontab/launchd runs in tests), so a green eval reflects this consent + compose + record behavior, not
+  an enforced prohibition.
 
 ## 8. Conversational-first configuration
 
