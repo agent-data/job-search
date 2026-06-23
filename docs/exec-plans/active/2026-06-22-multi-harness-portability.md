@@ -341,6 +341,16 @@ The relaxed rule's real teeth — three doc contradictions the dossier surfaced 
   adapters (`copilot.md` L60/L84 `/loop`/`claude -p`; `droid.md` L62/L103 `/loop`/`AskUserQuestion`) that
   codex.md and the other four avoid. Rephrased to codex.md's clean style (contrast kept, literal tokens
   dropped). The grep now returns ONLY `platform/claude.md` (+ synced) + the three `evals.json` dev-specs.
+- **FINAL — whole-branch review + Done-when gate.** Gate GREEN: `doc_lint`, `pytest` (78), `philosophy_guard`,
+  build→skills-sync, byte-identity markers in claude.md, the neutralization grep (only `platform/claude.md`
+  + evals dev-specs), the four hand-authored refs clean, `validate_platforms` (8 adapters × 12 sections,
+  manifests parse, 149+ cross-refs resolve), `codex-portability` superseded; live Codex proof = P0. Final
+  whole-branch review (opus): **READY TO MERGE — zero Critical/Important**; every non-goal respected (Claude
+  byte-identity diffed vs pre-branch `main`; no codegen/bundle; no agent-data CLI fork; the four hand-authored
+  refs neutralized in the same effort); two-tier scheduling consistent across all eight surfaces; deferral
+  resolution complete. Applied 2 optional shipped-file polishes (copilot model-tier PIN consistency;
+  customization dedup). Remaining Minors (cosmetic / dead superseded-doc) triaged acceptable. **P1–P5
+  COMPLETE.** Branch left at `state: active` — **NOT merged** (the user merges after all-harness testing).
 
 ## Decision log
 

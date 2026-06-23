@@ -78,7 +78,7 @@ After the primary pass scans summaries, the agent fans out one detail-read subag
 | `high` | Highest fidelity |
 | `inherit` | Uses the same model as the top-level run |
 
-`fast` is the right starting point for most searches. It is a touch looser on subtle qualitative calls — occasionally emitting an out-of-vocabulary band or a stray numeric value — but the consolidation step after all subagents return validates and coerces every verdict before anything reaches `jobs.jsonl` or the digest, so no invalid output persists. For roles where the brief's distinctions are fine-grained or the must-have/red-flag list is long, set `detail_model: balanced` (or `high`) to improve judgment fidelity. This is a **fidelity/speed tradeoff**, not a quality-gate — the defaults are safe either way. The literal model each tier maps to lives in your platform's adapter → Model tiers.
+`fast` is the right starting point for most searches. It is a touch looser on subtle qualitative calls — occasionally emitting an out-of-vocabulary band or a stray numeric value — but the consolidation step after all subagents return validates and coerces every verdict before anything reaches `jobs.jsonl` or the digest, so no invalid output persists. For roles where the brief's distinctions are fine-grained or the must-have/red-flag list is long, set `detail_model: balanced` (or `high`) to improve judgment fidelity. This is a **fidelity/speed tradeoff**, not a quality-gate — the defaults are safe either way.
 
 > **Note:** Per-subagent tier selection is effective only on hosts that support isolated-context subagents — see your platform's adapter → Concurrent detail reads. The adapter notes whether per-subagent model selection even exists; a single-model host makes the knob inert.
 

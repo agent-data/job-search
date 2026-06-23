@@ -116,9 +116,9 @@ fabricate a dispatch.
 
 | Tier token | Copilot model |
 |---|---|
-| `fast` | a fast GPT-4-class or equivalent model |
-| `balanced` | a mid-tier GPT-4-class model |
-| `high` | a high-capability model (o-series or equivalent) |
+| `fast` | a fast model tier (PIN: exact Copilot model id) |
+| `balanced` | a mid-tier model (PIN: exact id) |
+| `high` | a high-capability model tier (PIN: exact id) |
 | `inherit` | the model this run is already on |
 
 A legacy model name carried over from another harness's config maps to the nearest tier (default `fast`).
