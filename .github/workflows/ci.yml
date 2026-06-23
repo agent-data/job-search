@@ -15,6 +15,8 @@ jobs:
         run: python3 scripts/philosophy_guard.py --root .
       - name: Doc lint (knowledge base)
         run: python3 scripts/doc_lint.py --root .
+      - name: Structural validation (adapters + manifests)
+        run: python3 scripts/validate_platforms.py --root .
       - name: Build is a no-op (bundled copies in sync)
         run: |
           ./scripts/build.sh

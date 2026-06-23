@@ -319,6 +319,15 @@ The relaxed rule's real teeth — three doc contradictions the dossier surfaced 
   (cursor manifest); recovered intact; remaining manifests + reviews redone on **Opus** per the corrected
   model policy. Also: an **opus re-review** of the earlier sonnet-implemented `home`/`customization`/
   `new-user-onboarding` → all ✅ at the opus bar (1 deferred Minor: customization L72/L81 duplicate sentence).
+- **T5.4 (structural-validation lane)** — `scripts/validate_platforms.py` (stdlib, doc_lint shape) +
+  `tests/test_validate_platforms.py` (22 cases) + a CI step. Three checks: **adapter-sections** (all 8
+  adapters carry the 12 canonical sections; synced copies byte-equal), **manifest-parse** (every manifest
+  JSON parses; `.opencode/…js` via `node --check`), **adapter-cross-refs** (every `adapter →` / `defers to →`
+  pointer resolves to a canonical section present in EVERY adapter — 149+ pointers). Codex live lane = the
+  manual P0 proof; the six are structural-only via this validator. Review (opus, code): checks confirmed
+  non-vacuous; 1 Important — the cross-ref anchor missed the `defers to →` form (12 real sites silently
+  unvalidated) — **FIXED** (anchor broadened, 2 tests added, probe confirms no false-match). Validator clean,
+  **78 tests**, doc_lint + philosophy_guard clean. 2 Minor (source-driven synced-copy check) deferred.
 
 ## Decision log
 

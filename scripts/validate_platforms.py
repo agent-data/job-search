@@ -1,0 +1,281 @@
+#!/usr/bin/env python3
+"""Structural validation for the multi-harness platform layer.
+
+The six non-Claude harnesses (codex, cursor, opencode, gemini, copilot, droid, pi) cannot be
+live-tested in CI — no harness is installed on the runner. Codex is proven by the manual P0 live
+lane (run by hand, off-CI); the remaining six get this STRUCTURAL gate instead. It proves, without
+running any harness, that every platform adapter is complete, every manifest parses, and every
+adapter cross-reference the neutralized skill prose makes actually resolves on every harness — so a
+dangling `→ Section` pointer or a malformed manifest is caught before install. This is the
+platform/-subdir lane the plan calls for (doc_lint.py deliberately scans only the KB, not
+shared/references or skills, so this is a NEW lane, not a doc_lint rule).
+
+Mirrors scripts/doc_lint.py in shape: scan(root) -> hits; main() prints hits and returns 1 on
+failure, else prints "Platform validation: clean." and returns 0. `--root` arg. Stdlib only.
+
+Three checks, dispatched via the CHECKS registry:
+  - adapter-sections:  every shared/references/platform/<harness>.md SOURCE adapter carries all 12
+                       canonical `## ` sections (exact names). Synced skills/*/references/platform/
+                       copies are asserted to match their source byte-for-byte.
+  - manifest-parse:    every manifest JSON that EXISTS parses as valid JSON (an absent optional one
+                       is skipped, not a failure). The .opencode/plugins/job-search.js plugin is
+                       `node --check`'d IF node is on PATH, else an informational skip (CI without
+                       node must not fail).
+  - adapter-cross-refs: scan shared/references/*.md + skills/**/*.md (NOT the adapters themselves)
+                       for adapter cross-references — the arrow form the neutralized prose uses
+                       (`adapter → <Section>`, `… defers to → <Section>`). Every referenced
+                       <Section> must be one of the 12 canonical sections AND exist as a `## `
+                       heading in EVERY adapter (so a skill resolves its pointer on any harness).
+"""
+import argparse, json, os, re, shutil, subprocess, sys
+
+# The 12 canonical adapter sections, in their canonical order (from claude.md / codex.md).
+CANONICAL_SECTIONS = (
+    "Identity",
+    "Tool map",
+    "Run recipe",
+    "Scheduling",
+    "Headless invocation",
+    "Closed-choice question",
+    "Concurrent detail reads",
+    "Model tiers",
+    "Whole-file write",
+    "Block-alert channel",
+    "agent-data setup",
+    "Packaging & install",
+)
+
+PLATFORM_DIR = os.path.join("shared", "references", "platform")
+HEADING_RE = re.compile(r"^##\s+(.*?)\s*#*\s*$")
+
+# Manifests to check. Each may be absent (optional) — discovered, never hard-required.
+JSON_MANIFESTS = (
+    ".claude-plugin/plugin.json",
+    ".claude-plugin/marketplace.json",
+    ".codex-plugin/plugin.json",
+    ".cursor-plugin/plugin.json",
+    ".factory-plugin/plugin.json",
+    "gemini-extension.json",
+    "package.json",
+)
+JS_PLUGIN = ".opencode/plugins/job-search.js"
+
+
+def adapter_sources(root):
+    """Yield (harness, abspath) for every SOURCE adapter under shared/references/platform/."""
+    base = os.path.join(root, PLATFORM_DIR)
+    if not os.path.isdir(base):
+        return
+    for fn in sorted(os.listdir(base)):
+        if fn.endswith(".md"):
+            yield fn[:-3], os.path.join(base, fn)
+
+
+def _section_headings(text):
+    """Ordered list of `## ` heading titles in `text`."""
+    return [m.group(1) for line in text.splitlines() for m in [HEADING_RE.match(line)] if m]
+
+
+def scan_adapter_sections(root):
+    """Every source adapter must carry all 12 canonical `## ` sections (exact names); each synced
+    skills/*/references/platform/ copy must match its source byte-for-byte (build.sh keeps them in
+    sync — a drifted copy would ship a stale adapter on install)."""
+    hits = []
+    sources = list(adapter_sources(root))
+    for harness, path in sources:
+        rel = os.path.relpath(path, root)
+        with open(path, encoding="utf-8", errors="replace") as f:
+            src_text = f.read()
+        present = set(_section_headings(src_text))
+        for sec in CANONICAL_SECTIONS:
+            if sec not in present:
+                hits.append(f"{rel}: adapter-sections: missing canonical section '## {sec}'")
+        # Synced copies under skills/*/references/platform/<harness>.md must equal the source.
+        for dirpath, _, files in os.walk(os.path.join(root, "skills")):
+            if not dirpath.endswith(os.path.join("references", "platform")):
+                continue
+            copy = os.path.join(dirpath, harness + ".md")
+            if not os.path.isfile(copy):
+                continue
+            with open(copy, encoding="utf-8", errors="replace") as f:
+                if f.read() != src_text:
+                    hits.append(f"{os.path.relpath(copy, root)}: adapter-sections: synced copy "
+                                f"differs from source {rel} (re-run build.sh)")
+    return hits
+
+
+def scan_manifest_parse(root):
+    """Every manifest JSON that exists must parse; the opencode .js plugin is node --check'd when
+    node is available (informational skip otherwise — CI without node must not fail)."""
+    hits = []
+    for rel in JSON_MANIFESTS:
+        path = os.path.join(root, rel)
+        if not os.path.exists(path):
+            continue  # optional manifest, discovered not required
+        try:
+            with open(path, encoding="utf-8") as f:
+                json.load(f)
+        except (ValueError, OSError) as e:
+            hits.append(f"{rel}: manifest-parse: invalid JSON ({e})")
+    js = os.path.join(root, JS_PLUGIN)
+    if os.path.exists(js):
+        node = shutil.which("node")
+        if node is None:
+            print(f"info: manifest-parse: node not on PATH; skipped `node --check` of {JS_PLUGIN}")
+        else:
+            proc = subprocess.run([node, "--check", js], capture_output=True, text=True)
+            if proc.returncode != 0:
+                detail = (proc.stderr or proc.stdout).strip().replace("\n", " ")
+                hits.append(f"{JS_PLUGIN}: manifest-parse: node --check failed ({detail})")
+    return hits
+
+
+# An adapter cross-reference is the neutralized-prose form "… adapter → <Section>" (the literal word
+# "adapter" — "your platform's adapter", "your adapter", "the active platform's adapter") OR the
+# deferral form "… defers to → <Section>" (e.g. "the fan-out itself defers to → Concurrent detail
+# reads"), then an arrow (→), then a canonical section name. The arrow is otherwise heavily
+# overloaded in this repo (data-flow "search → dedup → judge", fallbacks "true → retry", path
+# precedence, error mapping "→ E-QUOTA", the doc-heading pointer "internals.md → Scheduling setup"),
+# so we anchor on the word "adapter" or the phrase "defers to" — only those forms are adapter
+# pointers.
+#
+# The trailing section name may be wrapped across a line break ("adapter → Model\ntiers"), wrapped in
+# **bold** or `code`, or COMPOUND ("adapter → Tool map / Whole-file write" — two sections joined by
+# "/"). We normalize whitespace to single spaces and strip emphasis markers, then greedily match the
+# LONGEST canonical name that begins the text after the arrow, and continue matching across "/ "
+# joiners. An arrow anchored by "adapter" whose target matches no canonical name is an unresolved /
+# typo'd / renamed pointer -> a hit.
+_CANON_BY_LEN = sorted(CANONICAL_SECTIONS, key=len, reverse=True)
+_WS_RE = re.compile(r"\s+")
+_EMPHASIS_RE = re.compile(r"[*`]")
+# "adapter" + optional possessive, OR the "defers to" verb phrase, then the arrow. Matches
+# "adapter →", "adapter's →", and the neutralized "… defers to → <Section>" deferral pointer.
+# Both are genuine adapter cross-references; the doc-heading pointer ("internals.md → Scheduling
+# setup"), data-flow arrows ("search → dedup"), and error maps ("→ E-QUOTA") are NOT anchored by
+# either token and so stay correctly excluded.
+_ADAPTER_ARROW_RE = re.compile(r"(?:adapter(?:'s)?|defers to)\s*→\s*")
+
+
+def _normalize(text):
+    """Collapse all whitespace to single spaces and strip markdown emphasis (* and `)."""
+    return _WS_RE.sub(" ", _EMPHASIS_RE.sub("", text))
+
+
+def _match_section(after):
+    """Greedily match the longest canonical section name that begins `after`; return (name, rest)
+    where rest is the text following the matched name, or (None, after) if none matches."""
+    for sec in _CANON_BY_LEN:
+        if after.startswith(sec):
+            return sec, after[len(sec):]
+    return None, after
+
+
+def _refs_in_text(text):
+    """Yield ('OK', section) for each canonical section pointed at by an "adapter → …" or
+    "defers to → …" reference, and ('UNRESOLVED', snippet) for such an anchored arrow whose target is
+    not a canonical section. Handles compound "adapter → A / B" pointers (both A and B are yielded)."""
+    norm = _normalize(text)
+    out = []
+    for m in _ADAPTER_ARROW_RE.finditer(norm):
+        after = norm[m.end():]
+        sec, rest = _match_section(after)
+        if sec is None:
+            out.append(("UNRESOLVED", after[:40].strip()))
+            continue
+        out.append(("OK", sec))
+        # Continue across "/ <Section>" compound joiners (e.g. "Tool map / Whole-file write").
+        while True:
+            stripped = rest.lstrip()
+            if not stripped.startswith("/"):
+                break
+            nxt, rest2 = _match_section(stripped[1:].lstrip())
+            if nxt is None:
+                break
+            out.append(("OK", nxt))
+            rest = rest2
+    return out
+
+
+def _cross_ref_files(root):
+    """shared/references/*.md (NOT platform/ adapters) + every skills/**/*.md (NOT the synced
+    references/platform/ adapter copies). These are the files whose pointers must resolve."""
+    files = []
+    sr = os.path.join(root, "shared", "references")
+    if os.path.isdir(sr):
+        for fn in sorted(os.listdir(sr)):
+            if fn.endswith(".md"):
+                files.append(os.path.join(sr, fn))
+    sk = os.path.join(root, "skills")
+    for dirpath, _, fns in os.walk(sk):
+        if dirpath.endswith(os.path.join("references", "platform")):
+            continue  # the adapters themselves are not cross-ref sources
+        for fn in sorted(fns):
+            if fn.endswith(".md"):
+                files.append(os.path.join(dirpath, fn))
+    return files
+
+
+def scan_adapter_cross_refs(root):
+    """Every `→ <Section>` pointer in the prose must name one of the 12 canonical sections, and that
+    section must exist as a `## ` heading in EVERY source adapter (so the pointer resolves on any
+    harness). An arrow whose target matches no canonical name is an unresolved/typo'd pointer."""
+    hits = []
+    # Which canonical sections actually exist in every adapter? (scan_adapter_sections already flags
+    # a genuinely missing section; here we guard the cross-ref against a section absent on some host.)
+    sources = list(adapter_sources(root))
+    per_adapter = {}
+    for harness, path in sources:
+        with open(path, encoding="utf-8", errors="replace") as f:
+            per_adapter[harness] = set(_section_headings(f.read()))
+    for path in _cross_ref_files(root):
+        rel = os.path.relpath(path, root)
+        with open(path, encoding="utf-8", errors="replace") as f:
+            text = f.read()
+        for kind, target in _refs_in_text(text):
+            if kind == "UNRESOLVED":
+                hits.append(f"{rel}: adapter-cross-refs: arrow target is not a canonical section: "
+                            f"'→ {target}'")
+                continue
+            missing = sorted(h for h in per_adapter if target not in per_adapter[h])
+            if missing:
+                hits.append(f"{rel}: adapter-cross-refs: section '{target}' is referenced but "
+                            f"absent from adapter(s): {', '.join(missing)}")
+    return hits
+
+
+CHECKS = {
+    "adapter-sections": scan_adapter_sections,
+    "manifest-parse": scan_manifest_parse,
+    "adapter-cross-refs": scan_adapter_cross_refs,
+}
+
+
+def scan(root, only=None):
+    """Return hits (a list of 'path: <check>: <detail>' strings) across all CHECKS.
+    Pass `only` (a name or iterable) to restrict the run to the named check(s) — used by unit tests."""
+    if isinstance(only, str):
+        only = [only]
+    hits = []
+    for name, fn in CHECKS.items():
+        if only and name not in only:
+            continue
+        hits += fn(root)
+    return hits
+
+
+def main():
+    ap = argparse.ArgumentParser(description="Structural validation of the platform adapter layer.")
+    ap.add_argument("--root", default=".")
+    ap.add_argument("--only", action="append", help="run only the named check(s); repeatable")
+    args = ap.parse_args()
+    hits = scan(args.root, only=args.only)
+    if hits:
+        print("Platform validation FAILED:")
+        print("\n".join(hits))
+        return 1
+    print("Platform validation: clean.")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
