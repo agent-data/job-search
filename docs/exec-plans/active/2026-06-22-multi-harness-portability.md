@@ -298,6 +298,16 @@ The relaxed rule's real teeth — three doc contradictions the dossier surfaced 
   `/loop`/question-box Claude tests + the stubbing instructions kept. All `evals.json` parse; `doc_lint`
   clean, 56 tests. Review: spec ✅, quality approved (1 Minor — parenthetical `--claude-code`, judged
   acceptable; 1 cosmetic doubled-parenthetical at L95/L109, deferred). **P4 complete.**
+- **T5.1 (six per-platform adapters)** — authored `platform/{cursor,opencode,gemini,copilot,droid,pi}.md`,
+  each mirroring codex.md's 12 sections, filled from dossier §1/§4 with every unverified runtime claim
+  carried as an inline **PIN** (cursor 24 · opencode 23 · gemini 22 · pi 24 · copilot 9 · droid 10 — the
+  last two lower, more file-verified). No `haiku|sonnet|opus` / `init --claude-code` in any (the grep stays
+  scoped to `claude.md`); `--api-key`-only agent-data setup; Tier-2 consent-gated scheduling with the gate
+  inside the recipe; mandatory sequential fallback everywhere; §6b WRONG-claim corrections applied the right
+  way. Batch review (opus): 3 Important fixed — a runnable `crontab -e` was removed from the copilot+droid
+  Run-recipe fences (a consent-safety regression vs codex.md), and cursor's leaked Codex `$`-prefix token
+  fixed — plus 2 Minor (opencode L18 consistency, copilot invocation PIN). `build.sh` synced all six;
+  `doc_lint` clean, 56 tests.
 
 ## Decision log
 
