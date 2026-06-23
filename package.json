@@ -1,0 +1,15 @@
+{
+  "name": "job-search",
+  "version": "0.3.0",
+  "description": "A private, local-first job-search assistant: pulls postings, judges each one's relevance against your prose preferences (qualitative — no scores), and digests the matches on a schedule you control.",
+  "author": { "name": "Aptiq Labs, Inc." },
+  "homepage": "https://github.com/agent-data/job-search",
+  "repository": "https://github.com/agent-data/job-search",
+  "license": "MIT",
+  "keywords": ["job-search", "career", "agent-data", "linkedin", "skills", "automation", "pi-package"],
+  "type": "module",
+  "main": ".opencode/plugins/job-search.js",
+  "pi": {
+    "skills": ["./skills"]
+  }
+}

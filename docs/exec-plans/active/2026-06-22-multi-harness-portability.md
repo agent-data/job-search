@@ -308,6 +308,17 @@ The relaxed rule's real teeth — three doc contradictions the dossier surfaced 
   Run-recipe fences (a consent-safety regression vs codex.md), and cursor's leaked Codex `$`-prefix token
   fixed — plus 2 Minor (opencode L18 consistency, copilot invocation PIN). `build.sh` synced all six;
   `doc_lint` clean, 56 tests.
+- **T5.2 + T5.3 (manifests + entry files)** — manifest-only, zero-codegen distribution: `.cursor-plugin/
+  plugin.json`; root `package.json` (opencode `type:module`/`main` + the pi block, one file both consumers)
+  + `.opencode/plugins/job-search.js` (config + messages.transform hooks); `gemini-extension.json` +
+  `GEMINI.md`; `.factory-plugin/plugin.json`; **Copilot reuses `.claude-plugin/`** (no new file). Each points
+  at the one `skills/` tree (Claude auto-discovers; others add `skills:"./skills/"` or inject via hook/`pi`
+  block). T5.3: `CLAUDE.md` stays the Claude redirect, `GEMINI.md` is the only new named entry, `AGENTS.md`
+  serves the rest. Reconciled the gemini adapter's stale `gemini-tools.md` reference (it now points at the
+  adapter itself). Batch review (opus): all six ✅. **Crash recovery note:** the host crashed mid-T5.2
+  (cursor manifest); recovered intact; remaining manifests + reviews redone on **Opus** per the corrected
+  model policy. Also: an **opus re-review** of the earlier sonnet-implemented `home`/`customization`/
+  `new-user-onboarding` → all ✅ at the opus bar (1 deferred Minor: customization L72/L81 duplicate sentence).
 
 ## Decision log
 

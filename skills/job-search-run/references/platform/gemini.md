@@ -17,8 +17,9 @@ The host agent is **Gemini CLI**; refer to it as "Gemini" (or "the agent") in an
 that would otherwise say "Claude Code". Gemini CLI loads its session context from `GEMINI.md` (via
 `contextFileName: GEMINI.md` in the extension manifest). `AGENTS.md` is a regular file in this repo
 — not a symlink — so `contextFileName` isolates Gemini to `GEMINI.md` without touching `AGENTS.md`.
-The `GEMINI.md` file `@`-imports the front-door `SKILL.md` and `references/gemini-tools.md` (authored
-in T5.2) so the agent has instructions at session start.
+The `GEMINI.md` file `@`-imports the front-door `SKILL.md` so the agent has instructions at session
+start, and points at this adapter (`shared/references/platform/gemini.md`) for the tool map — there
+is no separate per-platform tool-map file.
 
 ## Tool map
 
@@ -179,13 +180,14 @@ Ships as a Gemini CLI extension via two files at the repo root:
    and `contextFileName: GEMINI.md`, which tells Gemini CLI to load `GEMINI.md` as the session
    context file rather than a default or the repo's `AGENTS.md`.
 
-2. **`GEMINI.md`** — the Gemini CLI entry file. Uses Gemini's `@`-import syntax to pull in:
-   - the front-door `SKILL.md` (so the agent receives the job-search skill instructions), and
-   - `references/gemini-tools.md` — a Gemini-specific tool-map reference authored in T5.2 that
-     translates the skill's action vocabulary into Gemini CLI's native tool names.
+2. **`GEMINI.md`** — the Gemini CLI entry file. Uses Gemini's `@`-import syntax to pull in the
+   front-door `SKILL.md` (so the agent receives the job-search skill instructions), and points at
+   this adapter (`shared/references/platform/gemini.md`) for the tool map that translates the skill's
+   action vocabulary into Gemini CLI's native tool names — there is no separate per-platform
+   tool-map file.
 
-Both files are authored in T5.2; this adapter describes their role. The `skills/` tree is the same
-shared tree all harnesses point at — no per-platform bundle.
+This adapter describes the role of both files. The `skills/` tree is the same shared tree all
+harnesses point at — no per-platform bundle.
 
 PIN: confirm the exact `gemini extensions install <url>` command form and whether it ingests the one
 `skills/` tree as-is via the manifest; confirm whether Gemini CLI reads `gemini-extension.json` from
