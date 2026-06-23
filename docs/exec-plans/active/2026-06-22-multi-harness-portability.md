@@ -351,6 +351,18 @@ The relaxed rule's real teeth — three doc contradictions the dossier surfaced 
   resolution complete. Applied 2 optional shipped-file polishes (copilot model-tier PIN consistency;
   customization dedup). Remaining Minors (cosmetic / dead superseded-doc) triaged acceptable. **P1–P5
   COMPLETE.** Branch left at `state: active` — **NOT merged** (the user merges after all-harness testing).
+- **Follow-up — README generalized (scope-gap fix).** The user flagged that `README.md` still read Claude-only.
+  Root cause: the **human-facing docs were never in scope** — the dossier §2 coupling inventory and the P1–P5
+  tasks covered the agent-consumed runtime surface (`shared/references`, `skills`, AGENTS/ARCHITECTURE, the
+  policy docs), not README/CONTRIBUTING/TESTING/marketing docs, and no gate scans them (the neutralization
+  grep is scoped to `shared/references`+`skills`; doc_lint checks links/frontmatter, not framing). Same
+  blind-spot class as `new-user-onboarding.md` (caught mid-effort). **Fixed README only** (user's choice):
+  framing → "your coding agent"; kept Claude Code as the labeled **verified** quickstart; added a "Running on
+  other harnesses" section (the manifest-per-harness mechanism + a manifest table + an honest
+  verified/live-proven/structural-pin-on-install tiering — **no fabricated install commands** for the six
+  uninstalled harnesses). doc_lint clean, 78 tests. **Deferred (out of this fix):** the Claude-only framing
+  still in `CONTRIBUTING.md`/`TESTING.md` (largely legitimate — dev-only, live-eval-on-Claude) and the
+  product/design docs (`INTERFACE.md`/`RELIABILITY.md`/`PRODUCT_SENSE.md`).
 
 ## Decision log
 
