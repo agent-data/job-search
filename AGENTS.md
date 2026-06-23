@@ -1,7 +1,7 @@
 # job-search — Agent Map
 
-Claude Code as a private, local-first **job-search** operating system: a plugin with five skills, a
-single-source-of-truth `shared/references/` tree whose pinned contracts Claude Code executes natively
+An agent harness as a private, local-first **job-search** operating system: a plugin with five skills, a
+single-source-of-truth `shared/references/` tree whose pinned contracts the host agent executes natively
 (nothing ships to user machines but markdown), and a pytest + fake-shim + skill-creator eval harness.
 **This file is the entry point for coding agents working on this repo** — a map, not the territory.
 Start here, then follow the pointers.

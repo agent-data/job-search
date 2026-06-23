@@ -328,6 +328,15 @@ The relaxed rule's real teeth — three doc contradictions the dossier surfaced 
   non-vacuous; 1 Important — the cross-ref anchor missed the `defers to →` form (12 real sites silently
   unvalidated) — **FIXED** (anchor broadened, 2 tests added, probe confirms no false-match). Validator clean,
   **78 tests**, doc_lint + philosophy_guard clean. 2 Minor (source-driven synced-copy check) deferred.
+- **T5.5 + T5.6 (framing + reconcile)** — `AGENTS.md`/`ARCHITECTURE.md` framing generalized ("an agent
+  harness as a job-search OS"; "the host agent"), with the OS-model Cron row + scheduling-consent domain on
+  the two-tier rule, error-surfacing on the two file channels + capability-gated alert, and distribution on
+  the multi-harness manifest-only pattern (only legit residue: "e.g. Claude Code, Codex"). `codex-portability.md`
+  marked **superseded** by the dossier, its three load-bearing stale claims corrected (false CI-gate → the
+  real CI; dist-bundle → in-place one-tree; scheduling → two-tier); `design-docs/index.md` moved it under
+  Superseded (still linked). Batch review (opus): both ✅, quality ship; 2 Minor (residual inconsistencies in
+  the now-exempt superseded doc) → final-review triage. `doc_lint` clean, 78 tests.
+  **P5 complete — P1–P5 all done.**
 
 ## Decision log
 

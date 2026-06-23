@@ -1,7 +1,7 @@
 # Architecture
 
-Job Search turns **Claude Code** into a private, local-first **job-search operating system**: a plugin
-of five skills, a single-source-of-truth `shared/references/` tree whose pinned contracts Claude Code
+Job Search turns **an agent harness** into a private, local-first **job-search operating system**: a plugin
+of five skills, a single-source-of-truth `shared/references/` tree whose pinned contracts the host agent
 executes natively (no bundled runtime — no Python), and a pytest + fake-shim + eval harness. It searches LinkedIn postings through the agent-data
 marketplace, judges each one qualitatively against your prose preferences brief, and writes human digests
 into a workspace that never touches source control.
@@ -20,12 +20,12 @@ The product framing is an operating system whose userland is your job search:
 
 | OS concept | In Job Search |
 |---|---|
-| Kernel / shell | Claude Code itself — runs the skills, holds the conversation |
+| Kernel / shell | the host agent (e.g. Claude Code, Codex) — runs the skills, holds the conversation |
 | Programs | the five skills (the front door, the runner, the interview, the judge, the operator manual) |
-| Shared libraries | `shared/references/` — the contracts and pinned procedures Claude Code executes |
+| Shared libraries | `shared/references/` — the contracts and pinned procedures the host agent executes |
 | Filesystem | the private per-user workspace (default `~/.job-search/`), never committed |
 | System calls | the agent-data CLI — the one job source the runner shells out to |
-| Cron | the schedule — Claude Code's native `/loop`; nothing is installed on the machine |
+| Cron | the schedule — a native local scheduler where the host has one (installs nothing), else a consent-gated machine schedule; the mechanism is the active platform's (see the platform adapter → Scheduling) |
 
 Where the OS state lives and how the workspace is discovered is specified in
 [shared/references/internals.md](shared/references/internals.md); the on-disk file layout is in
@@ -52,22 +52,24 @@ relevance verdict. The brief shape and the relevance vocabulary are defined in
 
 ### workspace-state
 Persist everything durably and discoverably: the workspace, config, the append-only job-event log, run
-audit logs, and digests. The engines are pinned procedures executed natively by Claude Code: the registry +
+audit logs, and digests. The engines are pinned procedures executed natively by the host agent: the registry +
 workspace-discovery rules in [shared/references/internals.md](shared/references/internals.md) and the
 event-log operations in [shared/references/conventions.md](shared/references/conventions.md), which also
 owns the file contracts.
 
 ### scheduling-consent
-Run on a cadence the user controls, using Claude Code's native `/loop` — and never write the user's machine.
-The [job-search](skills/job-search/SKILL.md) skill offers setup, composes the `/loop` line from the pinned
-interval table, and records the schedule marker in the registry. The never-install-cron stance is an
-instruction-level design rule carried by every skill ([docs/SECURITY.md](docs/SECURITY.md)), not a runtime
-control. The `/loop` flow and cadence options live in
-[shared/references/internals.md](shared/references/internals.md).
+Run on a cadence the user controls, on a two-tier rule: a native local scheduler where the host has one,
+else a consent-gated machine schedule — never a SILENT or un-consented privileged write. The
+[job-search](skills/job-search/SKILL.md) skill offers setup from the pinned interval table and records the
+schedule marker in the registry; the concrete mechanism is deferred to the active platform adapter
+(→ Scheduling). The consent-gated stance is an instruction-level design rule carried by every skill
+([docs/SECURITY.md](docs/SECURITY.md), [core-beliefs.md](docs/design-docs/core-beliefs.md) Belief 7), not a
+runtime control. The cadence options live in [shared/references/internals.md](shared/references/internals.md).
 
 ### error-surfacing
-Make every failure named and visible — no silent failures. Each blocked path is a named `E-*` error that
-surfaces through a blocked digest, a desktop notification, and the home view. The full catalog (codes,
+Make every failure named and visible — no silent failures. Each blocked path is a named `E-*` error whose
+durable guarantee is two file-backed channels — the blocked digest and the home view — plus a
+capability-gated attention-pull alert (fires only when the host has such a channel). The full catalog (codes,
 cause + fix wording, run effect, run-health states) is owned by
 [shared/references/errors.md](shared/references/errors.md); the runner enforces it.
 
@@ -80,7 +82,7 @@ The pinned contracts for the non-judgment work the skills must not improvise: th
 rules, the workspace-discovery precedence, the scheduling marker, and the `jobs.jsonl` operations
 (known-ids / append / fold). They are defined once — as exact procedures and portable shell one-liners in
 [shared/references/internals.md](shared/references/internals.md) and
-[shared/references/conventions.md](shared/references/conventions.md) — and Claude Code executes them with
+[shared/references/conventions.md](shared/references/conventions.md) — and the host agent executes them with
 its native tools. No helper binary or script ships with the skills.
 
 ### shared-references
@@ -122,9 +124,12 @@ isolation.
 [scripts/build.sh](scripts/build.sh), which copies the references into every skill's bundled `references/`.
 **Never hand-edit a skill's synced copies** — the next build overwrites them silently.
 
-**Distribution.** Two modes ship from one tree: as a **plugin** (declared in `.claude-plugin/plugin.json`)
-where the skills load together, or as **loose skills** where each folder is self-contained because the build
-bundled its dependencies. Either way the contracts are identical. Install steps are in [README.md](README.md).
+**Distribution.** One `skills/` tree, read in place, ships to every harness via a per-harness manifest —
+`.claude-plugin/`, `.codex-plugin/`, `.cursor-plugin/`, `.factory-plugin/`, `gemini-extension.json`,
+`package.json` — paired with the per-platform adapter under
+[shared/references/platform/](shared/references/platform/claude.md). The **loose skills** mode still works,
+each folder self-contained because the build bundled its dependencies. The contracts are identical across all
+harnesses. Install steps are in [README.md](README.md).
 
 **Headless run flow.** A scheduled pass runs [job-search-run](skills/job-search-run/SKILL.md): free preflight
 gates (CLI present, config, auth, brief, service status), then one metered search per enabled query, dedup via
