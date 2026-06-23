@@ -57,8 +57,8 @@ dossier §4 scheduling matrix):
 
 - **No native local scheduler.** `gh copilot` is a one-shot launcher with no schedule subcommand. GitHub
   Actions cron is **cloud** — the Actions runner cannot see the local `~/.job-search` workspace or the
-  local agent-data auth — so it does not qualify. There is no Copilot equivalent to Claude's `/loop` or
-  Codex Automations.
+  local agent-data auth — so it does not qualify. There is no Copilot equivalent to a native
+  in-session/local scheduler (nor to Codex Automations).
 - **Tier 2 — consent-gated machine schedule.** Fall back to a **consent-gated** `crontab`/`launchd`
   entry wrapping `copilot -p "job-search-run" --allow-tool shell --allow-tool read --allow-tool write`.
   Show the exact line to the user, get an explicit yes, never install it silently, and leave it
@@ -80,9 +80,9 @@ copilot -p "job-search-run" --allow-tool shell --allow-tool read --allow-tool wr
 
 PIN: `--allow-all-tools` may be available as a shorthand flag — verify with `copilot --help` before
 using; the full form above is safer. **Exit codes likely real but UNVERIFIED** — the binary is not
-installed here, so whether a non-zero exit reliably signals failure (vs. always returning 0 like
-`claude -p`) is unconfirmed. Surface every outcome through the **written record** instead — the record
-is the contract the home view reads:
+installed here, so unlike harnesses where a headless run can return 0 even on a block, Copilot's
+exit-code behavior is unconfirmed (PIN). Surface every outcome through the **written record** instead —
+the record is the contract the home view reads:
 
 - the **blocked run record** (`runs/<run_id>.json` with `run_health:"blocked"` + the named error, written
   before any exit),

@@ -59,7 +59,7 @@ Droid is **Tier 2** — no native local scheduler exists (see the dossier §4 sc
 - **No native local scheduler.** Droid's documentation delegates scheduling to external CI/CD systems,
   citing only a GitHub Actions cron example. GitHub Actions runs on a remote runner — it cannot see the
   local `~/.job-search` workspace or the local agent-data auth — so it does **not** qualify. There is
-  no Droid equivalent to Claude's `/loop` or Codex Automations.
+  no Droid equivalent to a native local scheduler (an in-session loop or a daemon automation).
 - **Tier 2 — consent-gated machine schedule.** Fall back to a **consent-gated** `crontab`/`launchd`
   entry wrapping `droid exec --auto low "run job-search-run"`. Show the exact line to the user, get an
   explicit yes, never install it silently, and leave it user-removable. Record
@@ -100,7 +100,7 @@ specific non-zero exit code, or only infra/objective failures do — confirm on 
 
 ## Closed-choice question
 
-Droid has **no structured-choice UI** — no `AskUserQuestion` analog is documented. Ask the same
+Droid has **no structured-choice UI** documented. Ask the same
 question as prose with the options on numbered lines (the fallback `voice.md` already specifies), then
 read the user's number. Keep authoring the header/question/labels in the skill; only the presentation
 degrades.

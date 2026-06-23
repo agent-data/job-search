@@ -337,6 +337,10 @@ The relaxed rule's real teeth — three doc contradictions the dossier surfaced 
   Superseded (still linked). Batch review (opus): both ✅, quality ship; 2 Minor (residual inconsistencies in
   the now-exempt superseded doc) → final-review triage. `doc_lint` clean, 78 tests.
   **P5 complete — P1–P5 all done.**
+- **Done-when gate fix** — the full neutralization grep caught contrastive Claude-token asides in two
+  adapters (`copilot.md` L60/L84 `/loop`/`claude -p`; `droid.md` L62/L103 `/loop`/`AskUserQuestion`) that
+  codex.md and the other four avoid. Rephrased to codex.md's clean style (contrast kept, literal tokens
+  dropped). The grep now returns ONLY `platform/claude.md` (+ synced) + the three `evals.json` dev-specs.
 
 ## Decision log
 
