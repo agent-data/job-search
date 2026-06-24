@@ -35,6 +35,19 @@
         "Describes judgment as qualitative — strong / moderate / weak / not relevant — with no numeric scores and no credit or dollar figures anywhere in the reply",
         "Is concise and conversational; does not enumerate every flag or internal script"
       ]
+    },
+    {
+      "id": 4,
+      "scenario": "Codex headless parallel detail reads configuration",
+      "prompt": "How do I make my headless Codex job-search runs use parallel subagents for detail reads?",
+      "expectations": [
+        "Explains that the user-approved job-search preference is `search.parallel_detail_reads: true`, and that `job-search-run` reads it headlessly without prompting or editing config",
+        "Names the Codex profile path `$CODEX_HOME/job-search.config.toml` (or `~/.codex/job-search.config.toml`) and the required content: [features] multi_agent = true and [agents] max_depth = 1",
+        "Shows that CLI scheduled/headless runs need `--profile job-search` and the exact prompt sentence `Use parallel subagents for all detail reads.`",
+        "For Codex App Automations, says to include `Use parallel subagents for all detail reads.` in the Automation prompt and does not assume App Automations accept `--profile`",
+        "Names the Codex detail-read model mapping: `fast` = `gpt-5.4-mini`, `balanced` = `gpt-5.4`, `high` = `gpt-5.5`, `inherit` = omit the subagent model override",
+        "States the fallback plainly: if Codex refuses or has no subagent slot, every queued posting is still read sequentially and this is not a run-health error"
+      ]
     }
   ]
 }

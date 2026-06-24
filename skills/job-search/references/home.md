@@ -66,19 +66,25 @@ Notes on each part:
 
 Offer these and apply each by **chatting**, editing `config.yaml` per the `internals.md` recipes:
 
-- **Run a search now** → invoke `job-search-run` against `<ws>` (disclose it makes live calls), then
-  show the fresh digest's strong/moderate matches with each match's reasoning line, link, and any
-  "confirm" warning.
+- **Run a search now** → disclose it makes live calls, then invoke `job-search-run` against `<ws>`. On Codex,
+  if `search.parallel_detail_reads` is unset, first ask the same one-time parallel-subagent approval from
+  `onboarding.md` → Codex detail-read approval; write the answer to `config.yaml`, and on yes write the
+  Codex job-search profile (or show the exact path + TOML if the sandbox blocks the write). If
+  `search.parallel_detail_reads: true`, include the exact sentence `Use parallel subagents for all detail
+  reads.` in the invocation context. Then show the fresh digest's strong/moderate matches with each match's
+  reasoning line, link, and any "confirm" warning.
 - **Add or edit a query** → append/modify a `queries[]` item
   (`{ id, keywords, location, limit, enabled }`); `limit` is the per-query feed size (1–100, default 25).
   Preserve comments; keep `version: 1`. If the user asks for another search without naming keywords,
   **derive** it from their brief (don't make them pick) and acknowledge what you added — same as onboarding
   step 5.
 - **Tune the feed** → set `search.freshness` (`any | past-week | past-2-weeks | past-month`) to narrow or
-  widen the recency window, and/or set `search.detail_model` (`fast | balanced | high | inherit`) to control
-  which model tier reads full posting details (default `fast`; your platform's adapter → Model tiers maps
-  each token to the platform's actual model). Edit `config.yaml` per the `internals.md` recipes; preserve
-  comments; keep `version: 1`.
+  widen the recency window; set `search.detail_model` (`fast | balanced | high | inherit`) to control which
+  model tier reads full posting details; and, where the host needs approval, set
+  `search.parallel_detail_reads` (`true | false`) to use parallel subagents or read sequentially. The
+  default detail tier is `fast`; your platform's adapter → Model tiers maps each token to the actual model.
+  When discussing this knob on a specific host, name the exact models from that adapter → Model tiers. Edit
+  `config.yaml` per the `internals.md` recipes; preserve comments; keep `version: 1`.
 - **Change how often it runs** → set `schedule.frequency` to `hourly | every-2-hours | every-6-hours |
   daily | weekly` (and `schedule.time` for daily/weekly). Reuse the plain-language nudge — "daily suits most
   searches; hourly only for a fast-moving, active search."
@@ -88,7 +94,9 @@ Offer these and apply each by **chatting**, editing `config.yaml` per the `inter
   (wherever the user is reading it — no code fence, skip the front-matter lines, never just the path).
 - **Change or turn off the schedule** → re-run the scheduling flow in `onboarding.md` with the new cadence,
   then update the scheduling marker. Show the **recurring-run recipe** verbatim from your platform's adapter
-  → Run recipe — copy exactly, do not reconstruct the tokens. To turn it off, apply the teardown for whichever
+  → Run recipe — copy exactly, do not reconstruct the tokens. If `search.parallel_detail_reads: true`, choose
+  the adapter's approved-parallel recipe/prompt variant; on Codex App Automations, the scheduled prompt must
+  include `Use parallel subagents for all detail reads.` To turn it off, apply the teardown for whichever
   scheduling tier is active (see your platform's adapter → Scheduling), then clear the scheduling marker so
   it reads `installed: false`, and tell the user it's off.
 - **Show the latest digest** → print the newest `reports/<date>-digest.md` (strong → moderate → weak →

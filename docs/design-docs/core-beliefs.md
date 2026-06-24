@@ -219,14 +219,18 @@ and are linked, never restated here — this doc is a live design-doc subject to
 ## 12. Parallel by default
 
 - **Statement.** Independent work runs concurrently, not in sequence — a run dispatches mutually-independent
-  subtasks (e.g. one detail-read subagent per posting) in a single batch, and briefs each like a colleague with
-  zero context.
+  subtasks (e.g. one detail-read subagent per posting) wherever the host supports it, and briefs each like a
+  colleague with zero context. The one carve-out: hosts that gate subagents behind explicit user approval
+  (e.g. Codex) wait for that approval before fanning out; every other host parallelizes by default.
 - **Why.** Time-to-value is a product feature. Parallelizing independent work turns a serial crawl into one
   concurrent step; isolating each subtask in its own subagent keeps the primary context clean and lets a faster,
   cheaper model do the bulk. A well-briefed subagent makes judgment calls — a terse one returns shallow, generic work.
 - **Enforced by.** **Cultural / by design** — no linter for parallelism. The principle and the subagent-briefing
   guidance are owned by [shared/references/parallelism.md](../../shared/references/parallelism.md) (bundled into
-  every skill); `job-search-run` embodies it (scan → parallel per-posting fan-out → consolidate; the
-  `search.detail_model` knob lives in [shared/references/conventions.md](../../shared/references/conventions.md)).
+  every skill); `job-search-run` embodies it (scan → parallel per-posting fan-out by default, sequential only
+  where the host lacks the primitive or awaits subagent approval → consolidate; the `search.detail_model` and
+  parallel-approval knobs live in [shared/references/conventions.md](../../shared/references/conventions.md)).
 - **How to verify.** Inspect [shared/references/parallelism.md](../../shared/references/parallelism.md) and
-  `skills/job-search-run/SKILL.md`; confirm mutually-independent work is dispatched concurrently, one subagent per item.
+  `skills/job-search-run/SKILL.md`; confirm mutually-independent work is dispatched concurrently by default
+  (sequential only where the host lacks the primitive or awaits subagent approval), and that the fallback
+  still evaluates every queued item.

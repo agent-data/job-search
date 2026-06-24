@@ -8,6 +8,7 @@
       "prompt": "Build a temp workspace + shim (setup-workspace.sh), PATH=<tmp>/_bin:$PATH, JOBSEARCH_TEST_SCENARIO=happy, JOBSEARCH_FIXTURES=<repo>/tests/fixtures. Run job-search-run against <tmp>. Show the digest and jobs.jsonl.",
       "expectations": [
         "Calls `agent-data ... status` before any search-jobs call",
+        "With search.parallel_detail_reads unset, never asks about subagents and never edits config (headless); detail reads follow the host's default mode — the parallel fan-out on hosts that don't gate subagents behind approval",
         "Writes reports/<date>-digest.md whose Run health line is 'healthy'",
         "Surfaces the Acme Senior AI Engineer (Remote US) as a strong (or moderate) match, grouped before weaker ones",
         "Judges the onsite-Austin ML role as not relevant (dealbreaker) and counts it under 'filtered out'",
@@ -142,8 +143,9 @@
     {
       "id": 14,
       "scenario": "many-promising",
-      "prompt": "Same harness but JOBSEARCH_TEST_SCENARIO=many-promising. Search returns 10 relevant-looking Remote US AI engineering postings, all with detail_available:true, which is intentionally more than the Codex thread capacity observed in a live run. Run job-search-run against <tmp> and show the digest + jobs.jsonl.",
+      "prompt": "Same harness but JOBSEARCH_TEST_SCENARIO=many-promising. Before running, set `search.parallel_detail_reads: true` in <tmp>/config.yaml to pin the explicit parallel-detail preference. Search returns 10 relevant-looking Remote US AI engineering postings, all with detail_available:true, which is intentionally more than the Codex thread capacity observed in a live run. Run job-search-run against <tmp> and show the digest + jobs.jsonl.",
       "expectations": [
+        "Does not prompt or edit config; job-search-run is headless and only reads search.parallel_detail_reads",
         "Every promising posting is evaluated; no posting is dropped merely because the host refuses another subagent slot",
         "If the host hits a subagent/thread limit, the run continues in rolling batches or falls back to sequential detail reads",
         "Capacity backpressure alone does NOT make Run health partial or degraded",

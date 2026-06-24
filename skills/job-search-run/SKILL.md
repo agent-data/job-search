@@ -12,7 +12,8 @@ user-invocable: true
 
 Run ONE headless job-search pass over the workspace. Preflight gates before searching; no silent failures.
 **Shape:** search → dedup/freshen → **scan summaries in this (primary) context** → **fan out one parallel
-subagent per promising posting** for the detail read → **consolidate** into a digest.
+subagent per promising posting** (sequential only where the host lacks the primitive or awaits subagent
+approval) → **consolidate** into a digest.
 
 Find the workspace with the **Discovery procedure** in `references/internals.md` UNLESS `--workspace <path>`
 is given, which overrides. This run is HEADLESS: never prompt. If discovery reports `first_run` (no
@@ -68,26 +69,32 @@ Read these before running, and follow them exactly:
    must-haves are unconfirmed from the summary, what's uncertain), e.g. "looks strong; confirm remote-US —
    location says Austin" or "confirm IC vs manager; seniority unstated". The cheap scan does real work — it
    produces the primary's guidance for each detail review, not just a gate.
-4. **Fan out the detail reads — one subagent per queued posting, in PARALLEL.** The reads are independent, so
-   dispatch all queued postings **at once, in a single batch** of concurrent subagents (tier =
-   `search.detail_model`, default `fast`; `inherit` = this run's own model tier — see your platform's adapter →
-   Model tiers) — **never a one-at-a-time loop** (see your platform's adapter → Concurrent detail reads for the
-   fan-out primitive and sequential fallback when no concurrent primitive is available). Hand each subagent the
-   **orchestration + the primary's steer**: the posting's `id` + `source_url` pair, the brief's path, the
-   **`evaluate-job-fit` skill to follow**, and the **per-posting steer from the scan** (your provisional read +
-   the specific must-haves/unknowns it should confirm) — brief it like a colleague with zero context (see
-   **Briefing each detail subagent**). Never a re-stated rubric — that skill's `SKILL.md`
-   is the single source of truth for *how* to judge; the primary supplies *what* to judge and *what to confirm*.
-   Each subagent calls `get-posting` with the row's `id` (`--posting_id`) AND its `--source_url` (the same-row
-   pair), judges `description_markdown` + `missing_fields[]` (missing = "not stated", never negative) by following
-   that skill and **resolving the steer's open questions**, and returns ONLY its `source_id` + the structured
-   judgment object. Per-posting errors stay inside that subagent: `400 invalid_pair` (not retryable) → judge from summary,
-   note "detail link expired"; `502 detail_fetch_failed` (retryable) → retry/backoff, then summary-only + note.
-   **No product cap** — every queued posting gets evaluated; the scan (relevance), not a count, decides how
-   many. If the host caps concurrent subagents, that's backpressure, not a run-health error — see your
-   platform's adapter → Concurrent detail reads. Running the available work in parallel is the point: it cuts
-   wall-clock, keeps full JDs out of this context, and lets a faster/cheaper model handle the bulk reads.
-5. **Consolidate + persist + report.** Collect the parallel subagents' verdicts and **validate each before it lands**: `match` must be `strong | moderate | weak`, or `null` when `relevant` is false — coerce anything else (a faster delegated model can emit a stray number or out-of-vocab band) and never let a numeric score reach `jobs.jsonl` or the digest — and every event MUST carry a non-empty `source_id`. Then for each NEW posting (the deduped set from step 2 — see Idempotency) append the FULL `evaluated` event
+4. **Read the details — parallel by default, sequential where the host requires it.** The reads are
+   independent, so the default is the parallel per-posting fan-out. First read `search.parallel_detail_reads`
+   from `config.yaml` (see `references/conventions.md`). This runner is headless: never ask, and never edit
+   config. Resolve the mode against your platform's adapter → Concurrent detail reads: `true` → use the
+   parallel fan-out; `false` → read sequentially (an explicit user opt-out); **unset → the adapter's default**
+   — hosts that gate subagents behind user approval (e.g. Codex) read sequentially until approved, every other
+   host keeps the parallel fan-out. For the parallel fan-out, dispatch queued postings as one concurrent batch
+   where capacity allows, one subagent per posting (tier = `search.detail_model`, default `fast`; `inherit` =
+   this run's own model tier — see your platform's adapter → Model tiers). If the host applies a subagent/thread
+   limit, continue in rolling batches; if it refuses subagent spawning or no slot is available, fall back to
+   sequential reads. Capacity or authorization fallback is not a run-health error, and no posting is dropped.
+
+   For parallel reads, hand each subagent the **orchestration + the primary's steer**: the posting's `id` +
+   `source_url` pair, the brief's path, the **`evaluate-job-fit` skill to follow**, and the **per-posting steer
+   from the scan** (your provisional read + the specific must-haves/unknowns it should confirm) — brief it like
+   a colleague with zero context (see **Briefing each detail subagent**). For sequential reads, keep that same
+   steer beside the posting and follow `evaluate-job-fit` directly. Never use a re-stated rubric — that skill's
+   `SKILL.md` is the single source of truth for *how* to judge; the primary supplies *what* to judge and *what
+   to confirm*. Each detail read, whether parallel or sequential, calls `get-posting` with the row's `id`
+   (`--posting_id`) AND its `--source_url` (the same-row pair), judges `description_markdown` + `missing_fields[]`
+   (missing = "not stated", never negative) by following that skill and **resolving the steer's open questions**,
+   and returns/records the same structured judgment object. Per-posting errors stay local to that posting:
+   `400 invalid_pair` (not retryable) → judge from summary, note "detail link expired"; `502 detail_fetch_failed`
+   (retryable) → retry/backoff, then summary-only + note. **No product cap** — every queued posting gets evaluated;
+   the scan (relevance), not a count, decides how many.
+5. **Consolidate + persist + report.** Collect the detail-read verdicts and **validate each before it lands**: `match` must be `strong | moderate | weak`, or `null` when `relevant` is false — coerce anything else (a faster delegated model can emit a stray number or out-of-vocab band) and never let a numeric score reach `jobs.jsonl` or the digest — and every event MUST carry a non-empty `source_id`. Then for each NEW posting (the deduped set from step 2 — see Idempotency) append the FULL `evaluated` event
    to `<workspace>/jobs.jsonl` via the **append** operation (complete schema + event-line contract in
    conventions.md §jobs.jsonl).
    The event MUST carry provenance — `event:"evaluated"`, `ts`, `run_id`, `source:"linkedin"`, `query_id`,

@@ -1,6 +1,6 @@
 ---
 name: job-search-agent
-description: The operator manual for the Job Search Agent — configure, customize, extend, or troubleshoot the agent itself, or explain how it works. Use when the user asks how the agent works, why a run failed, what it can do, or how to change its behavior — a query, the schedule, the recency window, the detail-read model — "how does my job search agent work", "why did the run fail", "how do I change/add/customize …", "change how often it runs". Not for daily use — onboarding, the home view, and running a search are job-search; the search pass itself is job-search-run.
+description: The operator manual for the Job Search Agent — configure, customize, extend, or troubleshoot the agent itself, or explain how it works. Use when the user asks how the agent works, why a run failed, what it can do, or how to change its behavior — a query, the schedule, the recency window, the detail-read model, parallel detail reads — "how does my job search agent work", "why did the run fail", "how do I change/add/customize …", "change how often it runs". Not for daily use — onboarding, the home view, and running a search are job-search; the search pass itself is job-search-run.
 disable-model-invocation: false
 user-invocable: true
 ---
@@ -53,7 +53,7 @@ There is no helper script — the OS state is plain files, and every operation o
 
 The user changes configuration by chatting — you apply it by reading `config.yaml`, editing it minimally (preserving comments and structure), and writing it back.
 
-For every supported edit — adding, editing, or pausing a query (`enabled: false`); the `search` block (`freshness`, `detail_model`, `queries[].limit`); `schedule.frequency`/`time`; the never-clobber adoption rule; and exact field schemas — see `references/internals.md` → "Config read/update recipes". Marking a job status (`new | interested | applied | rejected | archived`) is a `status_changed` event appended to `jobs.jsonl` (the append operation in `references/conventions.md` → §jobs.jsonl), not a `config.yaml` edit. To update the brief itself, run `job-preference-interview` or edit `preferences.md` directly.
+For every supported edit — adding, editing, or pausing a query (`enabled: false`); the `search` block (`freshness`, `detail_model`, `parallel_detail_reads`, `queries[].limit`); `schedule.frequency`/`time`; the never-clobber adoption rule; and exact field schemas — see `references/internals.md` → "Config read/update recipes". Marking a job status (`new | interested | applied | rejected | archived`) is a `status_changed` event appended to `jobs.jsonl` (the append operation in `references/conventions.md` → §jobs.jsonl), not a `config.yaml` edit. To update the brief itself, run `job-preference-interview` or edit `preferences.md` directly.
 
 **Invariants — never break these:**
 - Always preserve `version: 1` in `config.yaml`.
@@ -66,7 +66,7 @@ For every supported edit — adding, editing, or pausing a query (`enabled: fals
 
 The agent is designed to be extended — add queries, swap the brief, point the runner at a different workspace, or build new skills that slot into the same conventions. For the full flexibility workflows — including how to honor an explicit score request without polluting the clean data — see `references/customization.md`.
 
-**Run architecture.** Each run scans new posting summaries in the primary context (cheaply rejecting clear dealbreakers), then fans out one detail-read subagent per promising posting **at once, in a single batch** — never a one-at-a-time loop (model = `search.detail_model`, each follows the `evaluate-job-fit` skill), then consolidates and validates all verdicts before persisting. The concurrent dispatch primitive and mandatory sequential fallback live in your platform's adapter → Concurrent detail reads. See `references/parallelism.md` for the parallel-by-default principle and how to brief a subagent; see `references/customization.md` for the recency, model, and feed-size knobs.
+**Run architecture.** Each run scans new posting summaries in the primary context (cheaply rejecting clear dealbreakers), then reads each promising posting in full — by default fanning out one detail-read subagent per posting as a concurrent batch where capacity allows (model = `search.detail_model`, each follows the `evaluate-job-fit` skill). `search.parallel_detail_reads` resolves the mode against your platform's adapter → Concurrent detail reads: `false` reads sequentially, `true` fans out, and unset takes the adapter's default — hosts that gate subagents behind user approval (e.g. Codex) read sequentially until approved, every other host keeps the parallel fan-out. When the host applies a thread limit it continues in rolling batches; when it refuses or no slot is available it reads sequentially and still evaluates every queued posting. The concurrent dispatch primitive and mandatory sequential fallback live in your platform's adapter → Concurrent detail reads. See `references/parallelism.md` for the parallel-by-default principle and how to brief a subagent; see `references/customization.md` for the recency, model, parallel-approval, and feed-size knobs.
 
 ---
 

@@ -27,6 +27,7 @@ queries:
 search:
   freshness: "past-2-weeks"  # any | past-week | past-2-weeks | past-month — client-side recency filter on posted_at (no API date param)
   detail_model: "fast"       # portable tier the per-posting detail reads use: fast | balanced | high | inherit (the model id each maps to → your platform's adapter → Model tiers)
+  # parallel_detail_reads: true  # optional: approved use of parallel subagents for detail reads where the host supports them
 schedule:
   frequency: "daily"         # hourly | every-2-hours | every-6-hours | daily | weekly — the cadence the schedule runs on (its mapping for the active scheduler → your platform's adapter → Scheduling)
   time: "08:00"              # HH:MM, honored when the active scheduler is wall-clock-based (a Tier-2 cron/launchd schedule); ignored when it is interval-only (a Tier-1 in-session loop) — see your platform's adapter → Scheduling
@@ -39,6 +40,10 @@ The **`search` block** tunes the feed: `freshness` is a client-side recency wind
 no date param; `any` = no filter); `detail_model` is a portable tier token (`fast | balanced | high | inherit`)
 the runner's per-posting detail reads use — the model each maps to lives in your platform's adapter → Model
 tiers, and the fan-out itself defers to → Concurrent detail reads (`inherit` = the run's own model).
+`parallel_detail_reads` is optional and records whether the user approved parallel subagents for detail
+reads on hosts that require explicit authorization. Unset means interactive front-door flows may ask; `true`
+means use parallel subagents where available; `false` means read details sequentially. The runner reads this
+field but never writes it.
 **`queries[].limit`** (1–100, default 25) is the per-query feed size — pull
 generously across several varied queries rather than one giant pull; there is no pagination, so breadth +
 frequency + dedup accumulate coverage. Query construction (incl. deriving "remote") lives in `internals.md`.

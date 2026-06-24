@@ -48,7 +48,8 @@ Importance lives in the bucket assignment, never in numeric weights or score mul
 
 ## 4. Tuning the search feed & detail reads
 
-Three `config.yaml` keys (schema in `shared/references/conventions.md`) control how much the system fetches, how fresh it is, and how carefully it reads each posting.
+Four `config.yaml` keys (schema in `shared/references/conventions.md`) control how much the system fetches,
+how fresh it is, whether detail reads run in parallel, and how carefully it reads each posting.
 
 **Recency window — `search.freshness`**
 
@@ -67,9 +68,31 @@ Narrowing the window keeps the digest focused on live roles. Widening it is usef
 
 Sets how many postings each query pulls (1–100, default 25). A higher limit fetches more raw postings per query, but it is not pagination — there is no way to walk deeper pages. The practical path to seeing more new postings is **breadth + frequency**: several varied queries with meaningful keyword differences, run regularly, with dedup preventing repeats from inflating the digest.
 
+**Parallel detail reads — `search.parallel_detail_reads`**
+
+Controls whether promising postings are read through parallel subagents where the host supports them.
+
+| Value | Behavior |
+|---|---|
+| unset | An interactive front-door flow may ask once on hosts that need explicit approval; the headless runner never asks and takes the host default (parallel where no approval is required) |
+| `true` | User approved parallel detail-read subagents where available |
+| `false` | Read details sequentially |
+
+Only `job-search` / the home view writes this preference after talking with the user. `job-search-run` is
+headless: it reads the value and never edits config itself — `false` reads sequentially, `true` fans out, and
+unset takes the host default (parallel where no approval is required; sequential on hosts that gate subagents
+behind approval, e.g. Codex). It also falls back to sequential whenever the host lacks or refuses subagents.
+
 **Detail-read model — `search.detail_model`**
 
-After the primary pass scans summaries, the agent fans out one detail-read subagent per promising posting in parallel (see `references/parallelism.md` for the general pattern; the fan-out primitive and sequential fallback defer to your platform's adapter → Concurrent detail reads). Each subagent follows the `evaluate-job-fit` skill. This key controls which tier those subagents use — the literal model each tier maps to lives in your platform's adapter → Model tiers.
+After the primary pass scans summaries, the agent reads the full details for every promising posting. When
+the run uses the parallel fan-out (the default where the host supports it), it fans out one detail-read
+subagent per posting (see
+`references/parallelism.md` for the general pattern; the fan-out primitive and sequential fallback defer to
+your platform's adapter → Concurrent detail reads). Each subagent follows the `evaluate-job-fit` skill. This
+key controls which tier those detail readers use — the literal model each tier maps to lives in your
+platform's adapter → Model tiers. When discussing this on a specific host, name the exact model IDs from that
+adapter → Model tiers.
 
 | Value | Behavior |
 |---|---|
@@ -80,7 +103,10 @@ After the primary pass scans summaries, the agent fans out one detail-read subag
 
 `fast` is the right starting point for most searches. It is a touch looser on subtle qualitative calls — occasionally emitting an out-of-vocabulary band or a stray numeric value — but the consolidation step after all subagents return validates and coerces every verdict before anything reaches `jobs.jsonl` or the digest, so no invalid output persists. For roles where the brief's distinctions are fine-grained or the must-have/red-flag list is long, set `detail_model: balanced` (or `high`) to improve judgment fidelity. This is a **fidelity/speed tradeoff**, not a quality-gate — the defaults are safe either way.
 
-> **Note:** Per-subagent tier selection is effective only on hosts that support isolated-context subagents — see your platform's adapter → Concurrent detail reads. The adapter notes whether per-subagent model selection even exists; a single-model host makes the knob inert.
+> **Note:** Per-subagent tier selection is effective only on hosts that support isolated-context subagents —
+> see your platform's adapter → Concurrent detail reads. The adapter notes whether per-subagent model selection
+> even exists; a single-model host makes the knob inert. If parallel reads are disabled, unavailable, or refused,
+> the same tier still describes the intended detail-read fidelity, but the runner evaluates sequentially.
 
 ---
 
