@@ -29,7 +29,7 @@ See an example digest in [`examples/sample-digest.md`](examples/sample-digest.md
 
 ## Installation
 
-Job Search is one skills library that every supported agent reads from the same local clone. Two steps set up what's shared; then follow the section for your agent.
+Job Search is one skills library shared across every supported agent. Set your `agent-data` API key (step 1), then follow the section for your agent — most install **straight from git**; Codex and Cursor load from a local clone (step 2).
 
 **1. Set your `agent-data` API key.** `agent-data` is the job-data source (postings currently come from LinkedIn Jobs). Create a key at [agent-data.motie.dev](https://agent-data.motie.dev) (Profile → API Key), then:
 
@@ -40,7 +40,7 @@ agent-data whoami                     # confirms api_key_set: true
 
 Don't have the CLI yet? `npm install -g agent-data`.
 
-**2. Clone the repo.** Every agent installs from this local clone — `/path/to/job-search` below is wherever you put it.
+**2. Clone the repo — only for Codex, Cursor, or an editable/dev install.** Most agents install straight from git (below) and can skip this. Codex and Cursor load skills from a local clone — `/path/to/job-search` below is wherever you put it:
 
 ```bash
 git clone https://github.com/agent-data/job-search
@@ -50,18 +50,14 @@ Now install for your agent.
 
 ### Claude Code
 
-Register the local clone as a marketplace, then install:
+Register our marketplace, then install:
 
 ```
-/plugin marketplace add /path/to/job-search
+/plugin marketplace add agent-data/job-search
 /plugin install job-search@agent-data
 ```
 
-Or run it for a single session without installing:
-
-```bash
-claude --plugin-dir /path/to/job-search
-```
+Then run `/job-search` to start.
 
 ### Codex
 
@@ -71,55 +67,73 @@ Copy the skills into your Codex skills directory:
 mkdir -p ~/.agents/skills && cp -r /path/to/job-search/skills/* ~/.agents/skills/
 ```
 
+Then run `$job-search` to start.
+
 ### Cursor
 
 Open the cloned repo in Cursor — it loads the bundled skills from the repo's `.cursor-plugin/` manifest.
 
+Then tell Cursor to run the **job-search** skill.
+
 ### opencode
 
-Run opencode from inside the cloned repo. It loads the bundled plugin (`.opencode/plugins/job-search.js`), which registers the Job Search skills:
+Add Job Search to the `plugin` array in your `opencode.json` (global or project-level):
 
-```bash
-cd /path/to/job-search && opencode
+```json
+{
+  "plugin": ["job-search@git+https://github.com/agent-data/job-search.git"]
+}
 ```
+
+Restart opencode — it installs the plugin and registers the skills. Details and troubleshooting: [`.opencode/INSTALL.md`](.opencode/INSTALL.md). (Or run from a local clone: `cd /path/to/job-search && opencode`.)
+
+Then tell opencode to run the **job-search** skill.
 
 ### Gemini CLI
 
-Install the extension from the local clone:
+Install the extension straight from git:
 
 ```bash
-gemini extensions install /path/to/job-search
+gemini extensions install https://github.com/agent-data/job-search
 ```
 
 Update later with `gemini extensions update job-search`.
 
+Then tell Gemini to run the **job-search** skill.
+
 ### GitHub Copilot CLI
 
-Register the clone as a marketplace, then install:
+Register our marketplace, then install:
 
 ```bash
-copilot plugin marketplace add /path/to/job-search
+copilot plugin marketplace add agent-data/job-search
 copilot plugin install job-search@agent-data
 ```
 
+Then tell Copilot to run the **job-search** skill.
+
 ### Factory Droid
 
-Register the clone as a marketplace, then install:
+Register our marketplace, then install:
 
 ```bash
-droid plugin marketplace add /path/to/job-search
+droid plugin marketplace add https://github.com/agent-data/job-search
 droid plugin install job-search@agent-data
 ```
 
+Then tell Droid to run the **job-search** skill.
+
 ### Pi
 
-Install from the local clone:
+Install from git:
 
 ```bash
-pi install /path/to/job-search
+pi install git:github.com/agent-data/job-search
 ```
 
-After installing, start it — in Claude Code run `/job-search`; on any other agent, tell it to run the **job-search** skill.
+For an editable/development install, point Pi at a local clone: `pi -e /path/to/job-search`.
+
+Then tell Pi to run the **job-search** skill.
 
 ## Contributing
 
