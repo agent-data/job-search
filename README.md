@@ -6,6 +6,11 @@ Job Search is a plugin that turns your coding agent into a job search assistant.
 
 ## Quickstart
 
+**Set your `agent-data` API key.** Grab one at [agent-data.motie.dev](https://agent-data.motie.dev) (Profile → API Key), then export it:
+```bash
+export AGENT_DATA_API_KEY=mtk_…
+```
+
 Give your agent Job Search: [Claude Code](#claude-code) · [Codex](#codex) · [Cursor](#cursor) · [opencode](#opencode) · [Gemini CLI](#gemini-cli) · [GitHub Copilot CLI](#github-copilot-cli) · [Factory Droid](#factory-droid) · [Pi](#pi).
 
 ## How it works
@@ -29,24 +34,7 @@ See an example digest in [`examples/sample-digest.md`](examples/sample-digest.md
 
 ## Installation
 
-Job Search is one skills library shared across every supported agent. Set your `agent-data` API key (step 1), then follow the section for your agent — most install **straight from git**; Codex and Cursor load from a local clone (step 2).
-
-**1. Set your `agent-data` API key.** `agent-data` is the job-data source (postings currently come from LinkedIn Jobs). Create a key at [agent-data.motie.dev](https://agent-data.motie.dev) (Profile → API Key), then:
-
-```bash
-export AGENT_DATA_API_KEY=mtk_…      # or save it to ~/.agent-data/config.json
-agent-data whoami                     # confirms api_key_set: true
-```
-
-Don't have the CLI yet? `npm install -g agent-data`.
-
-**2. Clone the repo — only for Codex, Cursor, or an editable/dev install.** Most agents install straight from git (below) and can skip this. Codex and Cursor load skills from a local clone — `/path/to/job-search` below is wherever you put it:
-
-```bash
-git clone https://github.com/agent-data/job-search
-```
-
-Now install for your agent.
+Installation differs by harness. If you use more than one, install Job Search separately for each one.
 
 ### Claude Code
 
@@ -61,17 +49,22 @@ Then run `/job-search` to start.
 
 ### Codex
 
-Copy the skills into your Codex skills directory:
+Clone the repo, then copy the skills into your Codex skills directory:
 
 ```bash
-mkdir -p ~/.agents/skills && cp -r /path/to/job-search/skills/* ~/.agents/skills/
+git clone https://github.com/agent-data/job-search
+mkdir -p ~/.agents/skills && cp -r job-search/skills/* ~/.agents/skills/
 ```
 
 Then run `$job-search` to start.
 
 ### Cursor
 
-Open the cloned repo in Cursor — it loads the bundled skills from the repo's `.cursor-plugin/` manifest.
+Clone the repo and open it in Cursor — it loads the bundled skills from the repo's `.cursor-plugin/` manifest:
+
+```bash
+git clone https://github.com/agent-data/job-search
+```
 
 Then tell Cursor to run the **job-search** skill.
 
