@@ -6,12 +6,13 @@ Job Search is a plugin that turns your coding agent into a job search assistant.
 
 ## Quickstart
 
-**Set your `agent-data` API key.** Grab one at [agent-data.motie.dev](https://agent-data.motie.dev) (Profile → API Key), then export it:
-```bash
-export AGENT_DATA_API_KEY=mtk_…
-```
+- **Set your `agent-data` API key.** Grab one at [agent-data.motie.dev](https://agent-data.motie.dev) (Profile → API Key), then export it:
 
-Give your agent Job Search: [Claude Code](#claude-code) · [Codex](#codex) · [Cursor](#cursor) · [opencode](#opencode) · [Gemini CLI](#gemini-cli) · [GitHub Copilot CLI](#github-copilot-cli) · [Factory Droid](#factory-droid) · [Pi](#pi).
+  ```bash
+  export AGENT_DATA_API_KEY=mtk_…
+  ```
+
+- Give your agent Job Search: [Claude Code](#claude-code) · [Codex](#codex) · [Cursor](#cursor) · [opencode](#opencode) · [Gemini CLI](#gemini-cli) · [GitHub Copilot CLI](#github-copilot-cli) · [Factory Droid](#factory-droid) · [Pi](#pi).
 
 ## How it works
 
@@ -49,11 +50,15 @@ Then run `/job-search` to start.
 
 ### Codex
 
-Clone the repo, then copy the skills into your Codex skills directory:
+Register our marketplace, install the plugin, and launch Codex:
 
 ```bash
-git clone https://github.com/agent-data/job-search
-mkdir -p ~/.agents/skills && cp -r job-search/skills/* ~/.agents/skills/
+# Run in the normal shell
+codex plugin marketplace add agent-data/job-search
+codex plugin add job-search@agent-data
+
+# Then launch or restart Codex
+codex
 ```
 
 Then run `$job-search` to start.
