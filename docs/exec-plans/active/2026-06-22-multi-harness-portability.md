@@ -210,7 +210,8 @@ The relaxed rule's real teeth — three doc contradictions the dossier surfaced 
   Artifacts verified real (real companies/IDs/URLs, qualitative judgment with no scores, detail reads,
   a caught data discrepancy). Discovered + recorded the least-privilege sandbox egress config
   (`--sandbox workspace-write -c sandbox_workspace_write.network_access=true`) the dossier had flagged
-  untested, and folded it back into `platform/codex.md`. **P0 complete.**
+  untested, and folded it back into `platform/codex.md`. **P0 egress proof complete; see the 2026-06-23
+  correction below for the separate workspace-write persistence gap.**
 - **T1.1** — authored `shared/references/platform/claude.md`, the **byte-identity anchor**: 12 sections
   mirroring `codex.md`, carrying today's exact Claude literals — the `/loop` recipe `diff`-identical to
   `internals.md` L114-121, the `AskUserQuestion` constraints, `claude -p` exit-0, `init --claude-code`,
@@ -390,6 +391,14 @@ The relaxed rule's real teeth — three doc contradictions the dossier surfaced 
 - **Codex sandbox egress config is now verified, not a PIN** (P0): agent-data reaches the network from
   inside `codex exec` under `--sandbox workspace-write -c sandbox_workspace_write.network_access=true`
   (plain workspace-write blocks it). Resolves the dossier's "agent-data egress allowlist untested" risk.
+- **Correction from 2026-06-23 live run:** egress was verified, but workspace persistence was not fully
+  pinned. A nested Codex run from outside the active job-search workspace could read `~/.job-search` but could
+  not write `runs/`, `reports/`, or `jobs.jsonl`, forcing temporary output under `/private/tmp`. The Codex
+  run recipe now requires `cd <workspace>` or `--add-dir <workspace>`; the P0 proof should be treated as
+  partial until re-run with that recipe and direct workspace persistence verified. The same `workspace-write`
+  constraint applies to **Tier-1 App Automations** (they run in the project dir, which only *sees* the
+  workspace) — the Codex adapter now flags pointing the Automation's working dir at the workspace, PINned
+  until verified on a running App.
 - **`claude.md` is the sole owner of the literal Claude model-name mapping + legacy aliases**
   (`haiku|sonnet|opus`). The Done-when neutralization grep must return only `platform/claude.md` for
   those tokens, so neutralized loader prose (`internals.md`) defers model resolution to the active

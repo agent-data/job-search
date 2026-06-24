@@ -13,7 +13,7 @@ shared/references or skills, so this is a NEW lane, not a doc_lint rule).
 Mirrors scripts/doc_lint.py in shape: scan(root) -> hits; main() prints hits and returns 1 on
 failure, else prints "Platform validation: clean." and returns 0. `--root` arg. Stdlib only.
 
-Three checks, dispatched via the CHECKS registry:
+Five checks, dispatched via the CHECKS registry:
   - adapter-sections:  every shared/references/platform/<harness>.md SOURCE adapter carries all 12
                        canonical `## ` sections (exact names). Synced skills/*/references/platform/
                        copies are asserted to match their source byte-for-byte.
@@ -21,11 +21,19 @@ Three checks, dispatched via the CHECKS registry:
                        is skipped, not a failure). The .opencode/plugins/job-search.js plugin is
                        `node --check`'d IF node is on PATH, else an informational skip (CI without
                        node must not fail).
+  - skill-frontmatter: every skills/*/SKILL.md opens with a `---`-fenced YAML frontmatter block
+                       whose plain (unquoted) scalar values carry no ': ' (colon-space) — the
+                       construct strict-YAML harnesses (Codex et al.) reject though Claude's lenient
+                       reader tolerates it — plus the required name/description keys. Stdlib-only.
   - adapter-cross-refs: scan shared/references/*.md + skills/**/*.md (NOT the adapters themselves)
                        for adapter cross-references — the arrow form the neutralized prose uses
                        (`adapter → <Section>`, `… defers to → <Section>`). Every referenced
                        <Section> must be one of the 12 canonical sections AND exist as a `## `
                        heading in EVERY adapter (so a skill resolves its pointer on any harness).
+  - codex-workspace-write: Codex headless/run recipes must make the active job-search workspace
+                       writable (`cd <workspace>` or `--add-dir <workspace>`) as well as enabling
+                       network egress. This catches the live regression where `workspace-write`
+                       could read `~/.job-search` but could not persist run artifacts there.
 """
 import argparse, json, os, re, shutil, subprocess, sys
 
@@ -127,6 +135,63 @@ def scan_manifest_parse(root):
             if proc.returncode != 0:
                 detail = (proc.stderr or proc.stdout).strip().replace("\n", " ")
                 hits.append(f"{JS_PLUGIN}: manifest-parse: node --check failed ({detail})")
+    return hits
+
+
+# A skills/*/SKILL.md opens with a `---`-fenced YAML frontmatter block. Codex and the other
+# non-Claude harnesses parse it with a STRICT YAML loader; Claude's reader is lenient, so a defect
+# (e.g. a plain scalar containing ': ') loads fine on Claude yet "Skipped … invalid YAML: mapping
+# values are not allowed in this context" on Codex. We stay stdlib-only and target that exact
+# failure mode rather than re-implementing a YAML parser.
+_FRONTMATTER_RE = re.compile(r"\A---\r?\n(.*?)\r?\n---", re.DOTALL)
+_YAML_NONPLAIN = "\"'|>&*!"  # value first-chars meaning "not a plain scalar" (quoted/block/anchor/tag)
+
+
+def _skill_md_files(root):
+    """Yield abspaths of every skills/*/SKILL.md, sorted."""
+    base = os.path.join(root, "skills")
+    if not os.path.isdir(base):
+        return
+    for name in sorted(os.listdir(base)):
+        path = os.path.join(base, name, "SKILL.md")
+        if os.path.isfile(path):
+            yield path
+
+
+def scan_skill_frontmatter(root):
+    """Every skills/*/SKILL.md must open with a `---`-fenced YAML frontmatter block a STRICT YAML
+    loader accepts — so the skill loads on Codex and the other strict-parsing harnesses, not just on
+    Claude's lenient reader. Stdlib-only and targeted at the failure mode that actually bit us: a
+    plain (unquoted, non-block) `key: value` whose value contains a ': ' (colon-space) is rejected by
+    strict YAML ("mapping values are not allowed in this context"); quote the value or, house style,
+    use an em-dash. Also requires the block to exist and to carry `name` and `description`. (This is
+    the convention superpowers ships by — no SKILL.md description carries a value-internal colon.)"""
+    hits = []
+    for path in _skill_md_files(root):
+        rel = os.path.relpath(path, root)
+        with open(path, encoding="utf-8", errors="replace") as f:
+            text = f.read()
+        m = _FRONTMATTER_RE.match(text)
+        if not m:
+            hits.append(f"{rel}: skill-frontmatter: missing `---`-fenced YAML frontmatter block")
+            continue
+        keys = set()
+        for line in m.group(1).splitlines():
+            stripped = line.strip()
+            if not stripped or stripped.startswith("#"):
+                continue
+            key, sep, raw_value = line.partition(":")
+            if not sep or not key or key != key.strip():
+                continue  # indented / continuation / list item — out of scope for this targeted check
+            keys.add(key)
+            value = raw_value.strip()
+            if value and value[0] not in _YAML_NONPLAIN and ": " in raw_value:
+                col = len(key) + 1 + raw_value.index(": ") + 1
+                hits.append(f"{rel}: skill-frontmatter: unquoted '{key}' value contains a ': ' "
+                            f"(col {col}) — strict YAML rejects this; quote it or use ' — '")
+        for required in ("name", "description"):
+            if required not in keys:
+                hits.append(f"{rel}: skill-frontmatter: frontmatter missing required key '{required}'")
     return hits
 
 
@@ -243,10 +308,34 @@ def scan_adapter_cross_refs(root):
     return hits
 
 
+def scan_codex_workspace_write(root):
+    """Codex `workspace-write` grants writes only to the cwd/workspace roots. Job Search stores state in
+    the active workspace (usually ~/.job-search), so the Codex adapter must pin a run recipe that either
+    runs from `<workspace>` or passes it with `--add-dir`. Network egress alone is insufficient."""
+    hits = []
+    rel = os.path.join(PLATFORM_DIR, "codex.md")
+    path = os.path.join(root, rel)
+    if not os.path.exists(path):
+        return hits
+    with open(path, encoding="utf-8", errors="replace") as f:
+        text = f.read()
+    if "sandbox_workspace_write.network_access=true" not in text:
+        hits.append(f"{rel}: codex-workspace-write: missing network egress config")
+    if "cd <workspace> && codex exec" not in text and "--add-dir <workspace>" not in text:
+        hits.append(f"{rel}: codex-workspace-write: codex exec recipe must run from or add the job-search workspace")
+    if "cd <workspace> && codex exec" not in text:
+        hits.append(f"{rel}: codex-workspace-write: missing primary `cd <workspace> && codex exec` recipe")
+    if "--add-dir <workspace>" not in text:
+        hits.append(f"{rel}: codex-workspace-write: missing `--add-dir <workspace>` alternate recipe")
+    return hits
+
+
 CHECKS = {
     "adapter-sections": scan_adapter_sections,
     "manifest-parse": scan_manifest_parse,
+    "skill-frontmatter": scan_skill_frontmatter,
     "adapter-cross-refs": scan_adapter_cross_refs,
+    "codex-workspace-write": scan_codex_workspace_write,
 }
 
 

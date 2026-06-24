@@ -14,6 +14,12 @@ Whether an isolated-context concurrent subagent primitive is available, any conc
 the active platform's adapter → **Concurrent detail reads**. Read your adapter before dispatching; a host with
 no concurrent primitive degrades gracefully through that fallback.
 
+If the host has a concurrent primitive but refuses more subagents because its thread/slot limit is reached,
+that is **backpressure**, not a run-health error. Keep the already-dispatched work, wait for a completed subagent,
+close it promptly, and dispatch the next queued item. Continue in rolling batches until every queued item has
+either a detail judgment or the adapter's sequential fallback has handled it. Do not mark the run `partial`
+only because capacity forced batching.
+
 ## Briefing a subagent
 
 A fresh subagent starts with **zero context** — it hasn't seen this conversation, what you've tried, or why the

@@ -225,7 +225,8 @@ discovery, not a log dump — surface the **strong and moderate** matches from t
 text in your reply** (rendered markdown — never a code fence, never just the digest's file path):
 
 > "Here are **N jobs matching your brief**, found seconds ago:"
-> then the strong matches (title — company — location — one-line reasoning — link), then moderate.
+> then the strong matches (title — company — location — one-line reasoning — link), then
+> moderate. Include any "confirm" warning from the digest. Never collapse this to a title-only list.
 
 Handle whatever the run reports, in plain language:
 
@@ -304,6 +305,7 @@ runs", "update my preferences", "show the latest digest").
 - [ ] 2–3 `queries[]` **derived from the brief** and written (no upfront keyword-picking); searches
       acknowledged; `schedule.frequency` set (plain-language nudge)
 - [ ] first **live** `job-search-run` done; strong/moderate matches shown — or the named error if blocked
+- [ ] shown matches include the digest reasoning and any "confirm" warning, not just titles/companies
 - [ ] scheduling offered (two-tier, per the adapter); on yes started + marker set; run recipe shown either
       way
 - [ ] every ask carried one line of plain-English context; the four closed choices (workspace location,

@@ -85,8 +85,9 @@ Full spec: [`../skills/job-preference-interview/SKILL.md`](../skills/job-prefere
 
 Each run writes a Markdown digest to `reports/<date>-digest.md`. The digest is the main
 artifact the user reads: it groups postings by match strength, states the run-health,
-and includes a counts line. Footnotes cover stale detail links, partial failures, and a
-brief-age nudge when applicable.
+includes a counts line, and gives a one-line reason for every shown match so the user can
+audit why it landed in its band. Footnotes cover stale detail links, partial failures, and
+a brief-age nudge when applicable.
 
 The **exact digest format** (section layout, counts line shape, run-health vocabulary,
 footnote conventions) is owned by

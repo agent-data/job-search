@@ -67,7 +67,8 @@ Notes on each part:
 Offer these and apply each by **chatting**, editing `config.yaml` per the `internals.md` recipes:
 
 - **Run a search now** → invoke `job-search-run` against `<ws>` (disclose it makes live calls), then
-  show the fresh digest's strong/moderate matches.
+  show the fresh digest's strong/moderate matches with each match's reasoning line, link, and any
+  "confirm" warning.
 - **Add or edit a query** → append/modify a `queries[]` item
   (`{ id, keywords, location, limit, enabled }`); `limit` is the per-query feed size (1–100, default 25).
   Preserve comments; keep `version: 1`. If the user asks for another search without naming keywords,

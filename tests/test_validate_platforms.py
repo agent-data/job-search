@@ -211,3 +211,78 @@ def test_adapters_themselves_not_scanned_for_cross_refs(tmp_path):
     p.write_text(p.read_text() + "\nsee the adapter → Bogus thing here.\n")
     r = run_validate(tmp_path, "--only", "adapter-cross-refs")
     assert r.returncode == 0, r.stdout + r.stderr
+
+
+# ---- skill-frontmatter ----
+
+def _seed_skill(root, name, description,
+                extra="disable-model-invocation: false\nuser-invocable: true\n", body="\n# Body\n"):
+    """Write a minimal skills/<name>/SKILL.md with the given frontmatter description."""
+    d = root / "skills" / name
+    d.mkdir(parents=True)
+    (d / "SKILL.md").write_text(f"---\nname: {name}\ndescription: {description}\n{extra}---\n{body}")
+
+def test_skill_frontmatter_clean_passes(tmp_path):
+    _seed_skill(tmp_path, "job-search", 'Set up and steer the search — e.g. "start my job search".')
+    r = run_validate(tmp_path, "--only", "skill-frontmatter")
+    assert r.returncode == 0, r.stdout + r.stderr
+
+def test_skill_frontmatter_unquoted_colon_fails(tmp_path):
+    # the exact Codex bug: a plain description value with a ': ' before quoted examples
+    _seed_skill(tmp_path, "job-search",
+                'Steer the search, what they\'re looking for: "start my job search".')
+    r = run_validate(tmp_path, "--only", "skill-frontmatter")
+    assert r.returncode == 1
+    assert "skill-frontmatter" in r.stdout and "job-search" in r.stdout and "': '" in r.stdout
+
+def test_skill_frontmatter_em_dash_fix_passes(tmp_path):
+    # the shipped fix shape: an em-dash instead of the colon before the examples
+    _seed_skill(tmp_path, "job-search-run",
+                'Run one pass — "run a job search now", "pull jobs now", "do a fresh search".')
+    r = run_validate(tmp_path, "--only", "skill-frontmatter")
+    assert r.returncode == 0, r.stdout + r.stderr
+
+def test_skill_frontmatter_quoted_value_with_colon_passes(tmp_path):
+    # a double-quoted value may legitimately contain a colon — must not be a false positive
+    _seed_skill(tmp_path, "job-search", '"Steer the search: the front door and home screen."')
+    r = run_validate(tmp_path, "--only", "skill-frontmatter")
+    assert r.returncode == 0, r.stdout + r.stderr
+
+def test_skill_frontmatter_missing_required_key_fails(tmp_path):
+    d = tmp_path / "skills" / "job-search"; d.mkdir(parents=True)
+    (d / "SKILL.md").write_text("---\nname: job-search\nuser-invocable: true\n---\n# body\n")
+    r = run_validate(tmp_path, "--only", "skill-frontmatter")
+    assert r.returncode == 1 and "missing required key 'description'" in r.stdout
+
+def test_skill_frontmatter_missing_block_fails(tmp_path):
+    d = tmp_path / "skills" / "job-search"; d.mkdir(parents=True)
+    (d / "SKILL.md").write_text("# No frontmatter here\n\nbody\n")
+    r = run_validate(tmp_path, "--only", "skill-frontmatter")
+    assert r.returncode == 1 and "missing `---`-fenced" in r.stdout
+
+
+# ---- codex-workspace-write ----
+
+def test_codex_workspace_write_clean_passes(tmp_path):
+    p = tmp_path / "shared" / "references" / "platform"
+    p.mkdir(parents=True)
+    (p / "codex.md").write_text(
+        "cd <workspace> && codex exec --skip-git-repo-check --sandbox workspace-write \\\n"
+        "  -c sandbox_workspace_write.network_access=true '$job-search-run'\n"
+        "codex exec --skip-git-repo-check --sandbox workspace-write --add-dir <workspace> \\\n"
+        "  -c sandbox_workspace_write.network_access=true '$job-search-run'\n"
+    )
+    r = run_validate(tmp_path, "--only", "codex-workspace-write")
+    assert r.returncode == 0, r.stdout + r.stderr
+
+def test_codex_workspace_write_without_workspace_fails(tmp_path):
+    p = tmp_path / "shared" / "references" / "platform"
+    p.mkdir(parents=True)
+    (p / "codex.md").write_text(
+        "codex exec --skip-git-repo-check --sandbox workspace-write \\\n"
+        "  -c sandbox_workspace_write.network_access=true '$job-search-run'\n"
+    )
+    r = run_validate(tmp_path, "--only", "codex-workspace-write")
+    assert r.returncode == 1
+    assert "codex-workspace-write" in r.stdout
+    assert "cd <workspace>" in r.stdout and "--add-dir <workspace>" in r.stdout

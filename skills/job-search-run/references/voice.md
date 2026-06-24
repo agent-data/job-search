@@ -20,8 +20,8 @@ If a sentence would only make sense to someone who has read this repo, rewrite i
 4. **Show documents, don't point at them.** When presenting the brief or a digest, print its
    contents directly in the reply as normal message text — it renders as markdown wherever the
    user is reading it. Never wrap it in a code fence (that shows raw
-   markup), never hand back only a file path, never suggest an external viewer. Skip front-matter
-   lines (`created_at:` …) when showing a document.
+   markup), never hand back only a file path or a bare list of titles, never suggest an external
+   viewer. Skip front-matter lines (`created_at:` …) when showing a document.
 5. **Narrate what's happening, never what isn't.** No non-event narration: "this needs nothing
    from you", "I won't need anything from you yet", "nothing fails silently". If a step needs nothing from the user, just do it; if nothing went wrong, nothing needs
    saying. The reasons a playbook orders or gates a step (needs-input vs not) are

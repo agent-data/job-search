@@ -2,7 +2,8 @@
 """fake-agent-data — a PATH shim that mimics `agent-data` for tests. No network, no credits.
 
 Scenario via env JOBSEARCH_TEST_SCENARIO (default "happy"); fixtures dir via JOBSEARCH_FIXTURES.
-Scenarios: happy | zero-empty | stretch | quota | bad-query | invalid-pair | detail-fetch-failed | degraded | down.
+Scenarios: happy | many-promising | zero-empty | stretch | quota | bad-query | invalid-pair |
+detail-fetch-failed | degraded | down.
 Error-injection scenarios reuse the "happy" fixtures (fallback) for any data they don't override.
 JOBSEARCH_TEST_NOAUTH=1 makes whoami report unauthenticated. `--version` answers (onboarding's
 post-install check); `init` is NOT shimmed — evals stub it in the case prompt.

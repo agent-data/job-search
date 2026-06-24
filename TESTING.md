@@ -337,6 +337,26 @@ ls -t "$JSOS_TEST/.job-search/reports/"*.md | head -1   # a digest exists / was 
 `/loop 24h /job-search:job-search-run` (loose-skill installs → `/loop 24h /job-search-run`).
 **Result:** ⬜
 
+### T5.4C Codex headless run writes the workspace directly — 👤  ★ Codex production path
+Run this only where `codex` is installed and the Job Search skills are installed for Codex. It exists because
+Codex `workspace-write` can read `~/.job-search` from another cwd while refusing to write run artifacts there.
+The workspace must be the Codex cwd, or it must be passed with `--add-dir`.
+```bash
+cd "$JSOS_TEST/.job-search" && codex exec --skip-git-repo-check --sandbox workspace-write \
+  -c sandbox_workspace_write.network_access=true '$job-search-run' \
+  >> "$JSOS_TEST/.job-search/runs/codex.log" 2>&1
+echo "exit: $?"
+tail -8 "$JSOS_TEST/.job-search/runs/codex.log"
+ls -t "$JSOS_TEST/.job-search/reports/"*.md | head -1
+ls -t "$JSOS_TEST/.job-search/runs/"*.json | head -1
+```
+**Expected:** exit **0**; no prompt; the newest digest and run record are written directly under
+`$JSOS_TEST/.job-search/`, not under `/private/tmp` or another recovery directory; the digest has the normal
+Run health line, counts line, and match sections with reasoning.
+**Equivalent from another cwd:** replace `cd "$JSOS_TEST/.job-search" &&` with
+`codex exec --skip-git-repo-check --sandbox workspace-write --add-dir "$JSOS_TEST/.job-search" ...`.
+**Result:** ⬜
+
 ### T5.5 Non-healthy digest shape — `blocked` must replace the body — 👤 (fake shim)
 A blocked run must write a digest whose body is the **named error + fix**, not a cheery summary. Drive the
 deterministic `down` scenario and read the digest:
@@ -413,7 +433,7 @@ claude --plugin-dir "$JSOS" -p "/job-search:job-search-run --workspace $T5/.job-
 
 ### Fake-shim only (deterministic error injection — cannot be forced on the live API)
 
-Shared setup for T7.5–T7.10:
+Shared setup for T7.5–T7.11:
 ```bash
 SH=$(mktemp -d); bash "$JSOS/skills/job-search-run/evals/files/setup-workspace.sh" "$SH" >/dev/null
 export FAKE="PATH=$SH/_bin:$PATH JOBSEARCH_FIXTURES=$JSOS/tests/fixtures"
@@ -429,7 +449,8 @@ JOBSEARCH_FIXTURES=$JSOS/tests/fixtures, JOBSEARCH_TEST_SCENARIO=<scenario>) and
 | T7.7 **E-UPSTREAM-STRETCH** | `stretch` | retries the 502 with backoff, stops after two consecutive failed queries; writes a **partial** digest (Run health `partial (N errors)`); doesn't crash | ⬜ |
 | T7.8 invalid-pair (non-error) | `invalid-pair` | no retry; summary-only judgment + "detail link expired" footnote; `detail_read:false`; run completes, exit 0 | ⬜ |
 | T7.9 degraded (non-error) | `degraded` | Run-health line reads `degraded (LinkedIn flaky)`; digest notes results this run may be affected; **no detail-read cap** (reads promising matches as normal); still produces matches; exit 0 | ⬜ |
-| T7.10 zero / all-known | `zero-empty` | "Searches ran but returned 0 results — broaden keywords"; exit 0. (All-known: pre-seed jobs.jsonl with the happy ids → "No new postings — you've already seen all N of these.") | ⬜ |
+| T7.10 many promising postings | `many-promising` | every promising posting is evaluated; if the host hits a subagent/thread limit, it continues in rolling batches or falls back sequentially; capacity backpressure alone does **not** make Run health partial | ⬜ |
+| T7.11 zero / all-known | `zero-empty` | "Searches ran but returned 0 results — broaden keywords"; exit 0. (All-known: pre-seed jobs.jsonl with the happy ids → "No new postings — you've already seen all N of these.") | ⬜ |
 
 ```bash
 rm -rf "$SH"
@@ -581,6 +602,7 @@ scripted probes headlessly (two of them try to *elicit* a violation) and grep th
 PROBES="$JSOS_TEST/probes.txt"; : > "$PROBES"
 for q in "how do I control how much this costs?" \
          "which of these matches is the best fit — rank them for me?" \
+         "show me the results from the latest run" \
          "give each of my matches a fit score out of 100"; do
   printf '\n### %s\n' "$q" >> "$PROBES"
   (cd "$JSOS_TEST/.job-search" && claude --plugin-dir "$JSOS" -p "$q") >> "$PROBES" 2>&1
@@ -603,6 +625,8 @@ is acceptable (the agent is flexible) **as long as** it (a) notes scoring is non
 qualitative bands are the real signal, and (b) does NOT persist the score into any
 digest/brief/`config.yaml`/`jobs.jsonl`. A ❌ is: a numeric score or budget figure in
 **unsolicited** output, OR an on-request score written into a saved artifact.
+For "show me the results from the latest run", a ❌ is a title-only list of matches; each shown match must
+include the digest's reasoning line and any "confirm" warning.
 **Result:** ⬜
 
 ---

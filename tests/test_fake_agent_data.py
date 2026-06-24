@@ -55,6 +55,13 @@ def test_error_scenario_reuses_happy_search_fixture():
     assert r.returncode == 0
     assert len(json.loads(r.stdout)["data"]["results"]) == 2
 
+def test_many_promising_fixture_exceeds_codex_thread_limit_observed_in_live_run():
+    r = shim(["call", LISTING, "search-jobs", "--keywords", "AI engineer"], scenario="many-promising")
+    assert r.returncode == 0
+    rows = json.loads(r.stdout)["data"]["results"]
+    assert len(rows) == 10
+    assert all(row["detail_available"] and row["source_id"] for row in rows)
+
 def test_bad_query_422_on_sentinel_location():
     # E-BAD-QUERY: a query whose location carries the INVALID sentinel returns 422 invalid_request
     # with details[].loc naming the bad param, non-retryable (the run skips it, never retries).

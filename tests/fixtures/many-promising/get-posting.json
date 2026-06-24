@@ -1,0 +1,5 @@
+{ "data": { "id": "jp_200100000001", "title": "Senior AI Engineer", "company_name": "Acme",
+    "location_display": "Remote (US)", "posted_at": "2026-06-20T00:00:00Z", "employment_type": "Full-time",
+    "source_url": "https://www.linkedin.com/jobs/view/2001", "missing_fields": [],
+    "description_markdown": "Build production LLM and AI platform features in Python. Senior IC role with cross-functional ownership, remote US support, equity, and no regular on-call." },
+  "meta": { "mode": "live_detail", "request_id": "req_many_detail" } }

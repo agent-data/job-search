@@ -1,6 +1,6 @@
 ---
 name: job-search-run
-description: Run one headless, non-interactive job-search pass — load the preferences brief and config, search agent-data for each saved query, skip postings it has already seen, judge each new posting's relevance, read full descriptions for promising matches, and write a digest. Use to run the scheduled search, check for new jobs, or to run a search on demand: "run a job search now", "pull jobs now", "do a fresh search", or when invoked by a schedule. (For interactive setup or the home view, use job-search; for a single pasted posting, use evaluate-job-fit.)
+description: Run one headless, non-interactive job-search pass — load the preferences brief and config, search agent-data for each saved query, skip postings it has already seen, judge each new posting's relevance, read full descriptions for promising matches, and write a digest. Use to run the scheduled search, check for new jobs, or to run a search on demand — "run a job search now", "pull jobs now", "do a fresh search", or when invoked by a schedule. (For interactive setup or the home view, use job-search; for a single pasted posting, use evaluate-job-fit.)
 disable-model-invocation: false
 user-invocable: true
 ---
@@ -83,9 +83,10 @@ Read these before running, and follow them exactly:
    that skill and **resolving the steer's open questions**, and returns ONLY its `source_id` + the structured
    judgment object. Per-posting errors stay inside that subagent: `400 invalid_pair` (not retryable) → judge from summary,
    note "detail link expired"; `502 detail_fetch_failed` (retryable) → retry/backoff, then summary-only + note.
-   **No cap** — every queued posting gets a subagent; the scan (relevance), not a count, decided how many. Running
-   them in parallel is the point: it cuts wall-clock, keeps full JDs out of this context, and lets a
-   faster/cheaper model handle the bulk reads.
+   **No product cap** — every queued posting gets evaluated; the scan (relevance), not a count, decides how
+   many. If the host caps concurrent subagents, that's backpressure, not a run-health error — see your
+   platform's adapter → Concurrent detail reads. Running the available work in parallel is the point: it cuts
+   wall-clock, keeps full JDs out of this context, and lets a faster/cheaper model handle the bulk reads.
 5. **Consolidate + persist + report.** Collect the parallel subagents' verdicts and **validate each before it lands**: `match` must be `strong | moderate | weak`, or `null` when `relevant` is false — coerce anything else (a faster delegated model can emit a stray number or out-of-vocab band) and never let a numeric score reach `jobs.jsonl` or the digest — and every event MUST carry a non-empty `source_id`. Then for each NEW posting (the deduped set from step 2 — see Idempotency) append the FULL `evaluated` event
    to `<workspace>/jobs.jsonl` via the **append** operation (complete schema + event-line contract in
    conventions.md §jobs.jsonl).
@@ -128,7 +129,8 @@ files, skill names — never reaches the user; say the outcome, not the mechanis
 inside a live conversation (onboarding's first run, "run a search now"), narrate progress sparsely per
 `references/voice.md`: one short line per stage, in user outcomes — "Searching for '<keywords>'…" → "Found N
 postings — M are new." → "Reading the M promising ones in full…" → then the matches as normal message text
-(never a code fence, never just the digest's path).
+(never a code fence, never just the digest's path, never a title-only list — each match carries its one-line
+reasoning and any ⚠ confirm, per conventions.md → Digest format).
 
 ## Run health, surfacing & exit codes
 Every run ends by writing `runs/<run_id>.json` with at least `{"run_id","run_health",
