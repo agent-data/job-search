@@ -14,6 +14,7 @@ import os
 import sys
 
 import config_yaml
+import events
 import paths
 import registry
 from errors import JobSearchError
@@ -29,6 +30,14 @@ def _config_path(args):
     if args.workspace:
         return os.path.join(args.workspace, "config.yaml")
     raise JobSearchError("usage", "provide --workspace or --config")
+
+
+def _jobs_path(args):
+    if args.jobs:
+        return args.jobs
+    if args.workspace:
+        return os.path.join(args.workspace, "jobs.jsonl")
+    raise JobSearchError("usage", "provide --jobs or --workspace")
 
 
 def cmd_discover_workspace(args):
@@ -77,6 +86,26 @@ def cmd_update_config(args):
     _emit({"ok": True, "path": path, "changed": changed})
 
 
+def cmd_known_ids(args):
+    ids = events.known_ids(events.read_events(_jobs_path(args)))
+    _emit({"ok": True, "known_ids": ids, "count": len(ids)})
+
+
+def cmd_append_event(args):
+    raw = args.event if args.event is not None else sys.stdin.read()
+    try:
+        event = json.loads(raw)
+    except ValueError as exc:
+        raise JobSearchError("event_invalid", "event is not valid JSON: {}".format(exc))
+    sid = events.append_event(_jobs_path(args), event)
+    _emit({"ok": True, "appended": True, "source_id": sid})
+
+
+def cmd_fold_state(args):
+    records = events.fold(events.read_events(_jobs_path(args)))
+    _emit({"ok": True, "records": records, "tally": events.tally(records)})
+
+
 def build_parser():
     p = argparse.ArgumentParser(prog="hermes_job_search",
                                 description="job-search deterministic state-ops runtime")
@@ -121,6 +150,22 @@ def build_parser():
     uc.add_argument("--set", action="append", metavar="KEY=VALUE", help="set an allow-listed scalar key")
     uc.add_argument("--add-query", action="store_true", help="append one query item (JSON on stdin)")
     uc.set_defaults(func=cmd_update_config)
+
+    ki = sub.add_parser("known-ids", help="deduped source_id set from jobs.jsonl (the dedup set)")
+    ki.add_argument("--jobs")
+    ki.add_argument("--workspace")
+    ki.set_defaults(func=cmd_known_ids)
+
+    ae = sub.add_parser("append-event", help="validate + append one event (JSON on stdin or --event)")
+    ae.add_argument("--jobs")
+    ae.add_argument("--workspace")
+    ae.add_argument("--event")
+    ae.set_defaults(func=cmd_append_event)
+
+    fs = sub.add_parser("fold-state", help="fold jobs.jsonl into current records + a status tally")
+    fs.add_argument("--jobs")
+    fs.add_argument("--workspace")
+    fs.set_defaults(func=cmd_fold_state)
 
     return p
 

@@ -270,3 +270,90 @@ def test_update_config_add_query_appends_item(tmp_path):
     new = [x for x in cfg["queries"] if x["id"] == "ml-sf"]
     assert len(new) == 1
     assert new[0]["keywords"] == "ML platform" and new[0]["limit"] == 30 and new[0]["enabled"] is True
+
+
+# ---------- jobs.jsonl event log: known-ids, append, fold ----------
+
+def test_known_ids_dedups_preserving_order(tmp_path):
+    jobs = tmp_path / "jobs.jsonl"
+    jobs.write_text(
+        '{"event":"evaluated","source_id":"1001","title":"A"}\n'
+        '{"event":"evaluated","source_id":"1002","title":"B"}\n'
+        '{"event":"status_changed","source_id":"1001","status":"interested"}\n'
+    )
+    o = out(run(["known-ids", "--jobs", str(jobs)]))
+    assert o["known_ids"] == ["1001", "1002"]
+    assert o["count"] == 2
+
+
+def test_known_ids_missing_file_is_empty(tmp_path):
+    o = out(run(["known-ids", "--jobs", str(tmp_path / "nope.jsonl")]))
+    assert o["known_ids"] == [] and o["count"] == 0
+
+
+def test_known_ids_via_workspace(tmp_path):
+    ws = tmp_path / "ws"
+    ws.mkdir()
+    (ws / "jobs.jsonl").write_text('{"event":"evaluated","source_id":"w1"}\n')
+    assert out(run(["known-ids", "--workspace", str(ws)]))["known_ids"] == ["w1"]
+
+
+def test_append_event_validates_and_appends_single_line(tmp_path):
+    jobs = tmp_path / "jobs.jsonl"
+    ev = {"event": "evaluated", "source_id": "2001", "title": "X", "match": "strong"}
+    o = out(run(["append-event", "--jobs", str(jobs)], stdin=json.dumps(ev)))
+    assert o["appended"] is True and o["source_id"] == "2001"
+    lines = jobs.read_text().splitlines()
+    assert len(lines) == 1
+    assert json.loads(lines[0])["source_id"] == "2001"
+    assert lines[0].count('"source_id"') == 1   # event-line contract
+
+
+def test_append_event_rejects_non_dict(tmp_path):
+    r = run(["append-event", "--jobs", str(tmp_path / "jobs.jsonl")], stdin=json.dumps([1, 2, 3]))
+    assert r.returncode != 0
+    assert out(r)["error"] == "event_invalid"
+
+
+def test_append_event_rejects_missing_source_id(tmp_path):
+    r = run(["append-event", "--jobs", str(tmp_path / "jobs.jsonl")],
+            stdin=json.dumps({"event": "evaluated", "title": "x"}))
+    assert r.returncode != 0
+    assert out(r)["error"] == "event_invalid"
+
+
+def test_fold_last_write_wins_and_drops_event_key(tmp_path):
+    jobs = tmp_path / "jobs.jsonl"
+    jobs.write_text(
+        '{"event":"evaluated","source_id":"3001","status":"new","match":"weak","needs_human_check":false}\n'
+        '{"event":"status_changed","source_id":"3001","status":"interested"}\n'
+    )
+    recs = out(run(["fold-state", "--jobs", str(jobs)]))["records"]
+    assert len(recs) == 1
+    assert recs[0]["status"] == "interested"   # later event overrides
+    assert recs[0]["match"] == "weak"          # earlier field retained
+    assert "event" not in recs[0]              # the event key is stripped
+
+
+def test_fold_tally_counts_status_and_needs_human_check(tmp_path):
+    jobs = tmp_path / "jobs.jsonl"
+    jobs.write_text(
+        '{"event":"evaluated","source_id":"a","status":"new","needs_human_check":true}\n'
+        '{"event":"evaluated","source_id":"b","status":"interested","needs_human_check":false}\n'
+        '{"event":"evaluated","source_id":"c","status":"new","needs_human_check":false}\n'
+    )
+    t = out(run(["fold-state", "--jobs", str(jobs)]))["tally"]
+    assert t["by_status"]["new"] == 2
+    assert t["by_status"]["interested"] == 1
+    assert t["needs_human_check"] == 1
+    assert t["total"] == 3
+
+
+def test_fold_malformed_line_errors_with_line_number(tmp_path):
+    jobs = tmp_path / "jobs.jsonl"
+    jobs.write_text('{"event":"evaluated","source_id":"ok"}\n{ broken json\n')
+    r = run(["fold-state", "--jobs", str(jobs)])
+    assert r.returncode != 0
+    o = out(r)
+    assert o["error"] == "jobs_malformed_json"
+    assert "line 2" in o["message"]
