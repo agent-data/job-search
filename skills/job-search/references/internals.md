@@ -1,9 +1,11 @@
 # OS internals — registry, workspace discovery, config & scheduling
 
-The "OS state" that survives across sessions so any skill finds the user's data identically. There is no
-helper script: the host agent performs these procedures itself, with its file tools (see your platform's
-adapter → Tool map / Whole-file write) and the exact shell lines below. Never hard-code or re-derive the
-paths and precedence rules — follow the procedures as written; they are the contract every skill shares.
+The "OS state" that survives across sessions so any skill finds the user's data identically. By default
+the host agent performs these procedures itself, with its file tools (see your platform's adapter → Tool
+map / Whole-file write) and the exact shell lines below; a platform whose adapter pins a bundled runtime
+runs the identical operations through it instead (same inputs, same on-disk bytes — judgment never moves
+there). Never hard-code or re-derive the paths and precedence rules — follow the procedures as written;
+they are the contract every skill shares.
 
 ## Registry (machine-managed OS state — JSON, not YAML)
 Location (tests/evals redirect it via `$JOBSEARCH_OS_REGISTRY`):

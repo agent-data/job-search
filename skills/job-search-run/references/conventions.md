@@ -66,7 +66,9 @@ Allowed `status`: `new | interested | applied | rejected | archived`.
 JSON object — never pretty-printed; every event carries a non-empty `"source_id"`; the literal key
 `"source_id"` appears exactly once per line. Validate an event against this contract before appending it.
 
-Operations (no helper script — perform these exactly):
+Operations — perform each exactly. By default the host runs them in-context with its file tools (your
+platform's adapter → Tool map / Whole-file write); where the adapter pins a bundled runtime, it runs the
+identical operation through that runtime (same inputs, same on-disk bytes; judgment never moves there):
 - **Known ids** (the dedup set; missing file = empty set):
   ```bash
   grep -o '"source_id"[[:space:]]*:[[:space:]]*"[^"]*"' "$WS/jobs.jsonl" 2>/dev/null | cut -d'"' -f4 | sort -u

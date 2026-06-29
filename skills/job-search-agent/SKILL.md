@@ -35,7 +35,7 @@ Hold these stances in every change you make — each exists for a reason, and se
 
 ## Quick reference (OS state)
 
-There is no helper script — the OS state is plain files, and every operation on it is a pinned procedure in the bundled references. Never hard-code workspace paths; follow the procedure for each operation exactly as written.
+By default there is no helper script — the OS state is plain files, and every operation on it is a pinned procedure the host performs in-context (your platform's adapter → Tool map / Whole-file write). A platform whose adapter pins a bundled runtime runs those same procedures through it (identical inputs and on-disk bytes); judgment stays in the model. Never hard-code workspace paths; follow the procedure for each operation exactly as written.
 
 | Operation | Pinned where |
 |---|---|
