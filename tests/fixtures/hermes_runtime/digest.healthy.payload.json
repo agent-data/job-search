@@ -1,0 +1,20 @@
+{
+  "date": "2026-06-05",
+  "run_health": "healthy",
+  "counts": { "new": 3, "strong": 1, "moderate": 1, "weak": 0, "filtered": 1, "searches": 2, "detail_reads": 2 },
+  "strong": [
+    { "title": "Senior Product Designer", "company": "Tidewater Health", "location": "Remote (US)",
+      "reasoning": "Owns a care-navigation area end to end.", "url": "https://example.com/jobs/a" }
+  ],
+  "moderate": [
+    { "title": "Product Designer", "company": "Meridian Logistics", "location": "Hybrid, Seattle",
+      "reasoning": "Real ownership, but logistics domain is outside your missions.",
+      "url": "https://example.com/jobs/b", "confirm": "Confirm remote eligibility." }
+  ],
+  "weak": [],
+  "filtered": [
+    { "title": "Brand & Marketing Designer", "company": "Lumen Retail",
+      "why": "visual/brand design, not product UX (must-have)" }
+  ],
+  "notes": ["1 posting's detail link had expired; judged from its summary."]
+}

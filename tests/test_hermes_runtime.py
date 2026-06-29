@@ -456,3 +456,81 @@ def test_write_digest_blocked_replaces_body_with_named_error(tmp_path):
     assert "Run health: blocked (action needed)" in md
     assert "**E-NO-AUTH** — agent-data is not authenticated" in md
     assert "## Strong matches" not in md   # body replaced by the named error
+
+
+# ---------- end-to-end CLI matrix + fixtures ----------
+
+_FIX = pathlib.Path(__file__).resolve().parent / "fixtures" / "hermes_runtime"
+
+
+def test_digest_byte_matches_fixture(tmp_path):
+    payload = json.loads((_FIX / "digest.healthy.payload.json").read_text())
+    ws = tmp_path / "ws"
+    ws.mkdir()
+    o = out(run(["write-digest", "--workspace", str(ws), "--date", "2026-06-05"], stdin=json.dumps(payload)))
+    assert pathlib.Path(o["path"]).read_text() == (_FIX / "digest.healthy.expected.md").read_text()
+
+
+def test_end_to_end_run_lifecycle(tmp_path):
+    home = tmp_path / "home"
+    home.mkdir()
+    reg = tmp_path / "reg.json"
+    ws = home / ".job-search"
+    env = {"JOBSEARCH_OS_HOME": str(home), "JOBSEARCH_OS_REGISTRY": str(reg)}
+
+    # 1) first run -> default workspace, no config yet
+    o = out(run(["discover-workspace"], env=env))
+    assert o["first_run"] is True and o["workspace"] == str(ws)
+
+    # 2) adopt the workspace + (simulating onboarding) create config.yaml
+    out(run(["set-active-workspace", "--workspace", str(ws)], env=env))
+    ws.mkdir(parents=True, exist_ok=True)
+    (ws / "config.yaml").write_text("version: 1\n")
+
+    # 3) append evaluated events + a status change
+    for ev in (
+        {"event": "evaluated", "source_id": "p1", "status": "new", "match": "strong", "needs_human_check": False},
+        {"event": "evaluated", "source_id": "p2", "status": "new", "match": "weak", "needs_human_check": True},
+    ):
+        out(run(["append-event", "--workspace", str(ws)], env=env, stdin=json.dumps(ev)))
+    out(run(["append-event", "--workspace", str(ws)], env=env,
+            stdin=json.dumps({"event": "status_changed", "source_id": "p1", "status": "interested"})))
+
+    # 4) known-ids dedups to 2; fold reflects last-write-wins + tally
+    assert out(run(["known-ids", "--workspace", str(ws)], env=env))["count"] == 2
+    folded = out(run(["fold-state", "--workspace", str(ws)], env=env))
+    assert {r["source_id"]: r["status"] for r in folded["records"]} == {"p1": "interested", "p2": "new"}
+    assert folded["tally"]["needs_human_check"] == 1
+
+    # 5) write run record + digest as durable artifacts
+    out(run(["write-run-record", "--workspace", str(ws)], env=env,
+            stdin=json.dumps({"run_id": "2026-06-29T09-00-00Z", "run_health": "healthy"})))
+    out(run(["write-digest", "--workspace", str(ws), "--date", "2026-06-29"], env=env,
+            stdin=json.dumps({"run_health": "healthy",
+                              "counts": {"new": 2, "strong": 1, "moderate": 0, "weak": 1,
+                                         "filtered": 0, "searches": 1, "detail_reads": 2}})))
+    assert (ws / "runs" / "2026-06-29T09-00-00Z.json").exists()
+    assert (ws / "reports" / "2026-06-29-digest.md").exists()
+
+    # 6) a later discovery now sees the populated, registry-active workspace (not a first run)
+    o2 = out(run(["discover-workspace"], env=env))
+    assert o2["source"] == "registry" and o2["first_run"] is False
+
+
+def test_handled_errors_are_envelopes_not_tracebacks(tmp_path):
+    bad_reg = tmp_path / "bad.json"
+    bad_reg.write_text("{ not json")
+    cases = [
+        (["read-registry"], {"JOBSEARCH_OS_REGISTRY": str(bad_reg)}, None),
+        (["discover-workspace"], {"JOBSEARCH_OS_REGISTRY": str(bad_reg)}, None),
+        (["load-config", "--workspace", str(tmp_path / "absent")], None, None),
+        (["append-event", "--jobs", str(tmp_path / "j.jsonl")], None, json.dumps({"no": "source_id"})),
+        (["write-run-record", "--workspace", str(tmp_path)], None, json.dumps({"run_health": "healthy"})),
+        (["update-config", "--workspace", str(tmp_path), "--set", "search.fit_score=80"], None, None),
+    ]
+    for args, env, stdin in cases:
+        r = run(args, env=env, stdin=stdin)
+        assert r.returncode != 0, args
+        body = out(r)                       # exactly one JSON object on stdout
+        assert body["ok"] is False and body["error"], args
+        assert "Traceback (most recent call last)" not in r.stderr, args
