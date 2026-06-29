@@ -163,3 +163,110 @@ def test_read_registry_with_loop_mechanism_roundtrips(tmp_path):
     reg.write_text(json.dumps({"version": 1, "scheduling": {"installed": True, "mechanism": "loop", "set_at": "t"}}))
     o = out(run(["read-registry"], env={"JOBSEARCH_OS_REGISTRY": str(reg)}))
     assert o["registry"]["scheduling"]["mechanism"] == "loop"
+
+
+# ---------- config load + surgical update (stdlib-only YAML) ----------
+
+SAMPLE_CONFIG = '''version: 1
+workspace:
+  preferences_path: "preferences.md"
+  master_resume_path: "resumes/master.md"
+queries:
+  - { id: "ai-eng",  keywords: "AI, ML engineer", location: "United States", limit: 25, enabled: true }
+search:
+  freshness: "past-2-weeks"    # any | past-week | past-2-weeks | past-month
+  detail_model: "fast"         # fast | balanced | high | inherit
+schedule:
+  frequency: "daily"           # hourly | every-2-hours | every-6-hours | daily | weekly
+  time: "08:00"
+  timezone: "America/Los_Angeles"
+notify:
+  digest_path_template: "reports/{date}-digest.md"
+  desktop_notify_on_block: true
+'''
+
+
+def _ws_with_config(tmp_path, text=SAMPLE_CONFIG):
+    ws = tmp_path / "ws"
+    ws.mkdir()
+    (ws / "config.yaml").write_text(text)
+    return ws
+
+
+def test_load_config_roundtrips_documented_fields(tmp_path):
+    ws = _ws_with_config(tmp_path)
+    cfg = out(run(["load-config", "--workspace", str(ws)]))["config"]
+    assert cfg["version"] == 1
+    assert cfg["workspace"]["preferences_path"] == "preferences.md"
+    assert cfg["search"]["freshness"] == "past-2-weeks"
+    assert cfg["search"]["detail_model"] == "fast"
+    assert cfg["schedule"]["frequency"] == "daily"
+    assert cfg["schedule"]["time"] == "08:00"
+    assert cfg["notify"]["desktop_notify_on_block"] is True
+
+
+def test_load_config_keeps_comma_inside_quoted_keywords(tmp_path):
+    ws = _ws_with_config(tmp_path)
+    q = out(run(["load-config", "--workspace", str(ws)]))["config"]["queries"][0]
+    assert q["id"] == "ai-eng"
+    assert q["keywords"] == "AI, ML engineer"   # comma inside quotes must NOT split the flow-map
+    assert q["limit"] == 25
+    assert q["enabled"] is True
+
+
+def test_load_config_missing_is_named_error(tmp_path):
+    r = run(["load-config", "--workspace", str(tmp_path / "nope")])
+    assert r.returncode != 0
+    assert out(r)["error"] == "E-NO-CONFIG"
+
+
+def test_load_config_newer_version_is_named_error(tmp_path):
+    ws = _ws_with_config(tmp_path, SAMPLE_CONFIG.replace("version: 1", "version: 2"))
+    r = run(["load-config", "--workspace", str(ws)])
+    assert r.returncode != 0
+    assert out(r)["error"] == "E-CONFIG-VERSION"
+
+
+def test_update_config_set_is_surgical_and_preserves_comment(tmp_path):
+    ws = _ws_with_config(tmp_path)
+    before = (ws / "config.yaml").read_text().splitlines()
+    o = out(run(["update-config", "--workspace", str(ws), "--set", "search.freshness=past-week"]))
+    assert o["changed"] == ["search.freshness"]
+    after = (ws / "config.yaml").read_text().splitlines()
+    fl = [ln for ln in after if "freshness:" in ln][0]
+    assert '"past-week"' in fl
+    assert "# any | past-week" in fl                       # inline comment preserved
+    assert [ln for ln in before if "freshness:" not in ln] == [ln for ln in after if "freshness:" not in ln]
+
+
+def test_update_config_set_bool(tmp_path):
+    ws = _ws_with_config(tmp_path)
+    out(run(["update-config", "--workspace", str(ws), "--set", "notify.desktop_notify_on_block=false"]))
+    cfg = out(run(["load-config", "--workspace", str(ws)]))["config"]
+    assert cfg["notify"]["desktop_notify_on_block"] is False
+
+
+def test_update_config_rejects_unknown_key(tmp_path):
+    ws = _ws_with_config(tmp_path)
+    r = run(["update-config", "--workspace", str(ws), "--set", "search.detail_modell=fast"])
+    assert r.returncode != 0
+    assert out(r)["error"] == "config_key_not_allowed"
+
+
+def test_update_config_cannot_set_a_score_key(tmp_path):
+    # philosophy: the runtime structurally cannot write a numeric fit score/weight.
+    ws = _ws_with_config(tmp_path)
+    r = run(["update-config", "--workspace", str(ws), "--set", "search.fit_score=80"])
+    assert r.returncode != 0
+    assert out(r)["error"] == "config_key_not_allowed"
+
+
+def test_update_config_add_query_appends_item(tmp_path):
+    ws = _ws_with_config(tmp_path)
+    q = {"id": "ml-sf", "keywords": "ML platform", "location": "SF Bay Area", "limit": 30, "enabled": True}
+    o = out(run(["update-config", "--workspace", str(ws), "--add-query"], stdin=json.dumps(q)))
+    assert "queries[+]" in o["changed"]
+    cfg = out(run(["load-config", "--workspace", str(ws)]))["config"]
+    new = [x for x in cfg["queries"] if x["id"] == "ml-sf"]
+    assert len(new) == 1
+    assert new[0]["keywords"] == "ML platform" and new[0]["limit"] == 30 and new[0]["enabled"] is True

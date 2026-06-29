@@ -2,7 +2,7 @@
 
 Every command returns one of these envelopes on stdout: success -> {"ok": true, ...}, failure ->
 {"ok": false, "error": "<code>", "message": "<human>"}. Judgment never lives here — this layer only
-does deterministic bookkeeping (workspace/registry/log/digest), so it can introduce no fit score.
+does deterministic bookkeeping (workspace/registry/log/digest), never qualitative ranking.
 """
 
 

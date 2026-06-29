@@ -10,8 +10,10 @@ only does deterministic bookkeeping (workspace/registry/log/digest).
 """
 import argparse
 import json
+import os
 import sys
 
+import config_yaml
 import paths
 import registry
 from errors import JobSearchError
@@ -19,6 +21,14 @@ from errors import JobSearchError
 
 def _emit(obj):
     sys.stdout.write(json.dumps(obj, ensure_ascii=False) + "\n")
+
+
+def _config_path(args):
+    if args.config:
+        return args.config
+    if args.workspace:
+        return os.path.join(args.workspace, "config.yaml")
+    raise JobSearchError("usage", "provide --workspace or --config")
 
 
 def cmd_discover_workspace(args):
@@ -41,6 +51,30 @@ def cmd_set_scheduling(args):
 
 def cmd_clear_scheduling(args):
     _emit({"ok": True, "scheduling": registry.clear_scheduling(args.registry)})
+
+
+def cmd_load_config(args):
+    path = _config_path(args)
+    _emit({"ok": True, "config": config_yaml.load_config(path), "path": path})
+
+
+def cmd_update_config(args):
+    path = _config_path(args)
+    try:
+        with open(path, encoding="utf-8") as f:
+            text = f.read()
+    except FileNotFoundError:
+        raise JobSearchError("E-NO-CONFIG", "No config.yaml found at {}.".format(path))
+    changed = []
+    for pair in (args.set or []):
+        key, _, value = pair.partition("=")
+        text = config_yaml.set_scalar(text, key.strip(), value)
+        changed.append(key.strip())
+    if args.add_query:
+        text = config_yaml.add_query(text, json.loads(sys.stdin.read()))
+        changed.append("queries[+]")
+    paths.atomic_write(path, text)
+    _emit({"ok": True, "path": path, "changed": changed})
 
 
 def build_parser():
@@ -75,6 +109,18 @@ def build_parser():
     cs = sub.add_parser("clear-scheduling", help="clear the scheduling marker (turn-off)")
     cs.add_argument("--registry")
     cs.set_defaults(func=cmd_clear_scheduling)
+
+    lc = sub.add_parser("load-config", help="parse config.yaml (E-NO-CONFIG / E-CONFIG-VERSION)")
+    lc.add_argument("--workspace")
+    lc.add_argument("--config")
+    lc.set_defaults(func=cmd_load_config)
+
+    uc = sub.add_parser("update-config", help="surgical config edits (preserve comments)")
+    uc.add_argument("--workspace")
+    uc.add_argument("--config")
+    uc.add_argument("--set", action="append", metavar="KEY=VALUE", help="set an allow-listed scalar key")
+    uc.add_argument("--add-query", action="store_true", help="append one query item (JSON on stdin)")
+    uc.set_defaults(func=cmd_update_config)
 
     return p
 
