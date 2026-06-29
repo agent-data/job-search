@@ -12,7 +12,7 @@ Job Search is a plugin that turns your coding agent into a job search assistant.
   export AGENT_DATA_API_KEY=mtk_…
   ```
 
-- Give your agent Job Search: [Claude Code](#claude-code) · [Codex](#codex) · [Cursor](#cursor) · [opencode](#opencode) · [Gemini CLI](#gemini-cli) · [GitHub Copilot CLI](#github-copilot-cli) · [Factory Droid](#factory-droid) · [Pi](#pi).
+- Give your agent Job Search: [Claude Code](#claude-code) · [Codex](#codex) · [Cursor](#cursor) · [opencode](#opencode) · [Gemini CLI](#gemini-cli) · [GitHub Copilot CLI](#github-copilot-cli) · [Factory Droid](#factory-droid) · [Pi](#pi) · [Hermes](#hermes).
 
 ## How it works
 
@@ -132,6 +132,18 @@ pi install git:github.com/agent-data/job-search
 For an editable/development install, point Pi at a local clone: `pi -e /path/to/job-search`.
 
 Then tell Pi to run the **job-search** skill.
+
+### Hermes
+
+Job Search is a first-class, Hermes-native host (Nous Research's [`hermes-agent`](https://github.com/nousresearch/hermes-agent)). Register the skills, then run or schedule:
+
+```bash
+hermes skills tap add agent-data/job-search                 # or copy skills/ into ~/.hermes/skills/, or set skills.external_dirs
+hermes chat -Q -s job-search-run -q "run a job search now"  # one-off run
+hermes cron create "0 9 * * *" "run a job search now" --skill job-search-run --deliver origin --name "Daily job search"
+```
+
+On Hermes the skills drive a small bundled stdlib-Python runtime (`scripts/hermes_job_search/`) for state bookkeeping; judgment stays in the model. Recurring runs use Hermes's native cron and deliver the digest back to your chat. To develop against a branch: `git clone -b <branch> https://github.com/agent-data/job-search && cd job-search && ./scripts/build.sh`, then register `skills/` as above. Details and PIN caveats: the [Hermes adapter](shared/references/platform/hermes.md).
 
 ## Contributing
 
