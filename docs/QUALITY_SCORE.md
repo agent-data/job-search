@@ -17,10 +17,10 @@ _Last assessed: 2026-06-11._
 | `workspace-state` | domain | adequate | State procedures are model-executed against pinned contracts — verified by evals + the TESTING matrix, not unit tests; the concurrency-recovery path is not exercised by a test (tracked). |
 | `scheduling-consent` | domain | adequate | The no-cron stance is instruction-level only (the deny hook was removed 2026-06-11 — resolves the former hooks-shipping question); out-of-range time validation and `timezone` runtime behaviour are untested. |
 | `error-surfacing` | domain | strong | The desktop block-notification toggle is not exercised at runtime. |
-| `deterministic-core` | layer | adequate | The contracts are pinned once in `shared/references/` and exercised by evals, but no unit suite pins them since the Python helpers were removed (the named zero-dependency tradeoff; tracked). |
+| `deterministic-core` | layer | adequate | The contracts are pinned once in `shared/references/` and exercised by evals; the bundled Hermes state-ops runtime now pins them with a unit suite (`tests/test_hermes_runtime.py`), while the other harnesses execute the same contracts in-context (the named tradeoff; tracked). |
 | `shared-references` | layer | strong | A build step plus a CI sync-check keep the bundled copies honest; no material gaps. |
 | `skill-layer` | layer | adequate | Skill evals run via skill-creator, not pytest CI; the conversational config slash-commands are still pending. |
-| `hooks-guards` | layer | adequate | Now CI-only guards (philosophy guard + doc lint); nothing executable ships to user machines, so runtime conduct rests on the instruction-level stances the evals check. |
+| `hooks-guards` | layer | adequate | Now CI-only guards (philosophy guard + doc lint + platform validation); the only executable that ships to user machines is the Hermes path's optional state-ops runtime (deterministic bookkeeping only), so runtime conduct otherwise rests on the instruction-level stances the evals check. |
 | `tests-evals` | layer | adequate | Skill evals and the live acceptance pass run outside CI (manual / skill-creator), so CI proves the dev tooling, not the model behaviour — which now includes the pinned state procedures. |
 
 > Detailed, itemised debt lives in the tech-debt tracker under `docs/exec-plans/`. This scorecard is

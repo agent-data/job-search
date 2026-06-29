@@ -26,7 +26,7 @@ it reports; a few checks are pure shell or visual.
 claude --version                 # ≥ 2.1.x
 agent-data whoami                # api_key_set: true   (else: set AGENT_DATA_API_KEY and re-check)
 agent-data call f9a6ec16-0bfd-44d8-b3ee-073776745ee7 status   # {"status":"ok"}  (free)
-python3 --version                # ≥ 3.9 — DEV SUITE ONLY (§0.3 pytest + linters); the shipped skills need no Python
+python3 --version                # ≥ 3.9 — DEV SUITE ONLY (§0.3 pytest + linters); the shipped skills need no Python on the native-execution harnesses (the Hermes adapter's optional state-ops runtime is the exception)
 ```
 **Expected:** the first three succeed; `whoami` shows `api_key_set: true`; status is `ok`.
 **Result:** ⬜
@@ -418,7 +418,7 @@ PATH="/usr/bin:/bin" JOBSEARCH_OS_HOME="$T4" JOBSEARCH_OS_REGISTRY="$T4/reg.json
 echo "exit: $?"; rm -rf "$T4"
 ```
 **Expected:** **E-NO-AGENT-DATA** naming the `npm install -g agent-data` fix; writes a `runs/<id>.json` with `run_health: blocked` naming **E-NO-AGENT-DATA**, so the next job-search home view surfaces it; the headless `claude -p` process returns **0**, so do not assert on `$?`. *(The trimmed
-PATH needs no python3 — the skills are zero-dependency; see T9.4.)*
+PATH needs no python3 on the native-execution path — the skills are zero-dependency there (the Hermes adapter's optional runtime is the exception); see T9.4.)*
 **Result:** ⬜
 
 ### T7.3 E-NO-CONFIG — covered by T5.3. **Result:** ⬜
@@ -563,8 +563,10 @@ crontab -l 2>/dev/null | grep -c job-search-run     # 0 — nothing installed in
 ```
 **Result:** ⬜
 
-### T9.4 Zero-Python user path — the headline guarantee — 👤
-The shipped skills must work on a machine with **no Python at all**. Mask `python3` and run a full headless
+### T9.4 Zero-Python native-execution path — the headline guarantee — 👤
+On every harness except Hermes, the shipped skills must work on a machine with **no Python at all** (the
+Hermes adapter opts into the bundled stdlib-Python state-ops runtime — that path is exercised separately
+on a real Hermes install). This proves the native-execution path on Claude Code: mask `python3` and run a full headless
 pass (fake shim, so it's free):
 ```bash
 T9=$(mktemp -d); MASK=$(mktemp -d)

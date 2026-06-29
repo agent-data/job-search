@@ -2,7 +2,7 @@
 title: Core Beliefs — Agent-First Operating Principles
 status: current
 verified: partial
-last_reviewed: 2026-06-22
+last_reviewed: 2026-06-29
 code_refs: [scripts/philosophy_guard.py, scripts/doc_lint.py, scripts/build.sh, .github/workflows/ci.yml, shared/references/internals.md, shared/references/conventions.md]
 ---
 # Core Beliefs — Agent-First Operating Principles
@@ -106,13 +106,17 @@ and are linked, never restated here — this doc is a live design-doc subject to
 
 - **Statement.** The mechanics — dedup, the event log, schedule lines, workspace discovery — are
   pinned written contracts (exact procedures and portable one-liners) that Claude Code executes
-  natively, with **zero runtime dependencies** on the user's machine; the headless run reports
+  natively, with **zero runtime dependencies** on the native-execution harnesses; the Hermes adapter is
+  the one exception — it drives an optional bundled stdlib-Python runtime for the same deterministic
+  mechanics (identical artifacts), with judgment staying in the model. The headless run reports
   outcomes through records and the digest, not through process exit codes.
 - **Why.** The model handles judgment; everything else must be *specified* deterministically so any
   skill performs it identically — but it must not require an interpreter the user may not have
-  (Python is not assumed). The named tradeoff, accepted 2026-06-11: the mechanics are model-executed
-  against a pinned contract rather than script-executed, so they are verified by the skill evals and
-  the TESTING.md matrix, not by unit tests. And because a scheduled `claude -p` returns 0 even when
+  on the native-execution path (Python is not assumed there; the Hermes runtime is opt-in via its
+  adapter). The named tradeoff, accepted 2026-06-11: on the native path the mechanics are model-executed
+  against a pinned contract rather than script-executed, so they are verified by the skill evals and the
+  TESTING.md matrix; the Hermes runtime additionally executes the same contracts and is unit-tested
+  (`tests/test_hermes_runtime.py`). And because a scheduled `claude -p` returns 0 even when
   it halted, success must be read from the written record, never from the exit code.
 - **Enforced by.** The contracts are owned by
   [shared/references/internals.md](../../shared/references/internals.md) (registry, discovery,

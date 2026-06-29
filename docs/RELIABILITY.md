@@ -32,8 +32,9 @@ the named `E-*` errors themselves (cause + fix wording) are not in this doc — 
 
 The mechanics that must never improvise — workspace discovery, registry writes, the schedule
 line, dedup, the event-log fold — are **pinned written contracts**: exact precedence rules,
-portable shell one-liners, and byte-level write rules that Claude Code executes natively with
-no runtime dependency (no Python on the user's machine). The *specification* is deterministic —
+portable shell one-liners, and byte-level write rules the host executes natively with no runtime
+dependency on the native-execution harnesses (no Python there); on Hermes, the adapter runs the
+identical contracts through an optional bundled stdlib-Python runtime. The *specification* is deterministic —
 the same frequency always maps to the same `/loop` command, and the same event log always folds
 to the same current state — while the *executor* is the model following the contract verbatim.
 The named tradeoff: the runtime mechanics are verified by the skill evals and the TESTING.md

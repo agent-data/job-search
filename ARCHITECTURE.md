@@ -2,7 +2,7 @@
 
 Job Search turns **an agent harness** into a private, local-first **job-search operating system**: a plugin
 of five skills, a single-source-of-truth `shared/references/` tree whose pinned contracts the host agent
-executes natively (no bundled runtime — no Python), and a pytest + fake-shim + eval harness. It searches LinkedIn postings through the agent-data
+executes natively (markdown-only on every harness except Hermes, whose adapter drives an optional bundled stdlib-Python state-ops runtime), and a pytest + fake-shim + eval harness. It searches LinkedIn postings through the agent-data
 marketplace, judges each one qualitatively against your prose preferences brief, and writes human digests
 into a workspace that never touches source control.
 
@@ -83,7 +83,7 @@ rules, the workspace-discovery precedence, the scheduling marker, and the `jobs.
 (known-ids / append / fold). They are defined once — as exact procedures and portable shell one-liners in
 [shared/references/internals.md](shared/references/internals.md) and
 [shared/references/conventions.md](shared/references/conventions.md) — and the host agent executes them with
-its native tools. No helper binary or script ships with the skills.
+its native tools. No helper binary or script ships for the native-execution harnesses; the Hermes adapter is the exception — it runs these same procedures through an optional bundled stdlib-Python state-ops runtime (identical inputs and on-disk bytes), judgment staying in the model.
 
 ### shared-references
 The single source of truth for every runtime contract:
@@ -101,7 +101,7 @@ The five programs: [job-search](skills/job-search/SKILL.md) (front door / home v
 prose; they execute the deterministic core's pinned procedures and defer every contract to the references.
 
 ### hooks-guards
-CI guardrails (dev-side only — nothing executable ships to user machines):
+CI guardrails (dev-side only — the one executable that ships to user machines is the Hermes path's optional state-ops runtime):
 [scripts/philosophy_guard.py](scripts/philosophy_guard.py) rejects numeric scores or budget/cost fields
 leaking into shipped artifacts, and [scripts/doc_lint.py](scripts/doc_lint.py) keeps the knowledge base
 structurally sound. The scheduling stance is instruction-level (see scheduling-consent above).
