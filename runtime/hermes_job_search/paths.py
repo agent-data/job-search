@@ -9,8 +9,19 @@ current contract), not the `job-search-os` of the now-deleted scripts/osctl.py.
 """
 import json
 import os
+from datetime import datetime, timezone
 
 CONFIG_NAME = "config.yaml"
+
+
+def utc_run_id():
+    """run_id format (conventions.md): UTC YYYY-MM-DDTHH-MM-SSZ — hyphens in the time, safe as a filename."""
+    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H-%M-%SZ")
+
+
+def local_date():
+    """<date> for digests (conventions.md): local-tz YYYY-MM-DD."""
+    return datetime.now().strftime("%Y-%m-%d")
 
 
 def home():

@@ -14,8 +14,10 @@ import os
 import sys
 
 import config_yaml
+import digest
 import events
 import paths
+import records
 import registry
 from errors import JobSearchError
 
@@ -102,8 +104,21 @@ def cmd_append_event(args):
 
 
 def cmd_fold_state(args):
-    records = events.fold(events.read_events(_jobs_path(args)))
-    _emit({"ok": True, "records": records, "tally": events.tally(records)})
+    folded = events.fold(events.read_events(_jobs_path(args)))
+    _emit({"ok": True, "records": folded, "tally": events.tally(folded)})
+
+
+def cmd_write_run_record(args):
+    record = json.loads(sys.stdin.read())
+    path = records.write_run_record(args.workspace, record)
+    _emit({"ok": True, "path": path, "run_health": record.get("run_health")})
+
+
+def cmd_write_digest(args):
+    payload = json.loads(sys.stdin.read())
+    date = args.date or payload.get("date") or paths.local_date()
+    path = digest.write_digest(args.workspace, date, payload)
+    _emit({"ok": True, "path": path, "run_health": payload.get("run_health")})
 
 
 def build_parser():
@@ -166,6 +181,15 @@ def build_parser():
     fs.add_argument("--jobs")
     fs.add_argument("--workspace")
     fs.set_defaults(func=cmd_fold_state)
+
+    wr = sub.add_parser("write-run-record", help="write runs/<run_id>.json (record JSON on stdin)")
+    wr.add_argument("--workspace", required=True)
+    wr.set_defaults(func=cmd_write_run_record)
+
+    wd = sub.add_parser("write-digest", help="render+write reports/<date>-digest.md (payload JSON on stdin)")
+    wd.add_argument("--workspace", required=True)
+    wd.add_argument("--date")
+    wd.set_defaults(func=cmd_write_digest)
 
     return p
 

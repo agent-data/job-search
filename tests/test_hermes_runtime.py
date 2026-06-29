@@ -357,3 +357,102 @@ def test_fold_malformed_line_errors_with_line_number(tmp_path):
     o = out(r)
     assert o["error"] == "jobs_malformed_json"
     assert "line 2" in o["message"]
+
+
+# ---------- run-record + digest writers ----------
+
+def test_write_run_record_healthy(tmp_path):
+    ws = tmp_path / "ws"
+    ws.mkdir()
+    rec = {"run_id": "2026-06-29T09-00-00Z", "run_health": "healthy", "results_summary": {"strong": 3}}
+    o = out(run(["write-run-record", "--workspace", str(ws)], stdin=json.dumps(rec)))
+    assert o["run_health"] == "healthy"
+    p = pathlib.Path(o["path"])
+    assert p.exists() and p.name == "2026-06-29T09-00-00Z.json"
+    assert json.loads(p.read_text())["run_id"] == rec["run_id"]
+
+
+def test_write_run_record_requires_run_id(tmp_path):
+    ws = tmp_path / "ws"
+    ws.mkdir()
+    r = run(["write-run-record", "--workspace", str(ws)], stdin=json.dumps({"run_health": "healthy"}))
+    assert r.returncode != 0
+    assert out(r)["error"] == "run_record_invalid"
+
+
+def test_write_run_record_validates_run_health(tmp_path):
+    ws = tmp_path / "ws"
+    ws.mkdir()
+    r = run(["write-run-record", "--workspace", str(ws)], stdin=json.dumps({"run_id": "x", "run_health": "great"}))
+    assert r.returncode != 0
+    assert out(r)["error"] == "run_record_invalid"
+
+
+def test_write_run_record_blocked_carries_named_error(tmp_path):
+    ws = tmp_path / "ws"
+    ws.mkdir()
+    rec = {"run_id": "r1", "run_health": "blocked", "error": {"code": "E-NO-AUTH", "message": "not authed"}}
+    o = out(run(["write-run-record", "--workspace", str(ws)], stdin=json.dumps(rec)))
+    data = json.loads(pathlib.Path(o["path"]).read_text())
+    assert data["run_health"] == "blocked" and data["error"]["code"] == "E-NO-AUTH"
+
+
+DIGEST_PAYLOAD = {
+    "date": "2026-06-05", "run_health": "healthy",
+    "counts": {"new": 9, "strong": 2, "moderate": 1, "weak": 1, "filtered": 1, "searches": 2, "detail_reads": 5},
+    "strong": [{"title": "Senior PD", "company": "Tidewater", "location": "Remote (US)",
+                "reasoning": "Owns a care-nav area.", "url": "https://x/1"}],
+    "moderate": [{"title": "PD (Senior)", "company": "Meridian", "location": "Hybrid, Seattle",
+                  "reasoning": "Logistics domain.", "url": "https://x/2", "confirm": "Remote seat?"}],
+    "weak": [{"title": "PD", "company": "Northwind", "location": "Hybrid, Portland",
+              "reasoning": "Mid-level scope.", "url": "https://x/3"}],
+    "filtered": [{"title": "Brand Designer", "company": "Lumen", "why": "brand not product (must-have)"}],
+    "notes": ["1 detail link expired; judged from summary."],
+}
+
+
+def _digest(tmp_path, payload, date="2026-06-05"):
+    ws = tmp_path / "ws"
+    ws.mkdir()
+    o = out(run(["write-digest", "--workspace", str(ws), "--date", date], stdin=json.dumps(payload)))
+    return pathlib.Path(o["path"]).read_text(), o
+
+
+def test_write_digest_healthy_shape(tmp_path):
+    md, o = _digest(tmp_path, DIGEST_PAYLOAD)
+    assert pathlib.Path(o["path"]).name == "2026-06-05-digest.md"
+    assert md.startswith("# Job search digest — 2026-06-05\n")
+    assert "Run health: healthy\n" in md
+    assert "9 new postings · 2 strong · 1 moderate · 1 weak · 1 filtered out · 2 searches · 5 detail reads" in md
+    assert "## Strong matches" in md
+    assert "- **Senior PD** — Tidewater — Remote (US)" in md
+    assert "  Owns a care-nav area.  [view](https://x/1)" in md
+    assert "## Moderate matches" in md
+    assert "  ⚠ confirm: Remote seat?" in md
+    assert "## Weak matches" in md
+    assert "## Filtered out (not relevant): 1" in md
+    assert "- Brand Designer — Lumen — brand not product (must-have)" in md
+    assert "_Notes:_" in md
+
+
+def test_write_digest_has_no_numeric_score(tmp_path):
+    import re
+    md, _ = _digest(tmp_path, DIGEST_PAYLOAD)
+    assert "fit score" not in md.lower()
+    assert not re.search(r"\b\d{1,3}\s*/\s*100\b", md)
+    assert not re.search(r"\b\d+\s*(points|pts)\b", md, re.I)
+
+
+def test_write_digest_partial_decorates_health_line(tmp_path):
+    payload = dict(DIGEST_PAYLOAD, run_health="partial", error_count=2)
+    md, _ = _digest(tmp_path, payload)
+    assert "Run health: partial (2 errors)" in md
+
+
+def test_write_digest_blocked_replaces_body_with_named_error(tmp_path):
+    payload = {"date": "2026-06-05", "run_health": "blocked",
+               "error": {"code": "E-NO-AUTH", "message": "agent-data is not authenticated. Run agent-data whoami."}}
+    md, _ = _digest(tmp_path, payload)
+    assert "Run health: blocked (action needed)" in md
+    assert "**E-NO-AUTH** — agent-data is not authenticated" in md
+    assert "## Strong matches" not in md   # body replaced by the named error
