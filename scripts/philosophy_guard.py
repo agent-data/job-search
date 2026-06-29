@@ -4,12 +4,13 @@ category weight, per-criterion points, or a budget/credit knob. Honored-on-reque
 live only in chat, never in committed artifacts — so this scans what we ship, not what a
 user might ask for.
 
-Scanned: examples/, templates/. Skipped: prose that DEFINES the philosophy (it names the
-forbidden things to forbid them) and the source data field salary_display.
+Scanned: examples/, templates/, and the shipped state-ops runtime/ (so the digest-writer can never
+introduce a numeric score). Skipped: prose that DEFINES the philosophy (it names the forbidden things
+to forbid them) and the source data field salary_display.
 """
 import argparse, os, re, sys
 
-SCAN_DIRS = ("examples", "templates")
+SCAN_DIRS = ("examples", "templates", "runtime")
 PATTERNS = [
     (re.compile(r"\bfit score\b", re.I), "fit score"),
     (re.compile(r"\b\d{1,3}\s*/\s*100\b"), "N/100 score"),
@@ -31,7 +32,7 @@ def scan(root):
         base = os.path.join(root, d)
         for dirpath, _, files in os.walk(base):
             for fn in files:
-                if not fn.endswith((".md", ".yaml", ".yml")):
+                if not fn.endswith((".md", ".yaml", ".yml", ".py")):
                     continue
                 path = os.path.join(dirpath, fn)
                 with open(path, encoding="utf-8", errors="replace") as f:

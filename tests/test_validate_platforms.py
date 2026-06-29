@@ -339,3 +339,82 @@ def test_codex_parallel_subagent_contract_requires_balanced_model(tmp_path):
     r = run_validate(tmp_path, "--only", "codex-parallel-subagents")
     assert r.returncode == 1
     assert "balanced" in r.stdout and "gpt-5.4" in r.stdout
+
+
+# ---- runtime-bundle: the bundled state-ops runtime must match source, only in consuming skills ----
+
+def _seed_runtime(root, files=("cli.py", "registry.py"),
+                  bundle_into=("job-search", "job-search-run", "job-search-agent")):
+    src = root / "runtime" / "hermes_job_search"
+    src.mkdir(parents=True)
+    for fn in files:
+        (src / fn).write_text(f"# {fn}\nprint('ok')\n")
+    for skill in bundle_into:
+        dest = root / "skills" / skill / "scripts" / "hermes_job_search"
+        dest.mkdir(parents=True)
+        for fn in files:
+            (dest / fn).write_text((src / fn).read_text())
+    return src
+
+
+def test_runtime_bundle_clean_when_in_sync(tmp_path):
+    _seed_runtime(tmp_path)
+    r = run_validate(tmp_path, "--only", "runtime-bundle")
+    assert r.returncode == 0, r.stdout + r.stderr
+
+
+def test_runtime_bundle_absent_source_is_noop(tmp_path):
+    r = run_validate(tmp_path, "--only", "runtime-bundle")
+    assert r.returncode == 0, r.stdout + r.stderr
+
+
+def test_runtime_bundle_drift_fails(tmp_path):
+    _seed_runtime(tmp_path)
+    drift = tmp_path / "skills" / "job-search-run" / "scripts" / "hermes_job_search" / "cli.py"
+    drift.write_text("# tampered\n")
+    r = run_validate(tmp_path, "--only", "runtime-bundle")
+    assert r.returncode == 1
+    assert "runtime-bundle" in r.stdout and "build.sh" in r.stdout
+
+
+def test_runtime_bundle_missing_in_consuming_skill_fails(tmp_path):
+    import shutil
+    _seed_runtime(tmp_path)
+    shutil.rmtree(tmp_path / "skills" / "job-search-agent" / "scripts" / "hermes_job_search")
+    r = run_validate(tmp_path, "--only", "runtime-bundle")
+    assert r.returncode == 1 and "missing" in r.stdout
+
+
+def test_runtime_bundle_in_non_consuming_skill_fails(tmp_path):
+    _seed_runtime(tmp_path)
+    extra = tmp_path / "skills" / "evaluate-job-fit" / "scripts" / "hermes_job_search"
+    extra.mkdir(parents=True)
+    (extra / "cli.py").write_text("# x\n")
+    r = run_validate(tmp_path, "--only", "runtime-bundle")
+    assert r.returncode == 1 and "non-consuming" in r.stdout
+
+
+# ---- hermes-runtime-invocation: no-op until hermes.md exists, then must document the call ----
+
+def test_hermes_runtime_invocation_absent_is_noop(tmp_path):
+    r = run_validate(tmp_path, "--only", "hermes-runtime-invocation")
+    assert r.returncode == 0, r.stdout + r.stderr
+
+
+def test_hermes_runtime_invocation_present_passes(tmp_path):
+    d = tmp_path / "shared" / "references" / "platform"
+    d.mkdir(parents=True)
+    (d / "hermes.md").write_text(
+        "## Whole-file write\nrun `python3 ${HERMES_SKILL_DIR}/scripts/hermes_job_search/cli.py`\n"
+        "## Scheduling\nrecord scheduling.mechanism: hermes-cron\n"
+        "## Concurrent detail reads\nfan out via delegate_task\n")
+    r = run_validate(tmp_path, "--only", "hermes-runtime-invocation")
+    assert r.returncode == 0, r.stdout + r.stderr
+
+
+def test_hermes_runtime_invocation_missing_needle_fails(tmp_path):
+    d = tmp_path / "shared" / "references" / "platform"
+    d.mkdir(parents=True)
+    (d / "hermes.md").write_text("## Scheduling\nhermes-cron\n## Concurrent detail reads\ndelegate_task\n")
+    r = run_validate(tmp_path, "--only", "hermes-runtime-invocation")
+    assert r.returncode == 1 and "hermes-runtime-invocation" in r.stdout

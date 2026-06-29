@@ -13,7 +13,7 @@ shared/references or skills, so this is a NEW lane, not a doc_lint rule).
 Mirrors scripts/doc_lint.py in shape: scan(root) -> hits; main() prints hits and returns 1 on
 failure, else prints "Platform validation: clean." and returns 0. `--root` arg. Stdlib only.
 
-Six checks, dispatched via the CHECKS registry:
+Eight checks, dispatched via the CHECKS registry:
   - adapter-sections:  every shared/references/platform/<harness>.md SOURCE adapter carries all 12
                        canonical `## ` sections (exact names). Synced skills/*/references/platform/
                        copies are asserted to match their source byte-for-byte.
@@ -36,6 +36,11 @@ Six checks, dispatched via the CHECKS registry:
                        could read `~/.job-search` but could not persist run artifacts there.
   - codex-parallel-subagents: Codex must document the job-search parallel-detail preference, scoped
                        profile, explicit scheduled prompt authorization, fallback, and model mapping.
+  - runtime-bundle:    the stdlib runtime bundled into each consuming skill's scripts/hermes_job_search/
+                       must match runtime/hermes_job_search/ byte-for-byte, and no other skill may
+                       carry it (no-op when the runtime source is absent).
+  - hermes-runtime-invocation: once shared/references/platform/hermes.md exists, it must document the
+                       bundled-runtime terminal invocation + the hermes-cron / delegate_task mechanisms.
 """
 import argparse, json, os, re, shutil, subprocess, sys
 
@@ -373,6 +378,72 @@ def scan_codex_parallel_subagents(root):
     return hits
 
 
+# The Hermes path bundles a stdlib-Python state-ops runtime into the consuming skills' scripts/.
+RUNTIME_SRC = os.path.join("runtime", "hermes_job_search")
+CONSUMING_SKILLS = ("job-search", "job-search-run", "job-search-agent")
+
+
+def _read_bytes(path):
+    with open(path, "rb") as f:
+        return f.read()
+
+
+def scan_runtime_bundle(root):
+    """The runtime bundled into each consuming skill's scripts/hermes_job_search/ must match the
+    source byte-for-byte (build.sh keeps them in sync, mirroring the adapter synced-copy guarantee),
+    and no NON-consuming skill may carry it. No-op when the runtime source is absent (so the empty
+    tree and the synthetic-tmp adapter tests stay clean)."""
+    hits = []
+    src_dir = os.path.join(root, RUNTIME_SRC)
+    if not os.path.isdir(src_dir):
+        return hits
+    src = {fn: _read_bytes(os.path.join(src_dir, fn))
+           for fn in os.listdir(src_dir) if fn.endswith(".py")}
+    skills_base = os.path.join(root, "skills")
+    if not os.path.isdir(skills_base):
+        return hits
+    for skill in sorted(os.listdir(skills_base)):
+        dest = os.path.join(skills_base, skill, "scripts", "hermes_job_search")
+        rel = os.path.join("skills", skill, "scripts", "hermes_job_search")
+        present = os.path.isdir(dest)
+        if skill in CONSUMING_SKILLS:
+            if not present:
+                hits.append(f"{rel}: runtime-bundle: missing bundled runtime (re-run build.sh)")
+                continue
+            dest_files = {fn for fn in os.listdir(dest) if fn.endswith(".py")}
+            if dest_files != set(src):
+                hits.append(f"{rel}: runtime-bundle: bundled file set differs from source (re-run build.sh)")
+            for fn, data in src.items():
+                dp = os.path.join(dest, fn)
+                if os.path.isfile(dp) and _read_bytes(dp) != data:
+                    hits.append(f"{rel}/{fn}: runtime-bundle: differs from source (re-run build.sh)")
+        elif present:
+            hits.append(f"{rel}: runtime-bundle: unexpected bundle in a non-consuming skill "
+                        f"(only {', '.join(CONSUMING_SKILLS)} bundle the runtime)")
+    return hits
+
+
+def scan_hermes_runtime_invocation(root):
+    """Once the Hermes adapter exists, it must document how the Hermes path invokes the bundled
+    runtime (the terminal-tool call) and its Hermes-native scheduling + fan-out mechanisms. No-op
+    until shared/references/platform/hermes.md is authored (so it stays green before that commit)."""
+    hits = []
+    rel = os.path.join(PLATFORM_DIR, "hermes.md")
+    path = os.path.join(root, rel)
+    if not os.path.exists(path):
+        return hits
+    with open(path, encoding="utf-8", errors="replace") as f:
+        text = f.read()
+    for needle, message in (
+        ("scripts/hermes_job_search/cli.py", "missing the bundled-runtime invocation `scripts/hermes_job_search/cli.py`"),
+        ("hermes-cron", "missing the `hermes-cron` scheduling mechanism marker"),
+        ("delegate_task", "missing the `delegate_task` concurrent-detail-reads mechanism"),
+    ):
+        if needle not in text:
+            hits.append(f"{rel}: hermes-runtime-invocation: {message}")
+    return hits
+
+
 CHECKS = {
     "adapter-sections": scan_adapter_sections,
     "manifest-parse": scan_manifest_parse,
@@ -380,6 +451,8 @@ CHECKS = {
     "adapter-cross-refs": scan_adapter_cross_refs,
     "codex-workspace-write": scan_codex_workspace_write,
     "codex-parallel-subagents": scan_codex_parallel_subagents,
+    "runtime-bundle": scan_runtime_bundle,
+    "hermes-runtime-invocation": scan_hermes_runtime_invocation,
 }
 
 
