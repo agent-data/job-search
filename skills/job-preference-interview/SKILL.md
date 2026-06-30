@@ -52,6 +52,17 @@ command, then its precedence rules) and never hard-code its path.
   ...
   ```
 
+## Offer a head start from prior context (only where the platform supports it)
+
+If your platform adapter documents recalling prior sessions (a **Prior-session recall** note), you may —
+**with the user's permission** — search their prior sessions and synthesize a **draft** brief to start from.
+Ask first, state the benefit ("I can pre-fill a draft from what you've already told me, then you edit it"),
+and give a clean decline path. On agreement, follow the adapter's rules (what to search; that the draft is
+written to the workspace brief, never to durable profile memory) and present the result as an **editable
+draft** alongside the usual paths: refine this draft · interview (quick / standard / thorough) · import an
+existing brief. On decline — or if your platform has no such note — go straight to the depth choice. The
+draft is working material, never settled truth.
+
 ## Choose a depth (offer all three; give the question estimate)
 Before you ask anything, let the user choose how deep to go — and make clear they can **start light and deepen
 later** (a follow-up interview reads the existing brief and *enriches* it, never overwrites). **The depth ask
@@ -71,6 +82,10 @@ go? You can always come back for a deeper pass later."; options:
 
 (Standalone only — not mid-onboarding, where import was just declined — add a fourth option: **Import** —
 "already have one written down? Paste it or give me the path.")
+
+When you present the depth choice or any small closed set of options, use the closed-choice mechanism
+(your adapter → Closed-choice question) and **never author an "Other" option yourself** — the host supplies
+free-text. For an **open-ended** question, ask it as plain free text; do not force it into a choice picker.
 
 Whatever the depth, the **output is the same five-section brief** (below): depth changes how much you ask, not
 the shape of the result. If a brief already exists, any path **updates** it — read it first, fill gaps, and

@@ -491,6 +491,10 @@ git commit -m "docs(hermes): supersede the concierge plan; index the assistant p
 - 2026-06-30 — T2 done: `hermes-prior-session` validator + tests (red→green); `hermes.md` prior-session
   recall section, detail-read disk-handoff, and Identity / `${HERMES_SKILL_DIR}` / `cronjob`-delivery /
   install corrections; `parallelism.md` collecting-results note; `build.sh` synced into all 5 skills.
+- 2026-06-30 — T3 done: `job-preference-interview` SKILL.md — permissioned prior-session draft-offer step
+  (plain prose, no arrow to the non-canonical Prior-session recall note) before the depth/import fork, plus a
+  clarify-discipline note (closed-choice via `adapter → Closed-choice question`; open-ended asks stay free
+  text; never author an "Other" option). validate_platforms + doc_lint + pytest green.
 
 ## Decision log
 
