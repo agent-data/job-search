@@ -500,6 +500,10 @@ git commit -m "docs(hermes): supersede the concierge plan; index the assistant p
   Prior-session recall note); §7 adds a delivery-destination ask passed into scheduling setup (on Hermes the
   recurring job is created via the `cronjob` tool, `adapter → Scheduling`). validate_platforms + doc_lint +
   pytest green.
+- 2026-06-30 — T5 done: `job-search-run` step 4 now collects each detail subagent's verdict from the run
+  scratch on completion (the result-collection mechanism — inline vs disk-handoff — is `adapter → Concurrent
+  detail reads`; "expected verdict files exist" is the completion signal, not inline returns), then folds the
+  collected verdicts into the digest / event log. validate_platforms + doc_lint + philosophy_guard + pytest green.
 
 ## Decision log
 

@@ -94,6 +94,11 @@ Read these before running, and follow them exactly:
    `400 invalid_pair` (not retryable) → judge from summary, note "detail link expired"; `502 detail_fetch_failed`
    (retryable) → retry/backoff, then summary-only + note. **No product cap** — every queued posting gets evaluated;
    the scan (relevance), not a count, decides how many.
+
+   Collect each subagent's verdict **from the run scratch on completion** — the result-collection mechanism
+   (inline vs a disk-handoff) is your adapter → Concurrent detail reads. Treat "the expected verdict files
+   exist" as the completion signal; do not require results to return inline. Then fold the collected verdicts
+   into the digest / event log as usual.
 5. **Consolidate + persist + report.** Collect the detail-read verdicts and **validate each before it lands**: `match` must be `strong | moderate | weak`, or `null` when `relevant` is false — coerce anything else (a faster delegated model can emit a stray number or out-of-vocab band) and never let a numeric score reach `jobs.jsonl` or the digest — and every event MUST carry a non-empty `source_id`. Then for each NEW posting (the deduped set from step 2 — see Idempotency) append the FULL `evaluated` event
    to `<workspace>/jobs.jsonl` via the **append** operation (complete schema + event-line contract in
    conventions.md §jobs.jsonl).
