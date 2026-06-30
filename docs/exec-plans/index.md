@@ -6,6 +6,8 @@ are archived here.
 ## Active
 - [Documentation Knowledge Base](active/2026-06-07-doc-knowledge-base.md)
 - [Multi-Harness Portability — Adapter Layer + Per-Platform Distribution](active/2026-06-22-multi-harness-portability.md)
+- [Hermes Concierge Layer — Bootstrap, Concierge Flow, Hermes Source Layer](active/2026-06-30-hermes-concierge-layer.md)
+- [Hermes Job Search Assistant — Seamless Install + Adapter-Native Onboarding](active/2026-06-30-hermes-job-search-assistant.md)
 
 ## Completed
 - [Job Search OS — Foundation & Core (Plan A)](completed/2026-06-05-foundation-core.md)

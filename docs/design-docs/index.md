@@ -8,6 +8,7 @@ contracts now live in `shared/references/`).
 - [Core Beliefs — Agent-First Operating Principles](core-beliefs.md) — _status: current_
 - [Prompt & Doc Style Guide](prompt-style-guide.md) — _status: current_
 - [Hermes-Native Host — Adapter + Bundled State-Ops Runtime](2026-06-29-hermes-native-plugin.md) — _status: current_
+- [Hermes Job Search Assistant — Seamless Install + Adapter-Native Onboarding](2026-06-30-hermes-job-search-assistant.md) — _status: current_
 
 ## Historical design snapshots
 - [Job Search OS — Original Design Spec](2026-06-05-os-design.md) — _status: historical_
@@ -17,7 +18,21 @@ contracts now live in `shared/references/`).
 ## Forward-looking (aspirational)
 - [Multi-Harness Portability — Research Dossier](multi-harness-portability.md) — _status: aspirational_
 
+## Hermes harness review
+
+Source-grounded review of the Hermes agent harness, for maintainers scoping the Hermes concierge layer
+(under `hermes-harness-review/`; start at the `overview.md` cross-doc synthesis).
+
+- [Hermes Harness Review — Overview](hermes-harness-review/overview.md) — _status: current_
+- [Hermes Harness — Memory & Session History](hermes-harness-review/memory-and-sessions.md) — _status: current_
+- [Hermes Harness — Identity, Architecture & Install](hermes-harness-review/identity-architecture-and-install.md) — _status: current_
+- [Hermes Harness — Cron & Scheduling](hermes-harness-review/cron-and-scheduling.md) — _status: current_
+- [Hermes Harness — Skills System & Packaging](hermes-harness-review/skills-system-and-packaging.md) — _status: current_
+- [Hermes Harness — Delegation & Subagents](hermes-harness-review/delegation-and-subagents.md) — _status: current_
+- [Hermes Harness — Tools, Clarify & Delivery Channels](hermes-harness-review/tools-clarify-and-channels.md) — _status: current_
+
 ## Superseded
+- [Hermes Job Search Concierge Layer](2026-06-30-hermes-job-search-concierge.md) — _status: superseded_ (superseded by the [Hermes Job Search Assistant](2026-06-30-hermes-job-search-assistant.md) design, after the [harness review](hermes-harness-review/overview.md))
 - [Codex Portability — What It Takes to Run job-search on OpenAI Codex](codex-portability.md) — _status: superseded_ (superseded by the [Multi-Harness Portability dossier](multi-harness-portability.md), which generalizes it to seven harnesses)
 
 ---
