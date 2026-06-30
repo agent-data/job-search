@@ -438,3 +438,12 @@ def test_hermes_prior_session_missing_section_fails(tmp_path):
     r = run_validate(tmp_path, "--only", "hermes-prior-session")
     assert r.returncode == 1
     assert "hermes-prior-session" in r.stdout
+
+
+def test_hermes_prior_session_missing_needle_fails(tmp_path):
+    d = tmp_path / "shared" / "references" / "platform"
+    d.mkdir(parents=True)
+    (d / "hermes.md").write_text("## Prior-session recall\n\nRecall prior context to draft.\n")
+    r = run_validate(tmp_path, "--only", "hermes-prior-session")
+    assert r.returncode == 1
+    assert "hermes-prior-session" in r.stdout

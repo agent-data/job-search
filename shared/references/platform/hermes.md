@@ -19,7 +19,7 @@ it as "Hermes" in any user-facing line. Hermes's own persona lives in `SOUL.md` 
 (`~/.hermes/SOUL.md`) and is loaded only from there — **do not** put job-search instructions in `SOUL.md`.
 Inject workspace/job-search guidance through the workspace **`AGENTS.md`** instead (Hermes loads a project
 `AGENTS.md` from the directory it starts in — cwd, top-level only; the cwd→git-root walk applies to
-`.hermes.md`/`HERMES.md`, not `AGENTS.md`. Source: agent/prompt_builder.py.); that is the supported channel
+`.hermes.md`/`HERMES.md`, not `AGENTS.md`. Source: `agent/prompt_builder.py`.); that is the supported channel
 for repo guidance, kept separate from identity. (Source: `hermes_cli/config.py`, `docs/user-guide/features/personality`, `context-files`.)
 
 ## Tool map
@@ -210,7 +210,7 @@ python3 ${HERMES_SKILL_DIR}/scripts/hermes_job_search/cli.py <op> [flags]   # on
 markdown, gated by `skills.template_vars`, default on), **not** a shell env var. The call works because the
 model reads the already-substituted concrete path from its rendered `SKILL.md`; if `skills.template_vars` is
 off the token will not expand — fall back to resolving the skill directory from the run path. (Source:
-agent/skill_preprocessing.py.) The ops — `discover-workspace`, `read-registry`,
+`agent/skill_preprocessing.py`.) The ops — `discover-workspace`, `read-registry`,
 `set-active-workspace`, `set-scheduling` / `clear-scheduling`, `load-config`, `update-config`,
 `known-ids`, `append-event`, `fold-state`, `write-run-record`, `write-digest` — take inputs from flags or
 stdin JSON and return one JSON object on stdout (logs go to stderr). Their **inputs, semantics, and

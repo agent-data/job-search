@@ -135,9 +135,10 @@ where they're hunting, and matched jobs live here and shouldn't be committed to 
 
 ## 4. Preferences — interview or import (a fork)
 
-Hand the preference step to **`job-preference-interview`**, which opens by offering a prior-session draft
-where the platform supports it (see that skill), then the depth choice or import. Do not pre-decide
-interview-vs-import here in a way that skips that opening offer.
+Hand the preference step to **`job-preference-interview`**. Onboarding owns the Interview/Import fork below;
+when it routes **Interview** to that skill, hand off with only "onboarding + where to write" — never a
+pre-picked depth — so the skill's opening prior-session draft offer (where the platform supports it) and its
+depth ask both still fire.
 
 The system needs a **Job Preferences Brief** (prose `preferences.md`) — the "what I want" half that the
 runner reads against each posting. This is a closed two-way choice, so ask it as a closed choice

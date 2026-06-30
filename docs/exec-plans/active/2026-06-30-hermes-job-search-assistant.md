@@ -507,10 +507,19 @@ git commit -m "docs(hermes): supersede the concierge plan; index the assistant p
 - 2026-06-30 — T6 done: bannered the superseded concierge plan under its H1 (stays in `active/`, `state: active`
   unchanged so the harness-review docs' `active/` links don't move) and annotated its `index.md` entry
   "_superseded; do not execute_"; the new plan was already indexed. TESTING.md needed no change — its Hermes
-  notes (§0.1/§9.4/T7.2) stay accurate and the new-capability live proof lives in the design doc's verify-live
+  notes (§0.1/T9.4/T7.2) stay accurate and the new-capability live proof lives in the design doc's verify-live
   checklist. Full gate green: `Doc lint: clean.`; pytest 144 passed; `Philosophy guard: clean.`; build synced,
   `git status --porcelain skills` empty; `Platform validation: clean.` Step 4 (manual Hermes proof) is off-CI,
   deferred to the maintainer.
+- 2026-06-30 — Post-review polish wave (single commit): (1) reworded the onboarding §4 hand-off note so it no
+  longer forbids onboarding's own Interview/Import fork — onboarding owns that fork — while still requiring the
+  Interview route to hand off with only "onboarding + where to write" so `job-preference-interview`'s opening
+  prior-session draft offer and depth ask both still fire (reconciles the seam with that skill's "import was
+  just declined" contract); (2) added the `hermes-prior-session` missing-needle test branch (section present
+  but `session_search`/`USER.md` needles absent → exit 1), which the prior present/missing-section tests left
+  uncovered; (3) backticked two bare `Source:` paths in `hermes.md` (`agent/prompt_builder.py`,
+  `agent/skill_preprocessing.py`) for citation-style consistency and re-synced the skill copies via `build.sh`;
+  (4) corrected this log's TESTING.md citation §9.4 → T9.4 (the anchor is `T9.4`).
 
 ## Decision log
 
