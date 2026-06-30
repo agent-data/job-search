@@ -6,6 +6,11 @@ created: 2026-06-30
 
 # Hermes concierge layer — bootstrap, concierge flow, and Hermes-specific source layer
 
+> **Superseded** by [Hermes Job Search Assistant](2026-06-30-hermes-job-search-assistant.md) (design:
+> [here](../../design-docs/2026-06-30-hermes-job-search-assistant.md)). Closed without execution after the
+> [harness review](../../design-docs/hermes-harness-review/overview.md). Kept in `active/` only because the
+> review docs link this path; **do not execute it.**
+
 ## Goal
 
 Make the Hermes experience feel native and seamless: the Hermes installation section in `README.md` points to a single bootstrap file (`hermes/INSTALL.md`), generic Hermes can use that file to install/register the plugin and verify readiness, and once installed the existing `job-search` skill behaves as a Hermes-specific concierge — asking permission before drafting preferences from prior context, running a first manual calibration batch with lightweight analytics, asking for the user's reaction before tuning, and then proactively offering recurring delivery through Hermes-native setup paths. The installable front door stays canonical (`job-search`), the portable core remains intact for other hosts, and Hermes-only UX logic is source-separated under `hermes/` then bundled into the relevant installable skills.

@@ -504,6 +504,13 @@ git commit -m "docs(hermes): supersede the concierge plan; index the assistant p
   scratch on completion (the result-collection mechanism — inline vs disk-handoff — is `adapter → Concurrent
   detail reads`; "expected verdict files exist" is the completion signal, not inline returns), then folds the
   collected verdicts into the digest / event log. validate_platforms + doc_lint + philosophy_guard + pytest green.
+- 2026-06-30 — T6 done: bannered the superseded concierge plan under its H1 (stays in `active/`, `state: active`
+  unchanged so the harness-review docs' `active/` links don't move) and annotated its `index.md` entry
+  "_superseded; do not execute_"; the new plan was already indexed. TESTING.md needed no change — its Hermes
+  notes (§0.1/§9.4/T7.2) stay accurate and the new-capability live proof lives in the design doc's verify-live
+  checklist. Full gate green: `Doc lint: clean.`; pytest 144 passed; `Philosophy guard: clean.`; build synced,
+  `git status --porcelain skills` empty; `Platform validation: clean.` Step 4 (manual Hermes proof) is off-CI,
+  deferred to the maintainer.
 
 ## Decision log
 
