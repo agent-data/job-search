@@ -17,9 +17,10 @@ verification status and every PIN caveat.
 The host agent is **Hermes** (or "Hermes Agent"), built by Nous Research; the CLI is `hermes`. Refer to
 it as "Hermes" in any user-facing line. Hermes's own persona lives in `SOUL.md` under `HERMES_HOME`
 (`~/.hermes/SOUL.md`) and is loaded only from there — **do not** put job-search instructions in `SOUL.md`.
-Inject workspace/job-search guidance through the workspace **`AGENTS.md`** instead (Hermes reads a project
-`AGENTS.md` by walking cwd → git root); that is the supported channel for repo guidance, kept separate
-from identity. (Source: `hermes_cli/config.py`, `docs/user-guide/features/personality`, `context-files`.)
+Inject workspace/job-search guidance through the workspace **`AGENTS.md`** instead (Hermes loads a project
+`AGENTS.md` from the directory it starts in — cwd, top-level only; the cwd→git-root walk applies to
+`.hermes.md`/`HERMES.md`, not `AGENTS.md`. Source: agent/prompt_builder.py.); that is the supported channel
+for repo guidance, kept separate from identity. (Source: `hermes_cli/config.py`, `docs/user-guide/features/personality`, `context-files`.)
 
 ## Tool map
 
@@ -76,6 +77,11 @@ Hermes is **Tier 1** with a genuinely native scheduler — no consent-gated mach
   **Block-alert channel**. (Source: `cron/jobs.py`, `cron/scheduler.py`, `hermes_cli/subcommands/cron.py`,
   `docs/chronos-managed-cron-contract.md`.)
 
+To bind `--deliver origin` to *this* chat, create the job with the in-session **`cronjob` tool**
+(`cronjob(action="create", …)`), not a shelled `hermes cron create` from a bare terminal; origin binds to
+the session that creates the job. Confirm the gateway daemon is running (it ticks ~every 60s) before
+promising automation.
+
 The judgment-bearing run uses `--skill job-search-run` (the model judges fit); Hermes's `--no-agent
 --script` cron path runs a script with no model and is **not** used for the search.
 
@@ -113,6 +119,24 @@ same question as prose with the options on numbered lines. `clarify` is **unavai
 cron run** (a scheduled session cannot ask) — there, pick a sane default and never block. (Source:
 `tools-reference.md`; `delegation.md` notes leaf subagents also have `clarify` blocked.)
 
+## Prior-session recall
+
+Hermes can search the user's **prior sessions** with `session_search` (an FTS5 index over past
+conversations). This is the capability behind the preference interview's *draft-from-prior-context* offer:
+with permission, search prior sessions for what the user has said about jobs/work and synthesize a **draft**
+Job Preferences Brief.
+
+- **Ask first.** Never read prior sessions to draft without explicit permission; offer it, state the
+  benefit, and give a clean decline path.
+- **Sessions, not memory.** Hermes's `MEMORY.md`/`USER.md` is already auto-injected into context as a frozen
+  snapshot at session start — you do not "use memory" on request. This offer is specifically about searching
+  *prior sessions* via `session_search`.
+- **Draft, not truth.** Write the synthesized result **only** to the workspace brief
+  (`<workspace>/preferences.md`) and present it as an editable draft. **Never** write `USER.md` and never
+  silently promote an inferred preference to durable user-profile truth — the workspace brief is canonical.
+- **Interactive only.** A scheduled/headless run is a fresh session with no prior-session access and cannot
+  ask, so this offer never fires there.
+
 ## Concurrent detail reads
 
 Hermes fans out isolated subagents via the **`delegate_task`** tool in **batch** form —
@@ -135,6 +159,16 @@ fabricate a dispatch, never drop a posting; a capacity/authorization fallback is
 [PIN: one code path suggested top-level delegations may run in the background — results arriving as a
 later message rather than inline; the docs say inline/blocking. Confirm on the live pass; until then the
 sequential fallback is the safe path for a strictly in-turn run.]
+
+**Collect results from disk, not the return channel.** Each detail subagent writes its `evaluate-job-fit`
+verdict for its posting to a run-scoped scratch file (e.g. `<workspace>/.runs/<run_id>/details/<posting_id>.json`)
+instead of relying on its text returning to the parent. The orchestrator's completion signal is "the expected
+verdict files exist"; it then reads them, folds them into the durable digest / run record / event log (the
+bundled runtime does the bookkeeping; judgment stays in the subagents and the orchestrator), and never holds
+the long descriptions in its own context. This is deliberate, not a fallback: it keeps the primary context
+lean and makes the run **correct regardless of the inline-vs-background question above** — whichever way
+`delegate_task` returns, the verdicts are already on disk. A true sequential in-turn read is only a
+last-resort fallback when no subagent can be spawned at all.
 
 ## Model tiers
 
@@ -172,8 +206,11 @@ called via the `terminal` tool:
 python3 ${HERMES_SKILL_DIR}/scripts/hermes_job_search/cli.py <op> [flags]   # one JSON object on stdout
 ```
 
-[PIN: confirm `${HERMES_SKILL_DIR}` is exported into the skill's `terminal` session; if not, resolve the
-skill directory from the run path.] The ops — `discover-workspace`, `read-registry`,
+`${HERMES_SKILL_DIR}` is a **load-time `SKILL.md` template token** (text-substituted into the rendered skill
+markdown, gated by `skills.template_vars`, default on), **not** a shell env var. The call works because the
+model reads the already-substituted concrete path from its rendered `SKILL.md`; if `skills.template_vars` is
+off the token will not expand — fall back to resolving the skill directory from the run path. (Source:
+agent/skill_preprocessing.py.) The ops — `discover-workspace`, `read-registry`,
 `set-active-workspace`, `set-scheduling` / `clear-scheduling`, `load-config`, `update-config`,
 `known-ids`, `append-event`, `fold-state`, `write-run-record`, `write-digest` — take inputs from flags or
 stdin JSON and return one JSON object on stdout (logs go to stderr). Their **inputs, semantics, and
@@ -231,6 +268,7 @@ agent-data init --hermes --api-key <KEY> --yes && agent-data whoami     # api_ke
 git clone -b feat/hermes-native-host https://github.com/agent-data/job-search && cd job-search
 ./scripts/build.sh                                                       # materialize synced refs + runtime
 hermes skills tap add agent-data/job-search                             # or skills.external_dirs / copy into ~/.hermes/skills/
+hermes skills install job-search                                        # [PIN: confirm tap add alone does not load the skill]
 hermes chat -Q -s job-search-run -q "run a job search now"             # one-off
 hermes cron create "0 9 * * *" "run a job search now" --skill job-search-run --deliver origin --name "Daily job search"
 hermes cron list                                                        # confirm the job in ~/.hermes/cron/jobs.json

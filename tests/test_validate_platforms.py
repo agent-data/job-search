@@ -418,3 +418,23 @@ def test_hermes_runtime_invocation_missing_needle_fails(tmp_path):
     (d / "hermes.md").write_text("## Scheduling\nhermes-cron\n## Concurrent detail reads\ndelegate_task\n")
     r = run_validate(tmp_path, "--only", "hermes-runtime-invocation")
     assert r.returncode == 1 and "hermes-runtime-invocation" in r.stdout
+
+
+# ---- hermes-prior-session: no-op until hermes.md exists, then must document prior-session recall ----
+
+def test_hermes_prior_session_present_passes(tmp_path):
+    d = tmp_path / "shared" / "references" / "platform"
+    d.mkdir(parents=True)
+    (d / "hermes.md").write_text(
+        "## Prior-session recall\n\nUse `session_search`; draft to the brief, never USER.md.\n")
+    r = run_validate(tmp_path, "--only", "hermes-prior-session")
+    assert r.returncode == 0, r.stdout
+
+
+def test_hermes_prior_session_missing_section_fails(tmp_path):
+    d = tmp_path / "shared" / "references" / "platform"
+    d.mkdir(parents=True)
+    (d / "hermes.md").write_text("## Identity\n\nHermes.\n")
+    r = run_validate(tmp_path, "--only", "hermes-prior-session")
+    assert r.returncode == 1
+    assert "hermes-prior-session" in r.stdout

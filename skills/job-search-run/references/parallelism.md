@@ -14,6 +14,12 @@ Whether an isolated-context concurrent subagent primitive is available, any conc
 the active platform's adapter → **Concurrent detail reads**. Read your adapter before dispatching; a host with
 no concurrent primitive degrades gracefully through that fallback.
 
+**Collecting results.** How a finished subagent's result reaches you — inline in the dispatch turn, or via a
+**disk-handoff** (the subagent writes its result to a run-scoped scratch file and you read it on completion)
+— is the active platform's adapter → Concurrent detail reads. Prefer the disk-handoff where a host's
+subagents may return out-of-band, or simply to keep the primary context lean; it also makes the run correct
+regardless of whether dispatch is blocking or background.
+
 **Some hosts also require explicit user approval before they will use subagents for job-search detail reads**
 — their adapter → **Concurrent detail reads** says so (today only Codex does). Treat missing approval as a
 real boundary on those hosts, not as implied permission: the interactive front door may ask and store the

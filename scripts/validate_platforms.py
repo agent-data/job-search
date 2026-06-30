@@ -13,7 +13,7 @@ shared/references or skills, so this is a NEW lane, not a doc_lint rule).
 Mirrors scripts/doc_lint.py in shape: scan(root) -> hits; main() prints hits and returns 1 on
 failure, else prints "Platform validation: clean." and returns 0. `--root` arg. Stdlib only.
 
-Eight checks, dispatched via the CHECKS registry:
+Nine checks, dispatched via the CHECKS registry:
   - adapter-sections:  every shared/references/platform/<harness>.md SOURCE adapter carries all 12
                        canonical `## ` sections (exact names). Synced skills/*/references/platform/
                        copies are asserted to match their source byte-for-byte.
@@ -41,6 +41,9 @@ Eight checks, dispatched via the CHECKS registry:
                        carry it (no-op when the runtime source is absent).
   - hermes-runtime-invocation: once shared/references/platform/hermes.md exists, it must document the
                        bundled-runtime terminal invocation + the hermes-cron / delegate_task mechanisms.
+  - hermes-prior-session: once hermes.md exists, it must document the prior-session recall capability
+                       (the session_search mechanism, the permission gate, and that drafts go to the
+                       workspace brief, never USER.md). No-op until hermes.md is authored.
 """
 import argparse, json, os, re, shutil, subprocess, sys
 
@@ -444,6 +447,29 @@ def scan_hermes_runtime_invocation(root):
     return hits
 
 
+def scan_hermes_prior_session(root):
+    """Once the Hermes adapter exists, it must document the prior-session recall capability the preference
+    interview's draft-from-prior-context offer depends on: the session_search mechanism, the permission
+    gate, and that drafts go to the workspace brief, never USER.md. No-op until hermes.md is authored."""
+    hits = []
+    rel = os.path.join(PLATFORM_DIR, "hermes.md")
+    path = os.path.join(root, rel)
+    if not os.path.exists(path):
+        return hits
+    with open(path, encoding="utf-8", errors="replace") as f:
+        text = f.read()
+    if "## Prior-session recall" not in text:
+        hits.append(f"{rel}: hermes-prior-session: missing the '## Prior-session recall' section")
+        return hits
+    for needle, message in (
+        ("session_search", "missing the `session_search` mechanism marker"),
+        ("USER.md", "must state the draft never writes USER.md (durable-profile guard)"),
+    ):
+        if needle not in text:
+            hits.append(f"{rel}: hermes-prior-session: {message}")
+    return hits
+
+
 CHECKS = {
     "adapter-sections": scan_adapter_sections,
     "manifest-parse": scan_manifest_parse,
@@ -453,6 +479,7 @@ CHECKS = {
     "codex-parallel-subagents": scan_codex_parallel_subagents,
     "runtime-bundle": scan_runtime_bundle,
     "hermes-runtime-invocation": scan_hermes_runtime_invocation,
+    "hermes-prior-session": scan_hermes_prior_session,
 }
 
 

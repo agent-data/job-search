@@ -488,6 +488,9 @@ git commit -m "docs(hermes): supersede the concierge plan; index the assistant p
   itself grounded in the [harness review](../../design-docs/hermes-harness-review/overview.md). Replaces the
   superseded [concierge-layer plan](2026-06-30-hermes-concierge-layer.md).
 - 2026-06-30 — T1 done: hermes/INSTALL.md + README pointer + AGENTS/ARCHITECTURE note.
+- 2026-06-30 — T2 done: `hermes-prior-session` validator + tests (red→green); `hermes.md` prior-session
+  recall section, detail-read disk-handoff, and Identity / `${HERMES_SKILL_DIR}` / `cronjob`-delivery /
+  install corrections; `parallelism.md` collecting-results note; `build.sh` synced into all 5 skills.
 
 ## Decision log
 
