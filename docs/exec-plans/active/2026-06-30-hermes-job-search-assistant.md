@@ -487,6 +487,7 @@ git commit -m "docs(hermes): supersede the concierge plan; index the assistant p
 - 2026-06-30 — plan created from the [Hermes Job Search Assistant design](../../design-docs/2026-06-30-hermes-job-search-assistant.md),
   itself grounded in the [harness review](../../design-docs/hermes-harness-review/overview.md). Replaces the
   superseded [concierge-layer plan](2026-06-30-hermes-concierge-layer.md).
+- 2026-06-30 — T1 done: hermes/INSTALL.md + README pointer + AGENTS/ARCHITECTURE note.
 
 ## Decision log
 

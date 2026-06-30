@@ -129,7 +129,8 @@ isolation.
 `package.json` — paired with the per-platform adapter under
 [shared/references/platform/](shared/references/platform/claude.md). The **loose skills** mode still works,
 each folder self-contained because the build bundled its dependencies. The contracts are identical across all
-harnesses. Install steps are in [README.md](README.md).
+harnesses. Install steps are in [README.md](README.md). The `hermes/` dir is a Hermes-only **pre-install**
+bootstrap area (e.g. `INSTALL.md`); it is source-only — not shipped into skills, not read by other hosts.
 
 **Headless run flow.** A scheduled pass runs [job-search-run](skills/job-search-run/SKILL.md): free preflight
 gates (CLI present, config, auth, brief, service status), then one metered search per enabled query, dedup via

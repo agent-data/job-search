@@ -25,6 +25,7 @@ Start here, then follow the pointers.
 
 ## Working here
 - **Single source of truth:** edit `shared/references/`, then run `./scripts/build.sh`; never hand-edit `skills/*/references` — build.sh regenerates them and your edit is silently lost.
+- `hermes/` — Hermes-only **pre-install** bootstrap docs (e.g. `INSTALL.md`); not shipped into skills, not read by other hosts.
 - All prompts and docs are held to the [prompt & doc style guide](docs/design-docs/prompt-style-guide.md).
 - Dev tooling is stdlib-only Python; the only Python shipped in the skills is the Hermes path's optional state-ops runtime; scoped conventional commits; `python3 scripts/doc_lint.py --root .` and `python3 -m pytest -q` must be green before a PR.
 - Daily contributor docs: [README](README.md) · [CONTRIBUTING](CONTRIBUTING.md) · [TESTING](TESTING.md)
