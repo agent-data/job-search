@@ -135,6 +135,10 @@ where they're hunting, and matched jobs live here and shouldn't be committed to 
 
 ## 4. Preferences — interview or import (a fork)
 
+Hand the preference step to **`job-preference-interview`**, which opens by offering a prior-session draft
+where the platform supports it (see that skill), then the depth choice or import. Do not pre-decide
+interview-vs-import here in a way that skips that opening offer.
+
 The system needs a **Job Preferences Brief** (prose `preferences.md`) — the "what I want" half that the
 runner reads against each posting. This is a closed two-way choice, so ask it as a closed choice
 (`voice.md` → Asking questions), the what-it-is context riding in the question text. Header `Brief`;
@@ -285,6 +289,12 @@ Ask it as a closed choice (`voice.md` → Asking questions). Header `Schedule`; 
 checking automatically? New matches will land in a digest without you having to ask."; options: **Yes, keep
 checking** — "runs on your chosen cadence" · **No, I'll run it myself** — "a one-off search stays one
 command away".
+
+When you offer the schedule, also ask **where results should go** — here, an already-configured channel, or
+a new destination — and pass the choice into scheduling setup. (On Hermes, create the recurring job via the
+`cronjob` tool with the chosen delivery target — see your adapter → Scheduling — so `origin` binds to this
+chat; a brand-new platform is a one-time, out-of-band setup, so confirm and resume rather than promising one
+continuous flow.)
 
 **On yes:**
 

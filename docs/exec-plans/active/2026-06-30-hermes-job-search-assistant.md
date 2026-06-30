@@ -495,6 +495,11 @@ git commit -m "docs(hermes): supersede the concierge plan; index the assistant p
   (plain prose, no arrow to the non-canonical Prior-session recall note) before the depth/import fork, plus a
   clarify-discipline note (closed-choice via `adapter → Closed-choice question`; open-ended asks stay free
   text; never author an "Other" option). validate_platforms + doc_lint + pytest green.
+- 2026-06-30 — T4 done: `onboarding.md` §4 hands the preference step to `job-preference-interview` (the
+  prior-session draft offer leads, ahead of the interview/import fork; no adapter arrow to the non-canonical
+  Prior-session recall note); §7 adds a delivery-destination ask passed into scheduling setup (on Hermes the
+  recurring job is created via the `cronjob` tool, `adapter → Scheduling`). validate_platforms + doc_lint +
+  pytest green.
 
 ## Decision log
 
