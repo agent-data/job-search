@@ -98,10 +98,14 @@ decision.
   user-visible math. The one place cost can ever surface — a quota limit — is handled reactively
   as a named error; see [shared/references/errors.md](../shared/references/errors.md).
 
-- **Multi-source aggregation and a source-plugin system.** v1 has exactly one job source: the
-  agent-data Job Postings API (LinkedIn). The source sits behind an adapter seam so a future
-  source could be added, but we do not build a plugin system now. Adding the abstraction before
-  a second source exists is classic over-engineering; the seam is enough.
+- **Multi-source aggregation — shipped 2026-07; the non-goal's own trigger fired.** This entry
+  previously refused multi-source aggregation "before a second source exists," naming the seam
+  as sufficient. That condition ended when the Job Postings API shipped per-source selection
+  (Ashby live, Workday experimental) — see the contract in
+  [shared/references/agent-data-contract.md](../shared/references/agent-data-contract.md). We added client-side fan-out over that one
+  parameterized contract — per-source circuit breakers, a composite dedup key, conservative
+  cross-source merging — **not** a source-plugin system; the seam held as designed. Still
+  refused: a descriptor/plugin layer before a fourth source earns it.
 
 - **A dedicated pipeline/triage-board skill.** The `status` field on each job event (tracked in
   [shared/references/conventions.md](../shared/references/conventions.md)) and the per-run digest

@@ -1,12 +1,12 @@
 # Job search digest — 2026-06-05
 Run health: healthy
-9 new postings · 2 strong · 2 moderate · 2 weak · 3 filtered out · 2 searches · 5 detail reads
+9 new postings (6 LinkedIn · 3 Ashby) · 2 strong · 2 moderate · 2 weak · 3 filtered out · 4 searches · 5 detail reads
 
 ## Strong matches
 - **Senior Product Designer** — Tidewater Health — Remote (US)
   Embedded with a product+eng pod, owns a care-navigation area end to end, healthcare mission you're after.  [view](https://example.com/jobs/tidewater-senior-product-designer)
-- **Lead Product Designer, Developer Tools** — Forge Labs — Remote (US)
-  Lead-level ownership of a dev-tools surface with an established design system and weekly critique.  [view](https://example.com/jobs/forge-labs-lead-product-designer)
+- **Lead Product Designer, Developer Tools** — Forge Labs — Remote (US) · Ashby
+  Lead-level ownership of a dev-tools surface with an established design system and weekly critique. date not stated  [view on company board](https://jobs.ashbyhq.com/forge-labs/1b2c3d4e-5f60-4a7b-8c9d-0e1f2a3b4c5d)
   ⚠ confirm: Posting says "hybrid-friendly" but doesn't name a city — confirm a fully-remote US seat is on offer.
 
 ## Moderate matches
@@ -29,5 +29,6 @@ Run health: healthy
 
 ---
 _Notes:_
-- 1 posting's detail link had expired (LinkedIn re-indexed); judged from its summary.
+- 1 posting's detail link had expired (the source re-indexed it); judged from its summary.
+- First pass over Ashby company boards — this batch can include older postings, since boards don't always state dates.
 - Your preferences brief is dated 2026-06-05 — fresh; no review needed yet.

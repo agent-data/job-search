@@ -1181,6 +1181,29 @@ T8 shipped the operator enable flow; T9 shipped the template comment). This task
   scripts/philosophy_guard.py --root .` clean; `python3 -c "import yaml;
   yaml.safe_load(open('templates/config.example.yaml'))"` parses (`search.sources` ==
   `['linkedin', 'ashby']`); `python3 -m pytest -q` → 98 passed.
+- 2026-07-02 — **T10 done** (PR1). The knowledge base stops claiming LinkedIn-only, and the wave's
+  drift + filing (F9–F12) is hardened. `docs/PRODUCT_SENSE.md`'s multi-source non-goal is rewritten
+  as *reversed on its own stated trigger* — it refused aggregation "before a second source exists,"
+  and that condition ended when the Job Postings API shipped per-source selection (the bullet now
+  links `agent-data-contract.md` exactly like the errors.md bullet two entries up); still refused is
+  a descriptor/plugin layer before a fourth source earns it. `ARCHITECTURE.md`'s intro now searches
+  "LinkedIn and Ashby company-board postings (plus experimental Workday)"; `docs/QUALITY_SCORE.md`'s
+  `discovery-search` gap drops "LinkedIn-only" for the real gaps (Workday experimental; per-query
+  targeting deferred; conservative merge) with the grade held at `strong`. `TESTING.md` gained
+  **§14 Multi-source** (live Ashby search · shim multi-source · one-source-down). `CHANGELOG.md`
+  gained an `## [Unreleased]` section (multi-source + the test surface + the pytest/limit fixes).
+  `examples/sample-digest.md` now shows the multi-source shape: per-source counts `(6 LinkedIn · 3
+  Ashby)`, the Forge Labs match tagged ` · Ashby` with a `date not stated` mark and a company-board
+  link, the source-neutral "(the source re-indexed it)" note, and the first-Ashby-pass footnote.
+  **F11:** both `2026-06-07-doc-knowledge-base.md` and `2026-06-22-multi-harness-portability.md`
+  flipped to `state: completed` + `completed: 2026-07-02`, `git mv`'d to `completed/`, and re-filed
+  in `index.md` (doc-knowledge-base gains the removed-Python-tooling historical note); the
+  both-plans call is in the Decision log. **F12:** `home.md`'s Plan C copy went from "coming soon
+  (Plan C)" to "planned (Plan C, not yet scheduled)". No `shared/references/` edits, so
+  `./scripts/build.sh` is a no-op. Verified: `python3 scripts/doc_lint.py --root .` clean; `python3
+  scripts/philosophy_guard.py --root .` clean; `python3 -m pytest -q` → 98 passed; `grep -rn
+  "LinkedIn-only" docs ARCHITECTURE.md` → only the historical `2026-06-05-os-design.md` snapshot and
+  this plan remain (no live-doc claims).
 
 ## Decision log
 
@@ -1202,3 +1225,9 @@ T8 shipped the operator enable flow; T9 shipped the template comment). This task
   filesystem, so an untracked file under `docs/` either fails local index-completeness or, if
   indexed, fails CI's link check; outside `docs/` it is invisible to both. Never link it from
   tracked docs.
+- **F11 filing — moved BOTH the doc-knowledge-base and multi-harness-portability plans to
+  `completed/`** (T10), taking the brief's default rather than its parenthetical option to keep
+  multi-harness open pending all-harness live testing. Rationale: the plan was user-approved with
+  this default; the multi-harness work's own log records P1–P5 complete and merged to main
+  (2026-06-24, `d9ec957`); and the archive move is reversible at PR review if an owner wants it
+  reopened. The doc-knowledge-base move was unconditional.

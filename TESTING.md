@@ -675,6 +675,31 @@ built, mark **N/A (pending build)**.
 
 ---
 
+## 14. Multi-source (LinkedIn + Ashby)
+
+### T14.1 Live Ashby search returns ashby rows — 👤
+```bash
+agent-data call f9a6ec16-0bfd-44d8-b3ee-073776745ee7 search-jobs \
+  --keywords "software engineer" --limit 3 --source ashby \
+  --fields id,source_id,source_url,title,company_name,source
+```
+**Expected:** rows with `"source":"ashby"`, UUID `source_id`s, `jobs.ashbyhq.com` URLs.
+**Result:** ⬜
+
+### T14.2 Shim multi-source run — 🤖
+"Build the eval sandbox (§0.2), export `JOBSEARCH_TEST_SCENARIO=multi-source`, run
+job-search-run against the sandbox workspace, and show the digest + jobs.jsonl."
+**Expected:** per-source counts breakdown; ashby events carry `"source":"ashby"`; null-date
+entries carry a date mark; the first-Ashby-pass footnote is present.
+**Result:** ⬜
+
+### T14.3 One source down never blanks the run — 🤖
+"Same sandbox, `JOBSEARCH_TEST_SCENARIO=one-source-down`. Run job-search-run; show the digest."
+**Expected:** LinkedIn matches land; Run health `partial (ashby unavailable)`; outage footnote.
+**Result:** ⬜
+
+---
+
 ## Acceptance checklist (sign-off)
 
 - ⬜ Install: plugin validates `--strict`; loads via `--plugin-dir`; loose-skills self-contained (§1)

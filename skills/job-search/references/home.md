@@ -116,5 +116,5 @@ Offer these and apply each by **chatting**, editing `config.yaml` per the `inter
 ## Coming soon (Plan C)
 
 Resume actions — **compare** your resume against a match and **tailor** it (truthfully, never inventing
-experience) — are **coming soon (Plan C)**. Mention them if the user asks what's next, but defer; they
+experience) — are **planned (Plan C, not yet scheduled)**. Mention them if the user asks what's next, but defer; they
 aren't wired yet.
