@@ -74,7 +74,7 @@ in `-p` commands anyway so the skill is invoked deterministically.
 ```bash
 cd "$JSOS" && python3 -m pytest -q
 ```
-**Expected:** `56 passed` **and `0 failed`** — treat **`0 failed`** as the real gate (the exact count grows as
+**Expected:** `99 passed` **and `0 failed`** — treat **`0 failed`** as the real gate (the exact count grows as
 tests are added; bump this number when it does). Covers the doc linter, the philosophy guard, and the
 fake-shim self-tests (incl. the `bad-query` scenario behind T7.12) — dev tooling only; the runtime state
 procedures are exercised by the live tests below and the skill evals.
@@ -650,7 +650,7 @@ line, Strong/Moderate/Weak, Filtered-out, footnotes).
 
 Ask Claude, for each skill, to **run its evals** (the `harness` in `skills/<skill>/evals/evals.json`; they use the
 fake-agent-data shim, so zero real credits):
-- `evaluate-job-fit` (3) · `job-search-run` (20) · `job-preference-interview` (3) · `job-search` (8).
+- `evaluate-job-fit` (3) · `job-search-run` (20) · `job-preference-interview` (3) · `job-search` (8) · `job-search-agent` (4).
 **Expected:** all pass; outputs are philosophy-clean.
 **Result:** ⬜
 
