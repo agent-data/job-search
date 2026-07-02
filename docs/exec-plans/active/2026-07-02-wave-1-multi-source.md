@@ -1255,7 +1255,7 @@ T8 shipped the operator enable flow; T9 shipped the template comment). This task
   flaky)`), eval 10 passes its headline ("no new postings — you've already seen all 3"; 1 of 2 runs spent
   one stray get-posting reconciling the prompt's source-less 1001/1002 legacy seeds before
   self-correcting — a flake, second run clean 3/3), eval 15 ×3 fresh all fan out (4 query×source calls,
-  both sources in `sources_searched`, every time) + rerun idempotent (0 duplicate events).
+  both sources in `sources_searched`, every time) + rerun idempotent (0 duplicate events); eval-10 seed de-flake (this commit).
 
 ## Decision log
 
