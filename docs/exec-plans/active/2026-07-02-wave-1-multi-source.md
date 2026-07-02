@@ -1264,9 +1264,17 @@ T8 shipped the operator enable flow; T9 shipped the template comment). This task
   - **Dedup re-run: PASS** — second digest `25 new postings (25 LinkedIn · 0 Ashby)`; ashby `new: 0` on both queries (all 50 recognized as known); jobs.jsonl 83→108 append-only with **zero duplicate (source, source_id) pairs**; the 25 appends are genuinely-new LinkedIn rows (live-feed churn), zero collisions with run-1 pairs; first-pass footnotes correctly absent.
   - Honest gaps: the sample brief (product design) × template queries (engineering) yields 0 matches on live data, so per-match ` · Ashby` tags / date marks / `posted_at_extracted` weren't exercisable live (covered by eval 15's fixture run, PASS 7/7 above); run health `healthy` both runs — no live degradation to observe.
   - Sandbox left for inspection: `/var/folders/hb/ym6hm7s52p39j_m5m9y7chpw0000gn/T/tmp.JGrIcE9Uhe` (run1.log/run2.log + artifact snapshots inside).
+  - Gate-RED residue fixed (this commit): TESTING.md:370 enum → the `partial (<why>)` / `degraded (job
+    sources flaky)` form; T7.7 row → `partial (all sources unavailable)` (matches eval 4); T7.9 row →
+    `degraded (job sources flaky)`; acceptance-checklist pytest count 56 → 99. The os-design.md:303 hit
+    stands — see the Done-when amendment in the Decision log. Gate 7 green under the amended filter.
 
 ## Decision log
 
+- **Done-when grep amendment (controller, PR1 gate):** the `degraded (LinkedIn flaky)` zero-hit gate
+  additionally excludes `status: historical` design snapshots (`docs/design-docs/2026-06-05-os-design.md`)
+  — frozen by the KB's own status vocabulary, deliberately never updated; editing a frozen snapshot to
+  satisfy a grep would falsify the historical record. Live-doc hits remain forbidden.
 - **Announced-default-on for Ashby** (absent `search.sources` → `["linkedin","ashby"]`): opt-in
   would make multi-source a dead feature for the existing install base; the announcement is
   structural (per-source counts, first-pass footnote, home Sources line), not stored state.
