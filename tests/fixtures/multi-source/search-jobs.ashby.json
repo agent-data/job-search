@@ -1,0 +1,12 @@
+{ "data": { "query": {"keywords": "AI engineer", "location": "United States", "source": "ashby"}, "status": "completed",
+    "results": [
+      { "id": "jp_ashbyacme01", "source_id": "6e9a1f00-1111-4aaa-8bbb-2cc3dd4ee5f6",
+        "source_url": "https://jobs.ashbyhq.com/acme/6e9a1f00-1111-4aaa-8bbb-2cc3dd4ee5f6",
+        "title": "Senior AI Engineer", "company_name": "Acme", "location_display": "Remote (US)",
+        "salary_display": null, "posted_at": null, "source": "ashby", "detail_available": true },
+      { "id": "jp_ashbyzeph01", "source_id": "0b7c2d33-2222-4ccc-9ddd-3ee4ff5aa6b7",
+        "source_url": "https://jobs.ashbyhq.com/zephyr/0b7c2d33-2222-4ccc-9ddd-3ee4ff5aa6b7",
+        "title": "Staff AI Engineer", "company_name": "Zephyr Robotics", "location_display": "Remote (US)",
+        "salary_display": null, "posted_at": null, "source": "ashby", "detail_available": true } ],
+    "warnings": [], "started_at": "2026-07-02T08:00:00Z", "completed_at": "2026-07-02T08:00:00Z" },
+  "meta": { "request_id": "req_fakeashby" } }

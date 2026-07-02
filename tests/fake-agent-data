@@ -3,8 +3,10 @@
 
 Scenario via env JOBSEARCH_TEST_SCENARIO (default "happy"); fixtures dir via JOBSEARCH_FIXTURES.
 Scenarios: happy | many-promising | zero-empty | stretch | quota | bad-query | invalid-pair |
-detail-fetch-failed | degraded | down.
+detail-fetch-failed | degraded | down | multi-source | one-source-down | source-unsupported |
+legacy-source-swallow.
 Error-injection scenarios reuse the "happy" fixtures (fallback) for any data they don't override.
+Env JOBSEARCH_TEST_DOWN_SOURCE (default "ashby") selects which source one-source-down fails.
 JOBSEARCH_TEST_NOAUTH=1 makes whoami report unauthenticated. `--version` answers (onboarding's
 post-install check); `init` is NOT shimmed — evals stub it in the case prompt.
 """
@@ -12,6 +14,7 @@ import json, os, sys
 
 SCEN = os.environ.get("JOBSEARCH_TEST_SCENARIO", "happy")
 FIX = os.environ.get("JOBSEARCH_FIXTURES", "")
+SRC_ALLOWED = ("linkedin", "ashby", "workday")
 
 
 def out(obj):  # JSON to stdout, exit 0
@@ -35,14 +38,15 @@ def flag(argv, name):  # value following --name in argv (e.g. --location), or No
     return None
 
 
-def fixture(name):
-    # Try the scenario's own fixture, else fall back to "happy" (so error-injection
-    # scenarios reuse happy's data); a truly missing fixture yields a clean JSON error.
-    for scen in (SCEN, "happy"):
-        path = os.path.join(FIX, scen, name)
-        if os.path.exists(path):
-            with open(path, encoding="utf-8") as f:
-                return json.load(f)
+def fixture(name, names=None):
+    # Try each candidate filename in order, scenario dir first then "happy" (so error-injection
+    # scenarios keep reusing happy's data). `names` lets a caller pass a per-source cascade.
+    for fname in (names or [name]):
+        for scen in (SCEN, "happy"):
+            path = os.path.join(FIX, scen, fname)
+            if os.path.exists(path):
+                with open(path, encoding="utf-8") as f:
+                    return json.load(f)
     err("fixture_not_found", f"no fixture {name!r} for scenario {SCEN!r} (no happy fallback)", False)
 
 
@@ -62,6 +66,13 @@ def main(argv):
                 err("service_unreachable", "status route unreachable", False)
             out({"status": "degraded" if SCEN == "degraded" else "ok"})
         if slug == "search-jobs":
+            src = flag(argv, "--source") or "linkedin"
+            if SCEN == "legacy-source-swallow":
+                out(fixture("search-jobs.json"))  # --source silently ignored; no echo injected
+            if src not in SRC_ALLOWED or (SCEN == "source-unsupported" and src != "linkedin"):
+                err("unsupported_source", f"source {src!r} is not supported", False, param="source")
+            if SCEN == "one-source-down" and src == os.environ.get("JOBSEARCH_TEST_DOWN_SOURCE", "ashby"):
+                err("search_failed", f"{src} search failed", True)
             if SCEN == "stretch":
                 err("search_failed", "upstream fetch failed", True)
             if SCEN == "quota":
@@ -73,13 +84,20 @@ def main(argv):
                         param="location",
                         details=[{"loc": ["query", "location"], "msg": "unrecognized location",
                                   "type": "value_error"}])
-                # a query whose location lacks the sentinel passes through, so other queries continue
-            out(fixture("search-jobs.json"))
+            names = [f"search-jobs.{src}.json"] if src != "linkedin" else ["search-jobs.json"]
+            fx = fixture("search-jobs.json", names=names)
+            fx.setdefault("data", {}).setdefault("query", {})["source"] = src
+            out(fx)
         if slug == "get-posting":
             if SCEN == "invalid-pair":
                 err("invalid_pair", "posting_id/source_url mismatch", False)
             if SCEN == "detail-fetch-failed":
                 err("detail_fetch_failed", "upstream detail fetch failed", True)
+            src = flag(argv, "--source") or "linkedin"
+            pid = flag(argv, "--posting_id") or ""
+            if src != "linkedin":
+                out(fixture("get-posting.json",
+                            names=[f"get-posting.{src}.{pid}.json", f"get-posting.{src}.json"]))
             out(fixture("get-posting.json"))
     err("unsupported", f"unhandled args: {argv}", False)
 

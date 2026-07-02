@@ -1030,6 +1030,15 @@ T8 shipped the operator enable flow; T9 shipped the template comment). This task
   build-sync no-op check. Verified locally: `python3 -m pytest -q` green and `python3
   scripts/doc_lint.py --root .` clean. Committed on `feat/multi-source-core`; not pushed
   (CI-green-on-GitHub confirmation deferred per run instruction).
+- 2026-07-02 — **T2 done** (PR1). `tests/fake-agent-data` now reads `--source` (default
+  `linkedin`; enum `linkedin|ashby|workday`), injects `data.query.source` on every 200 search
+  except `legacy-source-swallow` (returned verbatim, no echo), and routes `get-posting` per
+  source then per `posting_id`; `fixture()` gained an ordered-candidates cascade where
+  non-linkedin sources never fall back to linkedin data (a missing per-source fixture is a loud
+  `fixture_not_found`). Added scenarios multi-source / one-source-down (env
+  `JOBSEARCH_TEST_DOWN_SOURCE`, default `ashby`) / source-unsupported / legacy-source-swallow,
+  three `tests/fixtures/multi-source/` Ashby fixtures, and 7 tests; the eval `setup-workspace.sh`
+  now pins `freshness: "any"` (fixture dates are static). `python3 -m pytest -q` → 98 passed (91 + 7).
 
 ## Decision log
 

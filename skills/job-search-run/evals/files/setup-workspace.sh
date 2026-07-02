@@ -10,6 +10,8 @@ DEST="$1"
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../.." && pwd)"
 mkdir -p "$DEST/runs" "$DEST/reports" "$DEST/_bin"
 cp "$REPO/templates/config.example.yaml" "$DEST/config.yaml"
+# Pin freshness so date-dependent evals don't rot with the calendar (fixture posted_at is static).
+sed -i.bak 's/freshness: "past-2-weeks"/freshness: "any"/' "$DEST/config.yaml" && rm -f "$DEST/config.yaml.bak"
 cp "$REPO/templates/preferences.example.md" "$DEST/preferences.md"
 : > "$DEST/jobs.jsonl"
 ln -sf "$REPO/tests/fake-agent-data" "$DEST/_bin/agent-data"

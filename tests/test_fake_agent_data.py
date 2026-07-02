@@ -79,3 +79,53 @@ def test_bad_query_scenario_passes_through_valid_location():
              scenario="bad-query")
     assert r.returncode == 0
     assert len(json.loads(r.stdout)["data"]["results"]) == 2
+
+def test_search_source_flag_echoes_requested_source():
+    r = shim(["call", LISTING, "search-jobs", "--keywords", "x", "--source", "ashby"],
+             scenario="multi-source")
+    data = json.loads(r.stdout)["data"]
+    assert data["query"]["source"] == "ashby"
+    assert all(row["source"] == "ashby" and row["posted_at"] is None for row in data["results"])
+
+def test_search_defaults_to_linkedin_and_injects_echo():
+    r = shim(["call", LISTING, "search-jobs", "--keywords", "x"], scenario="multi-source")
+    data = json.loads(r.stdout)["data"]
+    assert data["query"]["source"] == "linkedin"
+    assert len(data["results"]) == 2  # happy fallback carries the linkedin rows
+
+def test_one_source_down_fails_only_the_down_source():
+    down = shim(["call", LISTING, "search-jobs", "--keywords", "x", "--source", "ashby"],
+                scenario="one-source-down")
+    assert down.returncode != 0
+    body = json.loads(down.stderr)["error"]
+    assert body["code"] == "search_failed" and body["retryable"] is True
+    ok = shim(["call", LISTING, "search-jobs", "--keywords", "x"], scenario="one-source-down")
+    assert ok.returncode == 0
+
+def test_source_unsupported_400s_non_linkedin():
+    r = shim(["call", LISTING, "search-jobs", "--keywords", "x", "--source", "ashby"],
+             scenario="source-unsupported")
+    assert r.returncode != 0
+    body = json.loads(r.stderr)["error"]
+    assert body["code"] == "unsupported_source" and body["param"] == "source" \
+        and body["retryable"] is False
+
+def test_legacy_swallow_returns_linkedin_rows_without_source_echo():
+    r = shim(["call", LISTING, "search-jobs", "--keywords", "x", "--source", "ashby"],
+             scenario="legacy-source-swallow")
+    data = json.loads(r.stdout)["data"]
+    assert "source" not in data["query"]  # absent echo = linkedin (the E-SOURCE-IGNORED trigger)
+    assert all(row["source"] == "linkedin" for row in data["results"])
+
+def test_unknown_source_value_is_rejected():
+    r = shim(["call", LISTING, "search-jobs", "--keywords", "x", "--source", "monster"])
+    assert r.returncode != 0
+    assert json.loads(r.stderr)["error"]["code"] == "unsupported_source"
+
+def test_get_posting_routes_per_source_and_per_posting_id():
+    default = shim(["call", LISTING, "get-posting", "--posting_id", "jp_ashbyzeph01",
+                    "--source_url", "u", "--source", "ashby"], scenario="multi-source")
+    assert json.loads(default.stdout)["data"]["company_name"] == "Zephyr Robotics"
+    acme = shim(["call", LISTING, "get-posting", "--posting_id", "jp_ashbyacme01",
+                 "--source_url", "u", "--source", "ashby"], scenario="multi-source")
+    assert json.loads(acme.stdout)["data"]["company_name"] == "Acme"
