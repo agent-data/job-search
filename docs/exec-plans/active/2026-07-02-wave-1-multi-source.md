@@ -1289,6 +1289,34 @@ T8 shipped the operator enable flow; T9 shipped the template comment). This task
   Verified: `python3 scripts/doc_lint.py --root .` clean; `python3 -m pytest -q` → 99 passed
   (doc-only change). (Eval 19 asserting the merged-entry shape + the two alias events is T13's
   job, per plan.)
+- 2026-07-02 — **T13 done** (PR2). Merge eval + sample digest. `skills/job-search-run/evals/evals.json`
+  gains **eval 19** (scenario `multi-source`, 7 expectations): the Acme pair merges to ONE digest entry
+  (company-board link first + "also on LinkedIn"), one detail read on the Ashby row, two `evaluated`
+  events sharing the verdict with the linkedin one bearing `same_role_as:"ashby:6e9a1f00-1111-4aaa-8bbb-2cc3dd4ee5f6"`,
+  the Zephyr ashby-only row unmerged, the pair counted once. `examples/sample-digest.md` Forge Labs
+  entry converted to the merged link form (company-board `jobs.ashbyhq.com` link · "also on LinkedIn"
+  `linkedin.com/jobs/view` link); counts line left unchanged. **Live-verified via the harness** (`claude -p`
+  drove the loose `job-search-run` skill; multi-source shim; judged from written artifacts):
+  - **Eval 19 — PASS 7/7.** Digest: one Acme "Senior AI Engineer" strong match whose link line reads
+    "view on company board" (→ `…/acme/6e9a1f00-…`) then ` · ` then "also on LinkedIn"
+    (→ `…/jobs/view/1001`), the company-board link first; Zephyr a separate entry. jobs.jsonl: ashby `6e9a1f00-…` `detail_read:true` `posted_at_extracted:"2026-06-28"`
+    (proves the read hit `jp_ashbyacme01`), linkedin `1001` `detail_read:false`
+    `same_role_as:"ashby:6e9a1f00-…"` (flat string, one `source`/`source_id` key each), identical
+    match/relevant/reasoning; Zephyr `0b7c2d33-…` unmerged. `runs/…json` `merged_roles:1`, run_health
+    healthy, exit 0. Counts line `3 new postings (1 LinkedIn · 2 Ashby) · 2 strong` — pair counted once.
+    No numeric scores.
+  - **Eval 15 re-run — PASS 7/7 (no merge regression).** Run 1: 4 events, per-source breakdown
+    `(2 LinkedIn · 2 Ashby)`, ` · Ashby` tags, both null-`posted_at` ashby rows carry
+    `posted ~Jun 28/25 (from posting text)` + `posted_at_extracted`, first-pass-over-Ashby footnote,
+    exit 0. Immediate re-run (run 2): ZERO duplicate events — jobs.jsonl stays 4 lines, no
+    `(source, source_id)` pair repeats (the two shared-verdict Acme events are DIFFERENT pairs —
+    `(ashby,6e9a1f00-…)` vs `(linkedin,1001)` — so not a duplicate); run 2 `new_postings:0`, exit 0.
+  - Observation (not a failure): the underspecified "N new postings" figure in the counts line rendered
+    differently across the two runs — eval 19 counted distinct roles (`3 new postings`, merged pair once),
+    eval 15 run 1 counted raw rows (`4 new postings (2 LinkedIn · 2 Ashby)`, the value eval 15 expects).
+    Both satisfy their own expectations and both render the merged match entry itself exactly once.
+  - Gates: `python3 -m pytest -q` → 99 passed; `python3 scripts/doc_lint.py --root .` clean;
+    `python3 scripts/philosophy_guard.py` clean (sample digest touched).
 
 ## Decision log
 

@@ -6,7 +6,7 @@ Run health: healthy
 - **Senior Product Designer** — Tidewater Health — Remote (US)
   Embedded with a product+eng pod, owns a care-navigation area end to end, healthcare mission you're after.  [view](https://example.com/jobs/tidewater-senior-product-designer)
 - **Lead Product Designer, Developer Tools** — Forge Labs — Remote (US) · Ashby
-  Lead-level ownership of a dev-tools surface with an established design system and weekly critique. date not stated  [view on company board](https://jobs.ashbyhq.com/forge-labs/1b2c3d4e-5f60-4a7b-8c9d-0e1f2a3b4c5d)
+  Lead-level ownership of a dev-tools surface with an established design system and weekly critique. date not stated  [view on company board](https://jobs.ashbyhq.com/forge-labs/1b2c3d4e-5f60-4a7b-8c9d-0e1f2a3b4c5d) · [also on LinkedIn](https://www.linkedin.com/jobs/view/3901234567)
   ⚠ confirm: Posting says "hybrid-friendly" but doesn't name a city — confirm a fully-remote US seat is on offer.
 
 ## Moderate matches
