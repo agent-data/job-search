@@ -1039,6 +1039,20 @@ T8 shipped the operator enable flow; T9 shipped the template comment). This task
   `JOBSEARCH_TEST_DOWN_SOURCE`, default `ashby`) / source-unsupported / legacy-source-swallow,
   three `tests/fixtures/multi-source/` Ashby fixtures, and 7 tests; the eval `setup-workspace.sh`
   now pins `freshness: "any"` (fixture dates are static). `python3 -m pytest -q` → 98 passed (91 + 7).
+- 2026-07-02 — **T3 done** (PR1). `shared/references/agent-data-contract.md` is now multi-source:
+  the header declares one listing / three sources with `--source` (`linkedin | ashby | workday`;
+  omitted → `linkedin`) on both routes and names aggregation as the client's job; the dedup key is
+  the (`source`, `source_id`) PAIR (was the bare LinkedIn `source_id`). `search-jobs` documents
+  `--source` targeting (bad/repeated → `400 unsupported_source`, E-SOURCE-UNSUPPORTED, never
+  retried) and the echo-verification rule (an absent `data.query.source` echo counts as `linkedin`
+  → E-SOURCE-IGNORED); `get-posting` takes `--source` explicitly; `status` is documented as an
+  all-source aggregate. The stretch rule went per-source (E-UPSTREAM-STRETCH keeps its name —
+  stop the stretched source, others continue; all stretched → stop entirely), and a new
+  "Per-source quirks" table is the only per-source contract surface. `./scripts/build.sh` fanned
+  the source into the 5 `skills/*/references/agent-data-contract.md` copies (byte-identical).
+  Verified: `grep -rn "only job source" shared skills` → 0 hits; `python3 scripts/doc_lint.py
+  --root .` clean; `python3 -m pytest -q` → 98 passed. (E-SOURCE-UNSUPPORTED / E-SOURCE-IGNORED
+  are defined in `errors.md` by T5 — forward references, per plan.)
 
 ## Decision log
 
