@@ -143,8 +143,9 @@ Reliability claims are only as good as their tests. Four layers back this system
 - **Per-skill evals** measured by the skill-creator harness check the *model's* behavior (each
   skill has its own `evals/` suite) — that the runner actually halts on a blocked gate, judges
   qualitatively, and surfaces the right named error.
-- **CI** ([../.github/workflows/ci.yml](../.github/workflows/ci.yml)) runs the pytest suite, the
-  philosophy guard, and the doc linter on every change.
+- **CI** ([../.github/workflows/ci.yml](../.github/workflows/ci.yml)) runs five gates on every
+  change: the pytest suite, the philosophy guard, the doc linter, the structural platform
+  validation, and the build-sync no-op check.
 
 Honest scope (per [QUALITY_SCORE.md](QUALITY_SCORE.md)): the per-skill evals and the live
 acceptance pass run **outside CI** — via the skill-creator harness and the manual

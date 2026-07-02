@@ -1023,6 +1023,13 @@ T8 shipped the operator enable flow; T9 shipped the template comment). This task
 
 - 2026-07-02 — plan authored (strategy session 2026-07-01; Approach C ratified). Execution not
   yet started.
+- 2026-07-02 — **T1 done** (PR1). `.github/workflows/ci.yml` now installs pytest (`python3 -m pip
+  install pytest`) right after `setup-python`, so the Unit tests gate — red since 2026-06-11 with
+  `No module named pytest` — actually runs. `docs/RELIABILITY.md` now names all five CI gates: the
+  pytest suite, the philosophy guard, the doc linter, the structural platform validation, and the
+  build-sync no-op check. Verified locally: `python3 -m pytest -q` green and `python3
+  scripts/doc_lint.py --root .` clean. Committed on `feat/multi-source-core`; not pushed
+  (CI-green-on-GitHub confirmation deferred per run instruction).
 
 ## Decision log
 
