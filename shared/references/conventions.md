@@ -85,10 +85,10 @@ Operations (no helper script — perform these exactly):
 - **Append one event** (the heredoc keeps quoting safe — apostrophes in `reasoning` are fine):
   ```bash
   cat >> "$WS/jobs.jsonl" <<'EOF'
-  {"event":"evaluated","ts":"…","source_id":"…",…}
+  {"event":"evaluated","ts":"…","source":"…","source_id":"…",…}
   EOF
   ```
-- **Current state (fold):** read `jobs.jsonl` and fold in-context — group events by `source_id`, later
+- **Current state (fold):** read `jobs.jsonl` and fold in-context — group events by (`source`, `source_id`) — a legacy event with no `source` (old `status_changed` lines) attaches to its `source_id`'s record — later
   events override earlier per field, drop the `event` key. The pipeline view = the folded records tallied
   by `status` (plus the `needs_human_check: true` count).
 

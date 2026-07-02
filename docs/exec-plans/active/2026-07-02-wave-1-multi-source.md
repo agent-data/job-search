@@ -1075,7 +1075,7 @@ T8 shipped the operator enable flow; T9 shipped the template comment). This task
   into the 5 `skills/*/references/conventions.md` copies (byte-identical). Verified: `grep -n
   'source":"linkedin"' shared/references/conventions.md` → 0 hits; `python3 scripts/doc_lint.py
   --root .` clean; `python3 -m pytest -q` → 98 passed. (The old `degraded (LinkedIn flaky)` literal
-  still lives in `errors.md` + `doc_lint.py`'s regex — the atomic flip is T5's job, per plan.)
+  still lives in `errors.md` + `doc_lint.py`'s regex — the atomic flip is T5's job, per plan.); fold-op + append-example review fix (this commit)
 
 ## Decision log
 
