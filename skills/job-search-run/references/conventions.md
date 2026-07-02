@@ -143,6 +143,9 @@ Run health: healthy
 ```
 Strong first. Always show the Run health line and the counts. The parenthetical per-source breakdown in the
 counts line appears ONLY when more than one source was searched; single-source runs keep today's exact line.
+The counts line counts result ROWS — a cross-source merged pair contributes to both its sources' breakdown
+figures and to N; the collapse to one role shows in the merged entry itself and in the pipeline/home counts
+(see the alias rule in §jobs.jsonl), never by shrinking N.
 When more than one source was searched, append ` · <Source>` to the match meta line (e.g. `**<title>** —
 <company> — <location> · Ashby`). A match whose `posted_at` was null carries a date mark on its reasoning
 line: `posted ~<Mon D> (from posting text)` when the detail read extracted a JD-stated date, else `date not

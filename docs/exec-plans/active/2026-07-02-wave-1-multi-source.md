@@ -1314,7 +1314,7 @@ T8 shipped the operator enable flow; T9 shipped the template comment). This task
   - Observation (not a failure): the underspecified "N new postings" figure in the counts line rendered
     differently across the two runs — eval 19 counted distinct roles (`3 new postings`, merged pair once),
     eval 15 run 1 counted raw rows (`4 new postings (2 LinkedIn · 2 Ashby)`, the value eval 15 expects).
-    Both satisfy their own expectations and both render the merged match entry itself exactly once.
+    Both satisfy their own expectations and both render the merged match entry itself exactly once; counts-line row-semantics fix + eval-19 pin (this commit), eval 19 re-run 8/8.
   - Gates: `python3 -m pytest -q` → 99 passed; `python3 scripts/doc_lint.py --root .` clean;
     `python3 scripts/philosophy_guard.py` clean (sample digest touched).
 

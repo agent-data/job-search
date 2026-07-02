@@ -211,7 +211,8 @@
         "jobs.jsonl carries TWO evaluated events for the pair — one for (linkedin, 1001) and one for (ashby, 6e9a1f00-1111-4aaa-8bbb-2cc3dd4ee5f6) — sharing the same verdict fields (relevant/match/reasoning); the linkedin event bears same_role_as:\"ashby:6e9a1f00-1111-4aaa-8bbb-2cc3dd4ee5f6\" (a FLAT string pointing at the ashby primary that got the detail read) and the ashby event bears no same_role_as",
         "The ashby-only Zephyr Robotics 'Staff AI Engineer' (0b7c2d33-2222-4ccc-9ddd-3ee4ff5aa6b7) is NOT merged with anything — it is its own evaluated event and its own digest entry, carrying no same_role_as",
         "The merged Acme pair is treated as ONE role, not two: it appears exactly once across the digest's match sections, and the pipeline/home view counts the alias pair as one role (the two shared-verdict events are for DIFFERENT (source, source_id) pairs — not a duplicate)",
-        "Output contains no numeric score, no category weights, and no dollar/credit cost figures; exits 0"
+        "Output contains no numeric score, no category weights, and no dollar/credit cost figures; exits 0",
+        "The digest counts line counts rows, not merged roles: '4 new postings (2 LinkedIn · 2 Ashby)' — the breakdown sums to N even though the Acme pair renders as one merged entry"
       ]
     }
   ]
