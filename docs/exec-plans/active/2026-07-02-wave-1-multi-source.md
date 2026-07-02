@@ -1076,6 +1076,31 @@ T8 shipped the operator enable flow; T9 shipped the template comment). This task
   'source":"linkedin"' shared/references/conventions.md` → 0 hits; `python3 scripts/doc_lint.py
   --root .` clean; `python3 -m pytest -q` → 98 passed. (The old `degraded (LinkedIn flaky)` literal
   still lives in `errors.md` + `doc_lint.py`'s regex — the atomic flip is T5's job, per plan.); fold-op + append-example review fix (this commit)
+- 2026-07-02 — **T5 done** (PR1). `shared/references/errors.md` went source-agnostic, and the
+  CI-enforced run-health literal flipped atomically with the lint that guards it. The digest "Run
+  health" enum is now `healthy | partial (<why>) | degraded (job sources flaky) | blocked (action
+  needed)` (was `partial (N errors)` / `degraded (LinkedIn flaky)`). **E-UPSTREAM-STRETCH** went
+  per-source (keeps its name): 2 consecutive `search-jobs` 502s against the SAME source (all
+  retries exhausted) → stop that source, others continue; all enabled sources stretched → partial
+  digest; Run health `partial (<source> unavailable)` / `partial (all sources unavailable)`. Two
+  new rows land after it — **E-SOURCE-UNSUPPORTED** (`400 unsupported_source`, or an out-of-enum
+  `search.sources` token caught at preflight → non-retryable, drop that source, continue) and
+  **E-SOURCE-IGNORED** (a 200 whose echoed `data.query.source` ≠ requested — absent echo counts as
+  `linkedin` → skip that source's remaining queries, keep returned rows under their row-level
+  `source`, no event poisoning). **E-SERVICE-DOWN** reworded to "The job-search service is
+  unreachable…" (the one legitimately global HALT), and the invalid_pair footnote lost its
+  LinkedIn assumption → "(the source re-indexed it)". In `scripts/doc_lint.py` `DUP_SIGNATURES`
+  swapped `degraded \(LinkedIn flaky\)` → `degraded \(job sources flaky\)` and added a new
+  `linkedin \| ashby \| workday` "job source enum" signature — the same-commit contract flip.
+  `./scripts/build.sh` fanned errors.md into the 5 `skills/*/references/errors.md` copies
+  (byte-identical). Verified: `python3 -m pytest -q` → 98 passed; `python3 scripts/doc_lint.py
+  --root .` clean; `grep -rn "degraded (LinkedIn flaky)" shared scripts` → 0 hits. The old literal
+  now survives only in later-task-owned skill bodies: `skills/job-search-agent/SKILL.md` +
+  `skills/job-search/references/home.md` carry the EXACT string (T6/T8 fix). Note:
+  `skills/job-search-run/SKILL.md` does NOT carry the exact literal — only the differently-phrased
+  degraded note ("LinkedIn flaky — results this run may be affected") and a bare `degraded` enum
+  token, both T6's Step 0/2 — so `grep -rln "degraded (LinkedIn flaky)" skills` returns those two
+  files, not three.
 
 ## Decision log
 
