@@ -74,6 +74,14 @@ Read these before running, and follow them exactly:
    null, the steer also asks the detail read to extract a JD-stated posting date if the description names one
    ("Job Posted: …"). The cheap scan does real work — it
    produces the primary's guidance for each detail review, not just a gate.
+
+   **Cross-source merge (conservative).** After forming the NEW set, group rows that are the
+   same real-world role seen on multiple sources: same company (allowing trivial name variants),
+   same or equivalent role title, compatible location → one role. **When uncertain, treat as
+   distinct — two detail reads are cheaper than a wrong merge.** For a merged group: ONE detail
+   read, on the Ashby row when the group has one (its detail is complete and its URL is the
+   company's live apply page), with the steer noting "also on <other source>"; the judgment
+   applies to every row in the group.
 4. **Read the details — parallel by default, sequential where the host requires it.** The reads are
    independent, so the default is the parallel per-posting fan-out. First read `search.parallel_detail_reads`
    from `config.yaml` (see `references/conventions.md`). This runner is headless: never ask, and never edit
@@ -106,7 +114,7 @@ Read these before running, and follow them exactly:
    The event MUST carry provenance — `event:"evaluated"`, `ts`, `run_id`, `source` — **copied from the result row, never a literal**, `query_id`,
    `title`, `company_name`, `location_display`, `salary_display`, `posted_at`, `posted_at_extracted` (optional — the JD-stated date when the API `posted_at` was null), `source_url`,
    `posting_id_at_seen` (the `jp_` id), `detail_read` — AND the judgment — `source_id`, `relevant`, `match`,
-   `reasoning`, `dealbreakers_hit`, `unknowns`, `needs_human_check`, `status:"new"`, `first_seen`. Write
+   `reasoning`, `dealbreakers_hit`, `unknowns`, `needs_human_check`, `status:"new"`, `first_seen`. For a merged group, append one `evaluated` event per row (each with its own `source`/`source_id`/`source_url`/`posted_at`), all sharing the verdict fields; every NON-primary row's event also carries `"same_role_as":"<source>:<source_id>"` pointing at the primary (the row that got the detail read). Write
    `runs/<run_id>.json` and `reports/<date>-digest.md` (format in conventions.md — the counts line, per-source
    breakdown, per-match source tags, and date marks all per that spec; strong → moderate → weak, then
    "filtered out: N"). Footnotes: first-pass-per-source (for each source flagged in step 2), and one line per

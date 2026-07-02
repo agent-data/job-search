@@ -1268,6 +1268,27 @@ T8 shipped the operator enable flow; T9 shipped the template comment). This task
     sources flaky)` form; T7.7 row → `partial (all sources unavailable)` (matches eval 4); T7.9 row →
     `degraded (job sources flaky)`; acceptance-checklist pytest count 56 → 99. The os-design.md:303 hit
     stands — see the Done-when amendment in the Decision log. Gate 7 green under the amended filter.
+- 2026-07-02 — **T12 done** (PR2). Cross-source semantic merge lands, conservatively.
+  `skills/job-search-run/SKILL.md` step 3 gained the **Cross-source merge (conservative)**
+  paragraph — group NEW rows that are the same real-world role across sources (same company
+  allowing trivial name variants, same/equivalent title, compatible location) into one role,
+  **when uncertain treat as distinct** (two detail reads beat a wrong merge), and give a merged
+  group ONE detail read on the Ashby row (its detail is complete, its URL is the live apply page)
+  with an "also on <other source>" steer, the verdict applying to every row; step 5 now appends
+  one `evaluated` event per row in a merged group (each with its own
+  `source`/`source_id`/`source_url`/`posted_at`, sharing the verdict), every non-primary event
+  carrying flat-string `same_role_as:"<source>:<source_id>"` at the primary.
+  `shared/references/conventions.md`: the `evaluated` schema gains OPTIONAL `same_role_as` after
+  `posted_at_extracted`; the event-line contract now requires it be a FLAT string (never nested —
+  the `"source_id"`-appears-once rule guards the grep extraction); the fold rule counts/displays
+  an alias pair (a folded record whose `same_role_as` names another present record) as one role
+  (pipeline view + home counts); the digest format renders a merged role as ONE entry with the
+  company-board link first + "also on LinkedIn" ('view' verbs, never 'apply'), and permits one
+  qualitative earliest-signal clause (never a numeric freshness score). `./scripts/build.sh`
+  fanned conventions into the 5 `skills/*/references/conventions.md` copies (byte-identical).
+  Verified: `python3 scripts/doc_lint.py --root .` clean; `python3 -m pytest -q` → 99 passed
+  (doc-only change). (Eval 19 asserting the merged-entry shape + the two alias events is T13's
+  job, per plan.)
 
 ## Decision log
 
