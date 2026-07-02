@@ -9,7 +9,7 @@ user-invocable: true
 
 You are working on the agent itself — configuring, extending, or troubleshooting it — not running a search. Daily use lives elsewhere: onboarding and the home view in **job-search**, the search pass in **job-search-run**. This manual holds the playbooks and guardrails for changing the system safely.
 
-The system in one paragraph: a private, local-first job-search agent. It searches LinkedIn postings via agent-data, judges each one against the user's prose preferences brief, and writes digests to a workspace that never touches source control (`~/.job-search/` by default).
+The system in one paragraph: a private, local-first job-search agent. It searches LinkedIn and Ashby company-board postings (Workday experimental) via agent-data, judges each one against the user's prose preferences brief, and writes digests to a workspace that never touches source control (`~/.job-search/` by default).
 
 Hold these stances in every change you make — each exists for a reason, and several are CI-enforced:
 
@@ -53,12 +53,33 @@ There is no helper script — the OS state is plain files, and every operation o
 
 The user changes configuration by chatting — you apply it by reading `config.yaml`, editing it minimally (preserving comments and structure), and writing it back.
 
-For every supported edit — adding, editing, or pausing a query (`enabled: false`); the `search` block (`freshness`, `detail_model`, `parallel_detail_reads`, `queries[].limit`); `schedule.frequency`/`time`; the never-clobber adoption rule; and exact field schemas — see `references/internals.md` → "Config read/update recipes". Marking a job status (`new | interested | applied | rejected | archived`) is a `status_changed` event appended to `jobs.jsonl` (the append operation in `references/conventions.md` → §jobs.jsonl), not a `config.yaml` edit. To update the brief itself, run `job-preference-interview` or edit `preferences.md` directly.
+For every supported edit — adding, editing, or pausing a query (`enabled: false`); the `search` block (`sources`, `freshness`, `detail_model`, `parallel_detail_reads`, `queries[].limit`); `schedule.frequency`/`time`; the never-clobber adoption rule; and exact field schemas — see `references/internals.md` → "Config read/update recipes". Marking a job status (`new | interested | applied | rejected | archived`) is a `status_changed` event appended to `jobs.jsonl` (the append operation in `references/conventions.md` → §jobs.jsonl), not a `config.yaml` edit. To update the brief itself, run `job-preference-interview` or edit `preferences.md` directly.
 
 **Invariants — never break these:**
 - Always preserve `version: 1` in `config.yaml`.
 - Always preserve existing comments and structure when editing.
 - Never add a `score` or `weight` field anywhere.
+
+---
+
+## Job sources
+
+Searches run against the sources listed in `config.yaml` `search.sources` (see
+`references/conventions.md`; absent means the default pair). What each source is, honestly:
+
+- **linkedin** — LinkedIn job search, fetched live (slow, seconds per query). Posting links go
+  to LinkedIn; LinkedIn withholds the direct application URL.
+- **ashby** — a broad crawl of public Ashby company boards, served from an index (fast).
+  Board links ARE the live apply pages. Boards often omit posting dates — undated matches carry
+  "date not stated" (or a date read out of the posting text) rather than being hidden.
+- **workday — experimental.** Enable by adding `"workday"` to `search.sources`; expect
+  `partial (workday unavailable)` runs while its upstream stabilizes — one source failing never
+  blocks the others.
+
+To disable a source, set the list without it (e.g. `search.sources: ["linkedin"]`). Per-query
+source targeting ("search only Ashby for this query") is a known deferred knob — today every
+query runs against every enabled source. Source-related failures are named errors:
+E-SOURCE-UNSUPPORTED and E-SOURCE-IGNORED in `references/errors.md`.
 
 ---
 
@@ -88,7 +109,7 @@ For the full consent workflow — including what to do when the user explicitly 
 
 ## When something fails
 
-The run's outcome is the `run_health` field in `runs/<id>.json` and the digest header — one of `healthy | partial (N errors) | degraded (LinkedIn flaky) | blocked (action needed)`. For what each state means and when it's written, see `references/errors.md` (the four states and the surfacing story) and `references/conventions.md` → the digest "Run health" line. One meaning lives with the runner instead: a `degraded` run still reads promising matches in full — no detail-read cap, relevance decides (see **job-search-run**).
+The run's outcome is the `run_health` field in `runs/<id>.json` and the digest header — one of `healthy | partial (N errors) | degraded (job sources flaky) | blocked (action needed)`. For what each state means and when it's written, see `references/errors.md` (the four states and the surfacing story) and `references/conventions.md` → the digest "Run health" line. One meaning lives with the runner instead: a `degraded` run still reads promising matches in full — no detail-read cap, relevance decides (see **job-search-run**).
 
 **How failures surface:** a blocked run writes two durable artifacts — a `runs/<id>.json` record with `run_health:"blocked"`, and a `reports/<date>-digest.md` whose body is the named error + fix. The **home view** the next time you open the **job-search** skill reads `runs/<id>.json` and shows the error there. An attention-pull alert (if `notify.desktop_notify_on_block: true`) is capability-gated — see your platform's adapter → Block-alert channel. **The written record is the primary signal on every harness** — whether the host's exit code is also trustworthy is per-harness; see your adapter → Headless invocation.
 

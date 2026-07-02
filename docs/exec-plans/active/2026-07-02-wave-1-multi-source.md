@@ -1147,6 +1147,28 @@ T8 shipped the operator enable flow; T9 shipped the template comment). This task
   a no-op here. Verified: `grep -c posted_at_extracted skills/evaluate-job-fit/SKILL.md` → 2 (method
   + output); `python3 scripts/doc_lint.py --root .` clean; `./scripts/build.sh` produced no changes;
   `python3 -m pytest -q` → 98 passed.
+- 2026-07-02 — **T8 done** (PR1). Job sources are now user-visible across the front door, the
+  onboarding recap, the operator manual, and the config recipes — the last two `degraded (LinkedIn
+  flaky)` literals are gone. `skills/job-search/references/home.md` (hand-authored, NOT
+  build-synced): the home status-line example gained a `Sources: LinkedIn + Ashby` segment (between
+  Brief and Schedule); the Status-line note now explains sources come from `config.yaml`
+  `search.sources` (absent → default pair; `+ Workday (experimental)` when listed); the run-health
+  literal flipped to `degraded (job sources flaky)`; and **Tune the feed** gained a `search.sources`
+  knob (drop back to `["linkedin"]`, or add `"workday"` for the experimental source).
+  `skills/job-search/references/onboarding.md` §5 (hand-authored): item-3's acknowledgment quote now
+  reads "search **LinkedIn and public Ashby company boards** for …", and the config-preset sentence
+  gained a sibling naming the default job sources — **no new question** (the four closed choices are
+  unchanged; TTFV guard holds). `skills/job-search-agent/SKILL.md`: the one-paragraph summary now
+  names LinkedIn + Ashby company-board postings (Workday experimental); the config list gained
+  `sources` first; the run-health literal flipped to `degraded (job sources flaky)`; and a new
+  **## Job sources** section (verbatim) sits between "Configuring it" and "Customizing & extending
+  it", describing each source honestly + the deferred per-query knob + E-SOURCE-UNSUPPORTED /
+  E-SOURCE-IGNORED. `shared/references/internals.md` Config recipes gained a **Choose job sources**
+  bullet after "Tune the feed" (ordered list from the contract's enum, see `agent-data-contract.md`;
+  omit → `["linkedin", "ashby"]`; conversational-only write). `./scripts/build.sh` fanned internals.md
+  into the 5 `skills/*/references/internals.md` copies (byte-identical); home.md + onboarding.md + the
+  SKILL body are NOT build-synced. Verified: `grep -rn "LinkedIn flaky" shared scripts skills` → 0
+  hits; `python3 scripts/doc_lint.py --root .` clean; `python3 -m pytest -q` → 98 passed.
 
 ## Decision log
 
