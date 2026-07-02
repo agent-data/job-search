@@ -1,6 +1,6 @@
 # Job search digest — 2026-06-05
 Run health: healthy
-9 new postings (6 LinkedIn · 3 Ashby) · 2 strong · 2 moderate · 2 weak · 3 filtered out · 4 searches · 5 detail reads
+10 new postings (7 LinkedIn · 3 Ashby) · 2 strong · 2 moderate · 2 weak · 3 filtered out · 4 searches · 5 detail reads
 
 ## Strong matches
 - **Senior Product Designer** — Tidewater Health — Remote (US)

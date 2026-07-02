@@ -20,7 +20,8 @@ Read just what the home view needs (all local):
   line of the latest digest.
 - **Latest digest:** the newest `<ws>/reports/<date>-digest.md` — its date and its **counts line**.
 - **Pipeline:** fold `<ws>/jobs.jsonl` per the fold operation in `conventions.md` → current jobs (one per (`source`, `source_id`),
-  last-write-wins). Count by `status` and tally how many have `needs_human_check: true`.
+  last-write-wins; records aliased by `same_role_as` count as one role — see the fold operation in
+  `conventions.md`). Count by `status` and tally how many have `needs_human_check: true`.
 
 If the workspace is somehow missing its `config.yaml` (e.g. the directory was deleted out from under the
 registry), that's **`E-NO-CONFIG`** — say so with its fix ("Run the job-search skill (say 'set up job

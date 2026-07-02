@@ -1340,6 +1340,18 @@ T8 shipped the operator enable flow; T9 shipped the template comment). This task
   passed**; doc_lint clean; philosophy_guard clean; build.sh second run no-op; evals.json parses (ids
   1–18). Known follow-up (out of this sweep's scope): `TESTING.md:653` still lists only four skills —
   `job-search-agent` (4 evals) is absent from the §12 inventory though line 717 now says "five".
+- 2026-07-02 — **final-review fix sweep (commit B)** (PR2, `feat/cross-source-merge`). Merged commit A up
+  (clean auto-merge on every file except the plan Progress log, resolved by keeping BOTH the PR2 T12/T13
+  entries and the commit-A entry; `./scripts/build.sh` re-fanned `conventions.md` and all 5 skill copies are
+  byte-identical to the merged source — the merged `conventions.md` carries both PR2's `same_role_as`/alias
+  additions and commit A's composite-key + footnote-conjunct + `partial (<why>)` edits). Then two
+  branch-local fixes: (1) `examples/sample-digest.md` counts line now models the row-semantics rule —
+  `9 new postings (6 LinkedIn · 3 Ashby)` → `10 new postings (7 LinkedIn · 3 Ashby)`, since the merged Forge
+  Labs pair contributes its "also on LinkedIn" row to both N and the LinkedIn breakdown (7 + 3 = 10 = N; the
+  verdict bands still count the collapsed role, so 2·2·2·3 is unchanged); (2) `home.md` Pipeline sentence
+  gained the alias clause deferred from commit A — "records aliased by `same_role_as` count as one role — see
+  the fold operation in `conventions.md`". Gates: `python3 -m pytest -q` → **99 passed**; doc_lint clean;
+  philosophy_guard clean (sample digest touched); build.sh no-op. evals.json on this branch carries 19 evals.
 
 ## Decision log
 
