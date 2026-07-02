@@ -7,7 +7,7 @@ The **workspace** (default the hidden `~/.job-search/`; an existing visible `~/j
   config.yaml                # queries + schedule (human terms only; no score thresholds)
   preferences.md             # Job Preferences Brief — prose only
   resumes/master.md          # base resume; resumes/tailored/ for generated ones (Plan C)
-  jobs.jsonl                 # append-only EVENT log; current state = fold by source_id
+  jobs.jsonl                 # append-only EVENT log; current state = fold by (source, source_id)
   runs/<run_id>.json         # per-run audit log
   reports/<date>-digest.md   # human digest per run
   .gitignore                 # deny-all (from templates/workspace.gitignore)
@@ -56,7 +56,7 @@ frequency + dedup accumulate coverage. Query construction (incl. deriving "remot
 `run_id` format: UTC timestamp `YYYY-MM-DDTHH-MM-SSZ` (hyphens, not colons, in the time component — safe as a filename on every platform). `<date>` for digests: `YYYY-MM-DD` (local tz).
 
 ## jobs.jsonl — append-only events (one JSON object per line)
-Current state = fold by (**`source`**, **`source_id`**), last-write-wins per field (a legacy event with no `source` attaches by `source_id` alone — every legacy `evaluated` event already carries `source:"linkedin"`, so in practice only old `status_changed` lines lack it). Two event types:
+Current state = fold by (**`source`**, **`source_id`**), last-write-wins per field (an event with no `source` (all pre-multi-source history, and any `status_changed` line that omits it) attaches by `source_id` alone — every legacy `evaluated` event already carries `source:"linkedin"`, so in practice only old `status_changed` lines lack it). Two event types:
 ```jsonc
 { "event":"evaluated", "ts":"<iso>", "run_id":"…", "source":"<the result row's source — copied, NEVER a hardcoded literal>", "source_id":"<source-native id — with source, the DEDUP KEY>",
   "query_id":"…", "title":"…", "company_name":"…", "location_display":"…", "salary_display":"…",
@@ -88,7 +88,7 @@ Operations (no helper script — perform these exactly):
   {"event":"evaluated","ts":"…","source":"…","source_id":"…",…}
   EOF
   ```
-- **Current state (fold):** read `jobs.jsonl` and fold in-context — group events by (`source`, `source_id`) — a legacy event with no `source` (old `status_changed` lines) attaches to its `source_id`'s record — later
+- **Current state (fold):** read `jobs.jsonl` and fold in-context — group events by (`source`, `source_id`) — an event with no `source` (all pre-multi-source history, and any `status_changed` line that omits it) attaches to its `source_id`'s record — later
   events override earlier per field, drop the `event` key. The pipeline view = the folded records tallied
   by `status` (plus the `needs_human_check: true` count). A folded record whose `same_role_as` names another present record is an ALIAS of it — count and display the pair as one (the pipeline view and home counts treat aliases as one role).
 
@@ -139,7 +139,7 @@ Run health: healthy
 ## Filtered out (not relevant): 3
 <one line each: title — company — why rejected>
 
-<footnotes: stale detail links, partial failures, unidentifiable (null source_id) rows, brief-age nudge; first pass over a source (that source's known-ids set was empty at run start): `First pass over <Source> company boards — this batch can include older postings, since boards don't always state dates.`; per-source outage / unsupported / ignored (one line each — exact texts in `errors.md`)>
+<footnotes: stale detail links, partial failures, unidentifiable (null source_id) rows, brief-age nudge; first pass over a source (that source returned rows AND its known-ids set was empty at run start): `First pass over <Source> company boards — this batch can include older postings, since boards don't always state dates.`; per-source outage / unsupported / ignored (one line each — exact texts in `errors.md`)>
 ```
 Strong first. Always show the Run health line and the counts. The parenthetical per-source breakdown in the
 counts line appears ONLY when more than one source was searched; single-source runs keep today's exact line.

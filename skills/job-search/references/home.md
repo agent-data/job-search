@@ -19,8 +19,9 @@ Read just what the home view needs (all local):
 - **Last run health:** the newest `<ws>/runs/*.json` (its `run_health`), or fall back to the **Run health**
   line of the latest digest.
 - **Latest digest:** the newest `<ws>/reports/<date>-digest.md` — its date and its **counts line**.
-- **Pipeline:** fold `<ws>/jobs.jsonl` per the fold operation in `conventions.md` → current jobs (one per
-  `source_id`, last-write-wins). Count by `status` and tally how many have `needs_human_check: true`.
+- **Pipeline:** fold `<ws>/jobs.jsonl` per the fold operation in `conventions.md` → current jobs (one per (`source`, `source_id`),
+  last-write-wins; records aliased by `same_role_as` count as one role — see the fold operation in
+  `conventions.md`). Count by `status` and tally how many have `needs_human_check: true`.
 
 If the workspace is somehow missing its `config.yaml` (e.g. the directory was deleted out from under the
 registry), that's **`E-NO-CONFIG`** — say so with its fix ("Run the job-search skill (say 'set up job
@@ -32,7 +33,7 @@ Keep it tight. A good shape:
 
 ```
 Job search — <ws path>
-Brief: updated <date> (<N months ago>)   ·   Sources: LinkedIn + Ashby   ·   Schedule: <on, daily | off>   ·   Last run: <healthy | partial (N) | degraded | blocked>
+Brief: updated <date> (<N months ago>)   ·   Sources: LinkedIn + Ashby   ·   Schedule: <on, daily | off>   ·   Last run: <healthy | partial (<why>) | degraded | blocked>
 
 Latest digest — <date>
   9 new postings · 3 strong · 2 moderate · 1 weak · 3 filtered out · <n> searches · <m> detail reads

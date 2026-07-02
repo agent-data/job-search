@@ -1356,6 +1356,41 @@ T8 shipped the operator enable flow; T9 shipped the template comment). This task
     `/var/folders/hb/ym6hm7s52p39j_m5m9y7chpw0000gn/T/tmp.sUili5r0K4`.
   - Gates: `python3 -m pytest -q` → 99 passed; `python3 scripts/doc_lint.py --root .` clean;
     evals.json parses (ids 1–20).
+- 2026-07-02 — **final-review fix sweep (commit A)** (PR1, `feat/multi-source-core`). Whole-stack
+  review remediation. Swept stale single-source paraphrases now the dedup key is the (`source`,
+  `source_id`) pair: `conventions.md` workspace-tree comment (`fold by (source, source_id)`); both
+  fold sentences reworded so the no-`source` case reads "an event with no `source` (all
+  pre-multi-source history, and any `status_changed` line that omits it)" instead of "legacy"; the
+  `job-search-agent` quick-ref row (composite key + "alias pairs count as one role"); and the
+  `home.md` Pipeline summary (composite key — the alias clause is deferred to commit B). The
+  first-pass-footnote flag now requires the source **returned rows AND** had an empty known set at
+  run start (`conventions.md` digest footnote + `job-search-run` step 2; step 5's "for each source
+  flagged in step 2" now carries the conjunct). Run-health placeholders generalized to `partial
+  (<why>)` (`job-search-run` terminal summary + `home.md` status-line example). `TESTING.md` §12
+  eval counts → `job-search-run` (20) · `job-search` (8) and "all five skills' evals" (integrated
+  top-of-stack totals; this branch's `job-search-run/evals.json` itself carries 18, growing to 20 at
+  the top of the stack — no gate cross-checks the number, and the count edit flows up once via merge
+  so the shipped top is correct), plus a §14 sign-off bullet. evals.json phrasing: eval 1 `deduped by
+  (source, source_id)`, eval 10 "all three … already known", eval 14 "per (source, source_id)". Added
+  a **Wave 2 inherits (multi-source)** tech-debt group (merged-entry LinkedIn/Ashby hardcoding +
+  fixed Ashby-primary; unspecified alias status-divergence; `<why>` can't name a two-of-three loss).
+  `./scripts/build.sh` fanned `conventions.md` into the 5 skill copies (byte-identical); the
+  hand-authored `home.md` + SKILL bodies are not synced. Gates: `python3 -m pytest -q` → **99
+  passed**; doc_lint clean; philosophy_guard clean; build.sh second run no-op; evals.json parses (ids
+  1–18). Known follow-up (out of this sweep's scope): `TESTING.md:653` still lists only four skills —
+  `job-search-agent` (4 evals) is absent from the §12 inventory though line 717 now says "five".
+- 2026-07-02 — **final-review fix sweep (commit B)** (PR2, `feat/cross-source-merge`). Merged commit A up
+  (clean auto-merge on every file except the plan Progress log, resolved by keeping BOTH the PR2 T12/T13
+  entries and the commit-A entry; `./scripts/build.sh` re-fanned `conventions.md` and all 5 skill copies are
+  byte-identical to the merged source — the merged `conventions.md` carries both PR2's `same_role_as`/alias
+  additions and commit A's composite-key + footnote-conjunct + `partial (<why>)` edits). Then two
+  branch-local fixes: (1) `examples/sample-digest.md` counts line now models the row-semantics rule —
+  `9 new postings (6 LinkedIn · 3 Ashby)` → `10 new postings (7 LinkedIn · 3 Ashby)`, since the merged Forge
+  Labs pair contributes its "also on LinkedIn" row to both N and the LinkedIn breakdown (7 + 3 = 10 = N; the
+  verdict bands still count the collapsed role, so 2·2·2·3 is unchanged); (2) `home.md` Pipeline sentence
+  gained the alias clause deferred from commit A — "records aliased by `same_role_as` count as one role — see
+  the fold operation in `conventions.md`". Gates: `python3 -m pytest -q` → **99 passed**; doc_lint clean;
+  philosophy_guard clean (sample digest touched); build.sh no-op. evals.json on this branch carries 19 evals.
 
 ## Decision log
 

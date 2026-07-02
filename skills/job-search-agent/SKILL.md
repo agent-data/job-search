@@ -45,7 +45,7 @@ There is no helper script — the OS state is plain files, and every operation o
 | Read / set / clear the scheduling marker | `references/internals.md` → Registry (the `scheduling` object) |
 | Known ids — the dedup set from `jobs.jsonl` | `references/conventions.md` → §jobs.jsonl operations |
 | Append one evaluated or status-changed event | `references/conventions.md` → §jobs.jsonl operations |
-| Current state (fold by `source_id`, last-write-wins) | `references/conventions.md` → §jobs.jsonl operations |
+| Current state (fold by (`source`, `source_id`), last-write-wins; alias pairs count as one role) | `references/conventions.md` → §jobs.jsonl operations |
 
 ---
 
