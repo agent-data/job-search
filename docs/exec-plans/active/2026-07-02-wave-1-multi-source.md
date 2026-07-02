@@ -1101,6 +1101,39 @@ T8 shipped the operator enable flow; T9 shipped the template comment). This task
   degraded note ("LinkedIn flaky — results this run may be affected") and a bare `degraded` enum
   token, both T6's Step 0/2 — so `grep -rln "degraded (LinkedIn flaky)" skills` returns those two
   files, not three.
+- 2026-07-02 — **T6 done** (PR1). `skills/job-search-run/SKILL.md` — the headless run loop, the
+  most behavior-defining file in the product — now fans out per (query × source), consistent with
+  T3's contract, T4's conventions, and T5's errors. Intro: the listing-id sentence names
+  `search.sources` (absent → `["linkedin", "ashby"]`), enum-validated at preflight (unknown token
+  → E-SOURCE-UNSUPPORTED: drop, footnote, continue). Step 0's degraded note + run-health value
+  flipped to the source-agnostic `degraded (job sources flaky)` (killing the last paraphrased
+  "LinkedIn flaky" note). Step 1 issues one `search-jobs` per enabled query × enabled source (whole
+  batch concurrent), passes `--source <s>` on every call, fixes the limit note (API default 20;
+  template sets 25), adds echo-verification (echoed `data.query.source` absent = `linkedin`;
+  mismatch → E-SOURCE-IGNORED — skip that source's remaining queries, keep rows under their
+  row-level `source`; `400 unsupported_source` → E-SOURCE-UNSUPPORTED — drop the source, continue),
+  and makes the stretch breaker per-source (2 consecutive same-source fully-failed queries → stop
+  that source; all stretched → stop entirely, partial digest; counters per-source, reset on that
+  source's first success). Step 2 runs known-ids once per enabled source → per-source sets (NEW =
+  non-null `source_id` not in THEIR OWN source's set), records empty-known-set sources for the
+  first-pass footnote, and NEVER drops a null `posted_at` (carries a date-unknown mark into scan +
+  digest); the null-`source_id` "unidentifiable" rule is untouched. Step 3's steer now asks the
+  detail read to extract a JD-stated posting date when `posted_at` is null. Step 4's `get-posting`
+  passes the row's `--source` explicitly. Step 5 copies `source` from the result row (never a
+  literal), adds OPTIONAL `posted_at_extracted`, points the counts line / per-source breakdown /
+  per-match tags / date marks at conventions.md, and adds first-pass-per-source + per-lost-source
+  footnotes with run-health `partial (<source> unavailable)` / `partial (all sources
+  unavailable)`. Terminal-summary run-health token → `degraded (job sources flaky)` (placeholder
+  kept). Two reasoned deviations from the brief's prose, both for upstream consistency: (1)
+  `posted_at_extracted` is placed adjacent to `posted_at` in the provenance enumeration to match
+  conventions.md's schema ordering, not in the judgment half as the brief loosely worded it; (2)
+  Idempotency's "known `source_id`" → composite "known `(source, source_id)` pair (see step 2)",
+  since a bare `source_id` is stable only within its source (T3/T4 define the dedup key as the
+  pair). SKILL bodies are NOT build-synced, so `./scripts/build.sh` is a no-op here. Verified:
+  `grep -n 'source:"linkedin"' skills/job-search-run/SKILL.md` → 0; `grep -n "LinkedIn flaky" …` →
+  0; `grep -ni "linkedin" …` → 2 hits, both legitimate enum-token uses (the default list + the
+  absent-echo rule); `python3 scripts/doc_lint.py --root .` clean; `./scripts/build.sh` produced no
+  changes; `python3 -m pytest -q` → 98 passed.
 
 ## Decision log
 
