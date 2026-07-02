@@ -214,6 +214,17 @@
         "Output contains no numeric score, no category weights, and no dollar/credit cost figures; exits 0",
         "The digest counts line counts rows, not merged roles: '4 new postings (2 LinkedIn · 2 Ashby)' — the breakdown sums to N even though the Acme pair renders as one merged entry"
       ]
+    },
+    {
+      "id": 20,
+      "scenario": "one-source-down",
+      "prompt": "Same harness but JOBSEARCH_TEST_SCENARIO=one-source-down with two per-case tweaks that make workday the failing source: (a) export JOBSEARCH_TEST_DOWN_SOURCE=workday (every workday search-jobs returns a retryable 502; linkedin succeeds via the happy fallback and ashby returns its happy-fallback fixture row (Zephyr)), and (b) enable workday in the sandbox config via `sed -i.bak 's/sources: \\[\"linkedin\", \"ashby\"\\]/sources: [\"linkedin\", \"ashby\", \"workday\"]/' <tmp>/config.yaml && rm -f <tmp>/config.yaml.bak`. Run job-search-run and show the digest.",
+      "expectations": [
+        "Retries the workday 502s with backoff, opens the workday circuit after two consecutive fully-failed workday queries, and stops calling workday for the rest of the run",
+        "LinkedIn and Ashby queries complete and their matches appear as normal — one source down never blanks the run",
+        "Run health is 'partial (workday unavailable)' and a footnote says Workday was unreachable this run and the next run will retry",
+        "runs/<id>.json lists workday in sources_failed and both linkedin and ashby in sources_searched; exits 0 (partial, not a HALT)"
+      ]
     }
   ]
 }

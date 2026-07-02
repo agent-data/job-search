@@ -1317,6 +1317,45 @@ T8 shipped the operator enable flow; T9 shipped the template comment). This task
     Both satisfy their own expectations and both render the merged match entry itself exactly once; counts-line row-semantics fix + eval-19 pin (this commit), eval 19 re-run 8/8.
   - Gates: `python3 -m pytest -q` → 99 passed; `python3 scripts/doc_lint.py --root .` clean;
     `python3 scripts/philosophy_guard.py` clean (sample digest touched).
+- 2026-07-02 — **T14 done** (PR3). Workday ships as an explicit experiment, proven both ways.
+  `skills/job-search-run/evals/evals.json` gains **eval 20** (scenario `one-source-down`, 4
+  expectations; per-case tweaks: `JOBSEARCH_TEST_DOWN_SOURCE=workday` + the config sed enabling
+  `sources: ["linkedin", "ashby", "workday"]`); its prompt names ashby's data correctly — the
+  scenario ships no own ashby fixture, so ashby serves the happy-fallback single row (Zephyr),
+  not 2 rows. `CHANGELOG.md` Unreleased → Added: Workday is an explicit opt-in experimental
+  source; a failing source degrades the run to `partial`, never blocks it. **Live-verified via
+  the harness** (`claude -p` drove the loose skill; judged from written artifacts):
+  - **Eval 20 (one-source-down, workday down) — PASS 4/4 (shim).** Both workday query×source
+    calls 502 (`search_failed`, retryable) → retried ×3 → gave up (run record errors:
+    `attempts: 3`, `final: "gave_up"` for BOTH queries — two consecutive fully-failed workday
+    queries opened only ITS circuit); linkedin (2 events) and ashby (1 event, Zephyr with
+    `posted ~Jun 25 (from posting text)`) landed normally — counts line `3 new postings
+    (2 LinkedIn · 1 Ashby) · 2 strong · 0 moderate · 0 weak · 1 filtered out · 6 searches ·
+    2 detail reads`; digest line 2 verbatim: `Run health: partial (workday unavailable)`;
+    footnote verbatim: "Workday was unreachable this run (repeated upstream errors) — results
+    from the other sources only; the next scheduled run will retry."; run record
+    `sources_searched: ["linkedin", "ashby"]`, `sources_failed: ["workday"]`; exit 0 (partial,
+    not a HALT).
+  - **Live proof (real API, shim NOT on PATH, isolated mktemp sandbox, template config sed'd to
+    `["linkedin", "ashby", "workday"]`, sample brief) — the Workday-still-down world, PASS.**
+    Direct upstream probe (`agent-data call f9a6ec16-… search-jobs --source workday --limit 3`)
+    returned the 502 envelope: `code: "search_failed"`, `message: "Workday search failed. See
+    request_id for diagnostics."`, `retryable: true`, `source: "upstream"` (request_id
+    `req_c6978208761245bf982fb7ae`). The ONE headless run then completed with digest line 2
+    verbatim `Run health: partial (workday unavailable)` and counts line `78 new postings
+    (28 LinkedIn · 50 Ashby) · 0 strong · 0 moderate · 0 weak · 78 filtered out · 6 searches ·
+    0 detail reads`; both workday queries carry real upstream request_ids with `attempts: 3`,
+    `final: "gave_up"`; `sources_searched: ["linkedin", "ashby"]`, `sources_failed: ["workday"]`
+    — linkedin+ashby results intact (78 events, 28 linkedin · 50 ashby, zero duplicate
+    (source, source_id) pairs); the exact outage footnote; exit 0. Honest notes: the sample
+    brief (product design) × template engineering queries again yields 0 matches / 0 detail
+    reads live (the same gap the PR1 gate recorded — match bands are exercised by eval 20
+    above); the first live attempt was killed at the driving tool's 10-minute wall clock
+    mid-consolidation (a harness timeout, not a product failure) — sandbox reset, the identical
+    run re-driven to completion (~12 min). Sandbox left for inspection:
+    `/var/folders/hb/ym6hm7s52p39j_m5m9y7chpw0000gn/T/tmp.sUili5r0K4`.
+  - Gates: `python3 -m pytest -q` → 99 passed; `python3 scripts/doc_lint.py --root .` clean;
+    evals.json parses (ids 1–20).
 
 ## Decision log
 

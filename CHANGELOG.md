@@ -15,6 +15,7 @@ All notable changes to this project are documented here. The format is based on
   E-SOURCE-IGNORED) cover unknown sources and legacy servers that ignore source selection.
 - Multi-source test surface: fake-shim `--source` support, per-source fixtures, and four new
   scenarios (multi-source, one-source-down, source-unsupported, legacy-source-swallow).
+- Workday is available as an explicit opt-in experimental source (`search.sources: [..., "workday"]`); a failing source degrades the run to `partial`, never blocks it.
 
 ### Fixed
 - CI actually runs the unit-test gate (pytest was never installed on the runner).
