@@ -1168,7 +1168,7 @@ T8 shipped the operator enable flow; T9 shipped the template comment). This task
   omit → `["linkedin", "ashby"]`; conversational-only write). `./scripts/build.sh` fanned internals.md
   into the 5 `skills/*/references/internals.md` copies (byte-identical); home.md + onboarding.md + the
   SKILL body are NOT build-synced. Verified: `grep -rn "LinkedIn flaky" shared scripts skills` → 0
-  hits; `python3 scripts/doc_lint.py --root .` clean; `python3 -m pytest -q` → 98 passed.
+  hits; `python3 scripts/doc_lint.py --root .` clean; `python3 -m pytest -q` → 98 passed; run-health enum-form review fix (this commit).
 
 ## Decision log
 

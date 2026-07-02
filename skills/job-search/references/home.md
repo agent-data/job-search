@@ -54,7 +54,7 @@ Notes on each part:
   when installed, or "off" when not; the marker carries only on/off + the mechanism value recorded at install time
   (the mechanism label is not surfaced in the status line);
   last-run health from the newest `runs/*.json` `run_health` (or the latest digest's Run health line). Run
-  health is one of `healthy | partial (N errors) | degraded (job sources flaky) | blocked (action needed)`.
+  health is one of `healthy | partial (<why>) | degraded (job sources flaky) | blocked (action needed)`.
 - **Latest digest.** Read the newest `reports/<date>-digest.md`; show its date and reproduce its **counts
   line** (the `N new · S strong · M moderate · W weak · F filtered out · n searches · m detail reads` line —
   see the digest format in `conventions.md`). If there are no digests yet, say "No runs yet — want me to run
