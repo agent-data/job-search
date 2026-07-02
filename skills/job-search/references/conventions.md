@@ -25,6 +25,7 @@ workspace:
 queries:
   - { id: "ai-eng-remote", keywords: "AI engineer", location: "United States", limit: 25, enabled: true }
 search:
+  sources: ["linkedin", "ashby"]  # ordered job sources every query runs against: linkedin | ashby | workday — omit the key for this default; workday is experimental (expect partial runs while upstream stabilizes)
   freshness: "past-2-weeks"  # any | past-week | past-2-weeks | past-month — client-side recency filter on posted_at (no API date param)
   detail_model: "fast"       # portable tier the per-posting detail reads use: fast | balanced | high | inherit (the model id each maps to → your platform's adapter → Model tiers)
   # parallel_detail_reads: true  # optional: approved use of parallel subagents for detail reads where the host supports them
@@ -36,7 +37,11 @@ notify:
   digest_path_template: "reports/{date}-digest.md"
   desktop_notify_on_block: true
 ```
-The **`search` block** tunes the feed: `freshness` is a client-side recency window on `posted_at` (the API has
+The **`search` block** tunes the feed: `sources` is the ordered list of job sources each enabled query runs
+against (order = presentation order in per-source counts). An absent key means `["linkedin", "ashby"]`. Tokens
+outside the enum are dropped at preflight with a digest footnote (E-SOURCE-UNSUPPORTED), never a HALT.
+Per-query source targeting is a known deferred knob — all queries run against all enabled sources. The runner
+reads `sources` and never writes it. `freshness` is a client-side recency window on `posted_at` (the API has
 no date param; `any` = no filter); `detail_model` is a portable tier token (`fast | balanced | high | inherit`)
 the runner's per-posting detail reads use — the model each maps to lives in your platform's adapter → Model
 tiers, and the fan-out itself defers to → Concurrent detail reads (`inherit` = the run's own model).
@@ -44,18 +49,18 @@ tiers, and the fan-out itself defers to → Concurrent detail reads (`inherit` =
 reads on hosts that require explicit authorization. Unset means interactive front-door flows may ask; `true`
 means use parallel subagents where available; `false` means read details sequentially. The runner reads this
 field but never writes it.
-**`queries[].limit`** (1–100, default 25) is the per-query feed size — pull
+**`queries[].limit`** (1–100; the API's own default is 20 when omitted — the config template sets 25 explicitly) is the per-query feed size — pull
 generously across several varied queries rather than one giant pull; there is no pagination, so breadth +
 frequency + dedup accumulate coverage. Query construction (incl. deriving "remote") lives in `internals.md`.
 
 `run_id` format: UTC timestamp `YYYY-MM-DDTHH-MM-SSZ` (hyphens, not colons, in the time component — safe as a filename on every platform). `<date>` for digests: `YYYY-MM-DD` (local tz).
 
 ## jobs.jsonl — append-only events (one JSON object per line)
-Current state = fold by `source_id`, last-write-wins per field. Two event types:
+Current state = fold by (**`source`**, **`source_id`**), last-write-wins per field (a legacy event with no `source` attaches by `source_id` alone — every legacy `evaluated` event already carries `source:"linkedin"`, so in practice only old `status_changed` lines lack it). Two event types:
 ```jsonc
-{ "event":"evaluated", "ts":"<iso>", "run_id":"…", "source":"linkedin", "source_id":"<linkedin id, DEDUP KEY>",
+{ "event":"evaluated", "ts":"<iso>", "run_id":"…", "source":"<the result row's source — copied, NEVER a hardcoded literal>", "source_id":"<source-native id — with source, the DEDUP KEY>",
   "query_id":"…", "title":"…", "company_name":"…", "location_display":"…", "salary_display":"…",
-  "posted_at":"<iso>", "source_url":"…", "posting_id_at_seen":"jp_…", "detail_read":true,
+  "posted_at":"<iso>", "posted_at_extracted":"<iso date — OPTIONAL; only when the API posted_at was null and the JD states a date>", "source_url":"…", "posting_id_at_seen":"jp_…", "detail_read":true,
   "relevant":true, "match":"strong|moderate|weak|null", "reasoning":"…",
   "dealbreakers_hit":[], "unknowns":[], "needs_human_check":false, "status":"new", "first_seen":"<iso>" }
 { "event":"status_changed", "ts":"<iso>", "source_id":"…", "status":"interested", "note":"…" }
@@ -64,13 +69,19 @@ Allowed `status`: `new | interested | applied | rejected | archived`.
 
 **Event-line contract** (the operations below depend on it): one event per line; each line is a single-line
 JSON object — never pretty-printed; every event carries a non-empty `"source_id"`; the literal key
-`"source_id"` appears exactly once per line. Validate an event against this contract before appending it.
+`"source_id"` appears exactly once per line; every `evaluated` event carries a non-empty `"source"`; the
+literal key `"source"` appears at most once per line (the per-source pre-filter grep depends on it, exactly as
+the `"source_id"`-once rule protects the id extraction). Validate an event against this contract before appending it.
 
 Operations (no helper script — perform these exactly):
-- **Known ids** (the dedup set; missing file = empty set):
+- **Known ids** (the dedup set — one per enabled source `S`; missing file = empty set):
   ```bash
-  grep -o '"source_id"[[:space:]]*:[[:space:]]*"[^"]*"' "$WS/jobs.jsonl" 2>/dev/null | cut -d'"' -f4 | sort -u
+  grep -E '"source"[[:space:]]*:[[:space:]]*"'"$S"'"' "$WS/jobs.jsonl" 2>/dev/null \
+    | grep -o '"source_id"[[:space:]]*:[[:space:]]*"[^"]*"' | cut -d'"' -f4 | sort -u
   ```
+  (The `"source"` key pattern cannot match `"source_id"`/`"source_url"` — the closing quote
+  must follow immediately. Legacy history all carries `source:"linkedin"`, so the linkedin set
+  matches every pre-multi-source event: no migration.)
 - **Append one event** (the heredoc keeps quoting safe — apostrophes in `reasoning` are fine):
   ```bash
   cat >> "$WS/jobs.jsonl" <<'EOF'
@@ -84,7 +95,8 @@ Operations (no helper script — perform these exactly):
 ## runs/<run_id>.json — audit log
 ```jsonc
 { "run_id":"…", "started_at":"…", "completed_at":"…", "status_probe":"ok|degraded|unreachable",
-  "queries":[ { "query_id":"…", "keywords":"…", "results_returned":25, "new":6, "errors":[] } ],
+  "queries":[ { "query_id":"…", "source":"<source>", "keywords":"…", "results_returned":25, "new":6, "errors":[] } ],
+  "sources_searched":["linkedin","ashby"], "sources_failed":[],
   "results_summary":{ "total_results":50, "new_postings":9, "evaluated":9, "detail_read":5,
                       "relevant":6, "strong":3, "moderate":2, "weak":1 },
   "errors":[ { "stage":"get-posting", "source_id":"…", "code":"detail_fetch_failed",
@@ -111,7 +123,7 @@ from `updated_at`** (fall back to `created_at` for briefs written before `update
 ```
 # Job search digest — <date>
 Run health: healthy
-9 new postings · 3 strong · 2 moderate · 1 weak · 3 filtered out · <n> searches · <m> detail reads
+9 new postings (6 LinkedIn · 3 Ashby) · 3 strong · 2 moderate · 1 weak · 3 filtered out · <n> searches · <m> detail reads
 
 ## Strong matches
 - **<title>** — <company> — <location>
@@ -127,8 +139,16 @@ Run health: healthy
 ## Filtered out (not relevant): 3
 <one line each: title — company — why rejected>
 
-<footnotes: stale detail links, partial failures, unidentifiable (null source_id) rows, brief-age nudge>
+<footnotes: stale detail links, partial failures, unidentifiable (null source_id) rows, brief-age nudge; first pass over a source (that source's known-ids set was empty at run start): `First pass over <Source> company boards — this batch can include older postings, since boards don't always state dates.`; per-source outage / unsupported / ignored (one line each — exact texts in `errors.md`)>
 ```
-Strong first. Always show the Run health line and the counts. Run health is one of `healthy` |
-`partial (N errors)` | `degraded (LinkedIn flaky)` | `blocked (action needed)`. If blocked, replace the body
-with the named error's cause+fix (see `errors.md`).
+Strong first. Always show the Run health line and the counts. The parenthetical per-source breakdown in the
+counts line appears ONLY when more than one source was searched; single-source runs keep today's exact line.
+When more than one source was searched, append ` · <Source>` to the match meta line (e.g. `**<title>** —
+<company> — <location> · Ashby`). A match whose `posted_at` was null carries a date mark on its reasoning
+line: `posted ~<Mon D> (from posting text)` when the detail read extracted a JD-stated date, else `date not
+stated`; add `— older than your freshness window` when the extracted date falls outside it (the entry still
+lands in its verdict band: the read is already paid; relevance decides). Run health is one of `healthy` |
+`partial (<why>)` | `degraded (job sources flaky)` | `blocked (action needed)`, where `<why>` is exactly one
+of `N errors` (scattered per-query/per-posting errors) · `<source> unavailable` (a whole source lost this
+run) · `all sources unavailable`. Precedence: name a lost source over counting errors; `all sources` over
+one. If blocked, replace the body with the named error's cause+fix (see `errors.md`).

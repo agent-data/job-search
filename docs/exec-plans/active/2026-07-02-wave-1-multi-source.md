@@ -1053,6 +1053,29 @@ T8 shipped the operator enable flow; T9 shipped the template comment). This task
   Verified: `grep -rn "only job source" shared skills` → 0 hits; `python3 scripts/doc_lint.py
   --root .` clean; `python3 -m pytest -q` → 98 passed. (E-SOURCE-UNSUPPORTED / E-SOURCE-IGNORED
   are defined in `errors.md` by T5 — forward references, per plan.)
+- 2026-07-02 — **T4 done** (PR1). `shared/references/conventions.md` went multi-source. The
+  `config.yaml` `search:` block gains `sources` as its first line (ordered; enum `linkedin |
+  ashby | workday`; absent → `["linkedin", "ashby"]`; out-of-enum tokens dropped at preflight with
+  an E-SOURCE-UNSUPPORTED digest footnote, never a HALT; per-query targeting is a deferred knob;
+  the runner never writes it), and the `queries[].limit` note now states the API's own default is
+  20 (the template sets 25 explicitly). jobs.jsonl current-state folds by the (`source`,
+  `source_id`) PAIR — a legacy event without `source` attaches by `source_id` alone, and since
+  every legacy `evaluated` line already carries the linkedin source there is no migration; the
+  `evaluated` example copies the row's `source` (never a hardcoded literal) and adds OPTIONAL
+  `posted_at_extracted`; the event-line contract now also requires a non-empty `"source"` at most
+  once per line; **Known ids** became per-enabled-source `S` (grep the source pattern, then extract
+  `source_id`). runs/<run_id>.json `queries[]` entries are now per query × source (add `"source"`)
+  plus top-level `sources_searched` / `sources_failed`. Digest format: the counts line gains a
+  per-source breakdown (e.g. `(6 LinkedIn · 3 Ashby)`) shown only when more than one source was
+  searched (single-source keeps today's byte-shape), matches get a ` · <Source>` tag and
+  `posted_at`-null date marks, two new footnotes (first pass over a source; per-source
+  outage/unsupported/ignored), and the run-health literal is now `healthy | partial (<why>) |
+  degraded (job sources flaky) | blocked (action needed)` with `<why>` ∈ `N errors` · `<source>
+  unavailable` · `all sources unavailable` (+ precedence). `./scripts/build.sh` fanned the source
+  into the 5 `skills/*/references/conventions.md` copies (byte-identical). Verified: `grep -n
+  'source":"linkedin"' shared/references/conventions.md` → 0 hits; `python3 scripts/doc_lint.py
+  --root .` clean; `python3 -m pytest -q` → 98 passed. (The old `degraded (LinkedIn flaky)` literal
+  still lives in `errors.md` + `doc_lint.py`'s regex — the atomic flip is T5's job, per plan.)
 
 ## Decision log
 
