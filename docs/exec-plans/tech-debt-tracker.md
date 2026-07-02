@@ -56,3 +56,40 @@ concurrency / interrupted-run recovery (two overlapping runs; a hard-kill mid-ru
 
 ## P3 — schedule-line accepts an out-of-range --time (`TODO-TIME-RANGE`) — ✅ resolved (obsolete)
 **Resolved 2026-06-08 by removal.** The cron/launchd generators no longer exist — scheduling is native `/loop` (see [`../../shared/references/internals.md`](../../shared/references/internals.md)). The `/loop` line is composed from `schedule.frequency` alone (no `--time`), so there is no time value to range-check. No action needed.
+
+## Wave 2 inherits (multi-source)
+
+Watch items the multi-source wave (PR1–PR3) hands forward — each parked behind a concrete trigger,
+none with a test yet (the surface it guards isn't built).
+
+### P3 — merged-entry strings hardcode LinkedIn/Ashby; Ashby-primary is fixed (`TODO-MERGE-SOURCE-PRIMARY`)
+**What:** The cross-source merge bakes the `linkedin`/`ashby` names into the merged-entry copy and always
+picks the Ashby row as the primary of an aliased pair.
+**Why:** Two mergeable sources is the whole world today, so a two-name string and a fixed primary read
+cleanly; generalizing now would be speculative (YAGNI).
+**Impact:** the moment a third mergeable source lands, the two-name copy and the fixed Ashby-primary rule
+misdescribe the merge — a presentation bug, not a data bug (the fold key stays correct).
+**How to apply:** generalize the merged-entry copy and the primary-selection rule to N sources when a
+third mergeable source is added.
+**Linked tests:** none (watch item).
+
+### P3 — alias status-divergence rule unspecified (`TODO-ALIAS-STATUS-DIVERGENCE`)
+**What:** When two records aliased by `same_role_as` carry different `status` values, which status the
+collapsed role shows is unspecified.
+**Why:** No pipeline action mutates one leg of an aliased pair yet, so a divergence can't arise in
+practice today.
+**Impact:** once pipeline actions (mark interested/applied) can touch one alias leg, a divergent pair has
+no defined winner — the collapsed role could show either status.
+**How to apply:** define the precedence (e.g. most-advanced status wins) when pipeline actions land.
+**Linked tests:** none (watch item).
+
+### P3 — run-health `<why>` can't name a two-of-three source loss (`TODO-WHY-ENUM-MULTILOSS`)
+**What:** The run-health `<why>` vocabulary names one lost source or "all sources unavailable"; it can't
+say two of three sources were lost (e.g. LinkedIn and Ashby down while Workday survives).
+**Why:** With the two default sources the only cases are "one lost" or "all lost", both already covered.
+**Impact:** reachable only once Workday is opted in against a legacy server — a three-source run that
+loses two would collapse to "all sources unavailable" or a single-source name, understating the outage in
+the digest header.
+**How to apply:** extend the `<why>` vocabulary to name a partial-but-multiple loss once a third source is
+in routine use.
+**Linked tests:** none (watch item).
