@@ -1169,6 +1169,18 @@ T8 shipped the operator enable flow; T9 shipped the template comment). This task
   into the 5 `skills/*/references/internals.md` copies (byte-identical); home.md + onboarding.md + the
   SKILL body are NOT build-synced. Verified: `grep -rn "LinkedIn flaky" shared scripts skills` → 0
   hits; `python3 scripts/doc_lint.py --root .` clean; `python3 -m pytest -q` → 98 passed; run-health enum-form review fix (this commit).
+- 2026-07-02 — **T9 done** (PR1). `templates/config.example.yaml` now ships job sources: the
+  `search:` block opens with `sources: ["linkedin", "ashby"]` (the announced default pair) above
+  `freshness:`, with an inline comment naming what the list does and how to opt into the
+  experimental Workday source (expect failures while upstream stabilizes). The line adds no numeric
+  field (philosophy_guard stays clean) and follows the block's inline-comment style; because the
+  `sources` value already reaches the column the aligned comments sit at, the brief's verbatim
+  3-space gap is kept rather than re-aligning the untouched `freshness` / `detail_model` lines. This
+  is the template T11 copies into eval workspaces and onboarding scaffolds copy at setup;
+  `setup-workspace.sh`'s T2 `freshness: "any"` pin is untouched. Verified: `python3
+  scripts/philosophy_guard.py --root .` clean; `python3 -c "import yaml;
+  yaml.safe_load(open('templates/config.example.yaml'))"` parses (`search.sources` ==
+  `['linkedin', 'ashby']`); `python3 -m pytest -q` → 98 passed.
 
 ## Decision log
 
