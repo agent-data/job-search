@@ -1256,6 +1256,14 @@ T8 shipped the operator enable flow; T9 shipped the template comment). This task
   one stray get-posting reconciling the prompt's source-less 1001/1002 legacy seeds before
   self-correcting — a flake, second run clean 3/3), eval 15 ×3 fresh all fan out (4 query×source calls,
   both sources in `sources_searched`, every time) + rerun idempotent (0 duplicate events); eval-10 seed de-flake (this commit).
+- 2026-07-02 — **PR1 gate** (verification pass on `feat/multi-source-core`; full transcript in the run's scratchpad `sdd/pr1-gate-report.md`):
+  - Local gates: pytest **99 passed** · doc_lint clean · philosophy_guard clean · validate_platforms clean · build.sh no-op (porcelain empty) · `"source":"linkedin"` grep 0 hits · evals.json parses (ids 1–18) — all **PASS**.
+  - **Gate RED:** `degraded (LinkedIn flaky)` grep → 3 residual hits: `TESTING.md:370`, `TESTING.md:451` (genuine T10 drift — old run-health enum), `docs/design-docs/2026-06-05-os-design.md:303` (historical snapshot the Done-when filter doesn't exclude). Follow-up commit needed before PR1 closes.
+  - **Live Ashby proof (real API): PASS** — 3 rows all `"source":"ashby"`, UUID source_ids, `jobs.ashbyhq.com` URLs (Zapier ×1, Y Combinator ×2), echoed `data.query.source: ashby`.
+  - **Live end-to-end (isolated mktemp sandbox, template config `[linkedin, ashby]`, sample brief): PASS** — run 1 digest counts line verbatim: `83 new postings (33 LinkedIn · 50 Ashby) · 0 strong · 0 moderate · 0 weak · 83 filtered out · 4 searches · 0 detail reads`; runs record has 4 per-(query×source) entries, `sources_searched:["linkedin","ashby"]`, `sources_failed:[]`; both first-pass footnotes; all 50 null-dated ashby rows kept; events row-copy `source` (33 linkedin · 50 ashby, zero shape anomalies, zero dup pairs).
+  - **Dedup re-run: PASS** — second digest `25 new postings (25 LinkedIn · 0 Ashby)`; ashby `new: 0` on both queries (all 50 recognized as known); jobs.jsonl 83→108 append-only with **zero duplicate (source, source_id) pairs**; the 25 appends are genuinely-new LinkedIn rows (live-feed churn), zero collisions with run-1 pairs; first-pass footnotes correctly absent.
+  - Honest gaps: the sample brief (product design) × template queries (engineering) yields 0 matches on live data, so per-match ` · Ashby` tags / date marks / `posted_at_extracted` weren't exercisable live (covered by eval 15's fixture run, PASS 7/7 above); run health `healthy` both runs — no live degradation to observe.
+  - Sandbox left for inspection: `/var/folders/hb/ym6hm7s52p39j_m5m9y7chpw0000gn/T/tmp.JGrIcE9Uhe` (run1.log/run2.log + artifact snapshots inside).
 
 ## Decision log
 
