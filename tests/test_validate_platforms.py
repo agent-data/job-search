@@ -286,3 +286,56 @@ def test_codex_workspace_write_without_workspace_fails(tmp_path):
     assert r.returncode == 1
     assert "codex-workspace-write" in r.stdout
     assert "cd <workspace>" in r.stdout and "--add-dir <workspace>" in r.stdout
+
+
+# ---- codex-parallel-subagents ----
+
+def _codex_parallel_doc(**overrides):
+    parts = {
+        "preference": "search.parallel_detail_reads controls whether detail reads use subagents.\n",
+        "profile": "$CODEX_HOME/job-search.config.toml enables the job-search profile.\n",
+        "feature": "[features]\nmulti_agent = true\n",
+        "cli_profile": "codex exec --profile job-search '$job-search-run --workspace <workspace>. Use parallel subagents for all detail reads.'\n",
+        "automation_prompt": "Codex Automation prompt: Use $job-search-run. Use parallel subagents for all detail reads.\n",
+        "model_fast": "| `fast` | `gpt-5.4-mini` |\n",
+        "model_balanced": "| `balanced` | `gpt-5.4` |\n",
+        "model_high": "| `high` | `gpt-5.5` |\n",
+        "fallback": "If Codex refuses subagent spawning, read and judge each posting sequentially.\n",
+    }
+    parts.update(overrides)
+    return "\n".join(parts.values())
+
+
+def test_codex_parallel_subagent_contract_clean_passes(tmp_path):
+    p = tmp_path / "shared" / "references" / "platform"
+    p.mkdir(parents=True)
+    (p / "codex.md").write_text(_codex_parallel_doc())
+    r = run_validate(tmp_path, "--only", "codex-parallel-subagents")
+    assert r.returncode == 0, r.stdout + r.stderr
+
+
+def test_codex_parallel_subagent_contract_requires_explicit_prompt(tmp_path):
+    p = tmp_path / "shared" / "references" / "platform"
+    p.mkdir(parents=True)
+    (p / "codex.md").write_text(_codex_parallel_doc(cli_profile="", automation_prompt=""))
+    r = run_validate(tmp_path, "--only", "codex-parallel-subagents")
+    assert r.returncode == 1
+    assert "Use parallel subagents for all detail reads" in r.stdout
+
+
+def test_codex_parallel_subagent_contract_requires_mini_fast_model(tmp_path):
+    p = tmp_path / "shared" / "references" / "platform"
+    p.mkdir(parents=True)
+    (p / "codex.md").write_text(_codex_parallel_doc(model_fast="| `fast` | `gpt-5` |\n"))
+    r = run_validate(tmp_path, "--only", "codex-parallel-subagents")
+    assert r.returncode == 1
+    assert "gpt-5.4-mini" in r.stdout
+
+
+def test_codex_parallel_subagent_contract_requires_balanced_model(tmp_path):
+    p = tmp_path / "shared" / "references" / "platform"
+    p.mkdir(parents=True)
+    (p / "codex.md").write_text(_codex_parallel_doc(model_balanced=""))
+    r = run_validate(tmp_path, "--only", "codex-parallel-subagents")
+    assert r.returncode == 1
+    assert "balanced" in r.stdout and "gpt-5.4" in r.stdout

@@ -8,10 +8,11 @@
       "prompt": "Build a temp workspace + shim (setup-workspace.sh), PATH=<tmp>/_bin:$PATH, JOBSEARCH_TEST_SCENARIO=happy, JOBSEARCH_FIXTURES=<repo>/tests/fixtures. Run job-search-run against <tmp>. Show the digest and jobs.jsonl.",
       "expectations": [
         "Calls `agent-data ... status` before any search-jobs call",
+        "With search.parallel_detail_reads unset, never asks about subagents and never edits config (headless); detail reads follow the host's default mode — the parallel fan-out on hosts that don't gate subagents behind approval",
         "Writes reports/<date>-digest.md whose Run health line is 'healthy'",
         "Surfaces the Acme Senior AI Engineer (Remote US) as a strong (or moderate) match, grouped before weaker ones",
         "Judges the onsite-Austin ML role as not relevant (dealbreaker) and counts it under 'filtered out'",
-        "Appends one evaluated event per new posting to jobs.jsonl (one single-line JSON object per line, each with a non-empty source_id), deduped by source_id, carrying provenance (title/company/source_url) + judgment (relevant/match/reasoning)",
+        "Appends one evaluated event per new posting to jobs.jsonl (one single-line JSON object per line, each with a non-empty source_id), deduped by (source, source_id), carrying provenance (title/company/source_url) + judgment (relevant/match/reasoning)",
         "Output contains no numeric score, no category weights, and no dollar/credit cost figures",
         "Exits 0"
       ]
@@ -42,7 +43,7 @@
       "prompt": "Same harness but JOBSEARCH_TEST_SCENARIO=stretch (every search-jobs returns a retryable 502). Run job-search-run and show the digest.",
       "expectations": [
         "Retries the 502 with backoff, then stops searching after two consecutive failed queries (E-UPSTREAM-STRETCH)",
-        "Digest says LinkedIn was unreachable and the next run will retry (Run health: degraded or partial)",
+        "Digest says job sources were unreachable (all enabled sources stretched) and the next run will retry (Run health: partial (all sources unavailable))",
         "Does not crash; distinguishes this from a 'genuinely no new jobs' run"
       ]
     },
@@ -91,7 +92,7 @@
       "scenario": "degraded",
       "prompt": "Same harness but JOBSEARCH_TEST_SCENARIO=degraded (status returns 'degraded'; search returns the happy results via fallback). Run job-search-run and show the digest.",
       "expectations": [
-        "Sets Run health: degraded and notes LinkedIn is flaky (results this run may be affected) in the digest",
+        "Sets Run health: degraded (job sources flaky) and notes job sources are flaky (results this run may be affected) in the digest",
         "Reads detail for promising matches as normal — no aggressive cap; relevance, not a count, decides how many",
         "Still produces matches and exits 0 (partial/degraded, not a HALT)"
       ]
@@ -99,9 +100,9 @@
     {
       "id": 10,
       "scenario": "happy, all results already known (zero-results sub-case 3a)",
-      "prompt": "Same harness, JOBSEARCH_TEST_SCENARIO=happy, but BEFORE running, pre-seed <tmp>/jobs.jsonl with prior evaluated events for both happy source_ids by running `printf '%s\\n' '{\"event\":\"evaluated\",\"source_id\":\"1001\",\"status\":\"new\"}' >> <tmp>/jobs.jsonl` and the same for source_id 1002. Then run job-search-run.",
+      "prompt": "Same harness, JOBSEARCH_TEST_SCENARIO=happy, but BEFORE running, pre-seed <tmp>/jobs.jsonl with prior evaluated events for both happy source_ids by running `printf '%s\\n' '{\"event\":\"evaluated\",\"source\":\"linkedin\",\"source_id\":\"1001\",\"status\":\"new\"}' >> <tmp>/jobs.jsonl` and `printf '%s\\n' '{\"event\":\"evaluated\",\"source\":\"linkedin\",\"source_id\":\"1002\",\"status\":\"new\"}' >> <tmp>/jobs.jsonl`, and the same for the ashby posting: `printf '%s\\n' '{\"event\":\"evaluated\",\"source\":\"ashby\",\"source_id\":\"0b7c2d33-2222-4ccc-9ddd-3ee4ff5aa6b7\",\"status\":\"new\"}' >> <tmp>/jobs.jsonl`. Then run job-search-run.",
       "expectations": [
-        "Dedup finds BOTH search results already known → no NEW postings",
+        "Dedup finds all three search results already known → no NEW postings",
         "Reassuring message in plain English, e.g. 'No new postings — you've already seen all N of these' (NOT an error, NOT 'broaden keywords', and never the word 'database')",
         "Spends no get-posting calls; writes no duplicate evaluated events; Run health healthy; exits 0"
       ]
@@ -142,13 +143,87 @@
     {
       "id": 14,
       "scenario": "many-promising",
-      "prompt": "Same harness but JOBSEARCH_TEST_SCENARIO=many-promising. Search returns 10 relevant-looking Remote US AI engineering postings, all with detail_available:true, which is intentionally more than the Codex thread capacity observed in a live run. Run job-search-run against <tmp> and show the digest + jobs.jsonl.",
+      "prompt": "Same harness but JOBSEARCH_TEST_SCENARIO=many-promising. Before running, set `search.parallel_detail_reads: true` in <tmp>/config.yaml to pin the explicit parallel-detail preference. Search returns 10 relevant-looking Remote US AI engineering postings, all with detail_available:true, which is intentionally more than the Codex thread capacity observed in a live run. Run job-search-run against <tmp> and show the digest + jobs.jsonl.",
       "expectations": [
+        "Does not prompt or edit config; job-search-run is headless and only reads search.parallel_detail_reads",
         "Every promising posting is evaluated; no posting is dropped merely because the host refuses another subagent slot",
         "If the host hits a subagent/thread limit, the run continues in rolling batches or falls back to sequential detail reads",
         "Capacity backpressure alone does NOT make Run health partial or degraded",
         "Digest match sections include one-line reasoning for every shown match, not title-only entries",
-        "jobs.jsonl contains one single-line evaluated event per source_id and no duplicate source_id events"
+        "jobs.jsonl contains one single-line evaluated event per (source, source_id) and no duplicate source_id events"
+      ]
+    },
+    {
+      "id": 15,
+      "scenario": "multi-source",
+      "prompt": "Same harness but JOBSEARCH_TEST_SCENARIO=multi-source (the workspace config ships search.sources [linkedin, ashby]; linkedin returns the happy rows via fallback, ashby returns 2 rows with UUID source_ids and null posted_at). Run job-search-run against <tmp> and show the digest + jobs.jsonl.",
+      "expectations": [
+        "Runs one search-jobs per (enabled query × enabled source), passing --source on every call, and verifies the echoed data.query.source matches the request",
+        "Every evaluated event's source is copied from its result row (linkedin rows → \"linkedin\", ashby rows → \"ashby\") — never a hardcoded literal",
+        "Ashby rows with null posted_at are NOT dropped by the freshness window; their digest entries carry a date mark ('posted ~<date> (from posting text)' or 'date not stated'), and a detail-read null-date posting whose JD states a date yields posted_at_extracted on its event",
+        "The digest counts line includes a per-source breakdown (e.g. '(2 LinkedIn · 2 Ashby)') and ashby match meta lines carry a ' · Ashby' tag",
+        "The first-pass-over-Ashby footnote appears (the ashby known-ids set was empty at run start)",
+        "Immediately re-running produces no duplicate evaluated events for any (source, source_id) pair",
+        "Output contains no numeric score; exits 0"
+      ]
+    },
+    {
+      "id": 16,
+      "scenario": "one-source-down",
+      "prompt": "Same harness but JOBSEARCH_TEST_SCENARIO=one-source-down (every ashby search-jobs returns a retryable 502; linkedin succeeds via the happy fallback). Run job-search-run and show the digest.",
+      "expectations": [
+        "Retries the ashby 502s with backoff, opens the ashby circuit after two consecutive fully-failed ashby queries, and stops calling ashby for the rest of the run",
+        "LinkedIn queries complete and their matches appear as normal — one source down never blanks the run",
+        "Run health is 'partial (ashby unavailable)' and a footnote says Ashby was unreachable this run and the next run will retry",
+        "runs/<id>.json lists ashby in sources_failed; exits 0 (partial, not a HALT)"
+      ]
+    },
+    {
+      "id": 17,
+      "scenario": "source-unsupported",
+      "prompt": "Same harness but JOBSEARCH_TEST_SCENARIO=source-unsupported (every non-linkedin search-jobs returns a non-retryable 400 unsupported_source with error.param 'source'; linkedin succeeds via the happy fallback). Run job-search-run and show the digest.",
+      "expectations": [
+        "Surfaces E-SOURCE-UNSUPPORTED's footnote naming the fix (remove 'ashby' from search.sources in config.yaml, or update the agent-data service)",
+        "Does NOT retry the 400 (retryable:false) — the unsupported source is dropped on its first response",
+        "LinkedIn queries complete and their matches appear as normal — the unsupported source never blanks the run",
+        "Run health is 'partial (ashby unavailable)'; exits 0 (partial, not a HALT)"
+      ]
+    },
+    {
+      "id": 18,
+      "scenario": "legacy-source-swallow",
+      "prompt": "Same harness but JOBSEARCH_TEST_SCENARIO=legacy-source-swallow (the service silently ignores --source and never echoes data.query.source — a legacy server predating source selection; every search-jobs returns the happy linkedin rows via fallback). Run job-search-run against <tmp> and show the digest + jobs.jsonl.",
+      "expectations": [
+        "Detects the missing/mismatched data.query.source echo (an absent echo counts as linkedin) and surfaces E-SOURCE-IGNORED's footnote (the service predates source selection — only LinkedIn was searched)",
+        "Writes ZERO evaluated events with \"source\":\"ashby\" — the swallowed ashby call's rows keep their row-level source (linkedin)",
+        "The swallowed ashby call's returned rows dedup against the genuine linkedin call's rows — no duplicate evaluated events for any (source, source_id) pair",
+        "Run health is 'partial (ashby unavailable)'; exits 0 (partial, not a HALT)"
+      ]
+    },
+    {
+      "id": 19,
+      "scenario": "multi-source",
+      "prompt": "Same harness as eval 15, JOBSEARCH_TEST_SCENARIO=multi-source, focused on the cross-source duplicate. linkedin returns the happy rows via fallback — Acme 'Senior AI Engineer' (source_id 1001, Remote US) plus the Globex onsite-Austin ML reject. ashby returns the SAME Acme 'Senior AI Engineer' (source_id 6e9a1f00-1111-4aaa-8bbb-2cc3dd4ee5f6, posting jp_ashbyacme01, Remote US, null posted_at) duplicating the linkedin Acme role, plus the ashby-only Zephyr Robotics 'Staff AI Engineer' (source_id 0b7c2d33-2222-4ccc-9ddd-3ee4ff5aa6b7, Remote US, null posted_at). Run job-search-run against <tmp> and show the digest + jobs.jsonl.",
+      "expectations": [
+        "Recognizes the Acme 'Senior AI Engineer' (Remote US) — returned by BOTH linkedin (source_id 1001) and ashby (source_id 6e9a1f00-1111-4aaa-8bbb-2cc3dd4ee5f6) — as ONE real-world role (same company, equivalent title, compatible location) and merges the pair",
+        "Spends exactly ONE detail read on the merged pair, and that read is on the ashby row (posting jp_ashbyacme01 — the company board), NOT the linkedin row",
+        "The merged role renders as ONE digest entry (never two separate match lines) whose link line shows the ashby company-board link first, then an 'also on LinkedIn' link — the form `[view on company board](https://jobs.ashbyhq.com/acme/6e9a1f00-1111-4aaa-8bbb-2cc3dd4ee5f6) · [also on LinkedIn](https://www.linkedin.com/jobs/view/1001)` ('view' verbs, never 'apply')",
+        "jobs.jsonl carries TWO evaluated events for the pair — one for (linkedin, 1001) and one for (ashby, 6e9a1f00-1111-4aaa-8bbb-2cc3dd4ee5f6) — sharing the same verdict fields (relevant/match/reasoning); the linkedin event bears same_role_as:\"ashby:6e9a1f00-1111-4aaa-8bbb-2cc3dd4ee5f6\" (a FLAT string pointing at the ashby primary that got the detail read) and the ashby event bears no same_role_as",
+        "The ashby-only Zephyr Robotics 'Staff AI Engineer' (0b7c2d33-2222-4ccc-9ddd-3ee4ff5aa6b7) is NOT merged with anything — it is its own evaluated event and its own digest entry, carrying no same_role_as",
+        "The merged Acme pair is treated as ONE role, not two: it appears exactly once across the digest's match sections, and the pipeline/home view counts the alias pair as one role (the two shared-verdict events are for DIFFERENT (source, source_id) pairs — not a duplicate)",
+        "Output contains no numeric score, no category weights, and no dollar/credit cost figures; exits 0",
+        "The digest counts line counts rows, not merged roles: '4 new postings (2 LinkedIn · 2 Ashby)' — the breakdown sums to N even though the Acme pair renders as one merged entry"
+      ]
+    },
+    {
+      "id": 20,
+      "scenario": "one-source-down",
+      "prompt": "Same harness but JOBSEARCH_TEST_SCENARIO=one-source-down with two per-case tweaks that make workday the failing source: (a) export JOBSEARCH_TEST_DOWN_SOURCE=workday (every workday search-jobs returns a retryable 502; linkedin succeeds via the happy fallback and ashby returns its happy-fallback fixture row (Zephyr)), and (b) enable workday in the sandbox config via `sed -i.bak 's/sources: \\[\"linkedin\", \"ashby\"\\]/sources: [\"linkedin\", \"ashby\", \"workday\"]/' <tmp>/config.yaml && rm -f <tmp>/config.yaml.bak`. Run job-search-run and show the digest.",
+      "expectations": [
+        "Retries the workday 502s with backoff, opens the workday circuit after two consecutive fully-failed workday queries, and stops calling workday for the rest of the run",
+        "LinkedIn and Ashby queries complete and their matches appear as normal — one source down never blanks the run",
+        "Run health is 'partial (workday unavailable)' and a footnote says Workday was unreachable this run and the next run will retry",
+        "runs/<id>.json lists workday in sources_failed and both linkedin and ashby in sources_searched; exits 0 (partial, not a HALT)"
       ]
     }
   ]

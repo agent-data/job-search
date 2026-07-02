@@ -14,6 +14,15 @@ Whether an isolated-context concurrent subagent primitive is available, any conc
 the active platform's adapter → **Concurrent detail reads**. Read your adapter before dispatching; a host with
 no concurrent primitive degrades gracefully through that fallback.
 
+**Some hosts also require explicit user approval before they will use subagents for job-search detail reads**
+— their adapter → **Concurrent detail reads** says so (today only Codex does). Treat missing approval as a
+real boundary on those hosts, not as implied permission: the interactive front door may ask and store the
+answer in `search.parallel_detail_reads`, while a headless runner reads that stored preference. How an
+**unset** preference resolves is the adapter's call: an approval-gating host reads sequentially until the user
+approves, but a host that needs no approval keeps the parallel-by-default fan-out above. An explicit `false`
+is always a user opt-out to sequential reads; `true` is always the parallel fan-out where the primitive
+exists.
+
 If the host has a concurrent primitive but refuses more subagents because its thread/slot limit is reached,
 that is **backpressure**, not a run-health error. Keep the already-dispatched work, wait for a completed subagent,
 close it promptly, and dispatch the next queued item. Continue in rolling batches until every queued item has

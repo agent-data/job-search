@@ -9,6 +9,8 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with: { python-version: "3.11" }
+      - name: Install test dependencies
+        run: python3 -m pip install pytest
       - name: Unit tests
         run: python3 -m pytest -q
       - name: Philosophy guard

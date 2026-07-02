@@ -86,7 +86,15 @@ The user changes config by **chatting**; manual editing is an escape hatch. To a
   client-side recency filter on `posted_at`; the API has no date param) and `search.detail_model`
   (`fast | balanced | high | inherit` — a portable tier token the runner's per-posting detail reads use; the
   literal model each maps to lives in your platform's adapter → Model tiers, and the fan-out itself defers to
-  → Concurrent detail reads). `queries[].limit` (1–100, default 25) is the per-query feed size.
+  → Concurrent detail reads). `search.parallel_detail_reads` is optional: unset means an interactive
+  front-door flow may ask whether to use parallel subagents where the host requires explicit approval; `true`
+  means the user approved; `false` means use sequential detail reads. Only conversational front-door flows
+  write this preference; the headless runner reads it and never changes config. `queries[].limit` (1–100,
+  default 25) is the per-query feed size.
+- **Choose job sources:** set `search.sources` — an ordered list from the contract's source enum
+  (see `agent-data-contract.md`); omit the key for the default `["linkedin", "ashby"]`. Adding
+  `"workday"` opts into the experimental source (expect partial runs while upstream stabilizes).
+  Only conversational flows write this; the headless runner reads it and never changes config.
 - **Derive "remote" into the query:** `search-jobs` has no remote flag, so when the brief requires remote (or
   rejects onsite-elsewhere), fold `remote` into the query `keywords` and/or set `location` to the brief's allowed
   geographies — otherwise the feed fills with onsite roles the judge then filters out.

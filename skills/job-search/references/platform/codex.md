@@ -7,7 +7,7 @@ literal here. Read only the section you need; each is self-contained. Companion 
 and every "pin on install" caveat.
 
 > **Verification.** Codex is the one harness installed and **partially live-tested** (`codex-cli
-> 0.140.0`): live `agent-data` calls and relevance judgments worked via `codex exec`, but a later
+> 0.142.0`): live `agent-data` calls and relevance judgments worked via `codex exec`, but a later
 > nested run showed the default `workspace-write` sandbox can read `~/.job-search` while refusing to
 > write run artifacts there unless the workspace is the Codex cwd or is passed with `--add-dir`.
 > Items still unconfirmed on a running instance carry a **PIN** tag — confirm them before relying on
@@ -43,8 +43,15 @@ invoked by name; there is no Claude-style `job-search:` namespace prefix.
 One-off run anytime:
   cd <workspace> && codex exec --skip-git-repo-check --sandbox workspace-write \
     -c sandbox_workspace_write.network_access=true '$job-search-run'
+One-off run with approved parallel detail reads:
+  cd <workspace> && codex exec --profile job-search --skip-git-repo-check --sandbox workspace-write \
+    -c sandbox_workspace_write.network_access=true \
+    '$job-search-run --workspace <workspace>. Use parallel subagents for all detail reads.'
 Recurring (a native local Automation — see Scheduling):
   set up a Codex Automation that runs $job-search-run on your cadence
+Recurring with approved parallel detail reads:
+  set up a Codex Automation whose prompt is exactly:
+  Use $job-search-run. Use parallel subagents for all detail reads.
 ```
 
 `<workspace>` is the active job-search workspace from discovery (usually `~/.job-search`). If you must run
@@ -53,6 +60,9 @@ from another project directory, keep that cwd and add the workspace explicitly:
 ```
 codex exec --skip-git-repo-check --sandbox workspace-write --add-dir <workspace> \
   -c sandbox_workspace_write.network_access=true '$job-search-run'
+codex exec --profile job-search --skip-git-repo-check --sandbox workspace-write --add-dir <workspace> \
+  -c sandbox_workspace_write.network_access=true \
+  '$job-search-run --workspace <workspace>. Use parallel subagents for all detail reads.'
 ```
 
 ## Scheduling
@@ -65,12 +75,16 @@ Codex is **two-tier** (see the dossier §4 scheduling matrix):
   working directory at the job-search workspace (or otherwise keep the workspace writable from it) — the same
   `workspace-write` constraint as `codex exec`: reading `~/.job-search` is not enough, the run must persist
   `runs/`, `reports/`, and `jobs.jsonl` there. Record `scheduling.mechanism: codex-automation` in the
-  registry. PIN: behavior on a headless/server box with no App is unconfirmed; and whether an Automation's
-  default working directory makes the workspace writable is **unverified** — confirm direct persistence on a
-  running Codex App before relying on Tier 1.
+  registry. If `search.parallel_detail_reads: true`, put the exact sentence `Use parallel subagents for all
+  detail reads.` in the Automation prompt; do not assume a CLI `--profile` flag applies to App Automations.
+  PIN: behavior on a headless/server box with no App is unconfirmed; and whether an Automation's default
+  working directory makes the workspace writable is **unverified** — confirm direct persistence on a running
+  Codex App before relying on Tier 1.
 - **Tier 2 — pure CLI (no App): consent-gated machine schedule.** `codex` has no automation subcommand,
   so fall back to a **consent-gated** `crontab`/`launchd` entry wrapping
-  `cd <workspace> && codex exec --skip-git-repo-check --sandbox workspace-write -c sandbox_workspace_write.network_access=true '$job-search-run'`.
+  `cd <workspace> && codex exec --skip-git-repo-check --sandbox workspace-write -c sandbox_workspace_write.network_access=true '$job-search-run'`
+  or, when `search.parallel_detail_reads: true`,
+  `cd <workspace> && codex exec --profile job-search --skip-git-repo-check --sandbox workspace-write -c sandbox_workspace_write.network_access=true '$job-search-run --workspace <workspace>. Use parallel subagents for all detail reads.'`.
   Show the exact line with `<workspace>` resolved to an absolute path, get an explicit yes,
   never install it silently, and leave it user-removable. Record `scheduling.mechanism: cron` (or
   `launchd`). The relaxed-cron fallback is sanctioned here precisely because Codex offers no native local
@@ -98,6 +112,10 @@ written record (blocked run record + blocked digest + home view) — the record 
 view reads; the trustworthy exit code is an *additional* signal on Codex, not a replacement. PIN: a
 model-level HALT mapping to a specific non-zero code is not yet live-reproduced.
 
+When `search.parallel_detail_reads: true`, use the `--profile job-search` recipe from **Run recipe** so
+Codex loads `$CODEX_HOME/job-search.config.toml`, and keep the explicit prompt sentence. The profile enables
+the subagent tool; the prompt is the user's durable authorization.
+
 ## Closed-choice question
 
 Codex has **no structured-choice UI**. Ask the same question as prose with the options on numbered
@@ -106,12 +124,49 @@ header/question/labels in the skill; only the presentation degrades.
 
 ## Concurrent detail reads
 
-Codex supports isolated-context subagents via `spawn_agent` / `wait_agent` / `close_agent`. In
-`codex-cli 0.140.0` the `multi_agent` feature is on by default; older builds need
-`[features] multi_agent = true` in `~/.codex/config.toml`. Codex enforces a finite agent-thread limit, so
-the backpressure rule (`parallelism.md`) applies here: dispatch as many queued postings as fit, close
-completed agents promptly, then continue in rolling batches; with no slot at all, read and judge each
-posting **sequentially** — never fabricate a dispatch.
+Codex supports isolated-context subagents via `spawn_agent` / `wait_agent` / `close_agent`. Codex CLI 0.142.0
+reports `features.multi_agent` as stable/true, but Job Search still writes a scoped profile for headless runs
+so older or stricter installs have the capability enabled without changing the user's global Codex defaults.
+Codex still only spawns subagents when the user explicitly asks for subagents or parallel agent work.
+
+Job Search stores that approval in `search.parallel_detail_reads`:
+
+| Value | Codex action |
+|---|---|
+| unset | in a live `job-search` flow, ask once before the first run; in `job-search-run`, never prompt and read sequentially |
+| `true` | use parallel subagents for all queued detail reads, subject to Codex capacity |
+| `false` | read and judge queued postings sequentially |
+
+Ask the live Codex approval as a closed choice (numbered prose on Codex): "Use parallel subagents for detail
+reads? Codex will read promising postings faster by splitting those reads across helper agents. By default,
+detail-read subagents use `gpt-5.4-mini`." Options: **Yes, use subagents (Recommended)** — "faster; uses
+`gpt-5.4-mini` for posting details" · **No, read sequentially** — "slower; keeps all reads in this chat".
+Only the `job-search` front door writes the user's answer into `config.yaml`; `job-search-run` only reads it.
+
+When the user approves, also create or update `$CODEX_HOME/job-search.config.toml` for scheduled/headless
+CLI runs:
+
+```toml
+[features]
+multi_agent = true
+
+[agents]
+max_depth = 1
+```
+
+Tell the user this saves a Codex setting so unattended runs can use subagents. If the sandbox blocks the
+write, show the exact path and TOML above so the user can save it; do not silently skip the profile. If Codex
+rejects or ignores the profile, use the sequential fallback. This profile enables the capability where needed,
+but it does not replace explicit prompt authorization — CLI and Automation recipes still include
+`Use parallel subagents for all detail reads.` PIN: the `--profile` overlay (`$CODEX_HOME/job-search.config.toml`)
+and the `[agents] max_depth` key match OpenAI's published Codex config reference but are not yet live-reproduced
+in a job-search run — confirm the unattended path on a running Codex instance before relying on it.
+
+Codex enforces a finite agent-thread limit, so the backpressure rule (`parallelism.md`) applies here:
+dispatch as many queued postings as fit, close completed agents promptly, then continue in rolling batches.
+If Codex refuses subagent spawning or no slot is available at all, read and judge each posting sequentially —
+never fabricate a dispatch, never drop a posting, and do not mark run health partial/degraded solely for
+capacity or authorization fallback.
 
 ## Model tiers
 
@@ -119,13 +174,13 @@ posting **sequentially** — never fabricate a dispatch.
 
 | Tier token | Codex model |
 |---|---|
-| `fast` | a `gpt-5`-class fast model |
-| `balanced` | a mid `gpt-5`-class model |
-| `high` | `gpt-5-codex` / an o-series model |
-| `inherit` | the model this run is already on |
+| `fast` | `gpt-5.4-mini` |
+| `balanced` | `gpt-5.4` |
+| `high` | `gpt-5.5` |
+| `inherit` | the model this run is already on; omit the subagent model override |
 
 A legacy model name carried over from another harness's config maps to the nearest tier (default `fast`).
-PIN: exact current Codex model ids.
+Verified against the Codex manual fetched 2026-06-24.
 
 ## Whole-file write
 

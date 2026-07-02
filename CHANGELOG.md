@@ -4,6 +4,24 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- **Multi-source job search.** `search.sources` selects the job sources each query runs against
+  (`linkedin`, `ashby`, plus experimental `workday`); searches fan out per query × source with
+  per-source circuit breakers, composite (source, source_id) dedup, and honest handling of
+  Ashby's undated postings (a JD-stated date is extracted during the detail read). Digests
+  carry per-source counts and source tags. Two new named errors (E-SOURCE-UNSUPPORTED,
+  E-SOURCE-IGNORED) cover unknown sources and legacy servers that ignore source selection.
+- Multi-source test surface: fake-shim `--source` support, per-source fixtures, and four new
+  scenarios (multi-source, one-source-down, source-unsupported, legacy-source-swallow).
+- Workday is available as an explicit opt-in experimental source (`search.sources: [..., "workday"]`); a failing source degrades the run to `partial`, never blocks it.
+
+### Fixed
+- CI actually runs the unit-test gate (pytest was never installed on the runner).
+- `search-jobs` limit default corrected to the API's real value (20) in the run skill and
+  conventions; the config template still sets 25 explicitly.
+
 ## [0.3.0] — 2026-06-15
 
 First public release.

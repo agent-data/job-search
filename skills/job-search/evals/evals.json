@@ -109,6 +109,20 @@
         "Runs the auth step `agent-data init … --api-key mtk_evaltest --yes` (the platform adapter's init flag — `--claude-code` on the Claude agent; the bare installed binary, NOT an npx one-shot) (simulated), re-verifies with `agent-data whoami` (api_key_set:true), then PROCEEDS through onboarding to completion (workspace created and recorded as active_workspace in the registry)",
         "Does not invent a fit score or mention credits"
       ]
+    },
+    {
+      "id": 8,
+      "scenario": "first-run happy on Codex — approve parallel detail reads",
+      "prompt": "Fresh sandbox (setup-onboarding.sh), env as in harness, JOBSEARCH_TEST_SCENARIO=happy, and run as the Codex platform adapter. Also set CODEX_HOME=<tmp>/.codex so the Codex job-search profile write stays inside the temp sandbox. Invoke the job-search skill (discovery reports first_run:true, source:none). Canned answers — brief depth: 'standard'; situation='passively looking'; role='senior AI engineer, individual contributor, NOT management'; location='remote in the US, or SF Bay onsite'; frequency='daily'. When asked whether to use parallel subagents for detail reads, answer yes. Scheduling: yes. Complete onboarding end-to-end.",
+      "expectations": [
+        "After the frequency is saved and before the first live sample run, asks a one-time Codex approval question that explicitly says 'subagents' and names the default detail-read model `gpt-5.4-mini`",
+        "On yes, writes search.parallel_detail_reads: true to <tmp>/.job-search/config.yaml, preserves version: 1, and leaves search.detail_model as fast unless the user chose another tier",
+        "Creates or updates <tmp>/.codex/job-search.config.toml with [features] multi_agent = true and [agents] max_depth = 1; if the sandbox blocks that write, prints the exact path and TOML instead of silently skipping it",
+        "Runs the first sample job-search-run against <tmp>/.job-search with the explicit authorization sentence `Use parallel subagents for all detail reads.` in the invocation context",
+        "The Codex recurring Automation prompt or shown scheduled-run recipe also includes `Use parallel subagents for all detail reads.`; it does not assume App Automations accept `--profile`",
+        "The user-facing explanation is clear that posting-detail subagents use `gpt-5.4-mini` by default, with `gpt-5.4` and `gpt-5.5` available through the detail_model tiers",
+        "NO numeric score, NO category weights, NO credit/dollar/budget math anywhere in the output"
+      ]
     }
   ]
 }

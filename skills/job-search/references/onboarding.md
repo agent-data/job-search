@@ -190,13 +190,13 @@ user to name keywords.** They can retune anytime; the goal here is zero upfront 
 3. **Acknowledge what you saved — don't ask them to choose.** Name the searches you derived and make clear
    they're fully editable, e.g.:
 
-   > "From your preferences I'll search for **'AI engineer' · 'ML platform engineer'** across **US-remote +
+   > "From your preferences I'll search **LinkedIn and public Ashby company boards** for **'AI engineer' · 'ML platform engineer'** across **US-remote +
    > the SF Bay Area**. I can add, retune, or drop any of these anytime — just say the word."
 
    Only if the brief is too thin to derive anything sensible (rare) do you ask one focused question to fill
    the gap — lead with derivation, never a blank "what should I search for?".
    The config already comes preset with a recency window (recent postings only) and a fast model for reading
-   posting details — both are tunable anytime just by asking.
+   posting details — both are tunable anytime just by asking. The config also comes preset with the default job sources (LinkedIn + Ashby company boards) — tunable anytime just by asking.
 4. **Pick a frequency — as a closed choice** (`voice.md` → Asking questions), the plain-language nudge
    carried by the recommended-first option. Header `Frequency`; question:
    "How often should I check for new postings? You can change this anytime by just telling me."; options,
@@ -212,6 +212,28 @@ user to name keywords.** They can retune anytime; the goal here is zero upfront 
    allowed value and say which one you set. **Never** add a score or weight field — those
    don't exist in this system.
 
+### Codex detail-read approval
+
+Codex needs one explicit user approval before the runner uses parallel subagents for posting-detail reads.
+On Codex only, if `search.parallel_detail_reads` is unset, ask once after the frequency is saved and before
+the first live run. Use the exact closed choice from your platform's adapter → Concurrent detail reads; the
+question must say **subagents** and must name the default detail-read model (the `fast` tier from your
+platform's adapter → Model tiers).
+
+On **yes**:
+
+1. Write `search.parallel_detail_reads: true` to `config.yaml`; preserve comments/structure and keep
+   `version: 1`.
+2. Keep `search.detail_model: "fast"` unless the user explicitly chooses another tier. If they ask what
+   "fast" means, name the mapping from your platform's adapter → Model tiers.
+3. Create or update the Codex profile exactly as specified in your platform's adapter → Concurrent detail
+   reads (`$CODEX_HOME/job-search.config.toml` / `~/.codex/job-search.config.toml`). Tell the user this saves
+   a Codex setting so unattended runs can use subagents. If the sandbox blocks that write, show the exact
+   path and TOML from the adapter; don't silently skip it.
+
+On **no**, write `search.parallel_detail_reads: false` and read details sequentially. Do not ask again unless
+the user later asks to change it.
+
 ## 6. First live sample run — the magical moment
 
 This is the payoff. Disclose it plainly first, then do it:
@@ -220,7 +242,10 @@ This is the payoff. Disclose it plainly first, then do it:
 
 Invoke **`job-search-run`** against the workspace (pass `--workspace <workspace>`). It probes the
 source, searches each enabled query, skips postings already seen, judges each new posting against the
-brief, reads full descriptions for the promising ones, and writes a digest. Then present the result like a
+brief, reads full descriptions for the promising ones, and writes a digest. On Codex, if
+`search.parallel_detail_reads: true`, the invocation context must include the exact sentence
+`Use parallel subagents for all detail reads.` — the saved config records the user's preference, and this
+sentence is the run's explicit authorization. Then present the result like a
 discovery, not a log dump — surface the **strong and moderate** matches from the digest **as normal message
 text in your reply** (rendered markdown — never a code fence, never just the digest's file path):
 
@@ -277,7 +302,9 @@ is always one command away (the exact invocation is in your platform's adapter �
 
 **Either way, show the recurring-run and one-off-run recipes verbatim from your platform's adapter → Run
 recipe** so the user can start or restart it themselves — copy those lines exactly as written; do not
-reconstruct the tokens here.
+reconstruct the tokens here. If `search.parallel_detail_reads: true`, choose the adapter's approved-parallel
+recipe/prompt variant; on Codex App Automations, that means the scheduled prompt includes
+`Use parallel subagents for all detail reads.`
 
 ## 8. Home
 
@@ -304,10 +331,14 @@ runs", "update my preferences", "show the latest digest").
 - [ ] `preferences.md` exists (interview or import via `job-preference-interview`)
 - [ ] 2–3 `queries[]` **derived from the brief** and written (no upfront keyword-picking); searches
       acknowledged; `schedule.frequency` set (plain-language nudge)
+- [ ] on Codex, if `search.parallel_detail_reads` was unset, the user was asked once about parallel
+      subagents; the answer was written to `config.yaml`; on yes the Codex job-search profile was written
+      (or the exact path + TOML was shown if blocked); the user saw the default `fast`-tier model named from the adapter → Model tiers
 - [ ] first **live** `job-search-run` done; strong/moderate matches shown — or the named error if blocked
 - [ ] shown matches include the digest reasoning and any "confirm" warning, not just titles/companies
 - [ ] scheduling offered (two-tier, per the adapter); on yes started + marker set; run recipe shown either
-      way
+      way; if Codex parallel detail reads were approved, the scheduled prompt includes the exact parallel
+      subagent authorization
 - [ ] every ask carried one line of plain-English context; the four closed choices (workspace location,
       interview-or-import, frequency, scheduling) asked as closed choices; no internal vocabulary
       reached the user (`voice.md`)

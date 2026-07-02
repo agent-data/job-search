@@ -13,7 +13,7 @@ shared/references or skills, so this is a NEW lane, not a doc_lint rule).
 Mirrors scripts/doc_lint.py in shape: scan(root) -> hits; main() prints hits and returns 1 on
 failure, else prints "Platform validation: clean." and returns 0. `--root` arg. Stdlib only.
 
-Five checks, dispatched via the CHECKS registry:
+Six checks, dispatched via the CHECKS registry:
   - adapter-sections:  every shared/references/platform/<harness>.md SOURCE adapter carries all 12
                        canonical `## ` sections (exact names). Synced skills/*/references/platform/
                        copies are asserted to match their source byte-for-byte.
@@ -34,6 +34,8 @@ Five checks, dispatched via the CHECKS registry:
                        writable (`cd <workspace>` or `--add-dir <workspace>`) as well as enabling
                        network egress. This catches the live regression where `workspace-write`
                        could read `~/.job-search` but could not persist run artifacts there.
+  - codex-parallel-subagents: Codex must document the job-search parallel-detail preference, scoped
+                       profile, explicit scheduled prompt authorization, fallback, and model mapping.
 """
 import argparse, json, os, re, shutil, subprocess, sys
 
@@ -330,12 +332,54 @@ def scan_codex_workspace_write(root):
     return hits
 
 
+def scan_codex_parallel_subagents(root):
+    """Codex subagent collaboration is preference-gated and prompt-authorized. The adapter must pin
+    both layers for job-search: a user-approved job-search preference, a scoped Codex profile for
+    headless runs, explicit scheduled prompt wording, a sequential fallback, and the concrete Codex
+    model IDs used for each detail-read tier."""
+    hits = []
+    rel = os.path.join(PLATFORM_DIR, "codex.md")
+    path = os.path.join(root, rel)
+    if not os.path.exists(path):
+        return hits
+    with open(path, encoding="utf-8", errors="replace") as f:
+        text = f.read()
+    required = (
+        ("search.parallel_detail_reads",
+         "missing job-search `search.parallel_detail_reads` preference"),
+        ("job-search.config.toml",
+         "missing scoped Codex profile file `$CODEX_HOME/job-search.config.toml`"),
+        ("multi_agent = true",
+         "missing `multi_agent = true` profile setting"),
+        ("--profile job-search",
+         "missing `--profile job-search` in the Codex CLI recipe"),
+        ("Use parallel subagents for all detail reads",
+         "missing explicit scheduled prompt authorization: `Use parallel subagents for all detail reads`"),
+        ("sequential",
+         "missing sequential fallback if Codex refuses or cannot spawn subagents"),
+    )
+    for needle, message in required:
+        if needle not in text:
+            hits.append(f"{rel}: codex-parallel-subagents: {message}")
+    tier_rows = (
+        ("fast", "gpt-5.4-mini"),
+        ("balanced", "gpt-5.4"),
+        ("high", "gpt-5.5"),
+    )
+    for tier, model in tier_rows:
+        if not re.search(rf"`{tier}`\s*\|\s*`{re.escape(model)}`", text):
+            hits.append(f"{rel}: codex-parallel-subagents: missing Codex `{tier}` "
+                        f"detail-read model mapping to `{model}`")
+    return hits
+
+
 CHECKS = {
     "adapter-sections": scan_adapter_sections,
     "manifest-parse": scan_manifest_parse,
     "skill-frontmatter": scan_skill_frontmatter,
     "adapter-cross-refs": scan_adapter_cross_refs,
     "codex-workspace-write": scan_codex_workspace_write,
+    "codex-parallel-subagents": scan_codex_parallel_subagents,
 }
 
 

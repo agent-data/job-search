@@ -12,12 +12,13 @@ user-invocable: true
 
 Run ONE headless job-search pass over the workspace. Preflight gates before searching; no silent failures.
 **Shape:** search → dedup/freshen → **scan summaries in this (primary) context** → **fan out one parallel
-subagent per promising posting** for the detail read → **consolidate** into a digest.
+subagent per promising posting** (sequential only where the host lacks the primitive or awaits subagent
+approval) → **consolidate** into a digest.
 
 Find the workspace with the **Discovery procedure** in `references/internals.md` UNLESS `--workspace <path>`
 is given, which overrides. This run is HEADLESS: never prompt. If discovery reports `first_run` (no
 workspace/config yet) → E-NO-CONFIG naming the **job-search** skill as the fix (HALT, exit 1); onboarding is
-interactive and lives in the `job-search` skill, not here. The job source listing id is `f9a6ec16-0bfd-44d8-b3ee-073776745ee7`.
+interactive and lives in the `job-search` skill, not here. The job source listing id is `f9a6ec16-0bfd-44d8-b3ee-073776745ee7` — one listing serving every job source; the enabled sources come from `config.yaml` `search.sources` (absent → `["linkedin", "ashby"]`), validated against the contract's enum at preflight (an unknown token → E-SOURCE-UNSUPPORTED: drop it, footnote the fix, continue).
 
 **Retries:** branch only on the error envelope's `retryable` boolean (`true` → retry with backoff up to 3×;
 `false` → never retry), not on the error `code` string — see `references/agent-data-contract.md`.
@@ -37,71 +38,95 @@ Read these before running, and follow them exactly:
    - `agent-data whoami`; `api_key_set:false` → E-NO-AUTH (HALT, exit 1).
    - `config.yaml` `version` major unknown → E-CONFIG-VERSION (HALT, exit 1).
    - Brief missing/empty (`workspace.preferences_path`) → E-NO-PREFERENCES (HALT, exit 1, named fix).
-   - `agent-data call <listing> status`: `ok` proceed; `degraded` set a flag (set Run health: degraded;
-     note "LinkedIn flaky — results this run may be affected" in the digest; no detail-read cap — read
+   - `agent-data call <listing> status`: `ok` proceed; `degraded` set a flag (set Run health: degraded (job sources flaky);
+     note "job sources flaky — results this run may be affected" in the digest; no detail-read cap — read
      promising matches as normal); unreachable → E-SERVICE-DOWN (write a "service down" digest, HALT, exit 1).
 
    > Before exiting on ANY E-* HALT where a workspace exists (E-NO-AUTH, E-NO-PREFERENCES,
    > E-CONFIG-VERSION, E-SERVICE-DOWN, E-QUOTA), write `runs/<run_id>.json` with
    > `run_health:"blocked"` + the error, so the next home view surfaces it.
-1. **Search the feed (one `search-jobs` per enabled query; run the queries concurrently).** For each
-   `queries[]` with `enabled:true`, call `search-jobs` with `--keywords` (+ `--location`, `--limit`) and `--fields id,source_id,source_url,title,company_name,location_display,salary_display,posted_at,detail_available,source`.
-   `limit` is the feed size (1–100, **default 25**) — pull generously and lean on **breadth** (several varied
+1. **Search the feed (one `search-jobs` per enabled query × enabled source; run the whole batch concurrently).** Build the full call list first — one call per (enabled query × enabled source), passing `--source <s>` on each; with 2 queries and `sources: ["linkedin", "ashby"]` that is 4 calls. **The single listing id does not mean a single source** — the one listing serves every source and `--source` selects which; never collapse the fan-out because the listing id repeats. For each
+   `queries[]` with `enabled:true` × each enabled source `s`, call `search-jobs` with `--keywords` (+ `--location`, `--limit`), `--source <s>`, and `--fields id,source_id,source_url,title,company_name,location_display,salary_display,posted_at,detail_available,source`.
+   `limit` is the feed size (1–100; the API defaults to 20 — the config template sets 25) — pull generously and lean on **breadth** (several varied
    queries beat one giant pull; there's no pagination and re-runs reorder). See remote-derivation and "as many
    NEW as possible" in `references/internals.md`.
+   **Echo-verify every 200 response:** if the echoed `data.query.source` (absent = `linkedin`) ≠ the requested
+   source → E-SOURCE-IGNORED: skip this source's remaining queries, keep the returned rows under their own
+   row-level `source`. A `400 unsupported_source` → E-SOURCE-UNSUPPORTED: drop the source, continue.
    - `502 search_failed` (retryable) → retry up to 3× with backoff; on give-up record the error and continue.
-     **Two consecutive queries that fail entirely (all retries exhausted) → E-UPSTREAM-STRETCH: stop searching the rest.**
+     **Two consecutive fully-failed queries against the SAME source → E-UPSTREAM-STRETCH for that source: stop searching it; other sources continue. All enabled sources stretched → stop searching entirely (partial digest).** Failure counters are per-source and reset on that source's first success.
    - `422`/`400 unsupported_field` → E-BAD-QUERY (name the bad param from `details[].loc`), skip that query.
    - A quota/limit/payment failure (see errors.md detection) → E-QUOTA (HALT, exit 1).
-2. **Dedup + freshen.** The **known-ids** operation (`references/conventions.md` §jobs.jsonl) over
-   `<workspace>/jobs.jsonl` → the known set;
-   NEW = results whose non-null `source_id` is not in it (this is the dedup mechanism the no-reprocessing
-   guarantee rests on — see Idempotency). Then apply `search.freshness` (default `past-2-weeks`):
-   drop NEW rows whose `posted_at` is older than the window — the API has no date parameter, so this is a
-   client-side filter on `posted_at` (`any` disables it). Null-`source_id` rows can't be deduped → skip, count
-   "unidentifiable".
+   Cross-check before moving on: every enabled source must appear among the attempted calls (each lands in `runs/<run_id>.json` `queries[]` with its `source`); an enabled source with zero attempted calls means the fan-out was mis-executed — dispatch its missing calls now.
+2. **Dedup + freshen.** Run the **known-ids** operation once per enabled source (`conventions.md`
+   §jobs.jsonl) → per-source known sets; NEW = rows whose non-null `source_id` is not in THEIR OWN source's
+   set. Record which sources returned rows AND had an EMPTY known set at run start (that triggers the first-pass footnote in
+   step 5). Then apply `search.freshness`: drop NEW rows whose `posted_at` is older than the window — **a null
+   `posted_at` is NEVER dropped**: treat the row as new-if-unseen and carry a date-unknown mark into the scan
+   and digest. Null-`source_id` rows can't be deduped → skip, count "unidentifiable".
 3. **Scan the feed here, in this (primary) context — the cheap first pass.** Review every NEW posting's SUMMARY
    fields (title, company, `location_display`, `salary_display`, `posted_at`). Reject the clearly-irrelevant from
    the summary alone — a must-have plainly violated and stated right in the row (e.g. an onsite-elsewhere
    `location_display`) → record irrelevant, NO detail read. Queue everything relevant-or-uncertain, and for each queued posting jot a one-line
    **steer** for the detail read — your provisional read + the *specific* open questions it must resolve (which
    must-haves are unconfirmed from the summary, what's uncertain), e.g. "looks strong; confirm remote-US —
-   location says Austin" or "confirm IC vs manager; seniority unstated". The cheap scan does real work — it
+   location says Austin" or "confirm IC vs manager; seniority unstated". When a queued row's `posted_at` is
+   null, the steer also asks the detail read to extract a JD-stated posting date if the description names one
+   ("Job Posted: …"). The cheap scan does real work — it
    produces the primary's guidance for each detail review, not just a gate.
-4. **Fan out the detail reads — one subagent per queued posting, in PARALLEL.** The reads are independent, so
-   dispatch all queued postings **at once, in a single batch** of concurrent subagents (tier =
-   `search.detail_model`, default `fast`; `inherit` = this run's own model tier — see your platform's adapter →
-   Model tiers) — **never a one-at-a-time loop** (see your platform's adapter → Concurrent detail reads for the
-   fan-out primitive and sequential fallback when no concurrent primitive is available). Hand each subagent the
-   **orchestration + the primary's steer**: the posting's `id` + `source_url` pair, the brief's path, the
-   **`evaluate-job-fit` skill to follow**, and the **per-posting steer from the scan** (your provisional read +
-   the specific must-haves/unknowns it should confirm) — brief it like a colleague with zero context (see
-   **Briefing each detail subagent**). Never a re-stated rubric — that skill's `SKILL.md`
-   is the single source of truth for *how* to judge; the primary supplies *what* to judge and *what to confirm*.
-   Each subagent calls `get-posting` with the row's `id` (`--posting_id`) AND its `--source_url` (the same-row
-   pair), judges `description_markdown` + `missing_fields[]` (missing = "not stated", never negative) by following
-   that skill and **resolving the steer's open questions**, and returns ONLY its `source_id` + the structured
-   judgment object. Per-posting errors stay inside that subagent: `400 invalid_pair` (not retryable) → judge from summary,
-   note "detail link expired"; `502 detail_fetch_failed` (retryable) → retry/backoff, then summary-only + note.
-   **No product cap** — every queued posting gets evaluated; the scan (relevance), not a count, decides how
-   many. If the host caps concurrent subagents, that's backpressure, not a run-health error — see your
-   platform's adapter → Concurrent detail reads. Running the available work in parallel is the point: it cuts
-   wall-clock, keeps full JDs out of this context, and lets a faster/cheaper model handle the bulk reads.
-5. **Consolidate + persist + report.** Collect the parallel subagents' verdicts and **validate each before it lands**: `match` must be `strong | moderate | weak`, or `null` when `relevant` is false — coerce anything else (a faster delegated model can emit a stray number or out-of-vocab band) and never let a numeric score reach `jobs.jsonl` or the digest — and every event MUST carry a non-empty `source_id`. Then for each NEW posting (the deduped set from step 2 — see Idempotency) append the FULL `evaluated` event
+
+   **Cross-source merge (conservative).** After forming the NEW set, group rows that are the
+   same real-world role seen on multiple sources: same company (allowing trivial name variants),
+   same or equivalent role title, compatible location → one role. **When uncertain, treat as
+   distinct — two detail reads are cheaper than a wrong merge.** For a merged group: ONE detail
+   read, on the Ashby row when the group has one (its detail is complete and its URL is the
+   company's live apply page), with the steer noting "also on <other source>"; the judgment
+   applies to every row in the group.
+4. **Read the details — parallel by default, sequential where the host requires it.** The reads are
+   independent, so the default is the parallel per-posting fan-out. First read `search.parallel_detail_reads`
+   from `config.yaml` (see `references/conventions.md`). This runner is headless: never ask, and never edit
+   config. Resolve the mode against your platform's adapter → Concurrent detail reads: `true` → use the
+   parallel fan-out; `false` → read sequentially (an explicit user opt-out); **unset → the adapter's default**
+   — hosts that gate subagents behind user approval (e.g. Codex) read sequentially until approved, every other
+   host keeps the parallel fan-out. For the parallel fan-out, dispatch queued postings as one concurrent batch
+   where capacity allows, one subagent per posting (tier = `search.detail_model`, default `fast`; `inherit` =
+   this run's own model tier — see your platform's adapter → Model tiers). If the host applies a subagent/thread
+   limit, continue in rolling batches; if it refuses subagent spawning or no slot is available, fall back to
+   sequential reads. Capacity or authorization fallback is not a run-health error, and no posting is dropped.
+
+   For parallel reads, hand each subagent the **orchestration + the primary's steer**: the posting's `id` +
+   `source_url` pair, the brief's path, the **`evaluate-job-fit` skill to follow**, and the **per-posting steer
+   from the scan** (your provisional read + the specific must-haves/unknowns it should confirm) — brief it like
+   a colleague with zero context (see **Briefing each detail subagent**). For sequential reads, keep that same
+   steer beside the posting and follow `evaluate-job-fit` directly. Never use a re-stated rubric — that skill's
+   `SKILL.md` is the single source of truth for *how* to judge; the primary supplies *what* to judge and *what
+   to confirm*. Each detail read, whether parallel or sequential, calls `get-posting` with the row's `id`
+   (`--posting_id`) AND its `--source_url` (the same-row pair) — pass the row's `--source` explicitly (contract
+   → get-posting) — judges `description_markdown` + `missing_fields[]`
+   (missing = "not stated", never negative) by following that skill and **resolving the steer's open questions**,
+   and returns/records the same structured judgment object. Per-posting errors stay local to that posting:
+   `400 invalid_pair` (not retryable) → judge from summary, note "detail link expired"; `502 detail_fetch_failed`
+   (retryable) → retry/backoff, then summary-only + note. **No product cap** — every queued posting gets evaluated;
+   the scan (relevance), not a count, decides how many.
+5. **Consolidate + persist + report.** Collect the detail-read verdicts and **validate each before it lands**: `match` must be `strong | moderate | weak`, or `null` when `relevant` is false — coerce anything else (a faster delegated model can emit a stray number or out-of-vocab band) and never let a numeric score reach `jobs.jsonl` or the digest — and every event MUST carry a non-empty `source_id`. Then for each NEW posting (the deduped set from step 2 — see Idempotency) append the FULL `evaluated` event
    to `<workspace>/jobs.jsonl` via the **append** operation (complete schema + event-line contract in
    conventions.md §jobs.jsonl).
-   The event MUST carry provenance — `event:"evaluated"`, `ts`, `run_id`, `source:"linkedin"`, `query_id`,
-   `title`, `company_name`, `location_display`, `salary_display`, `posted_at`, `source_url`,
+   The event MUST carry provenance — `event:"evaluated"`, `ts`, `run_id`, `source` — **copied from the result row, never a literal**, `query_id`,
+   `title`, `company_name`, `location_display`, `salary_display`, `posted_at`, `posted_at_extracted` (optional — the JD-stated date when the API `posted_at` was null), `source_url`,
    `posting_id_at_seen` (the `jp_` id), `detail_read` — AND the judgment — `source_id`, `relevant`, `match`,
-   `reasoning`, `dealbreakers_hit`, `unknowns`, `needs_human_check`, `status:"new"`, `first_seen`. Write
-   `runs/<run_id>.json` and `reports/<date>-digest.md` (format in conventions.md; strong → moderate → weak,
-   then "filtered out: N"). Print a 5-line terminal summary in this shape:
+   `reasoning`, `dealbreakers_hit`, `unknowns`, `needs_human_check`, `status:"new"`, `first_seen`. For a merged group, append one `evaluated` event per row (each with its own `source`/`source_id`/`source_url`/`posted_at`), all sharing the verdict fields; every NON-primary row's event also carries `"same_role_as":"<source>:<source_id>"` pointing at the primary (the row that got the detail read). Write
+   `runs/<run_id>.json` and `reports/<date>-digest.md` (format in conventions.md — the counts line, per-source
+   breakdown, per-match source tags, and date marks all per that spec; strong → moderate → weak, then
+   "filtered out: N"). Footnotes: first-pass-per-source (for each source flagged in step 2), and one line per
+   lost source (stretch / unsupported / ignored — exact texts in `errors.md`). Run health: any lost source →
+   `partial (<source> unavailable)`; all lost → `partial (all sources unavailable)`. Print a 5-line terminal
+   summary in this shape:
 
    ```
    Searched <n> queries · <total> postings, <new> new
    Read <m> in full
    <s> strong · <md> moderate · <w> weak · <f> filtered out
-   Run health: <healthy | partial (N errors) | degraded | blocked>
+   Run health: <healthy | partial (<why>) | degraded (job sources flaky) | blocked>
    Digest: <path to reports/<date>-digest.md>
    ```
 
@@ -152,4 +177,4 @@ to onboarding. Name the error and stop.
 
 ## Idempotency
 Re-running the same day re-searches (cheap) but dedup means no posting is re-evaluated or re-read. Never write
-a duplicate `evaluated` event for a known `source_id`.
+a duplicate `evaluated` event for a known `(source, source_id)` pair (the composite dedup key — see step 2).
