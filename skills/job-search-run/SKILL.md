@@ -45,7 +45,7 @@ Read these before running, and follow them exactly:
    > Before exiting on ANY E-* HALT where a workspace exists (E-NO-AUTH, E-NO-PREFERENCES,
    > E-CONFIG-VERSION, E-SERVICE-DOWN, E-QUOTA), write `runs/<run_id>.json` with
    > `run_health:"blocked"` + the error, so the next home view surfaces it.
-1. **Search the feed (one `search-jobs` per enabled query × enabled source; run the whole batch concurrently).** For each
+1. **Search the feed (one `search-jobs` per enabled query × enabled source; run the whole batch concurrently).** Build the full call list first — one call per (enabled query × enabled source), passing `--source <s>` on each; with 2 queries and `sources: ["linkedin", "ashby"]` that is 4 calls. **The single listing id does not mean a single source** — the one listing serves every source and `--source` selects which; never collapse the fan-out because the listing id repeats. For each
    `queries[]` with `enabled:true` × each enabled source `s`, call `search-jobs` with `--keywords` (+ `--location`, `--limit`), `--source <s>`, and `--fields id,source_id,source_url,title,company_name,location_display,salary_display,posted_at,detail_available,source`.
    `limit` is the feed size (1–100; the API defaults to 20 — the config template sets 25) — pull generously and lean on **breadth** (several varied
    queries beat one giant pull; there's no pagination and re-runs reorder). See remote-derivation and "as many
@@ -57,6 +57,7 @@ Read these before running, and follow them exactly:
      **Two consecutive fully-failed queries against the SAME source → E-UPSTREAM-STRETCH for that source: stop searching it; other sources continue. All enabled sources stretched → stop searching entirely (partial digest).** Failure counters are per-source and reset on that source's first success.
    - `422`/`400 unsupported_field` → E-BAD-QUERY (name the bad param from `details[].loc`), skip that query.
    - A quota/limit/payment failure (see errors.md detection) → E-QUOTA (HALT, exit 1).
+   Cross-check before moving on: every enabled source must appear among the attempted calls (each lands in `runs/<run_id>.json` `queries[]` with its `source`); an enabled source with zero attempted calls means the fan-out was mis-executed — dispatch its missing calls now.
 2. **Dedup + freshen.** Run the **known-ids** operation once per enabled source (`conventions.md`
    §jobs.jsonl) → per-source known sets; NEW = rows whose non-null `source_id` is not in THEIR OWN source's
    set. Record which sources had an EMPTY known set at run start (that triggers the first-pass footnote in

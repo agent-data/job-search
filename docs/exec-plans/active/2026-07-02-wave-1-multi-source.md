@@ -1250,7 +1250,12 @@ T8 shipped the operator enable flow; T9 shipped the template comment). This task
   Cross-cutting: no numeric scores/weights/credit-cost in any digest or jobs.jsonl (match vocab strictly
   strong/moderate/weak/null); all observed run-health strings are within the ratified enum. Gates:
   `python3 -m pytest -q` → 98 passed; `python3 scripts/doc_lint.py --root .` → clean. evals.json is not a
-  synced `shared/references/` file, so `./scripts/build.sh` is a no-op.
+  synced `shared/references/` file, so `./scripts/build.sh` is a no-op; fix wave: fallback ashby fixtures
+  + fan-out hardening (this commit) — re-runs 1/2/9 pass (eval 9's exp1 now lands `degraded (job sources
+  flaky)`), eval 10 passes its headline ("no new postings — you've already seen all 3"; 1 of 2 runs spent
+  one stray get-posting reconciling the prompt's source-less 1001/1002 legacy seeds before
+  self-correcting — a flake, second run clean 3/3), eval 15 ×3 fresh all fan out (4 query×source calls,
+  both sources in `sources_searched`, every time) + rerun idempotent (0 duplicate events).
 
 ## Decision log
 

@@ -55,6 +55,14 @@ def test_error_scenario_reuses_happy_search_fixture():
     assert r.returncode == 0
     assert len(json.loads(r.stdout)["data"]["results"]) == 2
 
+def test_error_scenarios_reuse_happy_ashby_fixture():
+    # degraded has no own ashby fixture; the cascade must serve happy's ashby data with the echo injected
+    r = shim(["call", LISTING, "search-jobs", "--keywords", "x", "--source", "ashby"], scenario="degraded")
+    assert r.returncode == 0
+    data = json.loads(r.stdout)["data"]
+    assert data["query"]["source"] == "ashby"
+    assert [row["source"] for row in data["results"]] == ["ashby"]
+
 def test_many_promising_fixture_exceeds_codex_thread_limit_observed_in_live_run():
     r = shim(["call", LISTING, "search-jobs", "--keywords", "AI engineer"], scenario="many-promising")
     assert r.returncode == 0

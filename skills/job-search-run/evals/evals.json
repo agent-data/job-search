@@ -100,7 +100,7 @@
     {
       "id": 10,
       "scenario": "happy, all results already known (zero-results sub-case 3a)",
-      "prompt": "Same harness, JOBSEARCH_TEST_SCENARIO=happy, but BEFORE running, pre-seed <tmp>/jobs.jsonl with prior evaluated events for both happy source_ids by running `printf '%s\\n' '{\"event\":\"evaluated\",\"source_id\":\"1001\",\"status\":\"new\"}' >> <tmp>/jobs.jsonl` and the same for source_id 1002. Then run job-search-run.",
+      "prompt": "Same harness, JOBSEARCH_TEST_SCENARIO=happy, but BEFORE running, pre-seed <tmp>/jobs.jsonl with prior evaluated events for both happy source_ids by running `printf '%s\\n' '{\"event\":\"evaluated\",\"source_id\":\"1001\",\"status\":\"new\"}' >> <tmp>/jobs.jsonl` and the same for source_id 1002, and the same for the ashby posting: `printf '%s\\n' '{\"event\":\"evaluated\",\"source\":\"ashby\",\"source_id\":\"0b7c2d33-2222-4ccc-9ddd-3ee4ff5aa6b7\",\"status\":\"new\"}' >> <tmp>/jobs.jsonl`. Then run job-search-run.",
       "expectations": [
         "Dedup finds BOTH search results already known → no NEW postings",
         "Reassuring message in plain English, e.g. 'No new postings — you've already seen all N of these' (NOT an error, NOT 'broaden keywords', and never the word 'database')",

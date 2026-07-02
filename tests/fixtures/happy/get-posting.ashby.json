@@ -1,0 +1,7 @@
+{ "data": { "id": "jp_ashbyzeph01", "source_id": "0b7c2d33-2222-4ccc-9ddd-3ee4ff5aa6b7",
+    "title": "Staff AI Engineer", "company_name": "Zephyr Robotics", "location_display": "Remote (US)",
+    "posted_at": null, "employment_type": "FullTime", "source": "ashby",
+    "source_url": "https://jobs.ashbyhq.com/zephyr/0b7c2d33-2222-4ccc-9ddd-3ee4ff5aa6b7",
+    "missing_fields": [],
+    "description_markdown": "**Job Posted:** June 25th, 2026\n\nStaff-level IC building LLM-powered robotics tooling in Python. Remote within the US. No people management. On-call is opt-in and paid." },
+  "meta": { "mode": "live_detail", "request_id": "req_fakeashbydetail" } }
