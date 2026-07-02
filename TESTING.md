@@ -650,7 +650,7 @@ line, Strong/Moderate/Weak, Filtered-out, footnotes).
 
 Ask Claude, for each skill, to **run its evals** (the `harness` in `skills/<skill>/evals/evals.json`; they use the
 fake-agent-data shim, so zero real credits):
-- `evaluate-job-fit` (3) · `job-search-run` (11) · `job-preference-interview` (3) · `job-search` (5).
+- `evaluate-job-fit` (3) · `job-search-run` (20) · `job-preference-interview` (3) · `job-search` (8).
 **Expected:** all pass; outputs are philosophy-clean.
 **Result:** ⬜
 
@@ -714,8 +714,9 @@ entries carry a date mark; the first-Ashby-pass footnote is present.
 - ⬜ Scheduling correct (the composed `/loop <interval>` matches the pinned table per frequency; `/loop` sets `mechanism:loop`; **zero-Python user path** proven with python3 masked) (§9)
 - ⬜ **No numeric scores/weights/credit knobs** in files **or chat**; frequency is the only cost lever (§10)
 - ⬜ Docs match reality (install commands, error table, sample digest) (§11)
-- ⬜ Full regression green: `pytest` (**99**; gate on `0 failed`) + all four skills' evals (§0.3, §12)
+- ⬜ Full regression green: `pytest` (**99**; gate on `0 failed`) + all five skills' evals (§0.3, §12)
 - ⬜ Planned config slash-command tests are marked **N/A (pending build)**, not green (§13)
+- ⬜ Multi-source: live Ashby rows; shim multi-source run shows per-source counts + first-pass footnote; one source down never blanks the run (§14)
 
 **Teardown:** `rm -rf "$JSOS_TEST"` and any `$T*`/`$SH*` dirs you kept.
 

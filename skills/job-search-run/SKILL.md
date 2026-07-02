@@ -60,7 +60,7 @@ Read these before running, and follow them exactly:
    Cross-check before moving on: every enabled source must appear among the attempted calls (each lands in `runs/<run_id>.json` `queries[]` with its `source`); an enabled source with zero attempted calls means the fan-out was mis-executed — dispatch its missing calls now.
 2. **Dedup + freshen.** Run the **known-ids** operation once per enabled source (`conventions.md`
    §jobs.jsonl) → per-source known sets; NEW = rows whose non-null `source_id` is not in THEIR OWN source's
-   set. Record which sources had an EMPTY known set at run start (that triggers the first-pass footnote in
+   set. Record which sources returned rows AND had an EMPTY known set at run start (that triggers the first-pass footnote in
    step 5). Then apply `search.freshness`: drop NEW rows whose `posted_at` is older than the window — **a null
    `posted_at` is NEVER dropped**: treat the row as new-if-unseen and carry a date-unknown mark into the scan
    and digest. Null-`source_id` rows can't be deduped → skip, count "unidentifiable".
@@ -118,7 +118,7 @@ Read these before running, and follow them exactly:
    Searched <n> queries · <total> postings, <new> new
    Read <m> in full
    <s> strong · <md> moderate · <w> weak · <f> filtered out
-   Run health: <healthy | partial (N errors) | degraded (job sources flaky) | blocked>
+   Run health: <healthy | partial (<why>) | degraded (job sources flaky) | blocked>
    Digest: <path to reports/<date>-digest.md>
    ```
 

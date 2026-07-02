@@ -12,7 +12,7 @@
         "Writes reports/<date>-digest.md whose Run health line is 'healthy'",
         "Surfaces the Acme Senior AI Engineer (Remote US) as a strong (or moderate) match, grouped before weaker ones",
         "Judges the onsite-Austin ML role as not relevant (dealbreaker) and counts it under 'filtered out'",
-        "Appends one evaluated event per new posting to jobs.jsonl (one single-line JSON object per line, each with a non-empty source_id), deduped by source_id, carrying provenance (title/company/source_url) + judgment (relevant/match/reasoning)",
+        "Appends one evaluated event per new posting to jobs.jsonl (one single-line JSON object per line, each with a non-empty source_id), deduped by (source, source_id), carrying provenance (title/company/source_url) + judgment (relevant/match/reasoning)",
         "Output contains no numeric score, no category weights, and no dollar/credit cost figures",
         "Exits 0"
       ]
@@ -102,7 +102,7 @@
       "scenario": "happy, all results already known (zero-results sub-case 3a)",
       "prompt": "Same harness, JOBSEARCH_TEST_SCENARIO=happy, but BEFORE running, pre-seed <tmp>/jobs.jsonl with prior evaluated events for both happy source_ids by running `printf '%s\\n' '{\"event\":\"evaluated\",\"source\":\"linkedin\",\"source_id\":\"1001\",\"status\":\"new\"}' >> <tmp>/jobs.jsonl` and `printf '%s\\n' '{\"event\":\"evaluated\",\"source\":\"linkedin\",\"source_id\":\"1002\",\"status\":\"new\"}' >> <tmp>/jobs.jsonl`, and the same for the ashby posting: `printf '%s\\n' '{\"event\":\"evaluated\",\"source\":\"ashby\",\"source_id\":\"0b7c2d33-2222-4ccc-9ddd-3ee4ff5aa6b7\",\"status\":\"new\"}' >> <tmp>/jobs.jsonl`. Then run job-search-run.",
       "expectations": [
-        "Dedup finds BOTH search results already known → no NEW postings",
+        "Dedup finds all three search results already known → no NEW postings",
         "Reassuring message in plain English, e.g. 'No new postings — you've already seen all N of these' (NOT an error, NOT 'broaden keywords', and never the word 'database')",
         "Spends no get-posting calls; writes no duplicate evaluated events; Run health healthy; exits 0"
       ]
@@ -150,7 +150,7 @@
         "If the host hits a subagent/thread limit, the run continues in rolling batches or falls back to sequential detail reads",
         "Capacity backpressure alone does NOT make Run health partial or degraded",
         "Digest match sections include one-line reasoning for every shown match, not title-only entries",
-        "jobs.jsonl contains one single-line evaluated event per source_id and no duplicate source_id events"
+        "jobs.jsonl contains one single-line evaluated event per (source, source_id) and no duplicate source_id events"
       ]
     },
     {

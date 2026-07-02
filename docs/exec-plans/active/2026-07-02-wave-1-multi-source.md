@@ -1268,6 +1268,29 @@ T8 shipped the operator enable flow; T9 shipped the template comment). This task
     sources flaky)` form; T7.7 row → `partial (all sources unavailable)` (matches eval 4); T7.9 row →
     `degraded (job sources flaky)`; acceptance-checklist pytest count 56 → 99. The os-design.md:303 hit
     stands — see the Done-when amendment in the Decision log. Gate 7 green under the amended filter.
+- 2026-07-02 — **final-review fix sweep (commit A)** (PR1, `feat/multi-source-core`). Whole-stack
+  review remediation. Swept stale single-source paraphrases now the dedup key is the (`source`,
+  `source_id`) pair: `conventions.md` workspace-tree comment (`fold by (source, source_id)`); both
+  fold sentences reworded so the no-`source` case reads "an event with no `source` (all
+  pre-multi-source history, and any `status_changed` line that omits it)" instead of "legacy"; the
+  `job-search-agent` quick-ref row (composite key + "alias pairs count as one role"); and the
+  `home.md` Pipeline summary (composite key — the alias clause is deferred to commit B). The
+  first-pass-footnote flag now requires the source **returned rows AND** had an empty known set at
+  run start (`conventions.md` digest footnote + `job-search-run` step 2; step 5's "for each source
+  flagged in step 2" now carries the conjunct). Run-health placeholders generalized to `partial
+  (<why>)` (`job-search-run` terminal summary + `home.md` status-line example). `TESTING.md` §12
+  eval counts → `job-search-run` (20) · `job-search` (8) and "all five skills' evals" (integrated
+  top-of-stack totals; this branch's `job-search-run/evals.json` itself carries 18, growing to 20 at
+  the top of the stack — no gate cross-checks the number, and the count edit flows up once via merge
+  so the shipped top is correct), plus a §14 sign-off bullet. evals.json phrasing: eval 1 `deduped by
+  (source, source_id)`, eval 10 "all three … already known", eval 14 "per (source, source_id)". Added
+  a **Wave 2 inherits (multi-source)** tech-debt group (merged-entry LinkedIn/Ashby hardcoding +
+  fixed Ashby-primary; unspecified alias status-divergence; `<why>` can't name a two-of-three loss).
+  `./scripts/build.sh` fanned `conventions.md` into the 5 skill copies (byte-identical); the
+  hand-authored `home.md` + SKILL bodies are not synced. Gates: `python3 -m pytest -q` → **99
+  passed**; doc_lint clean; philosophy_guard clean; build.sh second run no-op; evals.json parses (ids
+  1–18). Known follow-up (out of this sweep's scope): `TESTING.md:653` still lists only four skills —
+  `job-search-agent` (4 evals) is absent from the §12 inventory though line 717 now says "five".
 
 ## Decision log
 
