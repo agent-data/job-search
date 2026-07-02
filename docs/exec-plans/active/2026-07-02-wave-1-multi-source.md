@@ -1204,6 +1204,53 @@ T8 shipped the operator enable flow; T9 shipped the template comment). This task
   scripts/philosophy_guard.py --root .` clean; `python3 -m pytest -q` → 98 passed; `grep -rn
   "LinkedIn-only" docs ARCHITECTURE.md` → only the historical `2026-06-05-os-design.md` snapshot and
   this plan remain (no live-doc claims).
+- 2026-07-02 — **T11 done** (PR1), with two honest cross-task concerns pasted below.
+  `skills/job-search-run/evals/evals.json` now holds **18 evals**: eval 4 (stretch) and eval 9
+  (degraded) reworded to the multi-source run-health literals, and evals 15–18 added (multi-source ·
+  one-source-down · source-unsupported · legacy-source-swallow, following 15/16's exact JSON shape).
+  `python3 -c "import json; json.load(...)"` → parses (ids 1–18). **Live-run outcomes** (fresh sandbox
+  per case via `setup-workspace.sh` + shim; `claude -p` drove the loose `job-search-run` skill — a
+  symlink to the live working tree, so multi-source logic was exercised — from repo root; judged on the
+  written artifacts, since headless `claude -p` returns 0 even when blocked):
+  - **Eval 4 (stretch) — PASS 3/3.** All 4 query×source searches 502→retry×3→gave up; digest `Run
+    health: partial (all sources unavailable)` + "Job sources were unreachable this run (repeated
+    upstream errors). … the next scheduled run will retry."; jobs.jsonl empty; exit 0.
+  - **Eval 15 (multi-source) — designated run PASS 7/7.** 4 query×source searches, echo-verified; 4
+    events (2 linkedin + 2 ashby, `source` copied per row); both null-`posted_at` ashby rows kept, each
+    carrying `posted_at_extracted` (2026-06-28 / 2026-06-25) from the JD; digest counts `(2 LinkedIn · 2
+    Ashby)`, ashby matches tagged ` · Ashby` with `posted ~Jun 28/25 (from posting text)` marks, both
+    first-pass footnotes; immediate re-run appended 0 events (idempotent — "you've already seen all 4 of
+    these"); no numeric score; exit 0. **CONCERN B (nondeterministic per-source fan-out):** re-running
+    the identical scenario in fresh sandboxes, **1 of 5 runs skipped the fan-out** — it issued 2 searches
+    (no `--source`), never queried ashby, and rationalized "one shared listing = one source", collapsing
+    to a LinkedIn-only `healthy` digest (the other 4/5 fanned out correctly). This violates SKILL.md
+    step 1's per-source-fan-out contract. Not an evals.json defect and NOT patched here (cross-task: skill
+    prose; honesty rule). Fix for review: step 1 needs a hard, unmissable restatement that the shared
+    listing id must NOT be read as a single source (issue one `--source` call per enabled source).
+  - **Eval 16 (one-source-down) — PASS 4/4.** ashby 502×3→circuit opened; linkedin matches landed;
+    `partial (Ashby unavailable)` + "Ashby was unreachable this run … the next scheduled run will retry.";
+    `sources_failed:[ashby]`; exit 0.
+  - **Eval 17 (source-unsupported) — PASS 4/4.** ashby 400 `unsupported_source` NOT retried
+    (attempts:1); E-SOURCE-UNSUPPORTED footnote names the fix; linkedin matches landed; `partial (ashby
+    unavailable)`; exit 0.
+  - **Eval 18 (legacy-source-swallow) — PASS 4/4.** absent `data.query.source` (= linkedin) ≠ ashby →
+    E-SOURCE-IGNORED footnote ("only LinkedIn was searched"); **ZERO `source:"ashby"` events**; the
+    swallowed rows deduped against the genuine linkedin rows (2 events, no dupes); `partial (Ashby
+    unavailable)`; exit 0.
+  - **Eval 9 (degraded) — DONE_WITH_CONCERNS (2/3).** exp2 (detail-read the one promising match by
+    relevance, not a cap) + exp3 (1 strong match, exit 0, partial not HALT) pass; the digest carries the
+    flaky note "Job sources were flaky this run — results may be affected." **CONCERN A: reworded exp1
+    fails on the run-health line — actual `partial (Ashby unavailable)`, expected `degraded (job sources
+    flaky)`.** The `degraded` shim scenario ships **no ashby fixture** (neither `degraded/` nor `happy/`
+    has `search-jobs.ashby.json`), and T9's template enables `sources:[linkedin,ashby]`, so both ashby
+    queries fail with `fixture_not_found` and ashby is genuinely lost — the skill surfaces the lost source
+    over the degraded status. Reported per the honesty rule; NOT patched (T2 fixture scope). Fix for
+    T2/PR-review: add `search-jobs.ashby.json` to the `degraded` (or `happy` fallback) fixtures so the
+    degraded scenario keeps both sources healthy and eval 9's reworded expectation becomes reachable.
+  Cross-cutting: no numeric scores/weights/credit-cost in any digest or jobs.jsonl (match vocab strictly
+  strong/moderate/weak/null); all observed run-health strings are within the ratified enum. Gates:
+  `python3 -m pytest -q` → 98 passed; `python3 scripts/doc_lint.py --root .` → clean. evals.json is not a
+  synced `shared/references/` file, so `./scripts/build.sh` is a no-op.
 
 ## Decision log
 

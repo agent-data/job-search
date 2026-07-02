@@ -43,7 +43,7 @@
       "prompt": "Same harness but JOBSEARCH_TEST_SCENARIO=stretch (every search-jobs returns a retryable 502). Run job-search-run and show the digest.",
       "expectations": [
         "Retries the 502 with backoff, then stops searching after two consecutive failed queries (E-UPSTREAM-STRETCH)",
-        "Digest says LinkedIn was unreachable and the next run will retry (Run health: degraded or partial)",
+        "Digest says job sources were unreachable (all enabled sources stretched) and the next run will retry (Run health: partial (all sources unavailable))",
         "Does not crash; distinguishes this from a 'genuinely no new jobs' run"
       ]
     },
@@ -92,7 +92,7 @@
       "scenario": "degraded",
       "prompt": "Same harness but JOBSEARCH_TEST_SCENARIO=degraded (status returns 'degraded'; search returns the happy results via fallback). Run job-search-run and show the digest.",
       "expectations": [
-        "Sets Run health: degraded and notes LinkedIn is flaky (results this run may be affected) in the digest",
+        "Sets Run health: degraded (job sources flaky) and notes job sources are flaky (results this run may be affected) in the digest",
         "Reads detail for promising matches as normal — no aggressive cap; relevance, not a count, decides how many",
         "Still produces matches and exits 0 (partial/degraded, not a HALT)"
       ]
@@ -151,6 +151,53 @@
         "Capacity backpressure alone does NOT make Run health partial or degraded",
         "Digest match sections include one-line reasoning for every shown match, not title-only entries",
         "jobs.jsonl contains one single-line evaluated event per source_id and no duplicate source_id events"
+      ]
+    },
+    {
+      "id": 15,
+      "scenario": "multi-source",
+      "prompt": "Same harness but JOBSEARCH_TEST_SCENARIO=multi-source (the workspace config ships search.sources [linkedin, ashby]; linkedin returns the happy rows via fallback, ashby returns 2 rows with UUID source_ids and null posted_at). Run job-search-run against <tmp> and show the digest + jobs.jsonl.",
+      "expectations": [
+        "Runs one search-jobs per (enabled query × enabled source), passing --source on every call, and verifies the echoed data.query.source matches the request",
+        "Every evaluated event's source is copied from its result row (linkedin rows → \"linkedin\", ashby rows → \"ashby\") — never a hardcoded literal",
+        "Ashby rows with null posted_at are NOT dropped by the freshness window; their digest entries carry a date mark ('posted ~<date> (from posting text)' or 'date not stated'), and a detail-read null-date posting whose JD states a date yields posted_at_extracted on its event",
+        "The digest counts line includes a per-source breakdown (e.g. '(2 LinkedIn · 2 Ashby)') and ashby match meta lines carry a ' · Ashby' tag",
+        "The first-pass-over-Ashby footnote appears (the ashby known-ids set was empty at run start)",
+        "Immediately re-running produces no duplicate evaluated events for any (source, source_id) pair",
+        "Output contains no numeric score; exits 0"
+      ]
+    },
+    {
+      "id": 16,
+      "scenario": "one-source-down",
+      "prompt": "Same harness but JOBSEARCH_TEST_SCENARIO=one-source-down (every ashby search-jobs returns a retryable 502; linkedin succeeds via the happy fallback). Run job-search-run and show the digest.",
+      "expectations": [
+        "Retries the ashby 502s with backoff, opens the ashby circuit after two consecutive fully-failed ashby queries, and stops calling ashby for the rest of the run",
+        "LinkedIn queries complete and their matches appear as normal — one source down never blanks the run",
+        "Run health is 'partial (ashby unavailable)' and a footnote says Ashby was unreachable this run and the next run will retry",
+        "runs/<id>.json lists ashby in sources_failed; exits 0 (partial, not a HALT)"
+      ]
+    },
+    {
+      "id": 17,
+      "scenario": "source-unsupported",
+      "prompt": "Same harness but JOBSEARCH_TEST_SCENARIO=source-unsupported (every non-linkedin search-jobs returns a non-retryable 400 unsupported_source with error.param 'source'; linkedin succeeds via the happy fallback). Run job-search-run and show the digest.",
+      "expectations": [
+        "Surfaces E-SOURCE-UNSUPPORTED's footnote naming the fix (remove 'ashby' from search.sources in config.yaml, or update the agent-data service)",
+        "Does NOT retry the 400 (retryable:false) — the unsupported source is dropped on its first response",
+        "LinkedIn queries complete and their matches appear as normal — the unsupported source never blanks the run",
+        "Run health is 'partial (ashby unavailable)'; exits 0 (partial, not a HALT)"
+      ]
+    },
+    {
+      "id": 18,
+      "scenario": "legacy-source-swallow",
+      "prompt": "Same harness but JOBSEARCH_TEST_SCENARIO=legacy-source-swallow (the service silently ignores --source and never echoes data.query.source — a legacy server predating source selection; every search-jobs returns the happy linkedin rows via fallback). Run job-search-run against <tmp> and show the digest + jobs.jsonl.",
+      "expectations": [
+        "Detects the missing/mismatched data.query.source echo (an absent echo counts as linkedin) and surfaces E-SOURCE-IGNORED's footnote (the service predates source selection — only LinkedIn was searched)",
+        "Writes ZERO evaluated events with \"source\":\"ashby\" — the swallowed ashby call's rows keep their row-level source (linkedin)",
+        "The swallowed ashby call's returned rows dedup against the genuine linkedin call's rows — no duplicate evaluated events for any (source, source_id) pair",
+        "Run health is 'partial (ashby unavailable)'; exits 0 (partial, not a HALT)"
       ]
     }
   ]
