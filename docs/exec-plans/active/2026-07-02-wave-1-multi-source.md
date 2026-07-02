@@ -1134,6 +1134,19 @@ T8 shipped the operator enable flow; T9 shipped the template comment). This task
   0; `grep -ni "linkedin" …` → 2 hits, both legitimate enum-token uses (the default list + the
   absent-echo rule); `python3 scripts/doc_lint.py --root .` clean; `./scripts/build.sh` produced no
   changes; `python3 -m pytest -q` → 98 passed.
+- 2026-07-02 — **T7 done** (PR1). `skills/evaluate-job-fit/SKILL.md` — the per-posting judge now
+  extracts a JD-stated posting date. **Method** step 2 gained: when the structured `posted_at` is
+  null (some sources omit it) and the description text states a posting date (e.g. 'Job Posted:
+  April 27th, 2026'), extract it as an ISO date into the output object as `posted_at_extracted`; a
+  date the posting doesn't state stays 'date not stated' — an unknown, never a negative. The
+  **Output** JSON example gained the OPTIONAL `"posted_at_extracted": "2026-06-25"` field (only
+  when the API `posted_at` was null and the JD stated a date). Consumed by T6 step 5 + eval 15.
+  Brief text used verbatim (the single-quote 'Job Posted:' kept as written — the T7 instruction was
+  verbatim; note T6's SKILL.md used double quotes for the same illustrative literal — cosmetic,
+  both are prose examples, not parsed). SKILL bodies are NOT build-synced → `./scripts/build.sh` is
+  a no-op here. Verified: `grep -c posted_at_extracted skills/evaluate-job-fit/SKILL.md` → 2 (method
+  + output); `python3 scripts/doc_lint.py --root .` clean; `./scripts/build.sh` produced no changes;
+  `python3 -m pytest -q` → 98 passed.
 
 ## Decision log
 
