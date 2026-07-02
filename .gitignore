@@ -4,3 +4,6 @@ __pycache__/
 .DS_Store
 *.skill
 .superpowers/
+# Local-only strategy/working docs — never published; kept outside docs/ so doc_lint
+# (which walks the filesystem, not git) doesn't demand index entries CI can't resolve.
+docs-private/
