@@ -47,7 +47,7 @@ def test_get_posting_detail_fetch_failed_is_retryable():
              scenario="detail-fetch-failed")
     assert r.returncode != 0
     body = json.loads(r.stderr)["error"]
-    assert body["code"] == "detail_fetch_failed" and body["retryable"] is True
+    assert body["code"] == "upstream_unavailable" and body["retryable"] is True
 
 def test_error_scenario_reuses_happy_search_fixture():
     # 'degraded' has no own search-jobs fixture; it must fall back to happy's 2-result fixture
@@ -77,7 +77,7 @@ def test_bad_query_422_on_sentinel_location():
              scenario="bad-query")
     assert r.returncode != 0
     body = json.loads(r.stderr)["error"]
-    assert body["code"] == "invalid_request" and body["retryable"] is False
+    assert body["code"] == "validation_error" and body["retryable"] is False
     assert body["param"] == "location"
     assert body["details"][0]["loc"][-1] == "location"
 
@@ -106,7 +106,7 @@ def test_one_source_down_fails_only_the_down_source():
                 scenario="one-source-down")
     assert down.returncode != 0
     body = json.loads(down.stderr)["error"]
-    assert body["code"] == "search_failed" and body["retryable"] is True
+    assert body["code"] == "upstream_unavailable" and body["retryable"] is True
     ok = shim(["call", LISTING, "search-jobs", "--keywords", "x"], scenario="one-source-down")
     assert ok.returncode == 0
 
@@ -115,7 +115,7 @@ def test_source_unsupported_400s_non_linkedin():
              scenario="source-unsupported")
     assert r.returncode != 0
     body = json.loads(r.stderr)["error"]
-    assert body["code"] == "unsupported_source" and body["param"] == "source" \
+    assert body["code"] == "validation_error" and body["param"] == "source" \
         and body["retryable"] is False
 
 def test_legacy_swallow_returns_linkedin_rows_without_source_echo():
@@ -128,7 +128,7 @@ def test_legacy_swallow_returns_linkedin_rows_without_source_echo():
 def test_unknown_source_value_is_rejected():
     r = shim(["call", LISTING, "search-jobs", "--keywords", "x", "--source", "monster"])
     assert r.returncode != 0
-    assert json.loads(r.stderr)["error"]["code"] == "unsupported_source"
+    assert json.loads(r.stderr)["error"]["code"] == "validation_error"
 
 def test_get_posting_routes_per_source_and_per_posting_id():
     default = shim(["call", LISTING, "get-posting", "--posting_id", "jp_ashbyzeph01",

@@ -70,17 +70,17 @@ def main(argv):
             if SCEN == "legacy-source-swallow":
                 out(fixture("search-jobs.json"))  # --source silently ignored; no echo injected
             if src not in SRC_ALLOWED or (SCEN == "source-unsupported" and src != "linkedin"):
-                err("unsupported_source", f"source {src!r} is not supported", False, param="source")
+                err("validation_error", f"Unsupported source {src!r} for source. Allowed values: linkedin, ashby, greenhouse, lever.", False, param="source")
             if SCEN == "one-source-down" and src == os.environ.get("JOBSEARCH_TEST_DOWN_SOURCE", "ashby"):
-                err("search_failed", f"{src} search failed", True)
+                err("upstream_unavailable", f"{src} search failed", True)
             if SCEN == "stretch":
-                err("search_failed", "upstream fetch failed", True)
+                err("upstream_unavailable", "upstream fetch failed", True)
             if SCEN == "quota":
                 err("quota_exceeded", "monthly API limit reached", False)
             if SCEN == "bad-query":
                 loc = flag(argv, "--location")
                 if loc and "INVALID" in loc.upper():
-                    err("invalid_request", f"location {loc!r} is not a recognized value", False,
+                    err("validation_error", f"location {loc!r} is not a recognized value", False,
                         param="location",
                         details=[{"loc": ["query", "location"], "msg": "unrecognized location",
                                   "type": "value_error"}])
@@ -90,9 +90,9 @@ def main(argv):
             out(fx)
         if slug == "get-posting":
             if SCEN == "invalid-pair":
-                err("invalid_pair", "posting_id/source_url mismatch", False)
+                err("validation_error", "posting_id/source_url mismatch", False, param="posting_id")
             if SCEN == "detail-fetch-failed":
-                err("detail_fetch_failed", "upstream detail fetch failed", True)
+                err("upstream_unavailable", "upstream detail fetch failed", True)
             src = flag(argv, "--source") or "linkedin"
             pid = flag(argv, "--posting_id") or ""
             if src != "linkedin":
