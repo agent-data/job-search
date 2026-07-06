@@ -18,4 +18,10 @@ for skill in skills/*/; do
   fi
 done
 
+python3 scripts/build_stamp.py --root "$REPO" --write shared/references/build-stamp.md >/dev/null
+
+for skill in skills/*/; do
+  cp shared/references/build-stamp.md "${skill}references/build-stamp.md"
+done
+
 echo "build: synced references into $(ls -d skills/*/ | wc -l | tr -d ' ') skill(s)"
