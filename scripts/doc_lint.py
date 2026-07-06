@@ -249,7 +249,7 @@ DUP_SIGNATURES = [
     (re.compile(r"YYYY-MM-DDTHH-MM-SSZ"), "run_id format"),
     (re.compile(r"interested\W+applied\W+rejected"), "job status enum"),
     (re.compile(r"degraded \(job sources flaky\)"), "run-health states"),
-    (re.compile(r"linkedin \| ashby \| workday"), "job source enum"),
+    (re.compile(r"linkedin \| ashby \| greenhouse \| lever"), "job source enum"),
     (re.compile(r"strong\s*·\s*\d+\s*moderate"), "digest counts line"),
     (re.compile(r"desktop_notify_on_block"), "config field"),
     (re.compile(r"API limit for this period has been reached"), "E-QUOTA verbatim"),

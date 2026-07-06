@@ -52,10 +52,10 @@ Read these before running, and follow them exactly:
    NEW as possible" in `references/internals.md`.
    **Echo-verify every 200 response:** if the echoed `data.query.source` (absent = `linkedin`) ≠ the requested
    source → E-SOURCE-IGNORED: skip this source's remaining queries, keep the returned rows under their own
-   row-level `source`. A `400 unsupported_source` → E-SOURCE-UNSUPPORTED: drop the source, continue.
-   - `502 search_failed` (retryable) → retry up to 3× with backoff; on give-up record the error and continue.
+   row-level `source`. A `400 validation_error` with `error.param:"source"` → E-SOURCE-UNSUPPORTED: drop the source, continue.
+   - `503 upstream_unavailable` (retryable) → retry up to 3× with backoff; on give-up record the error and continue.
      **Two consecutive fully-failed queries against the SAME source → E-UPSTREAM-STRETCH for that source: stop searching it; other sources continue. All enabled sources stretched → stop searching entirely (partial digest).** Failure counters are per-source and reset on that source's first success.
-   - `422`/`400 unsupported_field` → E-BAD-QUERY (name the bad param from `details[].loc`), skip that query.
+   - `422`/`400 validation_error` (a bad param or `fields=`) → E-BAD-QUERY (name the bad param from `error.param`/`details[].loc`), skip that query.
    - A quota/limit/payment failure (see errors.md detection) → E-QUOTA (HALT, exit 1).
    Cross-check before moving on: every enabled source must appear among the attempted calls (each lands in `runs/<run_id>.json` `queries[]` with its `source`); an enabled source with zero attempted calls means the fan-out was mis-executed — dispatch its missing calls now.
 2. **Dedup + freshen.** Run the **known-ids** operation once per enabled source (`conventions.md`
@@ -105,8 +105,7 @@ Read these before running, and follow them exactly:
    → get-posting) — judges `description_markdown` + `missing_fields[]`
    (missing = "not stated", never negative) by following that skill and **resolving the steer's open questions**,
    and returns/records the same structured judgment object. Per-posting errors stay local to that posting:
-   `400 invalid_pair` (not retryable) → judge from summary, note "detail link expired"; `502 detail_fetch_failed`
-   (retryable) → retry/backoff, then summary-only + note. **No product cap** — every queued posting gets evaluated;
+   `400 validation_error` (not retryable — a `posting_id`/`source_url` pair mismatch) → judge from summary, note "detail link expired"; `503 upstream_unavailable` (retryable) → retry/backoff, then summary-only + note. **No product cap** — every queued posting gets evaluated;
    the scan (relevance), not a count, decides how many.
 5. **Consolidate + persist + report.** Collect the detail-read verdicts and **validate each before it lands**: `match` must be `strong | moderate | weak`, or `null` when `relevant` is false — coerce anything else (a faster delegated model can emit a stray number or out-of-vocab band) and never let a numeric score reach `jobs.jsonl` or the digest — and every event MUST carry a non-empty `source_id`. Then for each NEW posting (the deduped set from step 2 — see Idempotency) append the FULL `evaluated` event
    to `<workspace>/jobs.jsonl` via the **append** operation (complete schema + event-line contract in
