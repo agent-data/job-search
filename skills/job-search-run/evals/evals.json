@@ -229,26 +229,29 @@
     {
       "id": 21,
       "scenario": "multi-source",
-      "prompt": "Same multi-source harness, but the sandbox config ships search.sources [\"linkedin\", \"ashby\", \"greenhouse\", \"lever\"] (edit config.yaml before running). linkedin+ashby return their happy/multi-source fixtures; greenhouse returns 2 rows with populated posted_at; lever returns 1 row with populated posted_at and a salary_display containing raw HTML. Run job-search-run against <tmp> and show the digest + jobs.jsonl.",
+      "prompt": "Same multi-source harness as eval 19, but enable ONLY linkedin + greenhouse: `sed -i.bak 's/sources: \\[\"linkedin\", \"ashby\"\\]/sources: [\"linkedin\", \"greenhouse\"]/' <tmp>/config.yaml && rm -f <tmp>/config.yaml.bak`. linkedin returns its happy rows — Acme 'Senior AI Engineer' (source_id 1001, Remote US) plus the Globex onsite-Austin ML reject. greenhouse returns the SAME Acme 'Senior AI Engineer' (source_id acme:7310605, posting jp_ghacme01, Remote US, POPULATED posted_at) duplicating the linkedin Acme role. Run job-search-run against <tmp> and show the digest + jobs.jsonl.",
       "expectations": [
-        "Runs one search-jobs per (enabled query × each of the four enabled sources), passing --source on every call, and verifies each echoed data.query.source matches the request",
-        "Every evaluated event's source is copied from its result row (greenhouse rows → 'greenhouse', lever rows → 'lever'); no hardcoded literal",
-        "Greenhouse and Lever rows have populated posted_at and are filtered by the freshness window normally (no null-date footnote for them)",
-        "The Lever row's HTML salary_display is shown as plain text and NEVER parsed into a number; output carries no numeric score or dollar figure derived from it",
-        "The digest counts line's per-source breakdown names all searched sources (e.g. '(… LinkedIn · … Ashby · … Greenhouse · … Lever)') and match meta lines carry the correct ' · <Source>' tag",
-        "Immediately re-running produces no duplicate evaluated events for any (source, source_id) pair; exits 0"
+        "Runs one search-jobs per (enabled query × {linkedin, greenhouse}), passing --source on each, and verifies the echoed data.query.source matches the request",
+        "Recognizes the Acme 'Senior AI Engineer' (Remote US) returned by BOTH linkedin (1001) and greenhouse (acme:7310605) as ONE real-world role and merges the pair",
+        "Spends exactly ONE detail read, on the GREENHOUSE row (posting jp_ghacme01 — the company board whose URL is the live apply page), NOT the linkedin row: the detail-read primary is a board source, generalized beyond Ashby",
+        "The merged role renders as ONE digest entry whose link line shows the greenhouse company-board link first, then an 'also on LinkedIn' link — the form `[view on company board](https://boards.greenhouse.io/acme/jobs/7310605?gh_jid=7310605) · [also on LinkedIn](https://www.linkedin.com/jobs/view/1001)` ('view' verbs, never 'apply')",
+        "jobs.jsonl carries TWO evaluated events sharing the verdict — one (linkedin, 1001) and one (greenhouse, acme:7310605); the linkedin event bears same_role_as:\"greenhouse:acme:7310605\" (a FLAT string — note the greenhouse source_id itself contains a colon) and the greenhouse event bears none",
+        "greenhouse's populated posted_at gives the merged entry a real date, NOT a 'date not stated' mark",
+        "The Globex onsite-Austin role is filtered out (dealbreaker), not merged; the counts line counts rows (e.g. '3 new postings (2 LinkedIn · 1 Greenhouse)')",
+        "Output contains no numeric score/weights/cost; exits 0"
       ]
     },
     {
       "id": 22,
       "scenario": "multi-source",
-      "prompt": "Same as eval 21's four-source config, focused on the cross-source duplicate. linkedin returns Acme 'Senior AI Engineer' (source_id 1001, Remote US). greenhouse returns the SAME Acme 'Senior AI Engineer' (source_id acme:7310605, posting jp_ghacme01, Remote US, populated posted_at). Run job-search-run against <tmp> and show the digest + jobs.jsonl.",
+      "prompt": "Same multi-source harness, but enable ONLY ashby + greenhouse in THAT order: `sed -i.bak 's/sources: \\[\"linkedin\", \"ashby\"\\]/sources: [\"ashby\", \"greenhouse\"]/' <tmp>/config.yaml && rm -f <tmp>/config.yaml.bak`. ashby returns Acme 'Senior AI Engineer' (source_id 6e9a1f00-1111-4aaa-8bbb-2cc3dd4ee5f6, posting jp_ashbyacme01, Remote US, null posted_at) plus the ashby-only Zephyr Robotics 'Staff AI Engineer'. greenhouse returns the SAME Acme 'Senior AI Engineer' (source_id acme:7310605, posting jp_ghacme01, Remote US, populated posted_at). BOTH are board sources — this tests which one is chosen as the single detail-read primary. Run job-search-run against <tmp> and show the digest + jobs.jsonl.",
       "expectations": [
-        "Recognizes the two Acme 'Senior AI Engineer' rows (linkedin 1001 + greenhouse acme:7310605) as ONE real-world role and merges the pair",
-        "Spends exactly ONE detail read, and that read is on the GREENHOUSE row (jp_ghacme01 — the company board), NOT the linkedin row (the primary is a board source, generalized beyond Ashby)",
-        "The merged role renders as ONE digest entry whose link line shows the greenhouse company-board link first, then an 'also on LinkedIn' link — '[view on company board](https://boards.greenhouse.io/acme/jobs/7310605?gh_jid=7310605) · [also on LinkedIn](https://www.linkedin.com/jobs/view/1001)' ('view' verbs, never 'apply')",
-        "jobs.jsonl carries TWO evaluated events sharing the verdict; the linkedin event bears same_role_as:'greenhouse:acme:7310605' and the greenhouse event bears none",
-        "The counts line counts rows, not merged roles; output has no numeric score; exits 0"
+        "Recognizes the Acme 'Senior AI Engineer' on BOTH ashby (6e9a1f00-1111-4aaa-8bbb-2cc3dd4ee5f6) and greenhouse (acme:7310605) as ONE real-world role and merges the pair",
+        "Both are board sources, so the tie is broken by search.sources order: the ONE detail read is on the ASHBY row (posting jp_ashbyacme01 — earliest in [ashby, greenhouse]), NOT the greenhouse row",
+        "The merged entry's link line shows the ashby company-board link first, then an 'also on Greenhouse' link — the form `[view on company board](https://jobs.ashbyhq.com/acme/6e9a1f00-1111-4aaa-8bbb-2cc3dd4ee5f6) · [also on Greenhouse](https://boards.greenhouse.io/acme/jobs/7310605?gh_jid=7310605)` ('view' verbs, never 'apply')",
+        "jobs.jsonl carries TWO evaluated events sharing the verdict; the greenhouse event bears same_role_as:\"ashby:6e9a1f00-1111-4aaa-8bbb-2cc3dd4ee5f6\" and the ashby event (the primary that got the detail read) bears none",
+        "The ashby-only Zephyr Robotics role is NOT merged — its own evaluated event and its own digest entry, no same_role_as",
+        "The counts line counts rows, not merged roles (e.g. '3 new postings (2 Ashby · 1 Greenhouse)'); output has no numeric score; exits 0"
       ]
     }
   ]
