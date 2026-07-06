@@ -1391,6 +1391,7 @@ T8 shipped the operator enable flow; T9 shipped the template comment). This task
   gained the alias clause deferred from commit A — "records aliased by `same_role_as` count as one role — see
   the fold operation in `conventions.md`". Gates: `python3 -m pytest -q` → **99 passed**; doc_lint clean;
   philosophy_guard clean (sample digest touched); build.sh no-op. evals.json on this branch carries 19 evals.
+- 2026-07-06 — the multi-source reconciliation plan folded into this branch **removed the experimental Workday track** (the live API dropped it — now a hard 400 validation_error) and added **Greenhouse + Lever**, plus the N-source merge generalization; see [2026-07-06-multi-source-reconciliation-greenhouse-lever.md](2026-07-06-multi-source-reconciliation-greenhouse-lever.md).
 
 ## Decision log
 

@@ -17,6 +17,11 @@ All notable changes to this project are documented here. The format is based on
   scenarios (multi-source, one-source-down, source-unsupported, legacy-source-swallow).
 - Workday is available as an explicit opt-in experimental source (`search.sources: [..., "workday"]`); a failing source degrades the run to `partial`, never blocks it.
 
+### Changed
+- **Job sources:** added **Greenhouse** and **Lever**; removed **Workday** (dropped
+  upstream — now a hard 400); wire error codes reconciled to `validation_error` /
+  `503 upstream_unavailable`; cross-source merge generalized to N board sources.
+
 ### Fixed
 - CI actually runs the unit-test gate (pytest was never installed on the runner).
 - `search-jobs` limit default corrected to the API's real value (20) in the run skill and

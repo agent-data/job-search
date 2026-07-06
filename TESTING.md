@@ -74,7 +74,7 @@ in `-p` commands anyway so the skill is invoked deterministically.
 ```bash
 cd "$JSOS" && python3 -m pytest -q
 ```
-**Expected:** `99 passed` **and `0 failed`** — treat **`0 failed`** as the real gate (the exact count grows as
+**Expected:** `102 passed` **and `0 failed`** — treat **`0 failed`** as the real gate (the exact count grows as
 tests are added; bump this number when it does). Covers the doc linter, the philosophy guard, and the
 fake-shim self-tests (incl. the `bad-query` scenario behind T7.12) — dev tooling only; the runtime state
 procedures are exercised by the live tests below and the skill evals.
@@ -650,7 +650,7 @@ line, Strong/Moderate/Weak, Filtered-out, footnotes).
 
 Ask Claude, for each skill, to **run its evals** (the `harness` in `skills/<skill>/evals/evals.json`; they use the
 fake-agent-data shim, so zero real credits):
-- `evaluate-job-fit` (3) · `job-search-run` (20) · `job-preference-interview` (3) · `job-search` (8) · `job-search-agent` (4).
+- `evaluate-job-fit` (3) · `job-search-run` (22) · `job-preference-interview` (3) · `job-search` (8) · `job-search-agent` (4).
 **Expected:** all pass; outputs are philosophy-clean.
 **Result:** ⬜
 
@@ -675,7 +675,7 @@ built, mark **N/A (pending build)**.
 
 ---
 
-## 14. Multi-source (LinkedIn + Ashby)
+## 14. Multi-source (LinkedIn + Ashby + Greenhouse + Lever)
 
 ### T14.1 Live Ashby search returns ashby rows — 👤
 ```bash
@@ -684,6 +684,24 @@ agent-data call f9a6ec16-0bfd-44d8-b3ee-073776745ee7 search-jobs \
   --fields id,source_id,source_url,title,company_name,source
 ```
 **Expected:** rows with `"source":"ashby"`, UUID `source_id`s, `jobs.ashbyhq.com` URLs.
+**Result:** ⬜
+
+### T14.1a Live Greenhouse search returns greenhouse rows — 👤
+```bash
+agent-data call f9a6ec16-0bfd-44d8-b3ee-073776745ee7 search-jobs \
+  --keywords "software engineer" --limit 3 --source greenhouse \
+  --fields id,source_id,source_url,title,company_name,source,posted_at
+```
+**Expected:** rows with `"source":"greenhouse"`, `<company>:<numeric>` `source_id`s, `boards.greenhouse.io` URLs, and a populated `posted_at`.
+**Result:** ⬜
+
+### T14.1b Live Lever search returns lever rows — 👤
+```bash
+agent-data call f9a6ec16-0bfd-44d8-b3ee-073776745ee7 search-jobs \
+  --keywords "software engineer" --limit 3 --source lever \
+  --fields id,source_id,source_url,title,company_name,source,posted_at,salary_display
+```
+**Expected:** rows with `"source":"lever"`, `<company>:<uuid>` `source_id`s, `jobs.lever.co` URLs, and a populated `posted_at` (Lever's `salary_display` may carry HTML — treat as free text, never parse).
 **Result:** ⬜
 
 ### T14.2 Shim multi-source run — 🤖
@@ -714,9 +732,9 @@ entries carry a date mark; the first-Ashby-pass footnote is present.
 - ⬜ Scheduling correct (the composed `/loop <interval>` matches the pinned table per frequency; `/loop` sets `mechanism:loop`; **zero-Python user path** proven with python3 masked) (§9)
 - ⬜ **No numeric scores/weights/credit knobs** in files **or chat**; frequency is the only cost lever (§10)
 - ⬜ Docs match reality (install commands, error table, sample digest) (§11)
-- ⬜ Full regression green: `pytest` (**99**; gate on `0 failed`) + all five skills' evals (§0.3, §12)
+- ⬜ Full regression green: `pytest` (**102**; gate on `0 failed`) + all five skills' evals (§0.3, §12)
 - ⬜ Planned config slash-command tests are marked **N/A (pending build)**, not green (§13)
-- ⬜ Multi-source: live Ashby rows; shim multi-source run shows per-source counts + first-pass footnote; one source down never blanks the run (§14)
+- ⬜ Multi-source: live Ashby/Greenhouse/Lever rows; shim multi-source run shows per-source counts + first-pass footnote; one source down never blanks the run (§14)
 
 **Teardown:** `rm -rf "$JSOS_TEST"` and any `$T*`/`$SH*` dirs you kept.
 
