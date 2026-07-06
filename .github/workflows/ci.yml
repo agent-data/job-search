@@ -7,6 +7,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
       - uses: actions/setup-python@v5
         with: { python-version: "3.11" }
       - name: Install test dependencies
@@ -19,6 +20,12 @@ jobs:
         run: python3 scripts/doc_lint.py --root .
       - name: Structural validation (adapters + manifests)
         run: python3 scripts/validate_platforms.py --root .
+      - name: Release integrity
+        run: |
+          python3 scripts/check_release_integrity.py --root . --check-version-sync
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            python3 scripts/check_release_integrity.py --root . --check-version-bump --base "${{ github.event.pull_request.base.sha }}"
+          fi
       - name: Build is a no-op (bundled copies in sync)
         run: |
           ./scripts/build.sh
