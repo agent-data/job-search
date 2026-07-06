@@ -79,9 +79,11 @@ Read these before running, and follow them exactly:
    same real-world role seen on multiple sources: same company (allowing trivial name variants),
    same or equivalent role title, compatible location → one role. **When uncertain, treat as
    distinct — two detail reads are cheaper than a wrong merge.** For a merged group: ONE detail
-   read, on the Ashby row when the group has one (its detail is complete and its URL is the
-   company's live apply page), with the steer noting "also on <other source>"; the judgment
-   applies to every row in the group.
+   read, on a **board-source row** — `ashby`, `greenhouse`, or `lever`, whose `source_url` is the
+   company's canonical live apply page and whose detail is complete. If the group has several board
+   sources, pick the one earliest in the run's `search.sources` order; a `linkedin` row is the
+   target only when the group has NO board source. The steer notes "also on <the other sources>";
+   the judgment applies to every row in the group.
 4. **Read the details — parallel by default, sequential where the host requires it.** The reads are
    independent, so the default is the parallel per-posting fan-out. First read `search.parallel_detail_reads`
    from `config.yaml` (see `references/conventions.md`). This runner is headless: never ask, and never edit
@@ -117,8 +119,9 @@ Read these before running, and follow them exactly:
    `runs/<run_id>.json` and `reports/<date>-digest.md` (format in conventions.md — the counts line, per-source
    breakdown, per-match source tags, and date marks all per that spec; strong → moderate → weak, then
    "filtered out: N"). Footnotes: first-pass-per-source (for each source flagged in step 2), and one line per
-   lost source (stretch / unsupported / ignored — exact texts in `errors.md`). Run health: any lost source →
-   `partial (<source> unavailable)`; all lost → `partial (all sources unavailable)`. Print a 5-line terminal
+   lost source (stretch / unsupported / ignored — exact texts in `errors.md`). Run health: one lost source →
+   `partial (<source> unavailable)`; several (not all) → `partial (<sourceA>, <sourceB> unavailable)`
+   naming each in `search.sources` order; all lost → `partial (all sources unavailable)`. Print a 5-line terminal
    summary in this shape:
 
    ```

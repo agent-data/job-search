@@ -63,6 +63,7 @@ Watch items the multi-source wave (PR1–PR3) hands forward — each parked behi
 none with a test yet (the surface it guards isn't built).
 
 ### P3 — merged-entry strings hardcode LinkedIn/Ashby; Ashby-primary is fixed (`TODO-MERGE-SOURCE-PRIMARY`)
+**Resolved 2026-07-06 by [2026-07-06-multi-source-reconciliation-greenhouse-lever](active/2026-07-06-multi-source-reconciliation-greenhouse-lever.md).** Greenhouse + Lever are the third/fourth mergeable board sources; the merged-entry copy, the primary-selection rule (board-source row, earliest in `search.sources`), and run-health `<why>` are now N-source. Kept as a resolved record.
 **What:** The cross-source merge bakes the `linkedin`/`ashby` names into the merged-entry copy and always
 picks the Ashby row as the primary of an aliased pair.
 **Why:** Two mergeable sources is the whole world today, so a two-name string and a fixed primary read

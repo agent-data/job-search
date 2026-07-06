@@ -60,7 +60,7 @@ Current state = fold by (**`source`**, **`source_id`**), last-write-wins per fie
 ```jsonc
 { "event":"evaluated", "ts":"<iso>", "run_id":"…", "source":"<the result row's source — copied, NEVER a hardcoded literal>", "source_id":"<source-native id — with source, the DEDUP KEY>",
   "query_id":"…", "title":"…", "company_name":"…", "location_display":"…", "salary_display":"…",
-  "posted_at":"<iso>", "posted_at_extracted":"<iso date — OPTIONAL; only when the API posted_at was null and the JD states a date>", "same_role_as":"<source>:<source_id> — OPTIONAL; this row is the same real-world role as that primary row>", "source_url":"…", "posting_id_at_seen":"jp_…", "detail_read":true,
+  "posted_at":"<iso>", "posted_at_extracted":"<iso date — OPTIONAL; only when the API posted_at was null and the JD states a date>", "same_role_as":"<source>:<source_id> — OPTIONAL; this row is the same real-world role as that primary row — parse by splitting on the FIRST colon only (e.g. same_role_as:"greenhouse:acme:7310605" → source "greenhouse", source_id "acme:7310605")>", "source_url":"…", "posting_id_at_seen":"jp_…", "detail_read":true,
   "relevant":true, "match":"strong|moderate|weak|null", "reasoning":"…",
   "dealbreakers_hit":[], "unknowns":[], "needs_human_check":false, "status":"new", "first_seen":"<iso>" }
 { "event":"status_changed", "ts":"<iso>", "source_id":"…", "status":"interested", "note":"…" }
@@ -90,7 +90,7 @@ Operations (no helper script — perform these exactly):
   ```
 - **Current state (fold):** read `jobs.jsonl` and fold in-context — group events by (`source`, `source_id`) — an event with no `source` (all pre-multi-source history, and any `status_changed` line that omits it) attaches to its `source_id`'s record — later
   events override earlier per field, drop the `event` key. The pipeline view = the folded records tallied
-  by `status` (plus the `needs_human_check: true` count). A folded record whose `same_role_as` names another present record is an ALIAS of it — count and display the pair as one (the pipeline view and home counts treat aliases as one role).
+  by `status` (plus the `needs_human_check: true` count). A folded record whose `same_role_as` names another present record is an ALIAS of it (match the reference by splitting `same_role_as` on the FIRST colon only — source, then a possibly-colon-bearing `source_id` — the same parse as its definition above) — count and display the pair as one (the pipeline view and home counts treat aliases as one role).
 
 ## runs/<run_id>.json — audit log
 ```jsonc
@@ -150,8 +150,10 @@ When more than one source was searched, append ` · <Source>` to the match meta 
 <company> — <location> · Ashby`). A match whose `posted_at` was null carries a date mark on its reasoning
 line: `posted ~<Mon D> (from posting text)` when the detail read extracted a JD-stated date, else `date not
 stated`; add `— older than your freshness window` when the extracted date falls outside it (the entry still
-lands in its verdict band: the read is already paid; relevance decides). A cross-source role merged via `same_role_as` renders as ONE entry whose link line shows every source: `[view on company board](<ashby source_url>) · [also on LinkedIn](<linkedin source_url>)` — the canonical company-board link first; 'view' verbs, never 'apply'. When the JD-stated date meaningfully precedes the other source's `posted_at`, one qualitative clause is allowed — 'on the company's board days before LinkedIn — early'; never a numeric freshness score. Run health is one of `healthy` |
-`partial (<why>)` | `degraded (job sources flaky)` | `blocked (action needed)`, where `<why>` is exactly one
-of `N errors` (scattered per-query/per-posting errors) · `<source> unavailable` (a whole source lost this
-run) · `all sources unavailable`. Precedence: name a lost source over counting errors; `all sources` over
-one. If blocked, replace the body with the named error's cause+fix (see `errors.md`).
+lands in its verdict band: the read is already paid; relevance decides). A cross-source role merged via `same_role_as` renders as ONE entry whose link line shows every source — the **primary board source's canonical link first**, then `· [also on <Source>](<url>)` for each other row in `search.sources` order, e.g. `[view on company board](<primary board source_url>) · [also on LinkedIn](<linkedin source_url>)`. 'view' verbs, never 'apply'. (The primary is the board-source row that got the detail read — see the merge rule in `job-search-run` step 3; a `linkedin`-only group has no company-board link and shows just its LinkedIn link.) When the JD-stated date meaningfully precedes the other source's `posted_at`, one qualitative clause is allowed — 'on the company's board days before LinkedIn — early'; never a numeric freshness score. Run health is one of `healthy` |
+`partial (<why>)` | `degraded (job sources flaky)` | `blocked (action needed)`, where `<why>` is one
+of `N errors` (scattered per-query/per-posting errors) · `<source> unavailable` (one whole source lost this
+run) · `<sourceA>, <sourceB> unavailable` (several — but not all — sources lost, each named in
+`search.sources` order) · `all sources unavailable` (every enabled source lost). Precedence: name lost
+source(s) over counting errors; `all sources unavailable` only when EVERY enabled source is lost, otherwise
+list the specific ones. If blocked, replace the body with the named error's cause+fix (see `errors.md`).
