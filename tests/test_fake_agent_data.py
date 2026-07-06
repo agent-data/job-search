@@ -71,7 +71,7 @@ def test_many_promising_fixture_exceeds_codex_thread_limit_observed_in_live_run(
     assert all(row["detail_available"] and row["source_id"] for row in rows)
 
 def test_bad_query_422_on_sentinel_location():
-    # E-BAD-QUERY: a query whose location carries the INVALID sentinel returns 422 invalid_request
+    # E-BAD-QUERY: a query whose location carries the INVALID sentinel returns 422 validation_error
     # with details[].loc naming the bad param, non-retryable (the run skips it, never retries).
     r = shim(["call", LISTING, "search-jobs", "--keywords", "x", "--location", "INVALID-ZZ"],
              scenario="bad-query")

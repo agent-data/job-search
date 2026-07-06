@@ -80,9 +80,9 @@
     {
       "id": 8,
       "scenario": "invalid-pair",
-      "prompt": "Same harness but JOBSEARCH_TEST_SCENARIO=invalid-pair (search returns the happy results via fallback, but every get-posting returns 400 invalid_pair, retryable:false). Run job-search-run and show the digest + jobs.jsonl.",
+      "prompt": "Same harness but JOBSEARCH_TEST_SCENARIO=invalid-pair (search returns the happy results via fallback, but every get-posting returns 400 validation_error (param posting_id), retryable:false). Run job-search-run and show the digest + jobs.jsonl.",
       "expectations": [
-        "Does NOT retry invalid_pair (not retryable); falls back to a summary-only judgment for that posting",
+        "Does NOT retry validation_error (param posting_id) — not retryable; falls back to a summary-only judgment for that posting",
         "Adds a footnote like 'detail link expired / judged from summary'",
         "Still writes evaluated events (with detail_read:false for the affected posting); the run completes and exits 0"
       ]
@@ -170,9 +170,9 @@
     {
       "id": 16,
       "scenario": "one-source-down",
-      "prompt": "Same harness but JOBSEARCH_TEST_SCENARIO=one-source-down (every ashby search-jobs returns a retryable 502; linkedin succeeds via the happy fallback). Run job-search-run and show the digest.",
+      "prompt": "Same harness but JOBSEARCH_TEST_SCENARIO=one-source-down (every ashby search-jobs returns a retryable 503; linkedin succeeds via the happy fallback). Run job-search-run and show the digest.",
       "expectations": [
-        "Retries the ashby 502s with backoff, opens the ashby circuit after two consecutive fully-failed ashby queries, and stops calling ashby for the rest of the run",
+        "Retries the ashby 503s with backoff, opens the ashby circuit after two consecutive fully-failed ashby queries, and stops calling ashby for the rest of the run",
         "LinkedIn queries complete and their matches appear as normal — one source down never blanks the run",
         "Run health is 'partial (ashby unavailable)' and a footnote says Ashby was unreachable this run and the next run will retry",
         "runs/<id>.json lists ashby in sources_failed; exits 0 (partial, not a HALT)"

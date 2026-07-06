@@ -25,7 +25,7 @@ def err(code, message, retryable, param=None, details=None):  # error envelope t
     body = {"code": code, "message": message, "retryable": retryable,
             "param": param, "request_id": "req_fake", "source": "fake"}
     if details is not None:
-        body["details"] = details  # present on 422 invalid_request; absent on other errors
+        body["details"] = details  # present on 422 validation_error; absent on other errors
     print(json.dumps({"error": body}), file=sys.stderr)
     sys.exit(1)
 

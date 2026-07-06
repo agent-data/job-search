@@ -105,7 +105,9 @@ decision.
   [shared/references/agent-data-contract.md](../shared/references/agent-data-contract.md). We added client-side fan-out over that one
   parameterized contract — per-source circuit breakers, a composite dedup key, conservative
   cross-source merging — **not** a source-plugin system; the seam held as designed. Still
-  refused: a descriptor/plugin layer before a fourth source earns it.
+  refused: a descriptor/plugin layer — reconsidered when the fourth and fifth sources
+  (Greenhouse, Lever) landed and deliberately declined; the compact quirks table remains the
+  per-source contract (YAGNI).
 
 - **A dedicated pipeline/triage-board skill.** The `status` field on each job event (tracked in
   [shared/references/conventions.md](../shared/references/conventions.md)) and the per-run digest

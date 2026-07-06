@@ -99,7 +99,7 @@ Operations (no helper script — perform these exactly):
   "sources_searched":["linkedin","ashby"], "sources_failed":[],
   "results_summary":{ "total_results":50, "new_postings":9, "evaluated":9, "detail_read":5,
                       "relevant":6, "strong":3, "moderate":2, "weak":1 },
-  "errors":[ { "stage":"get-posting", "source_id":"…", "code":"detail_fetch_failed",
+  "errors":[ { "stage":"get-posting", "source_id":"…", "code":"upstream_unavailable",
                "retryable":true, "attempts":3, "final":"gave_up", "request_id":"…" } ],
   "run_health":"healthy|partial|degraded|blocked" }
 ```
