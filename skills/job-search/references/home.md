@@ -19,8 +19,9 @@ Read just what the home view needs (all local):
 - **Last run health:** the newest `<ws>/runs/*.json` (its `run_health`), or fall back to the **Run health**
   line of the latest digest.
 - **Latest digest:** the newest `<ws>/reports/<date>-digest.md` — its date and its **counts line**.
-- **Pipeline:** fold `<ws>/jobs.jsonl` per the fold operation in `conventions.md` → current jobs (one per
-  `source_id`, last-write-wins). Count by `status` and tally how many have `needs_human_check: true`.
+- **Pipeline:** fold `<ws>/jobs.jsonl` per the fold operation in `conventions.md` → current jobs (one per (`source`, `source_id`),
+  last-write-wins; records aliased by `same_role_as` count as one role — see the fold operation in
+  `conventions.md`). Count by `status` and tally how many have `needs_human_check: true`.
 
 If the workspace is somehow missing its `config.yaml` (e.g. the directory was deleted out from under the
 registry), that's **`E-NO-CONFIG`** — say so with its fix ("Run the job-search skill (say 'set up job
@@ -32,7 +33,7 @@ Keep it tight. A good shape:
 
 ```
 Job search — <ws path>
-Brief: updated <date> (<N months ago>)   ·   Schedule: <on, daily | off>   ·   Last run: <healthy | partial (N) | degraded | blocked>
+Brief: updated <date> (<N months ago>)   ·   Sources: LinkedIn + Ashby   ·   Schedule: <on, daily | off>   ·   Last run: <healthy | partial (<why>) | degraded | blocked>
 
 Latest digest — <date>
   9 new postings · 3 strong · 2 moderate · 1 weak · 3 filtered out · <n> searches · <m> detail reads
@@ -49,12 +50,12 @@ What next? Just tell me:
 
 Notes on each part:
 
-- **Status line.** Workspace path; brief age from `preferences.md:updated_at` (fallback `created_at`); schedule from
+- **Status line.** Workspace path; brief age from `preferences.md:updated_at` (fallback `created_at`); sources from `config.yaml` `search.sources` (absent → the default pair); render any additional sources (e.g. `+ Greenhouse`, `+ Lever`) when listed; schedule from
   the registry's scheduling marker — render the cadence (from `config.yaml:schedule.frequency`, e.g. "daily")
   when installed, or "off" when not; the marker carries only on/off + the mechanism value recorded at install time
   (the mechanism label is not surfaced in the status line);
   last-run health from the newest `runs/*.json` `run_health` (or the latest digest's Run health line). Run
-  health is one of `healthy | partial (N errors) | degraded (LinkedIn flaky) | blocked (action needed)`.
+  health is one of `healthy | partial (<why>) | degraded (job sources flaky) | blocked (action needed)`.
 - **Latest digest.** Read the newest `reports/<date>-digest.md`; show its date and reproduce its **counts
   line** (the `N new · S strong · M moderate · W weak · F filtered out · n searches · m detail reads` line —
   see the digest format in `conventions.md`). If there are no digests yet, say "No runs yet — want me to run
@@ -80,7 +81,7 @@ Offer these and apply each by **chatting**, editing `config.yaml` per the `inter
   step 5.
 - **Tune the feed** → set `search.freshness` (`any | past-week | past-2-weeks | past-month`) to narrow or
   widen the recency window; set `search.detail_model` (`fast | balanced | high | inherit`) to control which
-  model tier reads full posting details; and, where the host needs approval, set
+  model tier reads full posting details; set `search.sources` to choose job sources (e.g. drop back to `["linkedin"]`, or add "greenhouse" or "lever" to search more company boards); and, where the host needs approval, set
   `search.parallel_detail_reads` (`true | false`) to use parallel subagents or read sequentially. The
   default detail tier is `fast`; your platform's adapter → Model tiers maps each token to the actual model.
   When discussing this knob on a specific host, name the exact models from that adapter → Model tiers. Edit
@@ -116,5 +117,5 @@ Offer these and apply each by **chatting**, editing `config.yaml` per the `inter
 ## Coming soon (Plan C)
 
 Resume actions — **compare** your resume against a match and **tailor** it (truthfully, never inventing
-experience) — are **coming soon (Plan C)**. Mention them if the user asks what's next, but defer; they
+experience) — are **planned (Plan C, not yet scheduled)**. Mention them if the user asks what's next, but defer; they
 aren't wired yet.

@@ -91,6 +91,11 @@ The user changes config by **chatting**; manual editing is an escape hatch. To a
   means the user approved; `false` means use sequential detail reads. Only conversational front-door flows
   write this preference; the headless runner reads it and never changes config. `queries[].limit` (1–100,
   default 25) is the per-query feed size.
+- **Choose job sources:** set `search.sources` — an ordered list from the contract's source enum
+  (see `agent-data-contract.md`); omit the key for the default `["linkedin", "ashby"]`. The default is
+  `["linkedin", "ashby"]`; add `"greenhouse"` and/or `"lever"` to search more public company boards. One
+  source failing never blocks the others.
+  Only conversational flows write this; the headless runner reads it and never changes config.
 - **Derive "remote" into the query:** `search-jobs` has no remote flag, so when the brief requires remote (or
   rejects onsite-elsewhere), fold `remote` into the query `keywords` and/or set `location` to the brief's allowed
   geographies — otherwise the feed fills with onsite roles the judge then filters out.

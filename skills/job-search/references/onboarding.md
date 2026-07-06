@@ -190,13 +190,13 @@ user to name keywords.** They can retune anytime; the goal here is zero upfront 
 3. **Acknowledge what you saved — don't ask them to choose.** Name the searches you derived and make clear
    they're fully editable, e.g.:
 
-   > "From your preferences I'll search for **'AI engineer' · 'ML platform engineer'** across **US-remote +
+   > "From your preferences I'll search **LinkedIn and public Ashby company boards** for **'AI engineer' · 'ML platform engineer'** across **US-remote +
    > the SF Bay Area**. I can add, retune, or drop any of these anytime — just say the word."
 
    Only if the brief is too thin to derive anything sensible (rare) do you ask one focused question to fill
    the gap — lead with derivation, never a blank "what should I search for?".
    The config already comes preset with a recency window (recent postings only) and a fast model for reading
-   posting details — both are tunable anytime just by asking.
+   posting details — both are tunable anytime just by asking. The config also comes preset with the default job sources (LinkedIn + Ashby company boards) — tunable anytime just by asking.
 4. **Pick a frequency — as a closed choice** (`voice.md` → Asking questions), the plain-language nudge
    carried by the recommended-first option. Header `Frequency`; question:
    "How often should I check for new postings? You can change this anytime by just telling me."; options,

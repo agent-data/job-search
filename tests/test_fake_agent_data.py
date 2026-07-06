@@ -47,13 +47,21 @@ def test_get_posting_detail_fetch_failed_is_retryable():
              scenario="detail-fetch-failed")
     assert r.returncode != 0
     body = json.loads(r.stderr)["error"]
-    assert body["code"] == "detail_fetch_failed" and body["retryable"] is True
+    assert body["code"] == "upstream_unavailable" and body["retryable"] is True
 
 def test_error_scenario_reuses_happy_search_fixture():
     # 'degraded' has no own search-jobs fixture; it must fall back to happy's 2-result fixture
     r = shim(["call", LISTING, "search-jobs", "--keywords", "x"], scenario="degraded")
     assert r.returncode == 0
     assert len(json.loads(r.stdout)["data"]["results"]) == 2
+
+def test_error_scenarios_reuse_happy_ashby_fixture():
+    # degraded has no own ashby fixture; the cascade must serve happy's ashby data with the echo injected
+    r = shim(["call", LISTING, "search-jobs", "--keywords", "x", "--source", "ashby"], scenario="degraded")
+    assert r.returncode == 0
+    data = json.loads(r.stdout)["data"]
+    assert data["query"]["source"] == "ashby"
+    assert [row["source"] for row in data["results"]] == ["ashby"]
 
 def test_many_promising_fixture_exceeds_codex_thread_limit_observed_in_live_run():
     r = shim(["call", LISTING, "search-jobs", "--keywords", "AI engineer"], scenario="many-promising")
@@ -63,13 +71,13 @@ def test_many_promising_fixture_exceeds_codex_thread_limit_observed_in_live_run(
     assert all(row["detail_available"] and row["source_id"] for row in rows)
 
 def test_bad_query_422_on_sentinel_location():
-    # E-BAD-QUERY: a query whose location carries the INVALID sentinel returns 422 invalid_request
+    # E-BAD-QUERY: a query whose location carries the INVALID sentinel returns 422 validation_error
     # with details[].loc naming the bad param, non-retryable (the run skips it, never retries).
     r = shim(["call", LISTING, "search-jobs", "--keywords", "x", "--location", "INVALID-ZZ"],
              scenario="bad-query")
     assert r.returncode != 0
     body = json.loads(r.stderr)["error"]
-    assert body["code"] == "invalid_request" and body["retryable"] is False
+    assert body["code"] == "validation_error" and body["retryable"] is False
     assert body["param"] == "location"
     assert body["details"][0]["loc"][-1] == "location"
 
@@ -79,3 +87,74 @@ def test_bad_query_scenario_passes_through_valid_location():
              scenario="bad-query")
     assert r.returncode == 0
     assert len(json.loads(r.stdout)["data"]["results"]) == 2
+
+def test_search_source_flag_echoes_requested_source():
+    r = shim(["call", LISTING, "search-jobs", "--keywords", "x", "--source", "ashby"],
+             scenario="multi-source")
+    data = json.loads(r.stdout)["data"]
+    assert data["query"]["source"] == "ashby"
+    assert all(row["source"] == "ashby" and row["posted_at"] is None for row in data["results"])
+
+def test_search_defaults_to_linkedin_and_injects_echo():
+    r = shim(["call", LISTING, "search-jobs", "--keywords", "x"], scenario="multi-source")
+    data = json.loads(r.stdout)["data"]
+    assert data["query"]["source"] == "linkedin"
+    assert len(data["results"]) == 2  # happy fallback carries the linkedin rows
+
+def test_one_source_down_fails_only_the_down_source():
+    down = shim(["call", LISTING, "search-jobs", "--keywords", "x", "--source", "ashby"],
+                scenario="one-source-down")
+    assert down.returncode != 0
+    body = json.loads(down.stderr)["error"]
+    assert body["code"] == "upstream_unavailable" and body["retryable"] is True
+    ok = shim(["call", LISTING, "search-jobs", "--keywords", "x"], scenario="one-source-down")
+    assert ok.returncode == 0
+
+def test_source_unsupported_400s_non_linkedin():
+    r = shim(["call", LISTING, "search-jobs", "--keywords", "x", "--source", "ashby"],
+             scenario="source-unsupported")
+    assert r.returncode != 0
+    body = json.loads(r.stderr)["error"]
+    assert body["code"] == "validation_error" and body["param"] == "source" \
+        and body["retryable"] is False
+
+def test_legacy_swallow_returns_linkedin_rows_without_source_echo():
+    r = shim(["call", LISTING, "search-jobs", "--keywords", "x", "--source", "ashby"],
+             scenario="legacy-source-swallow")
+    data = json.loads(r.stdout)["data"]
+    assert "source" not in data["query"]  # absent echo = linkedin (the E-SOURCE-IGNORED trigger)
+    assert all(row["source"] == "linkedin" for row in data["results"])
+
+def test_unknown_source_value_is_rejected():
+    r = shim(["call", LISTING, "search-jobs", "--keywords", "x", "--source", "monster"])
+    assert r.returncode != 0
+    assert json.loads(r.stderr)["error"]["code"] == "validation_error"
+
+def test_get_posting_routes_per_source_and_per_posting_id():
+    default = shim(["call", LISTING, "get-posting", "--posting_id", "jp_ashbyzeph01",
+                    "--source_url", "u", "--source", "ashby"], scenario="multi-source")
+    assert json.loads(default.stdout)["data"]["company_name"] == "Zephyr Robotics"
+    acme = shim(["call", LISTING, "get-posting", "--posting_id", "jp_ashbyacme01",
+                 "--source_url", "u", "--source", "ashby"], scenario="multi-source")
+    assert json.loads(acme.stdout)["data"]["company_name"] == "Acme"
+
+def test_greenhouse_echoes_source_and_populated_posted_at():
+    r = shim(["call", LISTING, "search-jobs", "--keywords", "x", "--source", "greenhouse"])
+    data = json.loads(r.stdout)["data"]
+    assert data["query"]["source"] == "greenhouse"
+    assert all(row["source"] == "greenhouse" and row["posted_at"] for row in data["results"])
+
+def test_lever_salary_html_passes_through_untouched():
+    r = shim(["call", LISTING, "search-jobs", "--keywords", "x", "--source", "lever"])
+    data = json.loads(r.stdout)["data"]
+    assert data["query"]["source"] == "lever"
+    assert data["results"][0]["source"] == "lever" and data["results"][0]["posted_at"]
+    assert "<div>" in data["results"][0]["salary_display"]  # raw HTML preserved verbatim
+
+def test_get_posting_greenhouse_and_lever_route_per_source():
+    gh = shim(["call", LISTING, "get-posting", "--posting_id", "jp_gh0000000001",
+               "--source_url", "u", "--source", "greenhouse"])
+    assert json.loads(gh.stdout)["data"]["title"] == "Senior AI Engineer"
+    lv = shim(["call", LISTING, "get-posting", "--posting_id", "jp_lv0000000001",
+               "--source_url", "u", "--source", "lever"])
+    assert json.loads(lv.stdout)["data"]["employment_type"] == "Full-time"

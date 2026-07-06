@@ -1,7 +1,8 @@
 ---
 title: Multi-Harness Portability — Adapter Layer + Per-Platform Distribution
-state: active
+state: completed
 created: 2026-06-22
+completed: 2026-07-02
 ---
 
 # Multi-Harness Portability — Adapter Layer + Per-Platform Distribution

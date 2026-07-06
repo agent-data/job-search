@@ -1,0 +1,3 @@
+{ "data": { "query": {"keywords": "AI engineer", "location": "United States", "source": "ashby"}, "status": "completed",
+    "results": [], "warnings": [], "started_at": "2026-07-02T08:00:00Z", "completed_at": "2026-07-02T08:00:00Z" },
+  "meta": { "request_id": "req_fakeashbyempty" } }

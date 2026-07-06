@@ -74,7 +74,7 @@ in `-p` commands anyway so the skill is invoked deterministically.
 ```bash
 cd "$JSOS" && python3 -m pytest -q
 ```
-**Expected:** `56 passed` **and `0 failed`** — treat **`0 failed`** as the real gate (the exact count grows as
+**Expected:** `102 passed` **and `0 failed`** — treat **`0 failed`** as the real gate (the exact count grows as
 tests are added; bump this number when it does). Covers the doc linter, the philosophy guard, and the
 fake-shim self-tests (incl. the `bad-query` scenario behind T7.12) — dev tooling only; the runtime state
 procedures are exercised by the live tests below and the skill evals.
@@ -367,7 +367,7 @@ PATH="$SH5/_bin:$PATH" JOBSEARCH_FIXTURES="$JSOS/tests/fixtures" JOBSEARCH_TEST_
 cat "$SH5/reports/"*.md 2>/dev/null; rm -rf "$SH5"
 ```
 **Expected:** writes a `runs/<id>.json` with `run_health: blocked` naming **E-SERVICE-DOWN**, so the next job-search home view surfaces it; the headless `claude -p` process returns **0**, so do not assert on `$?`; the digest's Run-health line reads exactly **`Run health: blocked (action needed)`**
-(the full set is `healthy | partial (N errors) | degraded (LinkedIn flaky) | blocked (action needed)`); the body is
+(the full set is `healthy | partial (<why>) | degraded (job sources flaky) | blocked (action needed)`); the body is
 the **E-SERVICE-DOWN** message ("unreachable right now … next scheduled run will retry"), **not** a match list.
 (`degraded`/`partial` digest shapes are strengthened in T7.9/T7.7.)
 **Result:** ⬜
@@ -446,9 +446,9 @@ JOBSEARCH_FIXTURES=$JSOS/tests/fixtures, JOBSEARCH_TEST_SCENARIO=<scenario>) and
 |---|---|---|---|
 | T7.5 **E-QUOTA** | `quota` | plain-language quota note (lower frequency / upgrade) — **no credit math**; no retry; existing matches intact; writes a `runs/<id>.json` with `run_health: blocked` naming **E-QUOTA**, so the next job-search home view surfaces it; the headless `claude -p` process returns **0**, so do not assert on `$?` | ⬜ |
 | T7.6 **E-SERVICE-DOWN** | `down` | "service down" digest, Run health blocked; **no** search/get-posting calls; writes a `runs/<id>.json` with `run_health: blocked` naming **E-SERVICE-DOWN**, so the next job-search home view surfaces it; the headless `claude -p` process returns **0**, so do not assert on `$?` | ⬜ |
-| T7.7 **E-UPSTREAM-STRETCH** | `stretch` | retries the 502 with backoff, stops after two consecutive failed queries; writes a **partial** digest (Run health `partial (N errors)`); doesn't crash | ⬜ |
+| T7.7 **E-UPSTREAM-STRETCH** | `stretch` | retries the 502 with backoff, opens each source's circuit after two consecutive failed queries against it (the shim fails every source → all stretched); writes a **partial** digest (Run health `partial (all sources unavailable)`); doesn't crash | ⬜ |
 | T7.8 invalid-pair (non-error) | `invalid-pair` | no retry; summary-only judgment + "detail link expired" footnote; `detail_read:false`; run completes, exit 0 | ⬜ |
-| T7.9 degraded (non-error) | `degraded` | Run-health line reads `degraded (LinkedIn flaky)`; digest notes results this run may be affected; **no detail-read cap** (reads promising matches as normal); still produces matches; exit 0 | ⬜ |
+| T7.9 degraded (non-error) | `degraded` | Run-health line reads `degraded (job sources flaky)`; digest notes results this run may be affected; **no detail-read cap** (reads promising matches as normal); still produces matches; exit 0 | ⬜ |
 | T7.10 many promising postings | `many-promising` | every promising posting is evaluated; if the host hits a subagent/thread limit, it continues in rolling batches or falls back sequentially; capacity backpressure alone does **not** make Run health partial | ⬜ |
 | T7.11 zero / all-known | `zero-empty` | "Searches ran but returned 0 results — broaden keywords"; exit 0. (All-known: pre-seed jobs.jsonl with the happy ids → "No new postings — you've already seen all N of these.") | ⬜ |
 
@@ -650,7 +650,7 @@ line, Strong/Moderate/Weak, Filtered-out, footnotes).
 
 Ask Claude, for each skill, to **run its evals** (the `harness` in `skills/<skill>/evals/evals.json`; they use the
 fake-agent-data shim, so zero real credits):
-- `evaluate-job-fit` (3) · `job-search-run` (11) · `job-preference-interview` (3) · `job-search` (5).
+- `evaluate-job-fit` (3) · `job-search-run` (22) · `job-preference-interview` (3) · `job-search` (8) · `job-search-agent` (4).
 **Expected:** all pass; outputs are philosophy-clean.
 **Result:** ⬜
 
@@ -675,6 +675,49 @@ built, mark **N/A (pending build)**.
 
 ---
 
+## 14. Multi-source (LinkedIn + Ashby + Greenhouse + Lever)
+
+### T14.1 Live Ashby search returns ashby rows — 👤
+```bash
+agent-data call f9a6ec16-0bfd-44d8-b3ee-073776745ee7 search-jobs \
+  --keywords "software engineer" --limit 3 --source ashby \
+  --fields id,source_id,source_url,title,company_name,source
+```
+**Expected:** rows with `"source":"ashby"`, UUID `source_id`s, `jobs.ashbyhq.com` URLs.
+**Result:** ⬜
+
+### T14.1a Live Greenhouse search returns greenhouse rows — 👤
+```bash
+agent-data call f9a6ec16-0bfd-44d8-b3ee-073776745ee7 search-jobs \
+  --keywords "software engineer" --limit 3 --source greenhouse \
+  --fields id,source_id,source_url,title,company_name,source,posted_at
+```
+**Expected:** rows with `"source":"greenhouse"`, `<company>:<numeric>` `source_id`s, `boards.greenhouse.io` URLs, and a populated `posted_at`.
+**Result:** ⬜
+
+### T14.1b Live Lever search returns lever rows — 👤
+```bash
+agent-data call f9a6ec16-0bfd-44d8-b3ee-073776745ee7 search-jobs \
+  --keywords "software engineer" --limit 3 --source lever \
+  --fields id,source_id,source_url,title,company_name,source,posted_at,salary_display
+```
+**Expected:** rows with `"source":"lever"`, `<company>:<uuid>` `source_id`s, `jobs.lever.co` URLs, and a populated `posted_at` (Lever's `salary_display` may carry HTML — treat as free text, never parse).
+**Result:** ⬜
+
+### T14.2 Shim multi-source run — 🤖
+"Build the eval sandbox (§0.2), export `JOBSEARCH_TEST_SCENARIO=multi-source`, run
+job-search-run against the sandbox workspace, and show the digest + jobs.jsonl."
+**Expected:** per-source counts breakdown; ashby events carry `"source":"ashby"`; null-date
+entries carry a date mark; the first-Ashby-pass footnote is present.
+**Result:** ⬜
+
+### T14.3 One source down never blanks the run — 🤖
+"Same sandbox, `JOBSEARCH_TEST_SCENARIO=one-source-down`. Run job-search-run; show the digest."
+**Expected:** LinkedIn matches land; Run health `partial (ashby unavailable)`; outage footnote.
+**Result:** ⬜
+
+---
+
 ## Acceptance checklist (sign-off)
 
 - ⬜ Install: plugin validates `--strict`; loads via `--plugin-dir`; loose-skills self-contained (§1)
@@ -689,8 +732,9 @@ built, mark **N/A (pending build)**.
 - ⬜ Scheduling correct (the composed `/loop <interval>` matches the pinned table per frequency; `/loop` sets `mechanism:loop`; **zero-Python user path** proven with python3 masked) (§9)
 - ⬜ **No numeric scores/weights/credit knobs** in files **or chat**; frequency is the only cost lever (§10)
 - ⬜ Docs match reality (install commands, error table, sample digest) (§11)
-- ⬜ Full regression green: `pytest` (**56**; gate on `0 failed`) + all four skills' evals (§0.3, §12)
+- ⬜ Full regression green: `pytest` (**102**; gate on `0 failed`) + all five skills' evals (§0.3, §12)
 - ⬜ Planned config slash-command tests are marked **N/A (pending build)**, not green (§13)
+- ⬜ Multi-source: live Ashby/Greenhouse/Lever rows; shim multi-source run shows per-source counts + first-pass footnote; one source down never blanks the run (§14)
 
 **Teardown:** `rm -rf "$JSOS_TEST"` and any `$T*`/`$SH*` dirs you kept.
 

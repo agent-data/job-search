@@ -1,0 +1,4 @@
+{ "data": { "id": "jp_ghacme01", "title": "Senior AI Engineer", "company_name": "Acme",
+  "location_display": "Remote, US", "employment_type": null, "posted_at": "2026-05-15T19:01:28",
+  "description_markdown": "Acme is hiring a Senior AI Engineer (Python, LLMs), remote in the US.\n",
+  "missing_fields": ["employment_type"] } }
