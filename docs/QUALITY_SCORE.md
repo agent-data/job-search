@@ -12,7 +12,7 @@ _Last assessed: 2026-06-11._
 
 | Area | Kind | Grade | Gaps |
 |---|---|---|---|
-| `discovery-search` | domain | strong | Workday is experimental (upstream still stabilizing); per-query source targeting deferred; cross-source merging is conservative by design (unsure → distinct entries). |
+| `discovery-search` | domain | strong | Four live sources (LinkedIn, Ashby, Greenhouse, Lever); per-query source targeting deferred; cross-source merging is conservative by design (unsure → distinct entries). |
 | `preferences-judgment` | domain | strong | Judgment consistency rests on the prose method; there is no automated consistency check. |
 | `workspace-state` | domain | adequate | State procedures are model-executed against pinned contracts — verified by evals + the TESTING matrix, not unit tests; the concurrency-recovery path is not exercised by a test (tracked). |
 | `scheduling-consent` | domain | adequate | The no-cron stance is instruction-level only (the deny hook was removed 2026-06-11 — resolves the former hooks-shipping question); out-of-range time validation and `timezone` runtime behaviour are untested. |
