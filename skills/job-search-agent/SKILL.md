@@ -9,7 +9,7 @@ user-invocable: true
 
 You are working on the agent itself — configuring, extending, or troubleshooting it — not running a search. Daily use lives elsewhere: onboarding and the home view in **job-search**, the search pass in **job-search-run**. This manual holds the playbooks and guardrails for changing the system safely.
 
-The system in one paragraph: a private, local-first job-search agent. It searches LinkedIn and Ashby company-board postings (Workday experimental) via agent-data, judges each one against the user's prose preferences brief, and writes digests to a workspace that never touches source control (`~/.job-search/` by default).
+The system in one paragraph: a private, local-first job-search agent. It searches LinkedIn, Ashby, Greenhouse, and Lever company-board postings via agent-data, judges each one against the user's prose preferences brief, and writes digests to a workspace that never touches source control (`~/.job-search/` by default).
 
 Hold these stances in every change you make — each exists for a reason, and several are CI-enforced:
 
@@ -72,9 +72,12 @@ Searches run against the sources listed in `config.yaml` `search.sources` (see
 - **ashby** — a broad crawl of public Ashby company boards, served from an index (fast).
   Board links ARE the live apply pages. Boards often omit posting dates — undated matches carry
   "date not stated" (or a date read out of the posting text) rather than being hidden.
-- **workday — experimental.** Enable by adding `"workday"` to `search.sources`; expect
-  `partial (workday unavailable)` runs while its upstream stabilizes — one source failing never
-  blocks the others.
+- **greenhouse** — a crawl of public Greenhouse company boards, served from a service-refreshed
+  store (fast). Board links ARE the live apply pages. Postings carry real dates, so freshness
+  filters normally.
+- **lever** — a crawl of public Lever company boards, served from a store (fast). Board links ARE
+  the live apply pages. Postings carry real dates; some list salary as embedded HTML (shown as
+  plain text, never parsed for numbers).
 
 To disable a source, set the list without it (e.g. `search.sources: ["linkedin"]`). Per-query
 source targeting ("search only Ashby for this query") is a known deferred knob — today every

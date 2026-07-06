@@ -101,7 +101,7 @@ decision.
 - **Multi-source aggregation — shipped 2026-07; the non-goal's own trigger fired.** This entry
   previously refused multi-source aggregation "before a second source exists," naming the seam
   as sufficient. That condition ended when the Job Postings API shipped per-source selection
-  (Ashby live, Workday experimental) — see the contract in
+  (Ashby, Greenhouse, and Lever live) — see the contract in
   [shared/references/agent-data-contract.md](../shared/references/agent-data-contract.md). We added client-side fan-out over that one
   parameterized contract — per-source circuit breakers, a composite dedup key, conservative
   cross-source merging — **not** a source-plugin system; the seam held as designed. Still

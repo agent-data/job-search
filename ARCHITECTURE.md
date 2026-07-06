@@ -2,7 +2,7 @@
 
 Job Search turns **an agent harness** into a private, local-first **job-search operating system**: a plugin
 of five skills, a single-source-of-truth `shared/references/` tree whose pinned contracts the host agent
-executes natively (no bundled runtime — no Python), and a pytest + fake-shim + eval harness. It searches LinkedIn and Ashby company-board postings (plus experimental Workday) through the agent-data
+executes natively (no bundled runtime — no Python), and a pytest + fake-shim + eval harness. It searches LinkedIn, Ashby, Greenhouse, and Lever company-board postings through the agent-data
 marketplace, judges each one qualitatively against your prose preferences brief, and writes human digests
 into a workspace that never touches source control.
 

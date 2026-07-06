@@ -50,7 +50,7 @@ What next? Just tell me:
 
 Notes on each part:
 
-- **Status line.** Workspace path; brief age from `preferences.md:updated_at` (fallback `created_at`); sources from `config.yaml` `search.sources` (absent → the default pair); render `+ Workday (experimental)` when listed; schedule from
+- **Status line.** Workspace path; brief age from `preferences.md:updated_at` (fallback `created_at`); sources from `config.yaml` `search.sources` (absent → the default pair); render any additional sources (e.g. `+ Greenhouse`, `+ Lever`) when listed; schedule from
   the registry's scheduling marker — render the cadence (from `config.yaml:schedule.frequency`, e.g. "daily")
   when installed, or "off" when not; the marker carries only on/off + the mechanism value recorded at install time
   (the mechanism label is not surfaced in the status line);
@@ -81,7 +81,7 @@ Offer these and apply each by **chatting**, editing `config.yaml` per the `inter
   step 5.
 - **Tune the feed** → set `search.freshness` (`any | past-week | past-2-weeks | past-month`) to narrow or
   widen the recency window; set `search.detail_model` (`fast | balanced | high | inherit`) to control which
-  model tier reads full posting details; set `search.sources` to choose job sources (e.g. drop back to `["linkedin"]`, or add `"workday"` to try the experimental source — expect `partial (workday unavailable)` runs while its upstream stabilizes); and, where the host needs approval, set
+  model tier reads full posting details; set `search.sources` to choose job sources (e.g. drop back to `["linkedin"]`, or add "greenhouse" or "lever" to search more company boards); and, where the host needs approval, set
   `search.parallel_detail_reads` (`true | false`) to use parallel subagents or read sequentially. The
   default detail tier is `fast`; your platform's adapter → Model tiers maps each token to the actual model.
   When discussing this knob on a specific host, name the exact models from that adapter → Model tiers. Edit
