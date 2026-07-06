@@ -14,7 +14,7 @@ import json, os, sys
 
 SCEN = os.environ.get("JOBSEARCH_TEST_SCENARIO", "happy")
 FIX = os.environ.get("JOBSEARCH_FIXTURES", "")
-SRC_ALLOWED = ("linkedin", "ashby", "workday")
+SRC_ALLOWED = ("linkedin", "ashby", "greenhouse", "lever")
 
 
 def out(obj):  # JSON to stdout, exit 0

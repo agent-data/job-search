@@ -137,3 +137,24 @@ def test_get_posting_routes_per_source_and_per_posting_id():
     acme = shim(["call", LISTING, "get-posting", "--posting_id", "jp_ashbyacme01",
                  "--source_url", "u", "--source", "ashby"], scenario="multi-source")
     assert json.loads(acme.stdout)["data"]["company_name"] == "Acme"
+
+def test_greenhouse_echoes_source_and_populated_posted_at():
+    r = shim(["call", LISTING, "search-jobs", "--keywords", "x", "--source", "greenhouse"])
+    data = json.loads(r.stdout)["data"]
+    assert data["query"]["source"] == "greenhouse"
+    assert all(row["source"] == "greenhouse" and row["posted_at"] for row in data["results"])
+
+def test_lever_salary_html_passes_through_untouched():
+    r = shim(["call", LISTING, "search-jobs", "--keywords", "x", "--source", "lever"])
+    data = json.loads(r.stdout)["data"]
+    assert data["query"]["source"] == "lever"
+    assert data["results"][0]["source"] == "lever" and data["results"][0]["posted_at"]
+    assert "<div>" in data["results"][0]["salary_display"]  # raw HTML preserved verbatim
+
+def test_get_posting_greenhouse_and_lever_route_per_source():
+    gh = shim(["call", LISTING, "get-posting", "--posting_id", "jp_gh0000000001",
+               "--source_url", "u", "--source", "greenhouse"])
+    assert json.loads(gh.stdout)["data"]["title"] == "Senior AI Engineer"
+    lv = shim(["call", LISTING, "get-posting", "--posting_id", "jp_lv0000000001",
+               "--source_url", "u", "--source", "lever"])
+    assert json.loads(lv.stdout)["data"]["employment_type"] == "Full-time"
