@@ -1,0 +1,6 @@
+{ "data": { "status": "completed", "warnings": [], "results": [
+  { "id": "jp_ghacme01", "source_id": "acme:7310605",
+    "source_url": "https://boards.greenhouse.io/acme/jobs/7310605?gh_jid=7310605",
+    "title": "Senior AI Engineer", "company_name": "Acme", "location_display": "Remote, US",
+    "salary_display": null, "posted_at": "2026-05-15T19:01:28", "detail_available": true, "source": "greenhouse" }
+] } }

@@ -181,7 +181,7 @@
     {
       "id": 17,
       "scenario": "source-unsupported",
-      "prompt": "Same harness but JOBSEARCH_TEST_SCENARIO=source-unsupported (every non-linkedin search-jobs returns a non-retryable 400 unsupported_source with error.param 'source'; linkedin succeeds via the happy fallback). Run job-search-run and show the digest.",
+      "prompt": "Same harness but JOBSEARCH_TEST_SCENARIO=source-unsupported (every non-linkedin search-jobs returns a non-retryable 400 validation_error with error.param 'source'; linkedin succeeds via the happy fallback). Run job-search-run and show the digest.",
       "expectations": [
         "Surfaces E-SOURCE-UNSUPPORTED's footnote naming the fix (remove 'ashby' from search.sources in config.yaml, or update the agent-data service)",
         "Does NOT retry the 400 (retryable:false) — the unsupported source is dropped on its first response",
@@ -218,12 +218,37 @@
     {
       "id": 20,
       "scenario": "one-source-down",
-      "prompt": "Same harness but JOBSEARCH_TEST_SCENARIO=one-source-down with two per-case tweaks that make workday the failing source: (a) export JOBSEARCH_TEST_DOWN_SOURCE=workday (every workday search-jobs returns a retryable 502; linkedin succeeds via the happy fallback and ashby returns its happy-fallback fixture row (Zephyr)), and (b) enable workday in the sandbox config via `sed -i.bak 's/sources: \\[\"linkedin\", \"ashby\"\\]/sources: [\"linkedin\", \"ashby\", \"workday\"]/' <tmp>/config.yaml && rm -f <tmp>/config.yaml.bak`. Run job-search-run and show the digest.",
+      "prompt": "Same harness but JOBSEARCH_TEST_SCENARIO=one-source-down with two per-case tweaks that make greenhouse the failing source: (a) export JOBSEARCH_TEST_DOWN_SOURCE=greenhouse (every greenhouse search-jobs returns a retryable 503; linkedin succeeds via the happy fallback and ashby returns its happy-fallback fixture row), and (b) enable greenhouse in the sandbox config via `sed -i.bak 's/sources: \\[\"linkedin\", \"ashby\"\\]/sources: [\"linkedin\", \"ashby\", \"greenhouse\"]/' <tmp>/config.yaml && rm -f <tmp>/config.yaml.bak`. Run job-search-run and show the digest.",
       "expectations": [
-        "Retries the workday 502s with backoff, opens the workday circuit after two consecutive fully-failed workday queries, and stops calling workday for the rest of the run",
+        "Retries the greenhouse 503s with backoff, opens the greenhouse circuit after two consecutive fully-failed greenhouse queries, and stops calling greenhouse for the rest of the run",
         "LinkedIn and Ashby queries complete and their matches appear as normal — one source down never blanks the run",
-        "Run health is 'partial (workday unavailable)' and a footnote says Workday was unreachable this run and the next run will retry",
-        "runs/<id>.json lists workday in sources_failed and both linkedin and ashby in sources_searched; exits 0 (partial, not a HALT)"
+        "Run health is 'partial (greenhouse unavailable)' and a footnote says Greenhouse was unreachable this run and the next run will retry",
+        "runs/<id>.json lists greenhouse in sources_failed and both linkedin and ashby in sources_searched; exits 0 (partial, not a HALT)"
+      ]
+    },
+    {
+      "id": 21,
+      "scenario": "multi-source",
+      "prompt": "Same multi-source harness, but the sandbox config ships search.sources [\"linkedin\", \"ashby\", \"greenhouse\", \"lever\"] (edit config.yaml before running). linkedin+ashby return their happy/multi-source fixtures; greenhouse returns 2 rows with populated posted_at; lever returns 1 row with populated posted_at and a salary_display containing raw HTML. Run job-search-run against <tmp> and show the digest + jobs.jsonl.",
+      "expectations": [
+        "Runs one search-jobs per (enabled query × each of the four enabled sources), passing --source on every call, and verifies each echoed data.query.source matches the request",
+        "Every evaluated event's source is copied from its result row (greenhouse rows → 'greenhouse', lever rows → 'lever'); no hardcoded literal",
+        "Greenhouse and Lever rows have populated posted_at and are filtered by the freshness window normally (no null-date footnote for them)",
+        "The Lever row's HTML salary_display is shown as plain text and NEVER parsed into a number; output carries no numeric score or dollar figure derived from it",
+        "The digest counts line's per-source breakdown names all searched sources (e.g. '(… LinkedIn · … Ashby · … Greenhouse · … Lever)') and match meta lines carry the correct ' · <Source>' tag",
+        "Immediately re-running produces no duplicate evaluated events for any (source, source_id) pair; exits 0"
+      ]
+    },
+    {
+      "id": 22,
+      "scenario": "multi-source",
+      "prompt": "Same as eval 21's four-source config, focused on the cross-source duplicate. linkedin returns Acme 'Senior AI Engineer' (source_id 1001, Remote US). greenhouse returns the SAME Acme 'Senior AI Engineer' (source_id acme:7310605, posting jp_ghacme01, Remote US, populated posted_at). Run job-search-run against <tmp> and show the digest + jobs.jsonl.",
+      "expectations": [
+        "Recognizes the two Acme 'Senior AI Engineer' rows (linkedin 1001 + greenhouse acme:7310605) as ONE real-world role and merges the pair",
+        "Spends exactly ONE detail read, and that read is on the GREENHOUSE row (jp_ghacme01 — the company board), NOT the linkedin row (the primary is a board source, generalized beyond Ashby)",
+        "The merged role renders as ONE digest entry whose link line shows the greenhouse company-board link first, then an 'also on LinkedIn' link — '[view on company board](https://boards.greenhouse.io/acme/jobs/7310605?gh_jid=7310605) · [also on LinkedIn](https://www.linkedin.com/jobs/view/1001)' ('view' verbs, never 'apply')",
+        "jobs.jsonl carries TWO evaluated events sharing the verdict; the linkedin event bears same_role_as:'greenhouse:acme:7310605' and the greenhouse event bears none",
+        "The counts line counts rows, not merged roles; output has no numeric score; exits 0"
       ]
     }
   ]
