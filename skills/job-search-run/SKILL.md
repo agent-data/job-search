@@ -28,11 +28,15 @@ Read these before running, and follow them exactly:
 - `references/agent-data-contract.md` — CLI + routes + retry rules.
 - `references/errors.md` — every E-* with the exact cause+fix wording.
 - `references/conventions.md` — file schemas + digest format.
+- `references/build-stamp.md` — local build version + content hash to write into run records.
 - `references/parallelism.md` — parallel-by-default + how to brief a subagent.
 - `references/voice.md` — how any user-facing line is worded (see **Narrating** below).
 
 ## Loop
 0. **Preflight.**
+   - Read `references/build-stamp.md` and parse `version:` + `content_hash:`. Determine
+     `git_sha` with `git rev-parse --short HEAD` when available; otherwise use `"unknown"`.
+     Carry this `build` object into every `runs/<run_id>.json`, including blocked records.
    - `agent-data` not found on PATH → E-NO-AGENT-DATA (HALT, exit 1).
    - No `config.yaml` → E-NO-CONFIG (HALT, exit 1).
    - `agent-data whoami`; `api_key_set:false` → E-NO-AUTH (HALT, exit 1).
@@ -128,7 +132,7 @@ Read these before running, and follow them exactly:
    Searched <n> queries · <total> postings, <new> new
    Read <m> in full
    <s> strong · <md> moderate · <w> weak · <f> filtered out
-   Run health: <healthy | partial (<why>) | degraded (job sources flaky) | blocked>
+   Run health: <healthy | partial (<why>) | degraded (job sources flaky) | blocked> · Job Search <version> <content_hash> · git <sha|unknown>
    Digest: <path to reports/<date>-digest.md>
    ```
 
@@ -161,7 +165,7 @@ reasoning and any ⚠ confirm, per conventions.md → Digest format).
 
 ## Run health, surfacing & exit codes
 Every run ends by writing `runs/<run_id>.json` with at least `{"run_id","run_health",
-"error"|null,"ts"}`. **Every HALT path writes this record with `run_health:"blocked"` and
+"build","error"|null,"ts"}`. **Every HALT path writes this record with `run_health:"blocked"` and
 its `E-*` BEFORE stopping** — this is the source the home view reads, so a failed scheduled
 run is named on the user's next job-search home view. When a workspace exists, a HALT also writes
 the blocked `reports/<date>-digest.md` (named error + fix as the body). When

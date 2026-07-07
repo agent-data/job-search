@@ -94,7 +94,9 @@ Operations (no helper script — perform these exactly):
 
 ## runs/<run_id>.json — audit log
 ```jsonc
-{ "run_id":"…", "started_at":"…", "completed_at":"…", "status_probe":"ok|degraded|unreachable",
+{ "run_id":"…", "started_at":"…", "completed_at":"…",
+  "build": { "version":"0.4.0", "content_hash":"sha256:abcdef123456", "git_sha":"<short sha|unknown>" },
+  "status_probe":"ok|degraded|unreachable",
   "queries":[ { "query_id":"…", "source":"<source>", "keywords":"…", "results_returned":25, "new":6, "errors":[] } ],
   "sources_searched":["linkedin","ashby"], "sources_failed":[],
   "results_summary":{ "total_results":50, "new_postings":9, "evaluated":9, "detail_read":5,
@@ -103,6 +105,10 @@ Operations (no helper script — perform these exactly):
                "retryable":true, "attempts":3, "final":"gave_up", "request_id":"…" } ],
   "run_health":"healthy|partial|degraded|blocked" }
 ```
+`build.version` and `build.content_hash` are copied from the bundled `references/build-stamp.md`.
+`build.git_sha` is best-effort: use `git rev-parse --short HEAD` when the executing copy has a `.git`
+context, else write `"unknown"`. The build object is required on every run record written by
+`job-search-run`, including blocked records where a workspace exists.
 
 ## preferences.md — prose brief (the model reads this; NO machine-readable contract, NO weights)
 Sections: a 2–3 sentence **Summary**; **Must-haves / dealbreakers** (the binary filters); **Strong

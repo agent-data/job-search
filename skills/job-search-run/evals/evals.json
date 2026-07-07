@@ -10,6 +10,8 @@
         "Calls `agent-data ... status` before any search-jobs call",
         "With search.parallel_detail_reads unset, never asks about subagents and never edits config (headless); detail reads follow the host's default mode — the parallel fan-out on hosts that don't gate subagents behind approval",
         "Writes reports/<date>-digest.md whose Run health line is 'healthy'",
+        "Writes runs/<id>.json with build.version and build.content_hash copied from references/build-stamp.md; build.git_sha is a short git sha when available, otherwise \"unknown\"",
+        "The terminal summary keeps five lines and appends the build id to the Run health line, e.g. Run health: healthy · Job Search 0.4.0 sha256:<hash> · git <sha|unknown>",
         "Surfaces the Acme Senior AI Engineer (Remote US) as a strong (or moderate) match, grouped before weaker ones",
         "Judges the onsite-Austin ML role as not relevant (dealbreaker) and counts it under 'filtered out'",
         "Appends one evaluated event per new posting to jobs.jsonl (one single-line JSON object per line, each with a non-empty source_id), deduped by (source, source_id), carrying provenance (title/company/source_url) + judgment (relevant/match/reasoning)",
