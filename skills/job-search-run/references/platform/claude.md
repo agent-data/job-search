@@ -161,3 +161,14 @@ Ships as a Claude Code plugin: `.claude-plugin/plugin.json` + `.claude-plugin/ma
 at the **same** one `skills/` tree (no per-platform bundle). Install via Claude Code's plugin manager, or
 drop the skills loose into `~/.claude/skills/`. **Plugin skills are invocable only namespaced** (the
 `job-search:` prefix); loose-installed skills use the bare slash command.
+
+### Update recipe
+
+Show the user **verbatim** when `references/update.md` reports an update is available:
+
+```bash
+claude plugin marketplace update agent-data
+claude plugin update job-search@agent-data
+```
+
+Restart Claude Code after the update so the new plugin cache is loaded.

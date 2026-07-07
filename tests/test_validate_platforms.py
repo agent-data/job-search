@@ -339,3 +339,56 @@ def test_codex_parallel_subagent_contract_requires_balanced_model(tmp_path):
     r = run_validate(tmp_path, "--only", "codex-parallel-subagents")
     assert r.returncode == 1
     assert "balanced" in r.stdout and "gpt-5.4" in r.stdout
+
+
+# ---- primary-update-recipes ----
+
+def test_primary_update_recipes_clean_passes(tmp_path):
+    p = tmp_path / "shared" / "references" / "platform"
+    p.mkdir(parents=True)
+    (p / "claude.md").write_text(
+        "## Packaging & install\n\n"
+        "Update recipe:\n"
+        "```bash\n"
+        "claude plugin marketplace update agent-data\n"
+        "claude plugin update job-search@agent-data\n"
+        "```\n"
+    )
+    (p / "codex.md").write_text(
+        "## Packaging & install\n\n"
+        "Update recipe:\n"
+        "```bash\n"
+        "codex plugin marketplace upgrade agent-data\n"
+        "codex plugin add job-search@agent-data\n"
+        "```\n"
+    )
+    r = run_validate(tmp_path, "--only", "primary-update-recipes")
+    assert r.returncode == 0, r.stdout + r.stderr
+
+
+def test_primary_update_recipes_missing_claude_update_fails(tmp_path):
+    p = tmp_path / "shared" / "references" / "platform"
+    p.mkdir(parents=True)
+    (p / "claude.md").write_text("## Packaging & install\n\nno update command\n")
+    (p / "codex.md").write_text(
+        "## Packaging & install\n\n"
+        "codex plugin marketplace upgrade agent-data\n"
+        "codex plugin add job-search@agent-data\n"
+    )
+    r = run_validate(tmp_path, "--only", "primary-update-recipes")
+    assert r.returncode == 1
+    assert "claude plugin update job-search@agent-data" in r.stdout
+
+
+def test_primary_update_recipes_missing_codex_upgrade_fails(tmp_path):
+    p = tmp_path / "shared" / "references" / "platform"
+    p.mkdir(parents=True)
+    (p / "claude.md").write_text(
+        "## Packaging & install\n\n"
+        "claude plugin marketplace update agent-data\n"
+        "claude plugin update job-search@agent-data\n"
+    )
+    (p / "codex.md").write_text("## Packaging & install\n\ncodex plugin add job-search@agent-data\n")
+    r = run_validate(tmp_path, "--only", "primary-update-recipes")
+    assert r.returncode == 1
+    assert "codex plugin marketplace upgrade agent-data" in r.stdout

@@ -216,3 +216,14 @@ sandbox. Also ensure the active job-search workspace is writable via `cd <worksp
 Ships as a Codex plugin: `.codex-plugin/plugin.json` with `skills: "./skills/"` pointing at the **same**
 one `skills/` tree (no per-platform bundle). Install via Codex's plugin manager, or drop the skills into
 the cross-runtime `~/.agents/skills/` path Codex reads.
+
+### Update recipe
+
+Show the user **verbatim** when `references/update.md` reports an update is available:
+
+```bash
+codex plugin marketplace upgrade agent-data
+codex plugin add job-search@agent-data
+```
+
+Restart Codex after the update so the new plugin cache is loaded.

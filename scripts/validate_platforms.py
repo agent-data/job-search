@@ -373,6 +373,37 @@ def scan_codex_parallel_subagents(root):
     return hits
 
 
+def scan_primary_update_recipes(root):
+    """Claude and Codex are the primary tested harnesses. Their adapters must carry exact update
+    commands for the home-view update banner. Other adapters intentionally stay out of this check
+    until they are live-verified."""
+    hits = []
+    if not os.path.isdir(os.path.join(root, PLATFORM_DIR)):
+        return hits
+    required = {
+        "claude": (
+            "claude plugin marketplace update agent-data",
+            "claude plugin update job-search@agent-data",
+        ),
+        "codex": (
+            "codex plugin marketplace upgrade agent-data",
+            "codex plugin add job-search@agent-data",
+        ),
+    }
+    for harness, needles in required.items():
+        rel = os.path.join(PLATFORM_DIR, harness + ".md")
+        path = os.path.join(root, rel)
+        if not os.path.exists(path):
+            hits.append(f"{rel}: primary-update-recipes: adapter is missing")
+            continue
+        with open(path, encoding="utf-8", errors="replace") as f:
+            text = f.read()
+        for needle in needles:
+            if needle not in text:
+                hits.append(f"{rel}: primary-update-recipes: missing `{needle}`")
+    return hits
+
+
 CHECKS = {
     "adapter-sections": scan_adapter_sections,
     "manifest-parse": scan_manifest_parse,
@@ -380,6 +411,7 @@ CHECKS = {
     "adapter-cross-refs": scan_adapter_cross_refs,
     "codex-workspace-write": scan_codex_workspace_write,
     "codex-parallel-subagents": scan_codex_parallel_subagents,
+    "primary-update-recipes": scan_primary_update_recipes,
 }
 
 
