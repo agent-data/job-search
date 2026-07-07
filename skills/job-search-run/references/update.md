@@ -44,19 +44,27 @@ Use the resolved registry from `internals.md` and preserve all existing keys. Th
 }
 ```
 
-A cache is fresh for 24 hours. When fresh, use it and do not hit the network. When absent or stale, try one
-lightweight fetch of the local stamp's `published_stamp_url`:
+A cache is fresh for 24 hours by `checked_at`, regardless of `status`. When fresh, use it and do not hit
+the network. Only a fresh `status: "ok"` cache with a parseable `latest` object may enter comparison; a
+fresh non-ok cache suppresses the banner and still renders the home view normally. When the cache is
+absent or stale, try one lightweight fetch of the local stamp's `published_stamp_url`:
 
 ```bash
 curl -fsSL --max-time 5 "<published_stamp_url>"
 ```
 
-If `curl` is unavailable, the command fails, or the fetched stamp is malformed, keep any previous cache but
-do not show a banner from stale data. The home view still renders normally.
-
-Write a successful fresh result back to the registry with the registry whole-file write rules in
+Write every attempted fresh check back to the registry with the registry whole-file write rules in
 `internals.md`: read current JSON, merge only `update_check`, preserve unrelated keys, keep `version: 1`,
 and write atomically.
+
+- Successful fetch + parse writes `checked_at`, `status: "ok"`, and the trusted `latest` object.
+- `curl` unavailable, command failure, or unavailable remote writes a fresh `checked_at`,
+  `status: "failed"`, and no `latest`.
+- Malformed fetched stamp writes a fresh `checked_at`, `status: "malformed"`, and no `latest`.
+
+Do not carry forward a previous `latest` object into a non-ok cache. Do not show a banner from failed,
+malformed, absent, or stale data. If the cache write itself cannot be completed, suppress the banner and
+render the home view normally.
 
 ## Comparison
 

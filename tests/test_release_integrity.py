@@ -113,3 +113,10 @@ def test_eval_and_generated_stamp_changes_do_not_require_bump(tmp_path):
     stamp_path.write_text("# changed stamp\n")
     r = run_check(tmp_path, "--check-version-bump", "--base", base)
     assert r.returncode == 0, r.stdout + r.stderr
+
+
+def test_ci_build_noop_check_includes_canonical_stamp():
+    text = (ROOT / ".github" / "workflows" / "ci.yml").read_text()
+    assert "git status --porcelain skills shared/references/build-stamp.md" in text
+    assert "git --no-pager diff --stat skills shared/references/build-stamp.md" in text
+    assert "shared/references/build-stamp.md" in text

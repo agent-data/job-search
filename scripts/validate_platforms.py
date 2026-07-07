@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Structural validation for the multi-harness platform layer.
 
-The six non-Claude harnesses (codex, cursor, opencode, gemini, copilot, droid, pi) cannot be
+The seven non-Claude harnesses (codex, cursor, opencode, gemini, copilot, droid, pi) cannot be
 live-tested in CI — no harness is installed on the runner. Codex is proven by the manual P0 live
 lane (run by hand, off-CI); the remaining six get this STRUCTURAL gate instead. It proves, without
 running any harness, that every platform adapter is complete, every manifest parses, and every
@@ -13,7 +13,7 @@ shared/references or skills, so this is a NEW lane, not a doc_lint rule).
 Mirrors scripts/doc_lint.py in shape: scan(root) -> hits; main() prints hits and returns 1 on
 failure, else prints "Platform validation: clean." and returns 0. `--root` arg. Stdlib only.
 
-Six checks, dispatched via the CHECKS registry:
+Seven checks, dispatched via the CHECKS registry:
   - adapter-sections:  every shared/references/platform/<harness>.md SOURCE adapter carries all 12
                        canonical `## ` sections (exact names). Synced skills/*/references/platform/
                        copies are asserted to match their source byte-for-byte.
@@ -36,6 +36,8 @@ Six checks, dispatched via the CHECKS registry:
                        could read `~/.job-search` but could not persist run artifacts there.
   - codex-parallel-subagents: Codex must document the job-search parallel-detail preference, scoped
                        profile, explicit scheduled prompt authorization, fallback, and model mapping.
+  - primary-update-recipes: Claude and Codex adapters must carry exact update recipe command lines for
+                       the home-view update banner.
 """
 import argparse, json, os, re, shutil, subprocess, sys
 
