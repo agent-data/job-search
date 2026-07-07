@@ -18,6 +18,7 @@ are archived here.
 - [Zero-Python Shipped Surface](completed/2026-06-11-zero-python-shipped-surface.md)
 - [Public OSS Release Readiness](completed/2026-06-15-public-oss-release-readiness.md)
 - [Multi-Harness Portability — Adapter Layer + Per-Platform Distribution](completed/2026-06-22-multi-harness-portability.md)
+- [Build Stamp + Claude/Codex Update Banner](completed/2026-07-06-build-stamp-update-banner.md)
 
 ## Technical debt
 - [Tech-debt tracker](tech-debt-tracker.md) — the itemised P2/P3 backlog.
