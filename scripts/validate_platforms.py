@@ -373,6 +373,34 @@ def scan_codex_parallel_subagents(root):
     return hits
 
 
+def _markdown_heading_block(text, level, title):
+    """Return the body under a markdown heading up to the next same-level-or-higher heading."""
+    marker = "#" * level
+    heading_re = re.compile(rf"^{re.escape(marker)}\s+{re.escape(title)}\s*#*\s*$", re.MULTILINE)
+    m = heading_re.search(text)
+    if not m:
+        return None
+    next_heading_re = re.compile(rf"^#{{1,{level}}}\s+", re.MULTILINE)
+    next_heading = next_heading_re.search(text, m.end())
+    end = next_heading.start() if next_heading else len(text)
+    return text[m.end():end]
+
+
+def _update_recipe_commands(text):
+    """Extract exact non-empty command lines from Packaging & install -> Update recipe -> bash fence."""
+    packaging = _markdown_heading_block(text, 2, "Packaging & install")
+    if packaging is None:
+        return None, "missing `## Packaging & install` section"
+    update_recipe = _markdown_heading_block(packaging, 3, "Update recipe")
+    if update_recipe is None:
+        return None, "missing `### Update recipe` block under `## Packaging & install`"
+    fence = re.search(r"^```bash\s*\n(.*?)^```\s*$", update_recipe, re.MULTILINE | re.DOTALL)
+    if not fence:
+        return None, "missing fenced `bash` recipe under `### Update recipe`"
+    commands = tuple(line.strip() for line in fence.group(1).splitlines() if line.strip())
+    return commands, None
+
+
 def scan_primary_update_recipes(root):
     """Claude and Codex are the primary tested harnesses. Their adapters must carry exact update
     commands for the home-view update banner. Other adapters intentionally stay out of this check
@@ -398,9 +426,16 @@ def scan_primary_update_recipes(root):
             continue
         with open(path, encoding="utf-8", errors="replace") as f:
             text = f.read()
-        for needle in needles:
-            if needle not in text:
-                hits.append(f"{rel}: primary-update-recipes: missing `{needle}`")
+        commands, error = _update_recipe_commands(text)
+        expected = " then ".join(f"`{needle}`" for needle in needles)
+        if error:
+            hits.append(f"{rel}: primary-update-recipes: {error}; expected exact command lines: "
+                        f"{expected}")
+            continue
+        if commands != needles:
+            actual = " then ".join(f"`{command}`" for command in commands) or "<no commands>"
+            hits.append(f"{rel}: primary-update-recipes: update recipe in `## Packaging & install` "
+                        f"must contain exact command lines: {expected}; found {actual}")
     return hits
 
 

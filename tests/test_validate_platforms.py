@@ -348,7 +348,7 @@ def test_primary_update_recipes_clean_passes(tmp_path):
     p.mkdir(parents=True)
     (p / "claude.md").write_text(
         "## Packaging & install\n\n"
-        "Update recipe:\n"
+        "### Update recipe\n\n"
         "```bash\n"
         "claude plugin marketplace update agent-data\n"
         "claude plugin update job-search@agent-data\n"
@@ -356,7 +356,7 @@ def test_primary_update_recipes_clean_passes(tmp_path):
     )
     (p / "codex.md").write_text(
         "## Packaging & install\n\n"
-        "Update recipe:\n"
+        "### Update recipe\n\n"
         "```bash\n"
         "codex plugin marketplace upgrade agent-data\n"
         "codex plugin add job-search@agent-data\n"
@@ -392,3 +392,79 @@ def test_primary_update_recipes_missing_codex_upgrade_fails(tmp_path):
     r = run_validate(tmp_path, "--only", "primary-update-recipes")
     assert r.returncode == 1
     assert "codex plugin marketplace upgrade agent-data" in r.stdout
+
+
+def test_primary_update_recipes_commands_outside_packaging_fails(tmp_path):
+    p = tmp_path / "shared" / "references" / "platform"
+    p.mkdir(parents=True)
+    (p / "claude.md").write_text(
+        "## Run recipe\n\n"
+        "```bash\n"
+        "claude plugin marketplace update agent-data\n"
+        "claude plugin update job-search@agent-data\n"
+        "```\n\n"
+        "## Packaging & install\n\n"
+        "### Update recipe\n\n"
+        "```bash\n"
+        "```\n"
+    )
+    (p / "codex.md").write_text(
+        "## Packaging & install\n\n"
+        "### Update recipe\n\n"
+        "```bash\n"
+        "codex plugin marketplace upgrade agent-data\n"
+        "codex plugin add job-search@agent-data\n"
+        "```\n"
+    )
+    r = run_validate(tmp_path, "--only", "primary-update-recipes")
+    assert r.returncode == 1
+    assert "claude.md" in r.stdout and "Packaging & install" in r.stdout
+
+
+def test_primary_update_recipes_reversed_command_order_fails(tmp_path):
+    p = tmp_path / "shared" / "references" / "platform"
+    p.mkdir(parents=True)
+    (p / "claude.md").write_text(
+        "## Packaging & install\n\n"
+        "### Update recipe\n\n"
+        "```bash\n"
+        "claude plugin update job-search@agent-data\n"
+        "claude plugin marketplace update agent-data\n"
+        "```\n"
+    )
+    (p / "codex.md").write_text(
+        "## Packaging & install\n\n"
+        "### Update recipe\n\n"
+        "```bash\n"
+        "codex plugin marketplace upgrade agent-data\n"
+        "codex plugin add job-search@agent-data\n"
+        "```\n"
+    )
+    r = run_validate(tmp_path, "--only", "primary-update-recipes")
+    assert r.returncode == 1
+    assert "claude.md" in r.stdout and "exact command lines" in r.stdout
+
+
+def test_primary_update_recipes_extra_command_in_fence_fails(tmp_path):
+    p = tmp_path / "shared" / "references" / "platform"
+    p.mkdir(parents=True)
+    (p / "claude.md").write_text(
+        "## Packaging & install\n\n"
+        "### Update recipe\n\n"
+        "```bash\n"
+        "claude plugin marketplace update agent-data\n"
+        "claude plugin update job-search@agent-data\n"
+        "claude plugin list\n"
+        "```\n"
+    )
+    (p / "codex.md").write_text(
+        "## Packaging & install\n\n"
+        "### Update recipe\n\n"
+        "```bash\n"
+        "codex plugin marketplace upgrade agent-data\n"
+        "codex plugin add job-search@agent-data\n"
+        "```\n"
+    )
+    r = run_validate(tmp_path, "--only", "primary-update-recipes")
+    assert r.returncode == 1
+    assert "claude.md" in r.stdout and "exact command lines" in r.stdout
