@@ -35,6 +35,10 @@ See an example digest in [`examples/sample-digest.md`](examples/sample-digest.md
 
 ## Installation
 
+Claude Code and Codex are the primary tested installs today. The other harness entries below are expected
+to work from their manifests/adapters, but they have not had the same live verification depth yet; treat
+them as experimental until their adapter is promoted in the tech-debt tracker.
+
 Installation differs by harness. If you use more than one, install Job Search separately for each one.
 
 ### Claude Code
