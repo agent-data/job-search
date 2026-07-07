@@ -99,8 +99,6 @@ Install the extension straight from git:
 gemini extensions install https://github.com/agent-data/job-search
 ```
 
-Update later with `gemini extensions update job-search`.
-
 Then tell Gemini to run the **job-search** skill.
 
 ### GitHub Copilot CLI
