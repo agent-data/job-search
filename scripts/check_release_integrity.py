@@ -94,17 +94,18 @@ def check_version_sync(root):
 
 def _git_changed_paths(root, base):
     commands = (
-        ["git", "diff", "--name-only", f"{base}...HEAD"],
-        ["git", "diff", "--name-only"],
-        ["git", "diff", "--name-only", "--cached"],
+        ("git diff", ["git", "diff", "--name-only", f"{base}...HEAD"]),
+        ("git diff", ["git", "diff", "--name-only"]),
+        ("git diff", ["git", "diff", "--name-only", "--cached"]),
+        ("git ls-files", ["git", "ls-files", "--others", "--exclude-standard"]),
     )
     paths = set()
     hits = []
-    for cmd in commands:
+    for label, cmd in commands:
         proc = subprocess.run(cmd, cwd=root, capture_output=True, text=True)
         if proc.returncode != 0:
             detail = (proc.stderr or proc.stdout).strip().replace("\n", " ")
-            hits.append(f"git diff failed ({' '.join(cmd)}): {detail}")
+            hits.append(f"{label} failed ({' '.join(cmd)}): {detail}")
             continue
         paths.update(line.strip() for line in proc.stdout.splitlines() if line.strip())
     return sorted(paths), hits

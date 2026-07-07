@@ -81,6 +81,22 @@ def test_runtime_surface_change_requires_claude_version_bump(tmp_path):
     assert r.returncode == 0, r.stdout + r.stderr
 
 
+def test_untracked_runtime_surface_addition_requires_version_bump(tmp_path):
+    init_git_repo(tmp_path)
+    seed_manifests(tmp_path, "1.2.3")
+    commit_all(tmp_path, "base")
+    base = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=tmp_path, text=True).strip()
+
+    p = tmp_path / "skills" / "new-skill" / "SKILL.md"
+    p.parent.mkdir(parents=True)
+    p.write_text("---\nname: new-skill\ndescription: new\n---\n")
+
+    r = run_check(tmp_path, "--check-version-bump", "--base", base)
+    assert r.returncode == 1
+    assert "runtime surface changed" in r.stdout
+    assert "skills/new-skill/SKILL.md" in r.stdout
+
+
 def test_eval_and_generated_stamp_changes_do_not_require_bump(tmp_path):
     init_git_repo(tmp_path)
     seed_manifests(tmp_path, "1.2.3")
