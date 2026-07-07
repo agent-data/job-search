@@ -69,6 +69,19 @@
       ]
     },
     {
+      "id": 9,
+      "scenario": "returning-user home with cached update available",
+      "prompt": "PRE-SEED before invoking: run setup-onboarding.sh <tmp>; create <tmp>/.job-search from templates (cp templates/config.example.yaml -> config.yaml, templates/preferences.example.md -> preferences.md, templates/workspace.gitignore -> .gitignore, mkdir runs reports, : > jobs.jsonl); write a sample <tmp>/.job-search/reports/2026-06-05-digest.md with Run health: healthy and a counts line; write <tmp>/registry.json with version:1, active_workspace:<tmp>/.job-search, and update_check.checked_at set to the current UTC time with latest.version 9.9.9, latest.content_hash sha256:999999999999, status ok. Now invoke job-search as Claude Code (discovery reports first_run:false, source:registry). Env as in harness. Do not allow a network call; the cache is fresh.",
+      "expectations": [
+        "Does NOT onboard — no interview, no workspace creation, no template copy, no preferences rewrite",
+        "Reads the fresh registry update_check cache and does not fetch the network",
+        "Renders a compact update banner above the normal home view: Job Search <local version/hash> -> 9.9.9 sha256:999999999999",
+        "The banner includes the Claude update recipe exactly: claude plugin marketplace update agent-data, then claude plugin update job-search@agent-data",
+        "Still renders the normal home view below the banner: status line, latest digest summary, pipeline, quick actions",
+        "NO numeric score, NO weights, NO credit/dollar math"
+      ]
+    },
+    {
       "id": 5,
       "scenario": "never-clobber adoption of a legacy workspace",
       "prompt": "PRE-SEED a LEGACY workspace at <tmp>/job-search (legacy resolves there because JOBSEARCH_OS_HOME=<tmp>) with SENTINEL content, and do NOT write a registry: run setup-onboarding.sh <tmp>; mkdir -p <tmp>/job-search; write <tmp>/job-search/config.yaml (valid: version:1, workspace block, ONE queries[] entry, a schedule block); write <tmp>/job-search/preferences.md whose body contains the exact string SENTINEL-PREFS; write <tmp>/job-search/jobs.jsonl with exactly one evaluated event whose JSON contains the exact string SENTINEL-JOB (and a source_id). Do NOT create runs/ or reports/. Capture the byte contents of preferences.md and jobs.jsonl BEFORE invoking. Then invoke the job-search skill (discovery reports first_run:false, source:legacy). Env as in harness.",

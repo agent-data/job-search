@@ -77,5 +77,6 @@ Read and follow exactly: `references/internals.md` (OS state, discovery, never-c
 recipes, and the verbatim scheduling block), `references/conventions.md` (workspace layout, `config.yaml`
 schema, `jobs.jsonl` statuses, digest format + counts line), `references/errors.md` (every named error),
 `references/voice.md` (how every reply talks to the user — plain English, zero-context first-run asks,
-render documents inline), and `references/agent-data-contract.md` (the source contract `job-search-run`
-honors). These are the source of truth; this skill never restates their details from memory.
+render documents inline), `references/update.md` (cached update signal + Claude/Codex update banner), and
+`references/agent-data-contract.md` (the source contract `job-search-run` honors). These are the source of
+truth; this skill never restates their details from memory.

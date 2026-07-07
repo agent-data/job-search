@@ -15,6 +15,10 @@ Read just what the home view needs (all local):
 - **Schedule marker:** read it from the registry (`internals.md` → Registry) →
   `{"installed":<bool>,"mechanism":<active-mechanism>|null,"set_at":<iso>|null}` — the mechanism value
   is recorded by the active platform (see your platform's adapter → Scheduling).
+- **Update status:** on Claude Code or Codex only, follow `references/update.md` using the bundled
+  `references/build-stamp.md` and the registry `update_check` cache. The result is either
+  `update_available` with the local/remote build ids and the active adapter's update recipe, or no signal.
+  Any check failure means no signal; the home still renders.
 - **Brief age:** the `updated_at:` line near the top of `<ws>/preferences.md` (fall back to `created_at` if absent).
 - **Last run health:** the newest `<ws>/runs/*.json` (its `run_health`), or fall back to the **Run health**
   line of the latest digest.
@@ -28,6 +32,17 @@ registry), that's **`E-NO-CONFIG`** — say so with its fix ("Run the job-search
 search') to set it up") and offer to re-onboard, rather than rendering a broken home.
 
 ## Render the home
+
+If `references/update.md` reports `update_available`, print this single banner line first, then the normal
+home view:
+
+```text
+Update available: Job Search <local_version> <local_hash> -> <remote_version> <remote_hash> — run:
+<platform update recipe>
+```
+
+Copy `<platform update recipe>` verbatim from the active platform's adapter → Packaging & install. Do not
+show this banner on adapters without a verified update recipe.
 
 Keep it tight. A good shape:
 
