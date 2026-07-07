@@ -106,9 +106,11 @@ Operations (no helper script — perform these exactly):
   "run_health":"healthy|partial|degraded|blocked" }
 ```
 `build.version` and `build.content_hash` are copied from the bundled `references/build-stamp.md`.
-`build.git_sha` is best-effort: use `git rev-parse --short HEAD` when the executing copy has a `.git`
-context, else write `"unknown"`. The build object is required on every run record written by
-`job-search-run`, including blocked records where a workspace exists.
+`build.git_sha` is best-effort: use `git -C <job-search root> rev-parse --short HEAD` only when the
+executing Job Search plugin/source root is reliably known and that root has a `.git` context; otherwise
+write `"unknown"`. Never derive `git_sha` from the caller/current working directory, because that can
+record the user's project SHA instead of the Job Search build. The build object is required on every run
+record written by `job-search-run`, including blocked records where a workspace exists.
 
 ## preferences.md — prose brief (the model reads this; NO machine-readable contract, NO weights)
 Sections: a 2–3 sentence **Summary**; **Must-haves / dealbreakers** (the binary filters); **Strong

@@ -35,8 +35,11 @@ Read these before running, and follow them exactly:
 ## Loop
 0. **Preflight.**
    - Read `references/build-stamp.md` and parse `version:` + `content_hash:`. Determine
-     `git_sha` with `git rev-parse --short HEAD` when available; otherwise use `"unknown"`.
-     Carry this `build` object into every `runs/<run_id>.json`, including blocked records.
+     `git_sha` only from the executing Job Search plugin/source root: use
+     `git -C <job-search root> rev-parse --short HEAD` when that root is reliably known and has a
+     `.git` context; otherwise use `"unknown"`. Never derive `git_sha` from the caller/current
+     working directory. Carry this `build` object into every `runs/<run_id>.json`, including blocked
+     records.
    - `agent-data` not found on PATH → E-NO-AGENT-DATA (HALT, exit 1).
    - No `config.yaml` → E-NO-CONFIG (HALT, exit 1).
    - `agent-data whoami`; `api_key_set:false` → E-NO-AUTH (HALT, exit 1).
@@ -46,9 +49,11 @@ Read these before running, and follow them exactly:
      note "job sources flaky — results this run may be affected" in the digest; no detail-read cap — read
      promising matches as normal); unreachable → E-SERVICE-DOWN (write a "service down" digest, HALT, exit 1).
 
-   > Before exiting on ANY E-* HALT where a workspace exists (E-NO-AUTH, E-NO-PREFERENCES,
-   > E-CONFIG-VERSION, E-SERVICE-DOWN, E-QUOTA), write `runs/<run_id>.json` with
-   > `run_health:"blocked"` + the error, so the next home view surfaces it.
+   > Before exiting on ANY E-* HALT with a writable workspace (including E-NO-AGENT-DATA,
+   > E-NO-AUTH, E-NO-PREFERENCES, E-CONFIG-VERSION, E-SERVICE-DOWN, E-QUOTA), write
+   > `runs/<run_id>.json` with `run_health:"blocked"`, `build`, and the error, so the next
+   > home view surfaces it. The named exception is E-NO-CONFIG / first_run with no workspace:
+   > there is no run record to write, so name the error and stop.
 1. **Search the feed (one `search-jobs` per enabled query × enabled source; run the whole batch concurrently).** Build the full call list first — one call per (enabled query × enabled source), passing `--source <s>` on each; with 2 queries and `sources: ["linkedin", "ashby"]` that is 4 calls. **The single listing id does not mean a single source** — the one listing serves every source and `--source` selects which; never collapse the fan-out because the listing id repeats. For each
    `queries[]` with `enabled:true` × each enabled source `s`, call `search-jobs` with `--keywords` (+ `--location`, `--limit`), `--source <s>`, and `--fields id,source_id,source_url,title,company_name,location_display,salary_display,posted_at,detail_available,source`.
    `limit` is the feed size (1–100; the API defaults to 20 — the config template sets 25) — pull generously and lean on **breadth** (several varied
@@ -164,11 +169,12 @@ postings — M are new." → "Reading the M promising ones in full…" → then 
 reasoning and any ⚠ confirm, per conventions.md → Digest format).
 
 ## Run health, surfacing & exit codes
-Every run ends by writing `runs/<run_id>.json` with at least `{"run_id","run_health",
-"build","error"|null,"ts"}`. **Every HALT path writes this record with `run_health:"blocked"` and
-its `E-*` BEFORE stopping** — this is the source the home view reads, so a failed scheduled
-run is named on the user's next job-search home view. When a workspace exists, a HALT also writes
-the blocked `reports/<date>-digest.md` (named error + fix as the body). When
+Every run with a writable workspace ends by writing `runs/<run_id>.json` with at least
+`{"run_id","run_health","build","error"|null,"ts"}`. **Every HALT with a writable workspace writes
+this record with `run_health:"blocked"`, `build`, and its `E-*` BEFORE stopping** — this is the
+source the home view reads, so a failed scheduled run is named on the user's next job-search home view.
+When a writable workspace exists, a HALT also writes the blocked `reports/<date>-digest.md` (named
+error + fix as the body). When
 `notify.desktop_notify_on_block` is true, fire an attention-pull alert on a blocked run — defer the
 alert mechanism to your platform's adapter → Block-alert channel.
 
@@ -177,9 +183,9 @@ the alert supplements them and is capability-gated. **Surfacing is the written r
 exit code.** The record is primary on every harness — surface every blocked outcome through it. Whether
 the host exit code is also trustworthy is per-harness; see your platform's adapter → Headless invocation.
 
-Exception: **E-NO-CONFIG / first_run** means there is no workspace to write into — this is
-inherently visible because the next time the user opens the **job-search** skill it routes
-to onboarding. Name the error and stop.
+Exception: **E-NO-CONFIG / first_run** means there is no workspace to write into, so no run record
+or blocked digest can be written — this is inherently visible because the next time the user opens the
+**job-search** skill it routes to onboarding. Name the error and stop.
 
 ## Idempotency
 Re-running the same day re-searches (cheap) but dedup means no posting is re-evaluated or re-read. Never write
