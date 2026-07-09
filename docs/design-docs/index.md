@@ -22,6 +22,7 @@ contracts now live in `shared/references/`).
 - [Plan B/D — Handoff](2026-06-05-plan-b-d-handoff.md) — _status: historical_
 
 ## Forward-looking (aspirational)
+- [Three-Skill Job Search Redesign](2026-07-09-three-skill-redesign.md) — _status: aspirational_
 - [Multi-Harness Portability — Research Dossier](multi-harness-portability.md) — _status: aspirational_
 
 ## Superseded
