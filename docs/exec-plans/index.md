@@ -6,6 +6,7 @@ are archived here.
 ## Active
 - [Wave 1 — Multi-Source Job Search (LinkedIn + Ashby + Experimental Workday)](active/2026-07-02-wave-1-multi-source.md)
 - [Multi-Source Reconciliation — Greenhouse + Lever in, Workday out, wire-contract drift fixed](active/2026-07-06-multi-source-reconciliation-greenhouse-lever.md)
+- [AAS series — re-target onto feat/build-stamp-update-banner and re-anchor to the multi-file PSG](active/2026-07-09-aas-series-rebase-onto-feat-psg.md)
 
 ## Completed
 - [Job Search OS — Foundation & Core (Plan A)](completed/2026-06-05-foundation-core.md)
