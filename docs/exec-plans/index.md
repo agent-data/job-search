@@ -6,7 +6,6 @@ are archived here.
 ## Active
 - [Wave 1 — Multi-Source Job Search (LinkedIn + Ashby + Experimental Workday)](active/2026-07-02-wave-1-multi-source.md)
 - [Multi-Source Reconciliation — Greenhouse + Lever in, Workday out, wire-contract drift fixed](active/2026-07-06-multi-source-reconciliation-greenhouse-lever.md)
-- [AAS series — re-target onto feat/build-stamp-update-banner and re-anchor to the multi-file PSG](active/2026-07-09-aas-series-rebase-onto-feat-psg.md)
 
 ## Completed
 - [Job Search OS — Foundation & Core (Plan A)](completed/2026-06-05-foundation-core.md)
@@ -20,6 +19,7 @@ are archived here.
 - [Public OSS Release Readiness](completed/2026-06-15-public-oss-release-readiness.md)
 - [Multi-Harness Portability — Adapter Layer + Per-Platform Distribution](completed/2026-06-22-multi-harness-portability.md)
 - [Build Stamp + Claude/Codex Update Banner](completed/2026-07-06-build-stamp-update-banner.md)
+- [AAS series — re-target onto feat/build-stamp-update-banner and re-anchor to the multi-file PSG](completed/2026-07-09-aas-series-rebase-onto-feat-psg.md)
 
 ## Technical debt
 - [Tech-debt tracker](tech-debt-tracker.md) — the itemised P2/P3 backlog.
