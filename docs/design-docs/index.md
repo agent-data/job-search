@@ -32,6 +32,7 @@ contracts now live in `shared/references/`).
 - [Agent-agnostic skill packs — Checklist & rule index](agent-agnostic-skills/14-checklist-and-rule-index.md) — _status: current_
 - [Agent-agnostic skill packs — Gap analysis: job-search-os packaging & build](agent-agnostic-skills/15-gap-analysis-jso-packaging.md) — _status: current_
 - [Agent-agnostic skill packs — Tension register](agent-agnostic-skills/16-tension-register.md) — _status: current_
+- [Plugin ↔ guide alignment audit: skills, references & adapters vs the AAS + PSG rules](2026-07-10-plugin-guide-alignment-audit.md) — _status: current_
 
 ## Historical design snapshots
 - [Job Search OS — Original Design Spec](2026-06-05-os-design.md) — _status: historical_
