@@ -15,6 +15,23 @@ contracts now live in `shared/references/`).
 - [Prompt style guide — Safety & honesty pressure: completion pressure, counterweights, permissions, plan-mode boundary](prompt-style-guide/07-safety-and-honesty-pressure.md) — _status: current_
 - [Prompt style guide — Anti-patterns](prompt-style-guide/08-anti-patterns.md) — _status: current_
 - [Prompt style guide — Checklist & rule index](prompt-style-guide/09-checklist-and-rule-index.md) — _status: current_
+- [Agent-agnostic skill packs — index & applicability matrix](agent-agnostic-skills/index.md) — _status: current_
+- [Agent-agnostic skill packs — Pack anatomy & organization](agent-agnostic-skills/01-pack-anatomy-and-organization.md) — _status: current_
+- [Agent-agnostic skill packs — Skill anatomy](agent-agnostic-skills/02-skill-anatomy.md) — _status: current_
+- [Agent-agnostic skill packs — Conceptual boundaries & progressive disclosure](agent-agnostic-skills/03-conceptual-boundaries-and-disclosure.md) — _status: current_
+- [Agent-agnostic skill packs — Triggering & description design](agent-agnostic-skills/04-triggering-and-descriptions.md) — _status: current_
+- [Agent-agnostic skill packs — Guidance representation](agent-agnostic-skills/05-guidance-representation.md) — _status: current_
+- [Agent-agnostic skill packs — Examples in skills](agent-agnostic-skills/06-examples.md) — _status: current_
+- [Agent-agnostic skill packs — Autonomy calibration](agent-agnostic-skills/07-autonomy-calibration.md) — _status: current_
+- [Agent-agnostic skill packs — Process vs domain skills](agent-agnostic-skills/08-process-vs-domain-skills.md) — _status: current_
+- [Agent-agnostic skill packs — Harness-neutral language](agent-agnostic-skills/09-harness-neutral-language.md) — _status: current_
+- [Agent-agnostic skill packs — Portability mechanics](agent-agnostic-skills/10-portability-mechanics.md) — _status: current_
+- [Agent-agnostic skill packs — Distribution, packaging & versioning](agent-agnostic-skills/11-distribution-packaging-and-versioning.md) — _status: current_
+- [Agent-agnostic skill packs — Testing & verification of skills](agent-agnostic-skills/12-testing-and-verification.md) — _status: current_
+- [Agent-agnostic skill packs — Anti-patterns](agent-agnostic-skills/13-anti-patterns.md) — _status: current_
+- [Agent-agnostic skill packs — Checklist & rule index](agent-agnostic-skills/14-checklist-and-rule-index.md) — _status: current_
+- [Agent-agnostic skill packs — Gap analysis: job-search-os packaging & build](agent-agnostic-skills/15-gap-analysis-jso-packaging.md) — _status: current_
+- [Agent-agnostic skill packs — Tension register](agent-agnostic-skills/16-tension-register.md) — _status: current_
 
 ## Historical design snapshots
 - [Job Search OS — Original Design Spec](2026-06-05-os-design.md) — _status: historical_
