@@ -104,7 +104,9 @@ flags included.
   user say "no preference", "skip", or "that's a dealbreaker". When a question is a genuine pick-one with 2–4
   natural answers (IC vs. manager; remote / hybrid / onsite), ask it as a closed choice (see your platform's
   adapter → Closed-choice question); open questions stay prose (`../../shared/references/voice.md` → Asking questions).
-- Keep every message short. Don't lecture or pad.
+- Keep every message short — one or two sentences (plus a closed choice's option lines when you're asking
+  one); don't lecture or pad. Relax this only when the user explicitly asks you to explain something at
+  greater length.
 
 ### Flow
 1. **Start** with the user's current situation and what's prompting the search ("What's making you look now?"),

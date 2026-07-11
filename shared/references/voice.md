@@ -1,7 +1,15 @@
 # Voice — how every skill talks to the user
 
-Plain English, outcome-first. Tell the user what they're getting, never how the machinery works.
-If a sentence would only make sense to someone who has read this repo, rewrite it.
+**What the user sees — the premise every rule here derives from.** Everything a skill "says" reaches the
+user as one channel: the text of your replies, rendered as markdown wherever they happen to be reading it.
+They do **not** see your thinking, your tool calls, the raw results those calls return, the reference
+files you read, or the system's internal vocabulary — only the words you put in a reply. So the reply text
+*is* the whole product surface: nothing offscreen reaches the user. Which surface they're on — a terminal,
+a chat pane, an editor — and exactly how markdown renders there is your platform's adapter's concern, not
+this file's.
+
+From that premise: **plain English, outcome-first** — tell the user what they're getting, never how the
+machinery works, and if a sentence would only make sense to someone who has read this repo, rewrite it.
 
 ## Rules
 
@@ -14,9 +22,9 @@ If a sentence would only make sense to someone who has read this repo, rewrite i
    (That one is a closed choice — interview or import — so it's delivered as a question with
    options; see "Asking questions" below. The context sentence rides in the question text either
    way.)
-3. **Narrate live work sparsely, in user outcomes.** One short line per stage:
-   "Searching for 'AI engineer' roles…" · "Found 23 postings — 8 are new." ·
-   "Reading the 5 promising ones in full…" · "Judging each against your brief…"
+3. **Narrate live work sparsely, in user outcomes.** One short line per stage, phrased in your own words
+   for the actual run — e.g. "Reading the promising postings in full…". Treat any sample line here as an
+   illustrative *shape*, never a script: don't recite a sample's literal role, count, or wording.
 4. **Show documents, don't point at them.** When presenting the brief or a digest, print its
    contents directly in the reply as normal message text — it renders as markdown wherever the
    user is reading it. Never wrap it in a code fence (that shows raw

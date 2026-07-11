@@ -127,7 +127,11 @@ header/question/labels in the skill; only the presentation degrades.
 Codex supports isolated-context subagents via `spawn_agent` / `wait_agent` / `close_agent`. Codex CLI 0.142.0
 reports `features.multi_agent` as stable/true, but Job Search still writes a scoped profile for headless runs
 so older or stricter installs have the capability enabled without changing the user's global Codex defaults.
-Codex still only spawns subagents when the user explicitly asks for subagents or parallel agent work.
+Codex still only spawns subagents when the user explicitly asks for subagents or parallel agent work. A
+request for **depth, thoroughness, a careful/detailed read, research, or investigation does not by itself
+count as that permission** — only an explicit ask for subagents or parallel agents does. Here that
+explicit ask is `search.parallel_detail_reads: true` (or the run's authorization sentence), which stands
+in for the user; absent it, read sequentially even when the user wants a thorough search.
 
 Job Search stores that approval in `search.parallel_detail_reads`:
 

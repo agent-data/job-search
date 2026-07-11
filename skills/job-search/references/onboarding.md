@@ -17,6 +17,8 @@ step will say so plainly") — reliability is demonstrated, not promised; meta-a
 `voice.md`: give every question below one short plain-English sentence of what the thing is and why you're
 asking — then ask, closed choices (`voice.md` → Asking questions). No internal vocabulary, ever.
 
+**Contents:** [1. Welcome](#1-welcome) · [2. Prerequisites — agent-data](#2-prerequisites--get-agent-data-ready) · [3. Workspace](#3-workspace) · [4. Preferences](#4-preferences--interview-or-import-a-fork) · [5. Searches + frequency](#5-searches--frequency-derive-from-the-brief--dont-make-the-user-pick-keywords) · [6. First live sample run](#6-first-live-sample-run--the-magical-moment) · [7. Scheduling](#7-scheduling-offer-it) · [8. Home](#8-home)
+
 ---
 
 ## 1. Welcome
@@ -49,7 +51,7 @@ you haven't verified, and don't tell the user how long anything will take.
 agent-data`, and confirm it's authenticated — `agent-data whoami` should report `api_key_set: true` (per
 `../../../shared/references/agent-data-contract.md`).
 
-- **Already set up** → say so as a verified fact in one short line ("agent-data is ready ✓") and continue.
+- **Already set up** → say so as a verified fact in one short line ("agent-data is ready") and continue.
 - **Missing or not authenticated** → **set it up for the user; don't stop.** Lead with the solution, not an
   error. The internal codes for this state (`E-NO-AGENT-DATA`, `E-NO-AUTH`) are for your reasoning only —
   **never show them to the user** (`voice.md`). Two starting points, one path — a **missing** CLI starts at
@@ -179,14 +181,15 @@ user to name keywords.** They can retune anytime; the goal here is zero upfront 
      engineer") — the search API has no remote filter, so without it the feed fills with onsite roles the
      judge then has to cull.
 2. **Write them to `config.yaml`** per the `internals.md` "Add a query" recipe — never make the user open the
-   file. Each item:
+   file. One worked item — the `keywords` and `location` below are **illustrative; derive your own from
+   *this* user's brief, never paste these literal words**:
 
    ```yaml
    - { id: "ml-platform-sf", keywords: "ML platform engineer", location: "San Francisco Bay Area", limit: 25, enabled: true }
    ```
 
-   Give each `id` a short, human slug; keep `enabled: true`; `limit: 25` is a fine default. Preserve the
-   file's comments and structure, and keep `version: 1`.
+   Give each `id` a short, human slug built from that query's own terms; keep `enabled: true`; `limit: 25`
+   is a fine default. Preserve the file's comments and structure, and keep `version: 1`.
 3. **Acknowledge what you saved — don't ask them to choose.** Name the searches you derived and make clear
    they're fully editable, e.g.:
 

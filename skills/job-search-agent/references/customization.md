@@ -2,6 +2,8 @@
 
 This reference covers the flexibility and customization workflows — how to honor special requests, narrow results, tune the rubric, and add new capabilities — without breaking the clean defaults.
 
+**Contents:** [1. Honoring an explicit score request](#1-honoring-an-explicit-score-request) · [2. Adding a custom filter](#2-adding-a-custom-filter-or-narrowing-results) · [3. Changing how postings are judged](#3-changing-how-postings-are-judged) · [4. Tuning the search feed & detail reads](#4-tuning-the-search-feed--detail-reads) · [5. Adding a new capability or skill](#5-adding-a-new-capability-or-skill)
+
 ---
 
 ## 1. Honoring an explicit score request

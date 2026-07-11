@@ -6,6 +6,8 @@ show a **compact, glanceable home** for the user's job search, then let them dri
 
 Follow `../../../shared/references/internals.md`, `../../../shared/references/conventions.md`, `../../../shared/references/errors.md`, and `../../../shared/references/voice.md` exactly. No numeric scores.
 
+**Contents:** [Gather](#gather) · [Render the home](#render-the-home) · [Quick actions](#quick-actions-conversational--never-make-the-user-edit-a-file) · [Nudges](#nudges-surface-only-when-they-apply) · [Coming soon (Plan C)](#coming-soon-plan-c)
+
 ## Gather
 
 Use the workspace Discovery (SKILL.md Step 0) already found as `<ws>` throughout.
@@ -52,10 +54,10 @@ Job search — <ws path>
 Brief: updated <date> (<N months ago>)   ·   Sources: LinkedIn + Ashby   ·   Schedule: <on, daily | off>   ·   Last run: <run health>
 
 Latest digest — <date>
-  9 new postings · 3 strong · 2 moderate · 1 weak · 3 filtered out · <n> searches · <m> detail reads
+  <N> new postings · <S> strong · <M> moderate · <W> weak · <F> filtered out · <n> searches · <m> detail reads
 
 Pipeline
-  new 12 · interested 4 · applied 2 · rejected 6 · archived 1     (3 need a human check)
+  new <n> · interested <n> · applied <n> · rejected <n> · archived <n>     (<k> need a human check)
 
 What next? Just tell me:
   • run a search now            • add or edit a query

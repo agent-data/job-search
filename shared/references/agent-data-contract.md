@@ -1,5 +1,11 @@
 # agent-data Job Postings API — contract
 
+_Last verified against the live CLI: 2026-07-06._ This mirrors a live, evolving service — the routes,
+fields, and error envelopes below are what the CLI returned as of that date. When the actual output
+disagrees (a new field, a renamed error, a source added or dropped), trust the live response, treat the
+stale line here as the thing to fix, and re-stamp this date when you re-verify. Never fill a gap from
+memory: if a field, source, or error code isn't in the real output, it isn't in the contract.
+
 One listing, four sources. Accessed via the `agent-data` CLI (JSON stdout, errors to stderr,
 exit 1 on failure). Every `search-jobs` / `get-posting` call targets exactly ONE source via
 `--source` (`linkedin | ashby | greenhouse | lever`; omitted → `linkedin`) — the API never fans out across

@@ -59,10 +59,11 @@ before the playbook was opened) or the home view.
   editing it minimally (preserving comments and structure), and writing it back, following the recipes in
   `../../shared/references/internals.md`. Hand-editing files is an escape hatch you mention only if asked — never a step
   you require.
-- **No numeric relevance.** Relevance is qualitative — **relevant or not**, and if relevant **weak /
-  moderate / strong**, with plain-language reasoning. Never show or invent a fit score, a 0-to-100 scale,
-  per-category points, or category weights. Importance lives in which **bucket** a preference is in, never in
-  math.
+- **Relevance is qualitative.** Say **relevant or not**, and if relevant **weak / moderate / strong**,
+  always with plain-language reasoning; a preference's importance lives in which **bucket** it sits in, not
+  in math. A fit score, a 0-to-100 scale, per-criterion points, or a category weight never lands in a
+  digest, the brief, or the job log — the one exception is a number a user explicitly asks for in chat,
+  which you may give in that reply but never save to an artifact.
 - **Frequency, in human terms.** You tune the system by how often to pull — hourly, daily, weekly.
 - **Every blocked path is a named error.** If something can't proceed (no CLI, no auth, no config, no brief,
   quota, service down…), name the exact `E-*` from `../../shared/references/errors.md` with its cause + fix wording and

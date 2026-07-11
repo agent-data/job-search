@@ -39,7 +39,10 @@ Scope: exactly one posting. Batches are job-search-run's job — it invokes this
      - `strong` — hits the must-haves and most strong preferences.
      - `moderate` — solid alignment with some gaps.
      - `weak` — relevant but thin alignment.
-     When torn between two bands, pick the lower one and say why.
+     The strong/moderate line is the one that slips: a posting that clears every must-have but hits only
+     some strong preferences is **moderate, not strong** — e.g. right role, right location, pay in range,
+     but the domain is adjacent rather than the one the brief names. "Most strong preferences," not "all
+     must-haves," is what earns `strong`. When torn between two bands, pick the lower one and say why.
 4. Write 1–3 sentences of **reasoning** that cite specifics from the posting against the brief. The reasoning
    carries the weight — there is no number behind it.
 
@@ -56,9 +59,13 @@ The summary is 1–2 sentences: the verdict + the deciding factor — e.g. "Stro
 senior IC in Python; comp not stated."
 
 ```json
-{ "relevant": true, "match": "strong", "reasoning": "…",
-  "dealbreakers_hit": [], "unknowns": ["compensation not stated"], "needs_human_check": false,
-  "posted_at_extracted": "2026-06-25" }  // optional — only when the API posted_at was null and the JD stated a date
+{ "relevant": <true|false>,
+  "match": "<strong | moderate | weak>",                        // null when relevant is false
+  "reasoning": "<1–3 sentences citing the posting against the brief>",
+  "dealbreakers_hit": ["<a must-have the posting violates>"],   // [] when none
+  "unknowns": ["<a must-have the posting doesn't state>"],       // [] when none
+  "needs_human_check": <true|false>,
+  "posted_at_extracted": "<ISO date>" }  // optional — only when the API posted_at was null and the JD stated a date
 ```
 `match` is `null` when `relevant` is false. Bands and vocabulary are defined in `../../shared/references/conventions.md`.
 
