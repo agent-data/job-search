@@ -1,8 +1,17 @@
 {
   "skill_name": "evaluate-job-fit",
+  "harness": "Each verdict case gives the skill a brief + a single posting (the files listed) and inspects the returned judgment (relevant / match band / reasoning / unknowns) — no numeric score anywhere. HARNESS CAPABILITIES (P7): (a) DISCOVERY — a discovery scenario (discovery:true) plants this skill among the siblings it names and drives a NAIVE user prompt (no skill named, no invocation directed); it passes only if the runner SELECTS must_select and does NOT select any must_not_select sibling — the twin scenario in each sibling's suite asserts the opposite direction, so a mis-route fails the wrong skill's scenario. (b) N>=5 VARIANCE — scenarios marked stochastic:true are judgment-heavy (fit verdicts vary run to run); run each `reps` times against the shim (reps are free) and record pass-RATE + variance with scripts/eval_harness.py aggregate_reps, not a single shot. (c) NO-GUIDANCE CONTROL — each stochastic scenario carries a control arm: re-run the SAME prompt/files with the skill's guidance withheld (the base model, no SKILL.md rubric) and record its rate too; a green result only counts if the guided rate clears the control's (control_delta) — proving the guidance, not the base model, does the work. These N>=5 behavioral reps are the documented OFF-CI live-harness step (AAS-T-10); CI gates only the scenarios' structural coherence (python3 scripts/eval_harness.py --root .) and the helper math (tests/test_eval_harness.py).",
   "evals": [
     {
       "id": 1,
+      "scenario": "strong-match verdict",
+      "stochastic": true,
+      "reps": 5,
+      "control": {
+        "arm": "no-guidance",
+        "strip": "Re-run the same brief + posting on the base model with the evaluate-job-fit judgment guidance withheld (no SKILL.md rubric — just 'is this a fit?').",
+        "expectation": "The guided arm's pass-rate (correct relevant:true + strong band + specifics-citing reasoning, no numbers) clears the no-guidance control's by a clear margin (control_delta > 0)."
+      },
       "prompt": "Using the brief in evals/files/brief.md, evaluate the posting in evals/files/posting-strong.md.",
       "files": ["evals/files/brief.md", "evals/files/posting-strong.md"],
       "expectations": [
@@ -14,6 +23,14 @@
     },
     {
       "id": 2,
+      "scenario": "dealbreaker verdict",
+      "stochastic": true,
+      "reps": 5,
+      "control": {
+        "arm": "no-guidance",
+        "strip": "Re-run the same brief + posting on the base model with the dealbreaker-judgment guidance withheld.",
+        "expectation": "The guided arm reliably names the onsite-outside-SF-Bay dealbreaker and returns relevant:false with a null band; the no-guidance control drifts (misses the dealbreaker or invents facts) at a measurably higher rate (control_delta > 0)."
+      },
       "prompt": "Using the brief in evals/files/brief.md, evaluate the posting in evals/files/posting-dealbreaker.md.",
       "files": ["evals/files/brief.md", "evals/files/posting-dealbreaker.md"],
       "expectations": [
@@ -25,12 +42,42 @@
     },
     {
       "id": 3,
+      "scenario": "unknown-remote not auto-rejected (crown jewel)",
+      "stochastic": true,
+      "reps": 5,
+      "control": {
+        "arm": "no-guidance",
+        "strip": "Re-run the same brief + posting on the base model with the unknowns-are-not-counted-against guidance withheld.",
+        "expectation": "WITHOUT the guidance the base model tends to auto-reject (or silently pass) the unstated remote policy; the guided arm flags needs_human_check with the exact question at a clearly higher rate (control_delta > 0) — the control proves the not-auto-reject rule does the work."
+      },
       "prompt": "Using the brief in evals/files/brief.md, evaluate the posting in evals/files/posting-unknown-remote.md.",
       "files": ["evals/files/brief.md", "evals/files/posting-unknown-remote.md"],
       "expectations": [
         "Does NOT auto-reject despite remote policy being unstated",
         "Sets needs_human_check: true with a clear question about remote/location",
         "Lists location/remote under unknowns rather than counting it against the posting"
+      ]
+    },
+    {
+      "id": 4,
+      "scenario": "discovery — selected among siblings (fit -> run)",
+      "discovery": true,
+      "stochastic": true,
+      "reps": 5,
+      "siblings": ["job-search-run", "job-search"],
+      "must_select": "evaluate-job-fit",
+      "must_not_select": ["job-search-run", "job-search"],
+      "control": {
+        "arm": "no-guidance",
+        "strip": "Present the same naive prompt with evaluate-job-fit's trigger description withheld (only the sibling descriptions visible).",
+        "expectation": "With the description present the runner routes the single pasted posting to evaluate-job-fit; the no-guidance control (description withheld) mis-routes to a full-run/home sibling at a measurably higher rate (control_delta > 0)."
+      },
+      "prompt": "A user pastes one job description and asks, with no skill named: 'Here's a role I came across — is this actually a good match for me?' The sibling skills job-search-run (a full multi-posting search pass) and job-search (the home/onboarding view) are installed alongside evaluate-job-fit.",
+      "expectations": [
+        "evaluate-job-fit is SELECTED from the naive prompt (a single pasted posting judged against the brief is exactly its job)",
+        "job-search-run is NOT invoked — one pasted posting is not a fresh multi-source search pass",
+        "job-search is NOT invoked — the user is not asking for the home view or onboarding",
+        "Returns a qualitative verdict (relevant + band + reasoning), no numeric score"
       ]
     }
   ]

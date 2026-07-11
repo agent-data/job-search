@@ -1,6 +1,6 @@
 {
   "skill_name": "job-preference-interview",
-  "harness": "For each case: run skills/job-preference-interview/evals/files/setup-interview-ws.sh <tmp>; export JOBSEARCH_OS_REGISTRY=<tmp>/registry.json and JOBSEARCH_OS_HOME=<tmp> (so the brief is written under <tmp>/.job-search, never real data). Invoke the job-preference-interview skill. When the skill asks questions, answer with the canned answers in the prompt. Then inspect <tmp>/.job-search/preferences.md.",
+  "harness": "For each case: run skills/job-preference-interview/evals/files/setup-interview-ws.sh <tmp>; export JOBSEARCH_OS_REGISTRY=<tmp>/registry.json and JOBSEARCH_OS_HOME=<tmp> (so the brief is written under <tmp>/.job-search, never real data). Invoke the job-preference-interview skill. When the skill asks questions, answer with the canned answers in the prompt. Then inspect <tmp>/.job-search/preferences.md. HARNESS CAPABILITIES (P7): a DISCOVERY scenario (discovery:true) plants this skill among the siblings it names and drives a NAIVE prompt (no skill named); it passes only if the runner SELECTS must_select and not any must_not_select sibling. Discovery is behavioral, so it is stochastic:true — run it `reps` times, record pass-rate + variance (scripts/eval_harness.py aggregate_reps), and run its no-guidance control arm (description withheld) so the green result is attributable to the trigger description, not the base model (control_delta). The interview verdict-shape cases (1-3) are single-shot STRUCTURAL checks (sections present, no numbers, import preserved) and stay single-shot. The N>=5 reps are the OFF-CI live step (AAS-T-10); CI gates the structural coherence only.",
   "evals": [
     { "id": 1, "scenario": "fresh interview",
       "prompt": "Invoke as an orchestrator would, with a depth-bearing args string (args: 'write the brief — standard interview'); the depth ask must still be offered. Canned answers: depth='standard'; situation='employed, passively looking'; role='senior/staff AI engineer, individual contributor, NOT management'; domain='LLM products at a startup'; location='remote in the US, or SF Bay onsite; onsite elsewhere is a dealbreaker'; comp='wants meaningful equity; base flexible'; wlb='no heavy on-call'; stack='Python + modern LLM tooling'; dealbreakers='primarily people-management; onsite outside SF'. When asked to calibrate, keep it qualitative. Finish the interview.",
@@ -27,6 +27,22 @@
         "Notes that this system judges qualitatively and converts the brief to prose, dropping the numeric rubric/weights",
         "The written preferences.md contains the prose sections and NO 0–100 rubric and NO weights",
         "Writes <tmp>/.job-search/preferences.md with all five sections (Summary, Must-haves / dealbreakers, Strong preferences, Nice-to-haves, Red flags) and a created_at line"
+      ] },
+    { "id": 4, "scenario": "discovery — selected among siblings (interview -> fit)",
+      "discovery": true, "stochastic": true, "reps": 5,
+      "siblings": ["evaluate-job-fit", "job-search"],
+      "must_select": "job-preference-interview",
+      "must_not_select": ["evaluate-job-fit"],
+      "control": {
+        "arm": "no-guidance",
+        "strip": "Present the same naive prompt with job-preference-interview's trigger description withheld (only the sibling descriptions visible).",
+        "expectation": "With the description present the runner routes 'figure out what I want' to the interview; the no-guidance control mis-routes to evaluate-job-fit (which judges an existing posting) at a measurably higher rate (control_delta > 0)."
+      },
+      "prompt": "A user with no posting in hand and no skill named says: 'I want to figure out what I actually want in my next job before I start looking.' The sibling skills evaluate-job-fit (judges a specific posting against a brief) and job-search (home/onboarding) are installed alongside job-preference-interview.",
+      "expectations": [
+        "job-preference-interview is SELECTED — the user wants to BUILD the preferences brief, which is exactly this skill's job",
+        "evaluate-job-fit is NOT invoked — there is no posting to judge; the user is defining preferences, not testing a role against them",
+        "Offers the depth choice (quick sketch / standard / thorough) and asks questions one at a time; the written brief carries no numeric scoring"
       ] }
   ]
 }
