@@ -76,20 +76,11 @@ workspace/auth access) is harness-agnostic and applies to any candidate schedule
 ## Headless invocation
 
 The headless launch command for Gemini CLI is **not confirmed** — no print-mode or non-interactive
-command was found in any vendor documentation or file read in this session. Keep the **written
-record as primary** on every run:
-
-- the **blocked run record** (`runs/<run_id>.json` with `run_health:"blocked"` + the named error,
-  written before any halt exits),
-- the **blocked digest** (`reports/<date>-digest.md` with the named error's cause and fix as the
-  body),
-- the **home view** the next time the user opens the **job-search** skill (it reads `run_health`
-  from the newest `runs/<id>.json`).
-
-The record is the contract the home view reads on every harness. PIN: Gemini CLI's headless command,
-any required flags, and whether its exit code is trustworthy (real non-zero on failure vs always-0).
-Until confirmed, never tell the user a cron wrapper's `$?` will be non-zero on a blocked run —
-surface every outcome through the written record.
+command was found in any vendor documentation or file read in this session. Keep the **written record as
+primary** on every run (the three blocked-run channels and the record-is-primary contract are shared — see
+`_common.md` → **Written record**). PIN: Gemini CLI's headless command, any required flags, and whether its
+exit code is trustworthy (real non-zero on failure vs always-0). Until confirmed, never tell the user a
+cron wrapper's `$?` will be non-zero on a blocked run — surface every outcome through the written record.
 
 ## Closed-choice question
 
@@ -137,40 +128,26 @@ release cycle) and whether per-subagent model selection is supported.
 
 ## Whole-file write
 
-For structured-state files (registry, `config.yaml`), apply the change to the parsed object and
-write the **whole file back atomically** — use the native write tool (PIN), or write to a temp file
-then `mv` into place. Never stream a partial or redirected write that can truncate or interleave a
-structured-state file. Appending one immutable line to the event log (`jobs.jsonl`) stays a
-legitimate shell `>>` append.
+On Gemini CLI the whole-file write uses the native write tool (PIN exact name), or write to a temp file
+then `mv` into place. The shared read-modify-write-the-whole-file rule (and the `jobs.jsonl` `>>` append
+exception) is in `_common.md` → **Whole-file write**.
 
 PIN: confirm the exact Gemini CLI write-tool name and whether it performs an atomic replacement or
 a streamed write that could leave a partial file on interruption.
 
 ## Block-alert channel
 
-The durable guarantee is two file-backed channels (the blocked digest + the home-view run record).
-An attention-pull alert is capability-gated: Gemini CLI's notification surface is **not confirmed**
-— PIN whether Gemini CLI surfaces an in-terminal alert, a desktop notification, or neither. If no
-attention-pull channel is available or confirmed, skip the alert silently; the two file channels
-still carry the failure.
+On Gemini CLI the attention-pull alert surface is **not confirmed** — PIN whether Gemini CLI surfaces an
+in-terminal alert, a desktop notification, or neither. The shared two-file durable-guarantee frame (and the
+skip-silently rule when no surface is confirmed) is in `_common.md` → **Block-alert channel**.
 
 ## agent-data setup
 
-`agent-data init` has **no `--gemini` flag** (its selectors are `--claude-code|--open-claw|--hermes|
---nano-claw`). Authenticate with the harness-neutral path — it sets the key without installing a
-harness-specific discovery skill, which job-search does not need:
-
-```
-agent-data init --api-key <KEY> -y     # then: agent-data whoami  → api_key_set:true
-```
-
-The `--api-key`-only path is the verified workaround for all non-Claude harnesses. Skills reach
-agent-data through the CLI on `PATH`; the extension manifest (see **Packaging & install**) loads the
-job-search skills into Gemini CLI's session context.
-
-The agent-data CLI must be on `PATH` inside Gemini CLI's execution environment and its network egress
-permitted. PIN: confirm that agent-data is accessible on `PATH` within Gemini CLI's session and that
-outbound network calls to the agent-data endpoint are not blocked.
+Authenticate with the shared harness-neutral `--api-key` path — see `_common.md` → **agent-data auth
+(harness-neutral)** (Gemini CLI has no `--gemini` flag). Skills reach agent-data through the CLI on `PATH`;
+the extension manifest (see **Packaging & install**) loads the job-search skills into Gemini CLI's session
+context. PIN: confirm that agent-data is accessible on `PATH` within Gemini CLI's session and that outbound
+network calls to the agent-data endpoint are not blocked.
 
 ## Packaging & install
 

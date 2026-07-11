@@ -75,12 +75,16 @@ JS_PLUGIN = ".opencode/plugins/job-search.js"
 
 
 def adapter_sources(root):
-    """Yield (harness, abspath) for every SOURCE adapter under shared/references/platform/."""
+    """Yield (harness, abspath) for every SOURCE adapter under shared/references/platform/.
+
+    An underscore-prefixed file (e.g. `_common.md`) is a shared PARTIAL, not a harness adapter: it holds
+    the host-neutral boilerplate the adapters point to (AAS-FORM-04), so it is not required to carry the
+    12 canonical sections and is not a cross-reference resolution target. Skip it here."""
     base = os.path.join(root, PLATFORM_DIR)
     if not os.path.isdir(base):
         return
     for fn in sorted(os.listdir(base)):
-        if fn.endswith(".md"):
+        if fn.endswith(".md") and not fn.startswith("_"):
             yield fn[:-3], os.path.join(base, fn)
 
 

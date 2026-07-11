@@ -16,15 +16,13 @@ Read `references/build-stamp.md` and parse these literal lines:
 If the local stamp is missing or malformed, skip the update banner. Do not guess a version from a
 manifest at runtime.
 
-## Supported hosts
+## When the banner applies
 
-Show update banners only on the primary tested plugin hosts:
-
-- Claude Code
-- Codex
-
-For every other platform adapter, skip the update check and banner. Those adapters may still load and run,
-but their update command paths are not treated as a verified product surface yet.
+Show the update banner only when the **active platform's adapter declares a verified update recipe** — a
+`### Update recipe` block under its **Packaging & install** section (the Banner section below reads that
+recipe). An adapter without one skips the update check and banner: it may still load and run, but its update
+command path is not a verified product surface yet. This is a self-declared capability gate, not a host
+allowlist — an adapter becomes eligible by carrying a verified recipe, not by being named here.
 
 ## Registry cache
 

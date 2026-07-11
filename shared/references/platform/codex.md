@@ -108,9 +108,9 @@ workspace-write blocks network by default and the agent-data call needs egress. 
 from another cwd, pass `--add-dir <workspace>` so the saved job-search workspace is writable. `--json` /
 `--output-schema` are available for structured output. **Exit codes are real** — a non-zero exit signals infra/MCP/submission/
 git-apply failure, so a Tier-2 cron wrapper may act on `$?`. Still surface every outcome through the
-written record (blocked run record + blocked digest + home view) — the record is the contract the home
-view reads; the trustworthy exit code is an *additional* signal on Codex, not a replacement. PIN: a
-model-level HALT mapping to a specific non-zero code is not yet live-reproduced.
+written record (the three blocked-run channels and the record-is-primary contract are shared — see
+`_common.md` → **Written record**); on Codex the trustworthy exit code is an *additional* signal, not a
+replacement. PIN: a model-level HALT mapping to a specific non-zero code is not yet live-reproduced.
 
 When `search.parallel_detail_reads: true`, use the `--profile job-search` recipe from **Run recipe** so
 Codex loads `$CODEX_HOME/job-search.config.toml`, and keep the explicit prompt sentence. The profile enables
@@ -184,32 +184,24 @@ Verified against the Codex manual fetched 2026-06-24.
 
 ## Whole-file write
 
-For structured-state files (registry, `config.yaml`), apply the change to the parsed object and write
-the **whole file back atomically** — `apply_patch`, or write to a temp file then `mv` into place. Never
-stream a partial/redirected write that can truncate or interleave. Appending one immutable line to the
-event log (`jobs.jsonl`) stays a legitimate shell `>>` append.
+On Codex the whole-file write uses **`apply_patch`** (or write to a temp file then `mv` into place). The
+shared read-modify-write-the-whole-file rule (and the `jobs.jsonl` `>>` append exception) is in
+`_common.md` → **Whole-file write**.
 
 ## Block-alert channel
 
-The durable guarantee is two file-backed channels (the blocked digest + the home-view run record). An
-attention-pull alert is capability-gated: Codex **App** surfaces it via Triage; pure CLI has **no**
-alert channel — skip it silently, the two file channels still carry the failure.
+On Codex the attention-pull alert surface depends on the client: the Codex **App** surfaces it via
+Triage; pure CLI has **no** alert channel. The shared two-file durable-guarantee frame (and the
+skip-silently rule when no surface exists) is in `_common.md` → **Block-alert channel**.
 
 ## agent-data setup
 
-`agent-data init` has **no `--codex` flag** (its selectors are `--claude-code|--open-claw|--hermes|
---nano-claw`). Authenticate with the harness-neutral path — it sets the key without installing a
-harness-specific discovery skill, which job-search does not need:
-
-```
-agent-data init --api-key <KEY> -y     # then: agent-data whoami  → api_key_set:true
-```
-
-The agent-data CLI must be on `PATH` inside Codex's sandbox and its network egress permitted.
-**Verified:** under `--sandbox workspace-write` the agent-data call is blocked by default and succeeds
-with `-c sandbox_workspace_write.network_access=true`; the bundled binary on `PATH` resolves inside the
-sandbox. Also ensure the active job-search workspace is writable via `cd <workspace>` or
-`--add-dir <workspace>`; otherwise Codex may produce temporary output but fail to persist the digest.
+Authenticate with the shared harness-neutral `--api-key` path — see `_common.md` → **agent-data auth
+(harness-neutral)** (Codex has no `--codex` flag). Codex-specific sandbox notes: **verified** — under
+`--sandbox workspace-write` the agent-data call is blocked by default and succeeds with
+`-c sandbox_workspace_write.network_access=true`; the bundled binary on `PATH` resolves inside the sandbox.
+Also ensure the active job-search workspace is writable via `cd <workspace>` or `--add-dir <workspace>`;
+otherwise Codex may produce temporary output but fail to persist the digest.
 
 ## Packaging & install
 

@@ -212,13 +212,17 @@ user to name keywords.** They can retune anytime; the goal here is zero upfront 
    allowed value and say which one you set. **Never** add a score or weight field — those
    don't exist in this system.
 
-### Codex detail-read approval
+### Parallel detail-read approval (approval-gating hosts only)
 
-Codex needs one explicit user approval before the runner uses parallel subagents for posting-detail reads.
-On Codex only, if `search.parallel_detail_reads` is unset, ask once after the frequency is saved and before
-the first live run. Use the exact closed choice from your platform's adapter → Concurrent detail reads; the
-question must say **subagents** and must name the default detail-read model (the `fast` tier from your
-platform's adapter → Model tiers).
+Some hosts gate parallel subagents behind one explicit user approval before the runner may use them for
+posting-detail reads — your platform's adapter → **Concurrent detail reads** says whether this host is one,
+and supplies the exact approval question plus any host-specific setup. On a host that does **not** gate
+subagents, skip this whole step (the parallel fan-out is already the default) and go to §6.
+
+On an **approval-gating host**, if `search.parallel_detail_reads` is unset, ask once after the frequency is
+saved and before the first live run. Use the exact closed choice from your platform's adapter → Concurrent
+detail reads; the question must say **subagents** and must name the default detail-read model (the `fast`
+tier from your platform's adapter → Model tiers).
 
 On **yes**:
 
@@ -226,10 +230,10 @@ On **yes**:
    `version: 1`.
 2. Keep `search.detail_model: "fast"` unless the user explicitly chooses another tier. If they ask what
    "fast" means, name the mapping from your platform's adapter → Model tiers.
-3. Create or update the Codex profile exactly as specified in your platform's adapter → Concurrent detail
-   reads (`$CODEX_HOME/job-search.config.toml` / `~/.codex/job-search.config.toml`). Tell the user this saves
-   a Codex setting so unattended runs can use subagents. If the sandbox blocks that write, show the exact
-   path and TOML from the adapter; don't silently skip it.
+3. Perform any host-specific subagent setup your platform's adapter → Concurrent detail reads specifies
+   (e.g. writing a scoped profile so unattended runs may use subagents). Tell the user in plain language what
+   the setting does. If the sandbox blocks that write, show the exact path and content from the adapter;
+   don't silently skip it.
 
 On **no**, write `search.parallel_detail_reads: false` and read details sequentially. Do not ask again unless
 the user later asks to change it.
@@ -242,10 +246,11 @@ This is the payoff. Disclose it plainly first, then do it:
 
 Invoke **`job-search-run`** against the workspace (pass `--workspace <workspace>`). It probes the
 source, searches each enabled query, skips postings already seen, judges each new posting against the
-brief, reads full descriptions for the promising ones, and writes a digest. On Codex, if
-`search.parallel_detail_reads: true`, the invocation context must include the exact sentence
-`Use parallel subagents for all detail reads.` — the saved config records the user's preference, and this
-sentence is the run's explicit authorization. Then present the result like a
+brief, reads full descriptions for the promising ones, and writes a digest. On a host that gates parallel
+detail reads behind approval (your platform's adapter → Concurrent detail reads), if
+`search.parallel_detail_reads: true`, the invocation context must include the exact authorization sentence
+that adapter specifies — the saved config records the user's preference, and that sentence is the run's
+explicit authorization. Then present the result like a
 discovery, not a log dump — surface the **strong and moderate** matches from the digest **as normal message
 text in your reply** (rendered markdown — never a code fence, never just the digest's file path):
 
@@ -303,8 +308,8 @@ is always one command away (the exact invocation is in your platform's adapter �
 **Either way, show the recurring-run and one-off-run recipes verbatim from your platform's adapter → Run
 recipe** so the user can start or restart it themselves — copy those lines exactly as written; do not
 reconstruct the tokens here. If `search.parallel_detail_reads: true`, choose the adapter's approved-parallel
-recipe/prompt variant; on Codex App Automations, that means the scheduled prompt includes
-`Use parallel subagents for all detail reads.`
+recipe/prompt variant; where the adapter uses a scheduled-prompt authorization, the scheduled prompt
+includes that adapter's required authorization sentence (your platform's adapter → Run recipe / Scheduling).
 
 ## 8. Home
 
@@ -331,14 +336,15 @@ runs", "update my preferences", "show the latest digest").
 - [ ] `preferences.md` exists (interview or import via `job-preference-interview`)
 - [ ] 2–3 `queries[]` **derived from the brief** and written (no upfront keyword-picking); searches
       acknowledged; `schedule.frequency` set (plain-language nudge)
-- [ ] on Codex, if `search.parallel_detail_reads` was unset, the user was asked once about parallel
-      subagents; the answer was written to `config.yaml`; on yes the Codex job-search profile was written
-      (or the exact path + TOML was shown if blocked); the user saw the default `fast`-tier model named from the adapter → Model tiers
+- [ ] on an approval-gating host, if `search.parallel_detail_reads` was unset, the user was asked once about
+      parallel subagents; the answer was written to `config.yaml`; on yes the host-specific subagent setup
+      the adapter specifies was performed (or the exact path + content was shown if blocked); the user saw
+      the default `fast`-tier model named from the adapter → Model tiers
 - [ ] first **live** `job-search-run` done; strong/moderate matches shown — or the named error if blocked
 - [ ] shown matches include the digest reasoning and any "confirm" warning, not just titles/companies
 - [ ] scheduling offered (two-tier, per the adapter); on yes started + marker set; run recipe shown either
-      way; if Codex parallel detail reads were approved, the scheduled prompt includes the exact parallel
-      subagent authorization
+      way; if parallel detail reads were approved on an approval-gating host, the scheduled prompt includes
+      the adapter's required parallel-subagent authorization
 - [ ] every ask carried one line of plain-English context; the four closed choices (workspace location,
       interview-or-import, frequency, scheduling) asked as closed choices; no internal vocabulary
       reached the user (`voice.md`)

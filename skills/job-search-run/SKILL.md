@@ -96,8 +96,8 @@ Read these before running, and follow them exactly:
    from `config.yaml` (see `../../shared/references/conventions.md`). This runner is headless: never ask, and never edit
    config. Resolve the mode against your platform's adapter → Concurrent detail reads: `true` → use the
    parallel fan-out; `false` → read sequentially (an explicit user opt-out); **unset → the adapter's default**
-   — hosts that gate subagents behind user approval (e.g. Codex) read sequentially until approved, every other
-   host keeps the parallel fan-out. For the parallel fan-out, dispatch queued postings as one concurrent batch
+   — hosts that gate subagents behind user approval (see your platform's adapter → Concurrent detail reads)
+   read sequentially until approved, every other host keeps the parallel fan-out. For the parallel fan-out, dispatch queued postings as one concurrent batch
    where capacity allows, one subagent per posting (tier = `search.detail_model`, default `fast`; `inherit` =
    this run's own model tier — see your platform's adapter → Model tiers). If the host applies a subagent/thread
    limit, continue in rolling batches; if it refuses subagent spawning or no slot is available, fall back to

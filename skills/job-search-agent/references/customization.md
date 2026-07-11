@@ -77,7 +77,8 @@ Controls whether promising postings are read through parallel subagents where th
 Only `job-search` / the home view writes this preference after talking with the user. `job-search-run` is
 headless: it reads the value and never edits config itself — `false` reads sequentially, `true` fans out, and
 unset takes the host default (parallel where no approval is required; sequential on hosts that gate subagents
-behind approval, e.g. Codex). It also falls back to sequential whenever the host lacks or refuses subagents.
+behind approval — see your platform's adapter → Concurrent detail reads). It also falls back to sequential
+whenever the host lacks or refuses subagents.
 
 **Detail-read model — `search.detail_model`**
 

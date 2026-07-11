@@ -72,18 +72,12 @@ local agent-data auth.
 ## Headless invocation
 
 **UNVERIFIED — PIN.** No `pi exec`-style headless command has been found in any file read; the exit-code
-contract is unknown. Keep the **written record primary** on Pi:
-
-- the **blocked run record** (`runs/<run_id>.json` with `run_health:"blocked"` + the named error),
-- the **blocked digest** (`reports/<date>-digest.md` with the named error's cause+fix as the body),
-- the **home view** the next time the user opens the **job-search** skill (it reads `run_health` from
-  the newest `runs/<id>.json`).
-
-The record is the contract the home view reads; the per-harness exit-code line is the add-on, and on Pi
-that add-on is **UNKNOWN** until confirmed on a live install. Whether a Pi headless run exits non-zero on
-a blocked run is also **PIN**: confirm before wiring `$?` in a Tier-2 cron wrapper. The "native skill
-tool / real exit codes / headless command" facts are the shipped integration test's assertions (the test
-SKIPs when Pi is absent) — not observed on a running instance.
+contract is unknown. Keep the **written record primary** on Pi (the three blocked-run channels and the
+record-is-primary contract are shared — see `_common.md` → **Written record**). On Pi the exit-code add-on
+is **UNKNOWN** until confirmed on a live install: whether a Pi headless run exits non-zero on a blocked run
+is **PIN** — confirm before wiring `$?` in a Tier-2 cron wrapper. The "native skill tool / real exit codes
+/ headless command" facts are the shipped integration test's assertions (the test SKIPs when Pi is absent)
+— not observed on a running instance.
 
 ## Closed-choice question
 
@@ -119,37 +113,27 @@ PIN: exact current Pi model ids — confirm on install.
 
 ## Whole-file write
 
-For structured-state files (the registry `config.json`, the workspace `config.yaml`), read the current
-file first, apply the change to the parsed object, and write the **whole file back atomically** — use
-Pi's native write tool, or write to a temp file then `mv` into place. **Never** stream a
-partial/redirected write that can truncate or interleave a structured-state file. Appending one immutable
-line to the event log (`jobs.jsonl`) stays a legitimate shell `>>` append.
+On Pi the whole-file write uses Pi's native write tool, or write to a temp file then `mv` into place. The
+shared read-modify-write-the-whole-file rule (and the `jobs.jsonl` `>>` append exception) is in
+`_common.md` → **Whole-file write**.
 
 PIN: exact Pi write-tool name — confirm on install.
 
 ## Block-alert channel
 
-The durable guarantee is two file-backed channels (the blocked digest + the home-view run record) — both
-plain file writes that survive regardless of any alert surface. An attention-pull alert is
-capability-gated: Pi's notification channel is **UNKNOWN** — skip the alert silently on Pi until a live
-channel is confirmed. The two file-backed channels always carry the failure.
+On Pi the attention-pull alert channel is **UNKNOWN** — skip the alert silently until a live channel is
+confirmed. The shared two-file durable-guarantee frame is in `_common.md` → **Block-alert channel**.
 
 PIN: confirm whether Pi exposes a desktop/terminal notification surface before enabling the
 `notify.desktop_notify_on_block` knob on this harness.
 
 ## agent-data setup
 
-`agent-data init` has **no `--pi` flag** (its selectors are `--claude-code|--open-claw|--hermes|
---nano-claw`). Authenticate with the harness-neutral path — it sets the key without installing a
-harness-specific discovery skill, which job-search does not need:
-
-```
-agent-data init --api-key <KEY> -y     # then: agent-data whoami  → api_key_set:true
-```
-
-This saves the key to `~/.agent-data/config.json`; `agent_type` will be `null` — that is cosmetic
-skill-install metadata, **not** an auth/runtime gate. The plugin install (via `pi.skills` manifest) is
-what places the job-search skills; `init` only needs to authenticate.
+Authenticate with the shared harness-neutral `--api-key` path — see `_common.md` → **agent-data auth
+(harness-neutral)** (Pi has no `--pi` flag). Pi-specific: this saves the key to `~/.agent-data/config.json`;
+`agent_type` will be `null` — that is cosmetic skill-install metadata, **not** an auth/runtime gate. The
+plugin install (via `pi.skills` manifest) is what places the job-search skills; `init` only needs to
+authenticate.
 
 PIN: confirm the agent-data CLI is on `PATH` inside Pi's runtime and that its network egress is
 permitted. The install-line repo slug (`agent-data/job-search`) is from project memory, not a Pi file.

@@ -75,6 +75,6 @@ Read and follow exactly: `../../shared/references/internals.md` (OS state, disco
 recipes, and the verbatim scheduling block), `../../shared/references/conventions.md` (workspace layout, `config.yaml`
 schema, `jobs.jsonl` statuses, digest format + counts line), `../../shared/references/errors.md` (every named error),
 `../../shared/references/voice.md` (how every reply talks to the user — plain English, zero-context first-run asks,
-render documents inline), `../../shared/references/update.md` (cached update signal + Claude/Codex update banner), and
+render documents inline), `../../shared/references/update.md` (cached update signal + update banner, shown only where the adapter declares a verified update recipe), and
 `../../shared/references/agent-data-contract.md` (the source contract `job-search-run` honors). These are the source of
 truth; this skill never restates their details from memory.

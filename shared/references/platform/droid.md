@@ -85,18 +85,11 @@ droid exec --auto low "run job-search-run"
 
 **Exit codes are real** — Droid returns non-zero on failure, including when the objective is unmet,
 the autonomy level is exceeded, or partial changes are abandoned. A Tier-2 cron wrapper may act on
-`$?`. Still surface every outcome through the **written record** — the record is the contract the home
-view reads:
-
-- the **blocked run record** (`runs/<run_id>.json` with `run_health:"blocked"` + the named error,
-  written before any exit),
-- the **blocked digest** (`reports/<date>-digest.md` with the named error's cause+fix as the body),
-- the **home view** the next time the user opens the **job-search** skill (it reads `run_health` from
-  the newest `runs/<id>.json`).
-
-The record is primary on every harness; the real exit code is an additional signal on Droid, not a
-replacement. PIN: whether a skill-level HALT (a blocked run stopped by the skill itself) maps to a
-specific non-zero exit code, or only infra/objective failures do — confirm on a live install.
+`$?`. Still surface every outcome through the **written record** (the three blocked-run channels and the
+record-is-primary contract are shared — see `_common.md` → **Written record**); on Droid the real exit
+code is an additional signal, not a replacement. PIN: whether a skill-level HALT (a blocked run stopped by
+the skill itself) maps to a specific non-zero exit code, or only infra/objective failures do — confirm on
+a live install.
 
 ## Closed-choice question
 
@@ -132,32 +125,22 @@ or equivalent on a live install.
 
 ## Whole-file write
 
-For structured-state files (the registry `config.json`, the workspace `config.yaml`), read the current
-file first, apply the change to the parsed object, and write the **whole file back** atomically — use
-the native write tool, or write to a temp file then `mv` into place. **Never shell redirection** for
-structured-state files (it can truncate or interleave). Appending one immutable line to the event log
-(`jobs.jsonl`) stays a legitimate shell `>>` append.
+On Droid the whole-file write uses the native write tool, or write to a temp file then `mv` into place. The
+shared read-modify-write-the-whole-file rule (and the `jobs.jsonl` `>>` append exception) is in
+`_common.md` → **Whole-file write**.
 
 ## Block-alert channel
 
-The durable guarantee is two file-backed channels (the blocked digest + the home-view run record) — both
-plain file writes that survive regardless of any alert surface. An attention-pull alert is
-capability-gated: Droid has **no documented desktop-notification channel** — skip it silently when the
-`notify.desktop_notify_on_block` knob is set; the two file channels still carry the failure. PIN:
-confirm whether Droid exposes any attention-pull notification API on a live install.
+On Droid there is **no documented desktop-notification channel** — skip the attention-pull alert silently
+when the `notify.desktop_notify_on_block` knob is set. The shared two-file durable-guarantee frame is in
+`_common.md` → **Block-alert channel**. PIN: confirm whether Droid exposes any attention-pull notification
+API on a live install.
 
 ## agent-data setup
 
-`agent-data init` has **no `--droid` or `--factory` flag** (its selectors are
-`--claude-code|--open-claw|--hermes|--nano-claw`). Authenticate with the harness-neutral path — it
-sets the key without installing a harness-specific discovery skill, which job-search does not need:
-
-```
-agent-data init --api-key <KEY> -y     # then: agent-data whoami  → api_key_set:true
-```
-
-The agent-data CLI must be on `PATH` inside Droid's execution environment and its network egress
-permitted. Verify egress is not blocked before the first run.
+Authenticate with the shared harness-neutral `--api-key` path — see `_common.md` → **agent-data auth
+(harness-neutral)** (Droid has no `--droid`/`--factory` flag). Verify agent-data is on `PATH` inside
+Droid's execution environment and its network egress is not blocked before the first run.
 
 ## Packaging & install
 

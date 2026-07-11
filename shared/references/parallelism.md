@@ -15,9 +15,11 @@ the active platform's adapter → **Concurrent detail reads**. Read your adapter
 no concurrent primitive degrades gracefully through that fallback.
 
 **Some hosts also require explicit user approval before they will use subagents for job-search detail reads**
-— their adapter → **Concurrent detail reads** says so (today only Codex does). Treat missing approval as a
-real boundary on those hosts, not as implied permission: the interactive front door may ask and store the
-answer in `search.parallel_detail_reads`, while a headless runner reads that stored preference. How an
+— their adapter → **Concurrent detail reads** says whether this host is one. If your environment gates
+parallel dispatch behind user approval, wait for that approval before fanning out; otherwise fan out by
+default. Treat missing approval as a real boundary on those hosts, not as implied permission: the
+interactive front door may ask and store the answer in `search.parallel_detail_reads`, while a headless
+runner reads that stored preference. How an
 **unset** preference resolves is the adapter's call: an approval-gating host reads sequentially until the user
 approves, but a host that needs no approval keeps the parallel-by-default fan-out above. An explicit `false`
 is always a user opt-out to sequential reads; `true` is always the parallel fan-out where the primitive

@@ -81,17 +81,10 @@ copilot -p "job-search-run" --allow-tool shell --allow-tool read --allow-tool wr
 PIN: `--allow-all-tools` may be available as a shorthand flag — verify with `copilot --help` before
 using; the full form above is safer. **Exit codes likely real but UNVERIFIED** — the binary is not
 installed here, so unlike harnesses where a headless run can return 0 even on a block, Copilot's
-exit-code behavior is unconfirmed (PIN). Surface every outcome through the **written record** instead —
-the record is the contract the home view reads:
-
-- the **blocked run record** (`runs/<run_id>.json` with `run_health:"blocked"` + the named error, written
-  before any exit),
-- the **blocked digest** (`reports/<date>-digest.md` with the named error's cause+fix as the body),
-- the **home view** the next time the user opens the **job-search** skill (it reads `run_health` from the
-  newest `runs/<id>.json`).
-
-The record is primary; whether `$?` can also be trusted is unverified on Copilot — treat it as a
-secondary signal, not the authority. PIN: confirm exit-code semantics on a live install.
+exit-code behavior is unconfirmed (PIN). Surface every outcome through the **written record** instead (the
+three blocked-run channels and the record-is-primary contract are shared — see `_common.md` → **Written
+record**); on Copilot, whether `$?` can also be trusted is unverified — treat it as a secondary signal, not
+the authority. PIN: confirm exit-code semantics on a live install.
 
 ## Closed-choice question
 
@@ -127,31 +120,21 @@ equivalent.
 
 ## Whole-file write
 
-For structured-state files (the registry `config.json`, the workspace `config.yaml`), read the current
-file first, apply the change to the parsed object, and write the **whole file back** atomically — use
-the native write tool, or write to a temp file then `mv` into place. **Never shell redirection** for
-structured-state files (it can truncate or interleave). Appending one immutable line to the event log
-(`jobs.jsonl`) stays a legitimate shell `>>` append.
+On Copilot the whole-file write uses the native write tool, or write to a temp file then `mv` into place.
+The shared read-modify-write-the-whole-file rule (and the `jobs.jsonl` `>>` append exception) is in
+`_common.md` → **Whole-file write**.
 
 ## Block-alert channel
 
-The durable guarantee is two file-backed channels (the blocked digest + the home-view run record) — both
-plain file writes that survive regardless of any alert surface. An attention-pull alert is
-capability-gated: Copilot CLI has **no documented desktop-notification channel** — skip it silently when
-the `notify.desktop_notify_on_block` knob is set; the two file channels still carry the failure.
+On Copilot CLI there is **no documented desktop-notification channel** — skip the attention-pull alert
+silently when the `notify.desktop_notify_on_block` knob is set. The shared two-file durable-guarantee frame
+is in `_common.md` → **Block-alert channel**.
 
 ## agent-data setup
 
-`agent-data init` has **no `--copilot` flag** (its selectors are `--claude-code|--open-claw|--hermes|
---nano-claw`). Authenticate with the harness-neutral path — it sets the key without installing a
-harness-specific discovery skill, which job-search does not need:
-
-```
-agent-data init --api-key <KEY> -y     # then: agent-data whoami  → api_key_set:true
-```
-
-The agent-data CLI must be on `PATH` inside Copilot's execution environment and its network egress
-permitted. Verify egress is not blocked before the first run.
+Authenticate with the shared harness-neutral `--api-key` path — see `_common.md` → **agent-data auth
+(harness-neutral)** (Copilot has no `--copilot` flag). Verify agent-data is on `PATH` inside Copilot's
+execution environment and its network egress is not blocked before the first run.
 
 ## Packaging & install
 

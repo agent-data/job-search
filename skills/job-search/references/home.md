@@ -15,7 +15,8 @@ Read just what the home view needs (all local):
 - **Schedule marker:** read it from the registry (`internals.md` → Registry) →
   `{"installed":<bool>,"mechanism":<active-mechanism>|null,"set_at":<iso>|null}` — the mechanism value
   is recorded by the active platform (see your platform's adapter → Scheduling).
-- **Update status:** on Claude Code or Codex only, follow `../../../shared/references/update.md` using the bundled
+- **Update status:** follow `../../../shared/references/update.md` (it self-gates on whether the active
+  platform's adapter declares a verified update recipe) using the bundled
   `../../../shared/references/build-stamp.md` and the registry `update_check` cache. The result is either
   `update_available` with the local/remote build ids and the active adapter's update recipe, or no signal.
   Any check failure means no signal; the home still renders.
@@ -82,12 +83,13 @@ Notes on each part:
 
 Offer these and apply each by **chatting**, editing `config.yaml` per the `internals.md` recipes:
 
-- **Run a search now** → disclose it makes live calls, then invoke `job-search-run` against `<ws>`. On Codex,
-  if `search.parallel_detail_reads` is unset, first ask the same one-time parallel-subagent approval from
-  `onboarding.md` → Codex detail-read approval; write the answer to `config.yaml`, and on yes write the
-  Codex job-search profile (or show the exact path + TOML if the sandbox blocks the write). If
-  `search.parallel_detail_reads: true`, include the exact sentence `Use parallel subagents for all detail
-  reads.` in the invocation context. Then show the fresh digest's strong/moderate matches with each match's
+- **Run a search now** → disclose it makes live calls, then invoke `job-search-run` against `<ws>`. On a host
+  that gates parallel detail reads behind approval (your platform's adapter → Concurrent detail reads), if
+  `search.parallel_detail_reads` is unset, first ask the same one-time parallel-subagent approval from
+  `onboarding.md` → Parallel detail-read approval; write the answer to `config.yaml`, and on yes perform the
+  host-specific subagent setup the adapter specifies (or show the exact path + content if the sandbox blocks
+  the write). If `search.parallel_detail_reads: true`, include the adapter's required authorization sentence
+  in the invocation context. Then show the fresh digest's strong/moderate matches with each match's
   reasoning line, link, and any "confirm" warning.
 - **Add or edit a query** → append/modify a `queries[]` item
   (`{ id, keywords, location, limit, enabled }`); `limit` is the per-query feed size (its range and default live in `conventions.md`).
@@ -112,10 +114,10 @@ Offer these and apply each by **chatting**, editing `config.yaml` per the `inter
 - **Change or turn off the schedule** → re-run the scheduling flow in `onboarding.md` with the new cadence,
   then update the scheduling marker. Show the **recurring-run recipe** verbatim from your platform's adapter
   → Run recipe — copy exactly, do not reconstruct the tokens. If `search.parallel_detail_reads: true`, choose
-  the adapter's approved-parallel recipe/prompt variant; on Codex App Automations, the scheduled prompt must
-  include `Use parallel subagents for all detail reads.` To turn it off, apply the teardown for whichever
-  scheduling tier is active (see your platform's adapter → Scheduling), then clear the scheduling marker so
-  it reads `installed: false`, and tell the user it's off.
+  the adapter's approved-parallel recipe/prompt variant; where the adapter uses a scheduled-prompt
+  authorization, the scheduled prompt must include that adapter's required authorization sentence. To turn it
+  off, apply the teardown for whichever scheduling tier is active (see your platform's adapter → Scheduling),
+  then clear the scheduling marker so it reads `installed: false`, and tell the user it's off.
 - **Show the latest digest** → print the newest `reports/<date>-digest.md` (strong → moderate → weak →
   filtered-out) unchanged, as normal message text in your reply (wherever the user is reading it — never
   inside a code fence, never just the file path).

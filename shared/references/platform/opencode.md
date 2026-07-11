@@ -81,20 +81,12 @@ opencode run --print-logs --format json 'job-search-run'
 
 **Exit codes: real process exit codes** — opencode's own process exits non-zero when the run fails
 (the test harness treats non-zero as failure and 124 as timeout). Surface every outcome through the
-**written record** as the primary channel:
-
-- the **blocked run record** (`runs/<run_id>.json` with `run_health:"blocked"` + the named error,
-  written before any halt exits),
-- the **blocked digest** (`reports/<date>-digest.md` with the named error's cause and fix as the
-  body),
-- the **home view** the next time the user opens the **job-search** skill (it reads `run_health`
-  from the newest `runs/<id>.json`).
-
-The record is the contract the home view reads on every harness; the trustworthy exit code is an
-additional signal on opencode that a cron wrapper may act on. PIN: whether a skill-level HALT maps
-to a specific non-zero exit code from the `opencode run` process — this is the test harness's
-assertion, not a live-observed fact. Also confirm that agent-data is on `PATH` inside opencode's
-execution environment and that outbound network egress is not blocked.
+**written record** as the primary channel (the three blocked-run channels and the record-is-primary
+contract are shared — see `_common.md` → **Written record**); on opencode the trustworthy exit code is an
+additional signal a cron wrapper may act on. PIN: whether a skill-level HALT maps to a specific non-zero
+exit code from the `opencode run` process — this is the test harness's assertion, not a live-observed fact.
+Also confirm that agent-data is on `PATH` inside opencode's execution environment and that outbound network
+egress is not blocked.
 
 ## Closed-choice question
 
@@ -136,40 +128,26 @@ supported.
 
 ## Whole-file write
 
-For structured-state files (registry, `config.yaml`), apply the change to the parsed object and
-write the **whole file back atomically** — use the native write tool (PIN), or write to a temp file
-then `mv` into place. Never stream a partial or redirected write that can truncate or interleave a
-structured-state file. Appending one immutable line to the event log (`jobs.jsonl`) stays a
-legitimate shell `>>` append.
+On opencode the whole-file write uses the native write tool (PIN exact name), or write to a temp file then
+`mv` into place. The shared read-modify-write-the-whole-file rule (and the `jobs.jsonl` `>>` append
+exception) is in `_common.md` → **Whole-file write**.
 
 PIN: confirm the exact opencode write-tool name and whether it performs an atomic replacement or a
 streamed write that could leave a partial file on interruption.
 
 ## Block-alert channel
 
-The durable guarantee is two file-backed channels (the blocked digest + the home-view run record).
-An attention-pull alert is capability-gated: opencode's notification surface is **not confirmed** —
-PIN whether opencode surfaces an in-editor alert, a desktop notification, or neither. If no
-attention-pull channel is available or confirmed, skip the alert silently; the two file channels
-still carry the failure.
+On opencode the attention-pull alert surface is **not confirmed** — PIN whether opencode surfaces an
+in-editor alert, a desktop notification, or neither. The shared two-file durable-guarantee frame (and the
+skip-silently rule when no surface is confirmed) is in `_common.md` → **Block-alert channel**.
 
 ## agent-data setup
 
-`agent-data init` has **no `--opencode` flag** (its selectors are `--claude-code|--open-claw|--hermes|
---nano-claw`). Authenticate with the harness-neutral path — it sets the key without installing a
-harness-specific discovery skill, which job-search does not need:
-
-```
-agent-data init --api-key <KEY> -y     # then: agent-data whoami  → api_key_set:true
-```
-
-The `--api-key`-only path is the verified workaround for all non-Claude harnesses. Skills reach
-agent-data through the CLI on `PATH`; the `config.skills.paths` hook (see **Packaging & install**)
-ensures the plugin's skills load into opencode's skill registry automatically.
-
-The agent-data CLI must be on `PATH` inside opencode's execution environment and its network egress
-permitted. PIN: confirm that agent-data is accessible on `PATH` within `opencode run` and that
-outbound network calls to the agent-data endpoint are not blocked.
+Authenticate with the shared harness-neutral `--api-key` path — see `_common.md` → **agent-data auth
+(harness-neutral)** (opencode has no `--opencode` flag). Skills reach agent-data through the CLI on `PATH`;
+the `config.skills.paths` hook (see **Packaging & install**) loads the plugin's skills into opencode's
+skill registry automatically. PIN: confirm that agent-data is accessible on `PATH` within `opencode run`
+and that outbound network calls to the agent-data endpoint are not blocked.
 
 ## Packaging & install
 

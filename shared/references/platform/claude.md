@@ -77,16 +77,8 @@ scheduling marker (registry write rules — no more stale `installed: true`).
 Run the search pass non-interactively with `claude -p`. **Exit code trustworthy: NO** — a headless
 `claude -p` run returns **0 even when blocked** (a skill cannot set the host exit code), so never trust
 `$?` and never tell the user a cron job's `$?` will be non-zero on a blocked run. Surface every outcome
-through the **written record** instead — the record is the contract the home view reads:
-
-- the **blocked run record** (`runs/<run_id>.json` with `run_health:"blocked"` + the named error, written
-  before any HALT exits),
-- the **blocked digest** (`reports/<date>-digest.md` with the named error's cause+fix as the body),
-- the **home view** the next time the user opens the **job-search** skill (it reads `run_health` from the
-  newest `runs/<id>.json`).
-
-The record is primary on every harness; the per-harness exit-code line is the add-on, and on Claude that
-add-on is "do not rely on it."
+through the **written record** instead (the three blocked-run channels and the record-is-primary contract
+are shared — see `_common.md` → **Written record**). On Claude the exit-code add-on is "do not rely on it."
 
 ## Closed-choice question
 
@@ -125,19 +117,16 @@ Legacy `haiku|sonnet|opus` config values are accepted as aliases for `fast|balan
 
 ## Whole-file write
 
-For structured-state files (the registry `config.json`, the workspace `config.yaml`), read the current
-file first, apply the change to the parsed object, and write the **whole file back** with the **`Write`
-tool** — **never shell redirection** (it can truncate or interleave a structured-state file). Appending
-one immutable line to the event log (`jobs.jsonl`) stays a legitimate shell `>>` append (the heredoc form
-keeps quoting safe).
+On Claude Code the whole-file write uses the **`Write` tool** (atomic replacement) — **never shell
+redirection** for a structured-state file. The shared read-modify-write-the-whole-file rule (and the
+`jobs.jsonl` `>>` append exception) is in `_common.md` → **Whole-file write**.
 
 ## Block-alert channel
 
-The durable guarantee is two file-backed channels (the blocked digest + the home-view run record) — both
-plain file writes that survive regardless of any alert surface. An attention-pull alert is
-capability-gated by the user's on-block notify knob (`notify.desktop_notify_on_block`): on Claude Code,
-fire one **desktop / terminal notification** (or phone) on a blocked run when the knob is set. If no
-attention-pull channel is available, skip it silently — the two file channels still carry the failure.
+On Claude Code, fire one **desktop / terminal notification** (or phone) on a blocked run when the on-block
+notify knob (`notify.desktop_notify_on_block`) is set. The shared two-file durable-guarantee frame — and
+the rule to skip the attention-pull alert silently when no surface is available — is in `_common.md` →
+**Block-alert channel**.
 
 ## agent-data setup
 

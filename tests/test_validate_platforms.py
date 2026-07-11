@@ -81,6 +81,26 @@ def test_adapter_sections_single_home_no_skill_copies_passes(tmp_path):
     r = run_validate(tmp_path, "--only", "adapter-sections")
     assert r.returncode == 0, r.stdout + r.stderr
 
+def test_underscore_partial_is_not_an_adapter(tmp_path):
+    # an underscore-prefixed file (e.g. _common.md) is a SHARED PARTIAL, not a harness adapter: it holds
+    # the host-neutral boilerplate the adapters point to and is NOT required to carry the 12 sections.
+    _seed_adapters(tmp_path)
+    d = tmp_path / "shared" / "references" / "platform"
+    (d / "_common.md").write_text("# shared partial\n\n## Whole-file write\n\nthe common rule.\n")
+    r = run_validate(tmp_path, "--only", "adapter-sections")
+    assert r.returncode == 0, r.stdout + r.stderr
+
+def test_underscore_partial_not_a_cross_ref_target(tmp_path):
+    # the partial is excluded from the adapter set, so a canonical section it happens NOT to carry is
+    # still resolvable (resolution is proven against the real adapters, never the partial).
+    _seed_adapters(tmp_path)
+    d = tmp_path / "shared" / "references" / "platform"
+    (d / "_common.md").write_text("# shared partial\n\n## Written record\n\nno canonical sections here.\n")
+    sr = tmp_path / "shared" / "references"
+    (sr / "voice.md").write_text("ask as prose — see your platform's adapter → Closed-choice question.\n")
+    r = run_validate(tmp_path, "--only", "adapter-cross-refs")
+    assert r.returncode == 0, r.stdout + r.stderr
+
 
 # ---- manifest-parse ----
 
