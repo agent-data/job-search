@@ -3,7 +3,7 @@ title: Core Beliefs — Agent-First Operating Principles
 status: current
 verified: partial
 last_reviewed: 2026-06-22
-code_refs: [scripts/philosophy_guard.py, scripts/doc_lint.py, scripts/build.sh, tests/test_reference_resolution.py, .github/workflows/ci.yml, shared/references/internals.md, shared/references/conventions.md]
+code_refs: [scripts/philosophy_guard.py, scripts/doc_lint.py, scripts/build.sh, tests/test_reference_resolution.py, tests/test_mechanics_scripts.py, shared/scripts/mechanics/dedup.sh, .github/workflows/ci.yml, shared/references/internals.md, shared/references/conventions.md]
 ---
 # Core Beliefs — Agent-First Operating Principles
 
@@ -112,24 +112,32 @@ and are linked, never restated here — this doc is a live design-doc subject to
 
 ## 6. Deterministic, testable, headless
 
-- **Statement.** The mechanics — dedup, the event log, schedule lines, workspace discovery — are
-  pinned written contracts (exact procedures and portable one-liners) that Claude Code executes
-  natively, with **zero runtime dependencies** on the user's machine; the headless run reports
-  outcomes through records and the digest, not through process exit codes.
+- **Statement.** The fiddly deterministic mechanics are bundled as portable scripts where a runtime
+  exists (AAS-FORM-08), each paired with a named prose-contract fallback for hosts without one
+  (AAS-PORT-01); no third-party runtime dependency ships (AAS-DIST-05). Success is read from the
+  written record, never the process exit code.
 - **Why.** The model handles judgment; everything else must be *specified* deterministically so any
-  skill performs it identically — but it must not require an interpreter the user may not have
-  (Python is not assumed). The named tradeoff, accepted 2026-06-11: the mechanics are model-executed
-  against a pinned contract rather than script-executed, so they are verified by the skill evals and
-  the TESTING.md matrix, not by unit tests. And because a scheduled `claude -p` returns 0 even when
-  it halted, success must be read from the written record, never from the exit code.
-- **Enforced by.** The contracts are owned by
+  skill performs it identically. The scripted form is verified by unit tests; the prose fallback and
+  the judgment layer by the skill evals. This supersedes the 2026-06-11 zero-Python decision for the
+  mechanics only — no *third-party* runtime dependency ships (the scripts are the skills' own portable
+  shell, AAS-DIST-05), and portable **shell** (near-universal) shrinks the no-runtime surface so the
+  mandatory fallback stays a thin residual, not a second full implementation. And because a scheduled
+  `claude -p` returns 0 even when it halted, success must be read from the written record, never from
+  the exit code.
+- **Enforced by.** The mechanics are bundled as portable POSIX-`sh` scripts under
+  `shared/scripts/mechanics/` (dedup, the event log, schedule-line composition, workspace discovery),
+  each reproducing — and paired with — the pinned prose contract owned by
   [shared/references/internals.md](../../shared/references/internals.md) (registry, discovery,
   scheduling marker) and [shared/references/conventions.md](../../shared/references/conventions.md)
-  (the `jobs.jsonl` event-line contract + operations); the skill evals assert on the artifacts those
-  procedures produce (registry bytes, event lines). The "read the record, not the exit code" contract
-  is owned by [shared/references/errors.md](../../shared/references/errors.md).
-- **How to verify.** Run the skill evals (e.g. "run the evals for job-search-run") and the TESTING.md
-  state/discovery checks; confirm registry writes and `jobs.jsonl` lines match the pinned contracts.
+  (the `jobs.jsonl` event-line contract + operations); the runner invokes the script where a shell
+  runtime exists and follows the named prose fallback otherwise. `tests/test_mechanics_scripts.py`
+  pins the scripted form to the contract; the skill evals assert on the artifacts those procedures
+  produce (registry bytes, event lines). The "read the record, not the exit code" contract is owned by
+  [shared/references/errors.md](../../shared/references/errors.md).
+- **How to verify.** Run `python3 -m pytest tests/test_mechanics_scripts.py` (the scripted mechanics
+  reproduce their pinned contracts) plus the skill evals (e.g. "run the evals for job-search-run") and
+  the TESTING.md state/discovery checks; confirm registry writes and `jobs.jsonl` lines match the
+  pinned contracts.
 
 ## 7. Consent-gated autonomy
 

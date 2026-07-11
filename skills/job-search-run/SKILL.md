@@ -14,7 +14,13 @@ subagent per promising posting** (sequential only where the host lacks the primi
 approval) → **consolidate** into a digest.
 
 Find the workspace with the **Discovery procedure** in `../../shared/references/internals.md` UNLESS `--workspace <path>`
-is given, which overrides. This run is HEADLESS: never prompt. If discovery reports `first_run` (no
+is given, which overrides. Run the shared script where a shell runtime exists — `../../shared/scripts/mechanics/workspace-discovery.sh`
+prints `workspace=`/`source=`/`first_run=` — else apply the precedence in-model; either way follow the
+Discovery procedure's rules. **Corrupt-registry guard (before trusting discovery):** the script grep-extracts
+`active_workspace` and cannot detect a corrupt-but-non-grepable registry, so before trusting the result
+confirm the registry file (if present) parses as JSON; a present-but-unparseable registry → **E-BAD-REGISTRY**
+(HALT, exit 1) — never fall through to a default/legacy workspace (that could silently switch workspaces).
+This run is HEADLESS: never prompt. If discovery reports `first_run` (no
 workspace/config yet) → E-NO-CONFIG naming the **job-search** skill as the fix (HALT, exit 1); onboarding is
 interactive and lives in the `job-search` skill, not here. The job source listing id is `f9a6ec16-0bfd-44d8-b3ee-073776745ee7` — one listing serving every job source; the enabled sources come from `config.yaml` `search.sources` (absent → `["linkedin", "ashby"]`), validated against the contract's enum at preflight (an unknown token → E-SOURCE-UNSUPPORTED: drop it, footnote the fix, continue).
 
@@ -50,8 +56,9 @@ Read these before running, and follow them exactly:
    > Before exiting on ANY E-* HALT with a writable workspace (including E-NO-AGENT-DATA,
    > E-NO-AUTH, E-NO-PREFERENCES, E-CONFIG-VERSION, E-SERVICE-DOWN, E-QUOTA), write
    > `runs/<run_id>.json` with `run_health:"blocked"`, `build`, and the error, so the next
-   > home view surfaces it. The named exception is E-NO-CONFIG / first_run with no workspace:
-   > there is no run record to write, so name the error and stop.
+   > home view surfaces it. The named exception is E-NO-CONFIG / first_run with no workspace
+   > (and E-BAD-REGISTRY when the corrupt registry leaves no trusted workspace): there is no run
+   > record to write, so name the error and stop — never fall through to an untrusted workspace.
 1. **Search the feed (one `search-jobs` per enabled query × enabled source; run the whole batch concurrently).** Build the full call list first — one call per (enabled query × enabled source), passing `--source <s>` on each; with 2 queries and `sources: ["linkedin", "ashby"]` that is 4 calls. **The single listing id does not mean a single source** — the one listing serves every source and `--source` selects which; never collapse the fan-out because the listing id repeats. For each
    `queries[]` with `enabled:true` × each enabled source `s`, call `search-jobs` with `--keywords` (+ `--location`, `--limit`), `--source <s>`, and `--fields id,source_id,source_url,title,company_name,location_display,salary_display,posted_at,detail_available,source`.
    `limit` is the feed size (1–100; the API defaults to 20 — the config template sets 25) — pull generously and lean on **breadth** (several varied
@@ -65,9 +72,11 @@ Read these before running, and follow them exactly:
    - `422`/`400 validation_error` (a bad param or `fields=`) → E-BAD-QUERY (name the bad param from `error.param`/`details[].loc`), skip that query.
    - A quota/limit/payment failure (see errors.md detection) → E-QUOTA (HALT, exit 1).
    Cross-check before moving on: every enabled source must appear among the attempted calls (each lands in `runs/<run_id>.json` `queries[]` with its `source`); an enabled source with zero attempted calls means the fan-out was mis-executed — dispatch its missing calls now.
-2. **Dedup + freshen.** Run the **known-ids** operation once per enabled source (`conventions.md`
-   §jobs.jsonl) → per-source known sets; NEW = rows whose non-null `source_id` is not in THEIR OWN source's
-   set. Record which sources returned rows AND had an EMPTY known set at run start (that triggers the first-pass footnote in
+2. **Dedup + freshen.** Run the **dedup** step once per enabled source — invoke
+   `../../shared/scripts/mechanics/dedup.sh <workspace>/jobs.jsonl <source>` (candidate `source_id`s on
+   stdin → the NEW ones on stdout) where a shell runtime exists, else follow the **known-ids** prose
+   fallback (`conventions.md` §jobs.jsonl) → per-source known sets; NEW = rows whose non-null `source_id`
+   is not in THEIR OWN source's set. Record which sources returned rows AND had an EMPTY known set at run start (that triggers the first-pass footnote in
    step 5). Then apply `search.freshness`: drop NEW rows whose `posted_at` is older than the window — **a null
    `posted_at` is NEVER dropped**: treat the row as new-if-unseen and carry a date-unknown mark into the scan
    and digest. Null-`source_id` rows can't be deduped → skip, count "unidentifiable".
@@ -117,8 +126,11 @@ Read these before running, and follow them exactly:
    `400 validation_error` (not retryable — a `posting_id`/`source_url` pair mismatch) → judge from summary, note "detail link expired"; `503 upstream_unavailable` (retryable) → retry/backoff, then summary-only + note. **No product cap** — every queued posting gets evaluated;
    the scan (relevance), not a count, decides how many.
 5. **Consolidate + persist + report.** Collect the detail-read verdicts and **validate each before it lands**: `match` must be `strong | moderate | weak`, or `null` when `relevant` is false — coerce anything else (a faster delegated model can emit a stray number or out-of-vocab band) and never let a numeric score reach `jobs.jsonl` or the digest — and every event MUST carry a non-empty `source_id`. Then for each NEW posting (the deduped set from step 2 — see Idempotency) append the FULL `evaluated` event
-   to `<workspace>/jobs.jsonl` via the **append** operation (complete schema + event-line contract in
-   conventions.md §jobs.jsonl).
+   to `<workspace>/jobs.jsonl` via the **event-log-append** step — invoke
+   `../../shared/scripts/mechanics/event-log-append.sh <workspace>/jobs.jsonl` (the single-line event JSON on
+   stdin; it validates against the event-line contract and appends idempotently) where a shell runtime
+   exists, else follow the **append** prose fallback (validate, then the `cat >>` heredoc) — complete schema
+   + event-line contract in conventions.md §jobs.jsonl.
    The event MUST carry provenance — `event:"evaluated"`, `ts`, `run_id`, `source` — **copied from the result row, never a literal**, `query_id`,
    `title`, `company_name`, `location_display`, `salary_display`, `posted_at`, `posted_at_extracted` (optional — the JD-stated date when the API `posted_at` was null), `source_url`,
    `posting_id_at_seen` (the `jp_` id), `detail_read` — AND the judgment — `source_id`, `relevant`, `match`,

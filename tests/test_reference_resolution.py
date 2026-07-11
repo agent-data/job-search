@@ -26,6 +26,7 @@ import pytest
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 SHARED = ROOT / "shared" / "references"
+MECH = ROOT / "shared" / "scripts" / "mechanics"
 
 # Unique marker planted in the ONE canonical home (shared/references/conventions.md).
 MARKER = "reference-resolution-marker:8f2a4c1e-single-home"
@@ -59,6 +60,12 @@ SKILL_LOCAL_ORIGINALS = {
 # `references/platform/x.md`). A bare prose name ("conventions.md" with no directory component) is not a
 # path and is intentionally NOT matched — resolution is a property of paths, not of doc-name shorthand.
 _PTR = re.compile(r"(?:\.\./)*(?:shared/)?references/(?:platform/)?[A-Za-z0-9._-]+\.md")
+
+# A mechanics-script PATH pointer the P4/T4.2 invoke-or-prose-fallback wiring makes: the in-place shared
+# script (`../../shared/scripts/mechanics/x.sh` from a SKILL.md, `../scripts/mechanics/x.sh` from a
+# shared/references body). The "run the shared script where a runtime exists" arm must resolve in place to
+# the single scripts home — a dangling invocation would silently drop to the fallback on every host.
+_SCRIPT_PTR = re.compile(r"(?:\.\./)+(?:shared/)?scripts/mechanics/[A-Za-z0-9._-]+\.sh")
 
 
 def _pointer_files():
@@ -155,3 +162,45 @@ def test_no_fanned_reference_copy_remains():
             present.add(p.relative_to(ROOT).as_posix())
     fanned = sorted(present - SKILL_LOCAL_ORIGINALS)
     assert not fanned, f"fanned reference copies still present (must be single-homed): {fanned}"
+
+
+# ------------------------------------------------------ mechanics-script resolution (P4/T4.2)
+
+def _script_pointer_files():
+    """Files that invoke a mechanics script: every SKILL.md + every shared/references body (the
+    invoke-or-prose-fallback wiring lives in the runner and in the contracts it defers to)."""
+    files = sorted((ROOT / "skills").glob("*/SKILL.md"))
+    files += sorted(SHARED.glob("*.md"))
+    return files
+
+
+def _script_pointers(path):
+    """Distinct mechanics-script PATH pointers found in `path`."""
+    out = []
+    for m in _SCRIPT_PTR.finditer(path.read_text(encoding="utf-8")):
+        tok = m.group(0)
+        if tok not in out:
+            out.append(tok)
+    return out
+
+
+@pytest.mark.parametrize("host", sorted(HOST_MANIFESTS))
+def test_every_mechanics_script_resolves_in_place_on_host(host):
+    """P4/T4.2: the 'run the shared script' arm of each invoke-or-prose-fallback must resolve IN PLACE to
+    the single mechanics home on every host — the same ships-shared property the references rely on. A
+    dangling script pointer -> RED (the runtime arm would never fire)."""
+    ok, reason = _ships_shared(HOST_MANIFESTS[host])
+    assert ok, f"{host}: {reason}"
+    assert MECH.is_dir(), f"{host}: shared/scripts/mechanics not shipped"
+    any_ptr = False
+    for f in _script_pointer_files():
+        for ptr in _script_pointers(f):
+            any_ptr = True
+            target = (f.parent / ptr).resolve()
+            assert target.exists(), (
+                f"{host}: {f.relative_to(ROOT)} -> `{ptr}` is DANGLING (no {target})")
+            assert target.parent == MECH, (
+                f"{host}: {f.relative_to(ROOT)} -> `{ptr}` does not land in shared/scripts/mechanics")
+    assert any_ptr, (
+        f"{host}: no mechanics-script pointer found in any SKILL.md or shared/references body — the "
+        f"P4/T4.2 invoke-or-prose-fallback wiring is missing")

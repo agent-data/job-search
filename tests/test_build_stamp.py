@@ -34,6 +34,10 @@ def seed_runtime_tree(root):
     evals = skill / "evals"
     evals.mkdir()
     (evals / "evals.json").write_text('{"ignored":"eval-only"}\n')
+    # Shipped runtime code: the portable-shell mechanics scripts are in the hash scope (P4/T4.3).
+    mech = root / "shared" / "scripts" / "mechanics"
+    mech.mkdir(parents=True)
+    (mech / "dedup.sh").write_text("#!/bin/sh\necho stub\n")
 
 
 def test_stamp_output_is_deterministic(tmp_path):
@@ -71,6 +75,20 @@ def test_stamp_hash_changes_for_runtime_content_but_not_evals_or_stamp(tmp_path)
     changed = run_stamp(tmp_path).stdout
     assert changed != base
     assert "version: 1.2.3" in changed
+
+    # A mechanics-script edit is shipped runtime code, so it MUST flip the content hash (P4/T4.3).
+    (tmp_path / "shared" / "scripts" / "mechanics" / "dedup.sh").write_text(
+        "#!/bin/sh\necho changed\n"
+    )
+    changed_after_script = run_stamp(tmp_path).stdout
+    assert changed_after_script != changed
+
+
+def test_hash_scope_lists_shared_scripts(tmp_path):
+    """The shipped mechanics scripts are in the hash scope, and the stamp says so (P4/T4.3)."""
+    seed_runtime_tree(tmp_path)
+    out = run_stamp(tmp_path).stdout
+    assert "shared/scripts/**" in out
 
 
 def test_write_mode_creates_parent_and_writes_stamp(tmp_path):

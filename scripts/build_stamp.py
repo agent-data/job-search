@@ -15,7 +15,7 @@ PUBLISHED_STAMP_URL = (
     "shared/references/build-stamp.md"
 )
 HASH_SCOPE_TEXT = (
-    "skills/**, shared/references/**, .claude-plugin/plugin.json, "
+    "skills/**, shared/references/**, shared/scripts/**, .claude-plugin/plugin.json, "
     ".codex-plugin/plugin.json; excludes skills/*/evals/** and generated build-stamp.md"
 )
 PRIMARY_VERSION_MANIFEST = pathlib.Path(".claude-plugin/plugin.json")
@@ -37,7 +37,7 @@ def _is_skill_eval(path):
 def iter_hash_paths(root):
     root = pathlib.Path(root)
     candidates = []
-    for base in (root / "skills", root / "shared" / "references"):
+    for base in (root / "skills", root / "shared" / "references", root / "shared" / "scripts"):
         if not base.exists():
             continue
         for path in base.rglob("*"):

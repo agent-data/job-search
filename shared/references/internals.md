@@ -47,6 +47,20 @@ does.
   `"scheduling": {"installed": false, "mechanism": null, "set_at": null}`.
 
 ## Workspace discovery & first-run detection
+**Run the shared script where a shell runtime exists:** `../scripts/mechanics/workspace-discovery.sh` prints
+three lines — `workspace=<abs path>`, `source=<registry|default|legacy|none>`, `first_run=<true|false>` —
+reproducing the precedence below EXACTLY (pinned by `tests/test_mechanics_scripts.py`), honoring `$REG`/`$H`
+as defined here. **Where there is no shell runtime, gather the facts and apply the precedence in-model.**
+
+**Corrupt-registry guard (a caller MUST check this before trusting discovery's result).** The script
+grep-extracts `active_workspace` and CANNOT detect a corrupt-but-non-grepable registry — a corrupt file
+would make it silently fall through to default/first-run, the "guessing could switch workspaces" hazard the
+Registry write-rules warn against. Robust JSON validation is out of the zero-dependency script's scope by
+design, so this check lives in the caller's prose: before trusting the result, confirm the registry file (if
+present) parses as JSON; a **present-but-unparseable** registry is the corrupt-registry case above — never
+guess, never fall through. The **headless runner** maps it to **E-BAD-REGISTRY** (`errors.md`, HALT); the
+**job-search** front door offers to rewrite it from the known workspace.
+
 Gather the facts with one command, then apply the precedence rules:
 ```bash
 REG="${JOBSEARCH_OS_REGISTRY:-${XDG_CONFIG_HOME:-${JOBSEARCH_OS_HOME:-$HOME}/.config}/job-search/config.json}"
@@ -118,8 +132,16 @@ the local agent-data auth does **not** qualify on either tier — it is skipped 
 user's data and credentials produces nothing).
 
 The ACTIONS are the same across hosts. Compose the cadence from `schedule.frequency` (the adapter's Run
-recipe carries the cadence→interval/cron mapping). Offer scheduling as a yes/no; check the scheduling marker
-first so you never re-ask. On yes, start the schedule and set the scheduling marker (write rules above —
+recipe carries the cadence→interval/cron mapping). **Compose the five-field cron time expression with the
+shared script where a shell runtime exists:** `../scripts/mechanics/schedule-line.sh <frequency> [HH:MM]`
+prints `minute hour day-of-month month day-of-week` for the cadence; the host then wraps it with its own
+command/launchd or interval translation. **Fallback (no shell runtime) — compose it directly:**
+`hourly → 0 * * * *`; `every-2-hours → 0 */2 * * *`; `every-6-hours → 0 */6 * * *`;
+`daily HH:MM → <m> <h> * * *`; `weekly HH:MM → <m> <h> * * 1` (**weekly day-of-week = Monday, `1`**).
+`schedule.time` (`HH:MM`) is honored for daily/weekly and its **default is `08:00`**; strip a single leading
+zero so cron gets `8`/`5`, not `08`/`05`. (Both soft-defaults — Monday for weekly, `08:00` for the time —
+match the script and are pinned by `tests/test_mechanics_scripts.py`.) Offer scheduling as a yes/no; check
+the scheduling marker first so you never re-ask. On yes, start the schedule and set the scheduling marker (write rules above —
 recording the mechanism actually used). ALWAYS also show the **recurring-run recipe** and the **one-off-run
 recipe** verbatim — copy them exactly as written in your platform's adapter → Run recipe; do not reconstruct
 those tokens here.

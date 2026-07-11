@@ -76,8 +76,14 @@ JSON object — never pretty-printed; every event carries a non-empty `"source_i
 literal key `"source"` appears at most once per line (the per-source pre-filter grep depends on it, exactly as
 the `"source_id"`-once rule protects the id extraction); `same_role_as` is a FLAT string — never a nested object (the `"source_id"`-appears-once rule is load-bearing for the grep extraction). Validate an event against this contract before appending it.
 
-Operations (no helper script — perform these exactly):
-- **Known ids** (the dedup set — one per enabled source `S`; missing file = empty set):
+Operations — **run the shared script where a shell runtime exists, else follow the prose fallback**
+(each script reproduces its fallback EXACTLY — pinned by `tests/test_mechanics_scripts.py`; the scripts
+are the skills' own POSIX shell, no third-party dependency):
+- **Known ids** — the dedup step, one per enabled source `S` (missing file = empty set).
+  **Script:** `../scripts/mechanics/dedup.sh "$WS/jobs.jsonl" "$S"` — candidate `source_id`s on stdin,
+  the NEW ones (not already recorded for `S`) on stdout; blank candidate lines (a null `source_id`) are
+  skipped. **Prose fallback** — extract the known set with the pinned pipeline, then keep the candidates
+  not in it:
   ```bash
   grep -E '"source"[[:space:]]*:[[:space:]]*"'"$S"'"' "$WS/jobs.jsonl" 2>/dev/null \
     | grep -o '"source_id"[[:space:]]*:[[:space:]]*"[^"]*"' | cut -d'"' -f4 | sort -u
@@ -85,7 +91,11 @@ Operations (no helper script — perform these exactly):
   (The `"source"` key pattern cannot match `"source_id"`/`"source_url"` — the closing quote
   must follow immediately. Legacy history all carries `source:"linkedin"`, so the linkedin set
   matches every pre-multi-source event: no migration.)
-- **Append one event** (the heredoc keeps quoting safe — apostrophes in `reasoning` are fine):
+- **Append one event** — validate the line against the event-line contract above, then append idempotently.
+  **Script:** `../scripts/mechanics/event-log-append.sh "$WS/jobs.jsonl"` — the single-line event JSON on
+  stdin (it validates, then appends; an `evaluated` event whose `(source, source_id)` is already recorded is
+  a no-op). **Prose fallback** (validate first; the heredoc keeps quoting safe — apostrophes in `reasoning`
+  are fine):
   ```bash
   cat >> "$WS/jobs.jsonl" <<'EOF'
   {"event":"evaluated","ts":"…","source":"…","source_id":"…",…}
