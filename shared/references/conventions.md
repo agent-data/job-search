@@ -28,7 +28,7 @@ queries:
 search:
   sources: ["linkedin", "ashby"]  # ordered job sources every query runs against (the source enum is defined in agent-data-contract.md) — omit the key for this default; greenhouse/lever widen coverage across more company boards
   freshness: "past-2-weeks"  # any | past-week | past-2-weeks | past-month — client-side recency filter on posted_at (no API date param)
-  detail_model: "fast"       # portable tier the per-posting detail reads use: fast | balanced | high | inherit (the model id each maps to → your platform's adapter → Model tiers)
+  detail_model: "balanced"   # tier the per-posting fit VERDICT runs at — the mid-tier reviewer floor (default): fast | balanced | high | inherit (each tier's model id → your platform's adapter → Model tiers)
   # parallel_detail_reads: true  # optional: approved use of parallel subagents for detail reads where the host supports them
 schedule:
   frequency: "daily"         # hourly | every-2-hours | every-6-hours | daily | weekly — the cadence the schedule runs on (its mapping for the active scheduler → your platform's adapter → Scheduling)
@@ -44,10 +44,17 @@ outside the enum are dropped at preflight with a digest footnote (E-SOURCE-UNSUP
 Per-query source targeting is a known deferred knob — all queries run against all enabled sources. The runner
 reads `sources` and never writes it. `freshness` is a client-side recency window on `posted_at` (the API has
 no date param): `any` = no filter, `past-week` = the last 7 days, `past-2-weeks` = the last 14 days (the
-default), `past-month` = the last 30 days. `detail_model` is a portable tier token the runner's per-posting
-detail reads use — `fast` (fast and light; the default), `balanced` (more deliberate on nuanced qualitative
-judgments), `high` (highest fidelity), `inherit` (the run's own model); the model each maps to lives in your
-platform's adapter → Model tiers, and the fan-out itself defers to → Concurrent detail reads.
+default), `past-month` = the last 30 days. `detail_model` is a portable tier token for the per-posting **fit verdict** — the
+judgment the detail read produces. Because that verdict is a judgment, not a mechanical step, it runs at the
+**mid-tier reviewer floor**: `balanced` is the default, scaled up to `high` for a higher-risk or ambiguous
+posting, never dispatched on the cheapest tier by default and never reflexively on the most capable. The
+genuinely mechanical bulk — dedup, the summary prefilter, provenance — runs cheap in the runner's primary
+context and the shared scripts, independent of this knob. The tiers: `fast` (the cheapest tier — an explicit
+opt-down: faster, a touch looser on subtle qualitative calls), `balanced` (the mid-tier reviewer floor; the
+default), `high` (highest fidelity), `inherit` (the run's own model — the one value that maps to no explicit
+override, and only by the user's choice; the runner otherwise always dispatches an explicit model). The model
+each tier maps to lives in your platform's adapter → Model tiers, and the fan-out itself defers to →
+Concurrent detail reads.
 `parallel_detail_reads` is optional and records whether the user approved parallel subagents for detail
 reads on hosts that require explicit authorization. Unset means interactive front-door flows may ask; `true`
 means use parallel subagents where available; `false` means read details sequentially. The runner reads this

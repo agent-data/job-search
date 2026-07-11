@@ -139,8 +139,8 @@ Job Search stores that approval in `search.parallel_detail_reads`:
 
 Ask the live Codex approval as a closed choice (numbered prose on Codex): "Use parallel subagents for detail
 reads? Codex will read promising postings faster by splitting those reads across helper agents. By default,
-detail-read subagents use `gpt-5.4-mini`." Options: **Yes, use subagents (Recommended)** — "faster; uses
-`gpt-5.4-mini` for posting details" · **No, read sequentially** — "slower; keeps all reads in this chat".
+detail-read subagents use `gpt-5.4`." Options: **Yes, use subagents (Recommended)** — "faster; uses
+`gpt-5.4` for posting details" · **No, read sequentially** — "slower; keeps all reads in this chat".
 Only the `job-search` front door writes the user's answer into `config.yaml`; `job-search-run` only reads it.
 
 When the user approves, also create or update `$CODEX_HOME/job-search.config.toml` for scheduled/headless

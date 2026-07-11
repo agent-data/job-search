@@ -95,7 +95,8 @@ same question as prose with the options on numbered lines.
 ## Concurrent detail reads
 
 Claude Code supports isolated-context subagents via the **`Task`** tool, with **per-subagent model
-selection** (a faster/cheaper model can do the bulk reads while the orchestrating context stays clean).
+selection** (each subtask runs on the tier that fits it — the mechanical bulk cheap, the fit verdict at the
+mid-tier reviewer floor — while the orchestrating context stays clean).
 Dispatch all queued postings **at once, in a single batch** of concurrent `Task` subagents — never a
 one-at-a-time loop. When no subagent slot is available, read and judge each posting **sequentially** —
 never block one read on another, but do not fabricate a dispatch.
@@ -112,8 +113,9 @@ place the literal Claude model names live.**
 | `high` | `opus` |
 | `inherit` | the model this run is already on |
 
-Legacy `haiku|sonnet|opus` config values are accepted as aliases for `fast|balanced|high` (live
-`config.yaml` files carry the legacy form — `search.detail_model` defaults to `haiku`).
+Legacy `haiku|sonnet|opus` config values are accepted as aliases for `fast|balanced|high` (some live
+`config.yaml` files from earlier versions carry the legacy form — a `haiku` value maps to `fast`). The current
+default is the mid-tier reviewer floor, `balanced` → `sonnet`.
 
 ## Whole-file write
 

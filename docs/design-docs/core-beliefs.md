@@ -2,7 +2,7 @@
 title: Core Beliefs — Agent-First Operating Principles
 status: current
 verified: partial
-last_reviewed: 2026-06-22
+last_reviewed: 2026-07-11
 code_refs: [scripts/philosophy_guard.py, scripts/doc_lint.py, scripts/build.sh, tests/test_reference_resolution.py, tests/test_mechanics_scripts.py, shared/scripts/mechanics/dedup.sh, .github/workflows/ci.yml, shared/references/internals.md, shared/references/conventions.md]
 ---
 # Core Beliefs — Agent-First Operating Principles
@@ -239,8 +239,11 @@ and are linked, never restated here — this doc is a live design-doc subject to
   colleague with zero context. The one carve-out: hosts that gate subagents behind explicit user approval
   (e.g. Codex) wait for that approval before fanning out; every other host parallelizes by default.
 - **Why.** Time-to-value is a product feature. Parallelizing independent work turns a serial crawl into one
-  concurrent step; isolating each subtask in its own subagent keeps the primary context clean and lets a faster,
-  cheaper model do the bulk. A well-briefed subagent makes judgment calls — a terse one returns shallow, generic work.
+  concurrent step; isolating each subtask in its own subagent keeps the primary context clean and dispatches each
+  isolated subtask on the least powerful model that can do it *well* — sp's spectrum: mechanical steps (dedup,
+  provenance, extraction, prefilter) on the cheapest tier; the per-posting fit verdict, a well-specified
+  bite-sized review, at the reviewer floor (a mid-tier model), scaled up for higher-risk postings; the
+  dispatching model always specified explicitly. A well-briefed subagent makes judgment calls — a terse one returns shallow, generic work.
 - **Enforced by.** **Cultural / by design** — no linter for parallelism. The principle and the subagent-briefing
   guidance are owned by [shared/references/parallelism.md](../../shared/references/parallelism.md) (bundled into
   every skill); `job-search-run` embodies it (scan → parallel per-posting fan-out by default, sequential only

@@ -4,7 +4,10 @@ Independent work runs concurrently, not in sequence. When subtasks don't depend 
 different documents, judging ten postings, running several searches — dispatch them **at once, in a single
 batch** of subagents, never a one-at-a-time loop. Time-to-value is a product feature, and parallelism is how
 you cut wall-clock when the work is genuinely independent. Isolating each subtask in its own subagent also
-keeps the primary context clean and lets a faster, cheaper model do the bulk work.
+keeps the primary context clean and lets each isolated subtask run on the least powerful model that can do it
+*well* — the genuinely mechanical bulk on the cheapest tier, a delegated judgment (e.g. a per-posting fit
+verdict) at its reviewer floor, a mid-tier model scaled up to risk, with the dispatching model always set
+explicitly (the detail-read tier is configured in `conventions.md`).
 
 The bar is *mutual independence*: if subtask B needs subtask A's result, they're sequential — don't force them
 parallel. If they don't, running them serially is wasted wall-clock.
@@ -54,3 +57,14 @@ your synthesis onto the subagent. A good brief *proves you did the thinking* —
 one or two things still to resolve. Frame those as a provisional read + an open question, **never a verdict**:
 asserting the answer ("this is the bug", "this is a strong match") anchors the subagent instead of letting the
 evidence decide.
+
+## The delegated return channel
+
+A subagent that judges a delegated item returns its result as the agreed structured object **as plain text in
+its final message** — that final-message text *is* the return, and the dispatcher (e.g. `job-search-run`
+consuming a per-posting fit verdict) reads the object straight from it. Never write the judgment to a
+side-channel `.md`/report file; never wrap it in a fenced code block (the JSON fence a cheaper model
+reflexively adds); never precede it with a confirmation or politeness line ("Done.", "Here's the judgment").
+The object is the whole message, nothing else. This is the single home for the delegated return contract — the
+runner's detail-subagent brief and the judge's "used by job-search-run" batch path point here rather than
+restating it.

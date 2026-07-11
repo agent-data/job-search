@@ -49,6 +49,9 @@ numerically; if comp matters and isn't clearly stated, it's an unknown.
 
 ## Output
 Return BOTH a short human summary AND this object (used by job-search-run when evaluating in batch).
+When job-search-run drives this skill in its per-posting fan-out, return the object on the **delegated return
+channel** pinned in `../../shared/references/parallelism.md` — the object as plain text in your final message,
+never a sidecar file, no fenced code block, no confirmation/politeness preamble.
 The summary is 1–2 sentences: the verdict + the deciding factor — e.g. "Strong match — remote-US
 senior IC in Python; comp not stated."
 

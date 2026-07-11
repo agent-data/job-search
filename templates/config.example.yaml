@@ -8,7 +8,7 @@ queries:
 search:
   sources: ["linkedin", "ashby"]   # job sources each query runs against: linkedin | ashby | greenhouse | lever — add "greenhouse"/"lever" to search more company boards
   freshness: "past-2-weeks"    # any | past-week | past-2-weeks | past-month (client-side filter on posted_at)
-  detail_model: "fast"         # per-posting detail reads: fast | balanced | high | inherit — see your platform's adapter → Model tiers
+  detail_model: "balanced"     # tier the per-posting fit verdict runs at — the mid-tier reviewer floor (default): fast | balanced | high | inherit — see your platform's adapter → Model tiers
   # parallel_detail_reads: true # optional; set after approval to use parallel subagents where supported
 schedule:
   frequency: "daily"           # hourly | every-2-hours | every-6-hours | daily | weekly — cadence; the schedule mechanism is your platform's (see your adapter → Scheduling)
