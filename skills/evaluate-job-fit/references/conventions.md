@@ -25,7 +25,7 @@ workspace:
 queries:
   - { id: "ai-eng-remote", keywords: "AI engineer", location: "United States", limit: 25, enabled: true }
 search:
-  sources: ["linkedin", "ashby"]  # ordered job sources every query runs against: linkedin | ashby | greenhouse | lever — omit the key for this default; greenhouse/lever widen coverage across more company boards
+  sources: ["linkedin", "ashby"]  # ordered job sources every query runs against (the source enum is defined in agent-data-contract.md) — omit the key for this default; greenhouse/lever widen coverage across more company boards
   freshness: "past-2-weeks"  # any | past-week | past-2-weeks | past-month — client-side recency filter on posted_at (no API date param)
   detail_model: "fast"       # portable tier the per-posting detail reads use: fast | balanced | high | inherit (the model id each maps to → your platform's adapter → Model tiers)
   # parallel_detail_reads: true  # optional: approved use of parallel subagents for detail reads where the host supports them

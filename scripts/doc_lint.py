@@ -244,15 +244,26 @@ def scan_code_refs(root):
 
 # Distinctive literals OWNED by shared/references/*. A live KB doc reproducing one of these
 # (without linking the source on the same line) is duplicating a contract that will drift.
+#
+# Each entry is (regex, label, owner). `owner` is the repo-relative single canonical home for the
+# facts that were deliberately SINGLE-HOMED (P2/T2.1 + the source-enum reconciliation) and so are
+# also enforced ACROSS the reference layer (owner-aware): any non-owner reference file that restates
+# an owned literal without a resolving pointer is flagged. `owner=None` = guarded in KB docs only
+# (display / config enums the runbooks and config-write recipes legitimately restate — e.g. the
+# frequency/status/digest-counts enums — are intentionally NOT reference-layer-enforced; the
+# freshness/detail_model tier tokens were single-homed by T2.1 too but carry no reference-layer
+# residual and the detail_model token also appears in live design docs, so they are not signatured).
 DUP_SIGNATURES = [
-    (re.compile(r"every-2-hours"), "frequency enum"),
-    (re.compile(r"YYYY-MM-DDTHH-MM-SSZ"), "run_id format"),
-    (re.compile(r"interested\W+applied\W+rejected"), "job status enum"),
-    (re.compile(r"degraded \(job sources flaky\)"), "run-health states"),
-    (re.compile(r"linkedin \| ashby \| greenhouse \| lever"), "job source enum"),
-    (re.compile(r"strong\s*·\s*\d+\s*moderate"), "digest counts line"),
-    (re.compile(r"desktop_notify_on_block"), "config field"),
-    (re.compile(r"API limit for this period has been reached"), "E-QUOTA verbatim"),
+    (re.compile(r"every-2-hours"), "frequency enum", None),
+    (re.compile(r"YYYY-MM-DDTHH-MM-SSZ"), "run_id format", None),
+    (re.compile(r"interested\W+applied\W+rejected"), "job status enum", None),
+    (re.compile(r"degraded \(job sources flaky\)"), "run-health states",
+     "shared/references/conventions.md"),
+    (re.compile(r"linkedin \| ashby \| greenhouse \| lever"), "job source enum",
+     "shared/references/agent-data-contract.md"),
+    (re.compile(r"strong\s*·\s*\d+\s*moderate"), "digest counts line", None),
+    (re.compile(r"desktop_notify_on_block"), "config field", None),
+    (re.compile(r"API limit for this period has been reached"), "E-QUOTA verbatim", None),
 ]
 DUP_ALLOW = re.compile(r"shared/references")  # a line that points to the source is fine
 
@@ -269,9 +280,49 @@ def _is_live_kb_doc(path, root):
     return True
 
 
+def _shared_ref_files(root):
+    """Yield abs paths of every top-level shared/references/*.md (the single-home source of truth)."""
+    base = os.path.join(root, "shared", "references")
+    if not os.path.isdir(base):
+        return
+    for fn in sorted(os.listdir(base)):
+        p = os.path.join(base, fn)
+        if fn.endswith(".md") and os.path.isfile(p):
+            yield p
+
+
+def _skill_local_ref_files(root):
+    """Yield abs paths of hand-authored, skill-LOCAL references: a top-level skills/*/references/*.md
+    whose basename does NOT also exist under shared/references/. Those with a shared/references twin
+    are build-FANNED byte-copies of the source (flagging them would flag the source's own literal in
+    every skill), so they are excluded. SKILL.md runbooks live outside references/ and are never
+    scanned here."""
+    shared = set()
+    base = os.path.join(root, "shared", "references")
+    if os.path.isdir(base):
+        shared = {fn for fn in os.listdir(base) if fn.endswith(".md")}
+    skills = os.path.join(root, "skills")
+    if not os.path.isdir(skills):
+        return
+    for skill in sorted(os.listdir(skills)):
+        refs = os.path.join(skills, skill, "references")
+        if not os.path.isdir(refs):
+            continue
+        for fn in sorted(os.listdir(refs)):
+            p = os.path.join(refs, fn)
+            if fn.endswith(".md") and fn not in shared and os.path.isfile(p):
+                yield p
+
+
 def scan_shared_dup(root):
-    """Live KB docs must not restate shared/references contracts; link the source instead."""
+    """No file may restate a shared/references contract; link the source instead.
+
+    Two scopes: (1) live KB docs (docs/ + root) must not restate ANY owned literal; (2) within the
+    reference layer itself — shared/references/*.md plus hand-authored skill-local references — a
+    NON-owner file must not reproduce another reference's OWNED literal (owner-aware). The owner file
+    holding its own literal, a line that points to the owner, and build-fanned copies are all exempt."""
     hits = []
+    # (1) KB docs: never a source of truth, so they must always point (owner-agnostic).
     for path in iter_md_files(root):
         if not _is_live_kb_doc(path, root):
             continue
@@ -280,10 +331,26 @@ def scan_shared_dup(root):
             for i, line in enumerate(f, 1):
                 if DUP_ALLOW.search(line):
                     continue
-                for rx, label in DUP_SIGNATURES:
+                for rx, label, _owner in DUP_SIGNATURES:
                     if rx.search(line):
                         hits.append(f"{rel}:{i}: no-shared-reference-duplication: "
                                     f"{label} restated without linking shared/references")
+    # (2) Reference layer: a non-owner ref reproducing an owned literal without a resolving pointer.
+    owned = [(rx, label, owner) for rx, label, owner in DUP_SIGNATURES if owner]
+    if owned:
+        for path in list(_shared_ref_files(root)) + list(_skill_local_ref_files(root)):
+            rel = os.path.relpath(path, root)
+            with open(path, encoding="utf-8", errors="replace") as f:
+                for i, line in enumerate(f, 1):
+                    for rx, label, owner in owned:
+                        if rel == owner:
+                            continue  # the owner may hold its own literal
+                        if not rx.search(line):
+                            continue
+                        if DUP_ALLOW.search(line) or os.path.basename(owner) in line:
+                            continue  # a resolving pointer (shared/references/… or the owner's name)
+                        hits.append(f"{rel}:{i}: no-shared-reference-duplication: "
+                                    f"{label} restated without linking its owner ({owner})")
     return hits
 
 
