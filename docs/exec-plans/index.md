@@ -4,6 +4,7 @@ First-class, checked-in plans. Active plans carry a live progress + decision log
 are archived here.
 
 ## Active
+- [Plugin ↔ Guide Alignment Refactor — execute the AAS + PSG design](active/2026-07-11-plugin-guide-alignment-refactor.md)
 - [Wave 1 — Multi-Source Job Search (LinkedIn + Ashby + Experimental Workday)](active/2026-07-02-wave-1-multi-source.md)
 - [Multi-Source Reconciliation — Greenhouse + Lever in, Workday out, wire-contract drift fixed](active/2026-07-06-multi-source-reconciliation-greenhouse-lever.md)
 
