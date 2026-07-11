@@ -48,7 +48,7 @@ Keep it tight. A good shape:
 
 ```
 Job search — <ws path>
-Brief: updated <date> (<N months ago>)   ·   Sources: LinkedIn + Ashby   ·   Schedule: <on, daily | off>   ·   Last run: <healthy | partial (<why>) | degraded | blocked>
+Brief: updated <date> (<N months ago>)   ·   Sources: LinkedIn + Ashby   ·   Schedule: <on, daily | off>   ·   Last run: <run health>
 
 Latest digest — <date>
   9 new postings · 3 strong · 2 moderate · 1 weak · 3 filtered out · <n> searches · <m> detail reads
@@ -70,7 +70,7 @@ Notes on each part:
   when installed, or "off" when not; the marker carries only on/off + the mechanism value recorded at install time
   (the mechanism label is not surfaced in the status line);
   last-run health from the newest `runs/*.json` `run_health` (or the latest digest's Run health line). Run
-  health is one of `healthy | partial (<why>) | degraded (job sources flaky) | blocked (action needed)`.
+  health is one of the four run-health states defined in `conventions.md` (the digest "Run health" line).
 - **Latest digest.** Read the newest `reports/<date>-digest.md`; show its date and reproduce its **counts
   line** (the `N new · S strong · M moderate · W weak · F filtered out · n searches · m detail reads` line —
   see the digest format in `conventions.md`). If there are no digests yet, say "No runs yet — want me to run
@@ -90,17 +90,18 @@ Offer these and apply each by **chatting**, editing `config.yaml` per the `inter
   reads.` in the invocation context. Then show the fresh digest's strong/moderate matches with each match's
   reasoning line, link, and any "confirm" warning.
 - **Add or edit a query** → append/modify a `queries[]` item
-  (`{ id, keywords, location, limit, enabled }`); `limit` is the per-query feed size (1–100, default 25).
+  (`{ id, keywords, location, limit, enabled }`); `limit` is the per-query feed size (its range and default live in `conventions.md`).
   Preserve comments; keep `version: 1`. If the user asks for another search without naming keywords,
   **derive** it from their brief (don't make them pick) and acknowledge what you added — same as onboarding
   step 5.
-- **Tune the feed** → set `search.freshness` (`any | past-week | past-2-weeks | past-month`) to narrow or
-  widen the recency window; set `search.detail_model` (`fast | balanced | high | inherit`) to control which
-  model tier reads full posting details; set `search.sources` to choose job sources (e.g. drop back to `["linkedin"]`, or add "greenhouse" or "lever" to search more company boards); and, where the host needs approval, set
-  `search.parallel_detail_reads` (`true | false`) to use parallel subagents or read sequentially. The
-  default detail tier is `fast`; your platform's adapter → Model tiers maps each token to the actual model.
-  When discussing this knob on a specific host, name the exact models from that adapter → Model tiers. Edit
-  `config.yaml` per the `internals.md` recipes; preserve comments; keep `version: 1`.
+- **Tune the feed** → set `search.freshness` to narrow or widen the recency window; set `search.detail_model`
+  to control which model tier reads full posting details; set `search.sources` to choose job sources (narrow
+  to a single board, or add more company boards to widen coverage); and, where the host needs approval, set
+  `search.parallel_detail_reads` (`true | false`) to use parallel subagents or read sequentially. The allowed
+  values for each key — the freshness windows, the detail-model tiers, and the source list — live in the
+  config schema in `conventions.md`. Your platform's adapter → Model tiers maps each detail tier to the actual
+  model; when discussing this knob on a specific host, name the exact models from that adapter → Model tiers.
+  Edit `config.yaml` per the `internals.md` recipes; preserve comments; keep `version: 1`.
 - **Change how often it runs** → set `schedule.frequency` to `hourly | every-2-hours | every-6-hours |
   daily | weekly` (and `schedule.time` for daily/weekly). Reuse the plain-language nudge — "daily suits most
   searches; hourly only for a fast-moving, active search."

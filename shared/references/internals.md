@@ -82,15 +82,15 @@ The user changes config by **chatting**; manual editing is an escape hatch. To a
   When the user hasn't named keywords (onboarding, or a vague "add another search"), **derive** them from
   `preferences.md` — role/title + domain terms for `keywords`, the brief's location constraints for
   `location` — then **acknowledge** what you saved rather than asking them to pick.
-- **Tune the feed (`search` block):** `search.freshness` (`any | past-week | past-2-weeks | past-month` — a
-  client-side recency filter on `posted_at`; the API has no date param) and `search.detail_model`
-  (`fast | balanced | high | inherit` — a portable tier token the runner's per-posting detail reads use; the
-  literal model each maps to lives in your platform's adapter → Model tiers, and the fan-out itself defers to
-  → Concurrent detail reads). `search.parallel_detail_reads` is optional: unset means an interactive
-  front-door flow may ask whether to use parallel subagents where the host requires explicit approval; `true`
-  means the user approved; `false` means use sequential detail reads. Only conversational front-door flows
-  write this preference; the headless runner reads it and never changes config. `queries[].limit` (1–100,
-  default 25) is the per-query feed size.
+- **Tune the feed (`search` block):** `search.freshness` narrows or widens the client-side recency filter on
+  `posted_at` (the API has no date param), and `search.detail_model` picks the portable tier the runner's
+  per-posting detail reads use — the allowed values for each (the freshness windows and the detail tiers) live
+  in `conventions.md`; the literal model each tier maps to lives in your platform's adapter → Model tiers, and
+  the fan-out itself defers to → Concurrent detail reads. `search.parallel_detail_reads` is optional: unset
+  means an interactive front-door flow may ask whether to use parallel subagents where the host requires
+  explicit approval; `true` means the user approved; `false` means use sequential detail reads. Only
+  conversational front-door flows write this preference; the headless runner reads it and never changes config.
+  `queries[].limit` is the per-query feed size (its range and default live in `conventions.md`).
 - **Choose job sources:** set `search.sources` — an ordered list from the contract's source enum
   (see `agent-data-contract.md`); omit the key for the default `["linkedin", "ashby"]`. The default is
   `["linkedin", "ashby"]`; add `"greenhouse"` and/or `"lever"` to search more public company boards. One
@@ -100,7 +100,7 @@ The user changes config by **chatting**; manual editing is an escape hatch. To a
   rejects onsite-elsewhere), fold `remote` into the query `keywords` and/or set `location` to the brief's allowed
   geographies — otherwise the feed fills with onsite roles the judge then filters out.
 - **Pull as many NEW as possible:** there's no pagination and re-runs reorder, so breadth + frequency + dedup do
-  the work, not a giant single pull — keep `limit` sensible (default 25, up to 100), run several varied queries
+  the work, not a giant single pull — keep `limit` sensible (its range and default live in `conventions.md`), run several varied queries
   (role synonyms, key locations, remote variants), run often, and dedup; distinct postings accumulate across runs.
 - **Change frequency:** set `schedule.frequency` to one of `hourly | every-2-hours | every-6-hours | daily | weekly`
   (the cadence→interval mapping for the active scheduler lives in your platform's adapter → Run recipe).

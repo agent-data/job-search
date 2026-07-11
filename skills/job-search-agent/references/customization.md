@@ -55,18 +55,14 @@ how fresh it is, whether detail reads run in parallel, and how carefully it read
 
 Filters each posting's `posted_at` on the client side after the feed is returned (the search API has no date parameter).
 
-| Value | What passes |
-|---|---|
-| `any` | Everything in the feed regardless of age |
-| `past-week` | Posted within the last 7 days |
-| `past-2-weeks` | Posted within the last 14 days *(default)* |
-| `past-month` | Posted within the last 30 days |
+The four values and the exact window each admits (and which is the default) are in the config schema — see
+`shared/references/conventions.md` (the `config.yaml` section).
 
 Narrowing the window keeps the digest focused on live roles. Widening it is useful when you haven't run a search in a while and want to catch up.
 
 **Feed size — `queries[].limit`**
 
-Sets how many postings each query pulls (1–100, default 25). A higher limit fetches more raw postings per query, but it is not pagination — there is no way to walk deeper pages. The practical path to seeing more new postings is **breadth + frequency**: several varied queries with meaningful keyword differences, run regularly, with dedup preventing repeats from inflating the digest.
+Sets how many postings each query pulls; its range and default (and the API-vs-template distinction) are in the config schema — see `shared/references/conventions.md`. A higher limit fetches more raw postings per query, but it is not pagination — there is no way to walk deeper pages. The practical path to seeing more new postings is **breadth + frequency**: several varied queries with meaningful keyword differences, run regularly, with dedup preventing repeats from inflating the digest.
 
 **Parallel detail reads — `search.parallel_detail_reads`**
 
@@ -94,12 +90,8 @@ key controls which tier those detail readers use — the literal model each tier
 platform's adapter → Model tiers. When discussing this on a specific host, name the exact model IDs from that
 adapter → Model tiers.
 
-| Value | Behavior |
-|---|---|
-| `fast` | Fast and light *(default)* |
-| `balanced` | More deliberate on nuanced qualitative judgments |
-| `high` | Highest fidelity |
-| `inherit` | Uses the same model as the top-level run |
+The four tiers, what each is for, and which is the default are in the config schema — see
+`shared/references/conventions.md` (the `config.yaml` section).
 
 `fast` is the right starting point for most searches. It is a touch looser on subtle qualitative calls — occasionally emitting an out-of-vocabulary band or a stray numeric value — but the consolidation step after all subagents return validates and coerces every verdict before anything reaches `jobs.jsonl` or the digest, so no invalid output persists. For roles where the brief's distinctions are fine-grained or the must-have/red-flag list is long, set `detail_model: balanced` (or `high`) to improve judgment fidelity. This is a **fidelity/speed tradeoff**, not a quality-gate — the defaults are safe either way.
 

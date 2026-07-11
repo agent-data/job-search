@@ -42,9 +42,11 @@ against (order = presentation order in per-source counts). An absent key means `
 outside the enum are dropped at preflight with a digest footnote (E-SOURCE-UNSUPPORTED), never a HALT.
 Per-query source targeting is a known deferred knob — all queries run against all enabled sources. The runner
 reads `sources` and never writes it. `freshness` is a client-side recency window on `posted_at` (the API has
-no date param; `any` = no filter); `detail_model` is a portable tier token (`fast | balanced | high | inherit`)
-the runner's per-posting detail reads use — the model each maps to lives in your platform's adapter → Model
-tiers, and the fan-out itself defers to → Concurrent detail reads (`inherit` = the run's own model).
+no date param): `any` = no filter, `past-week` = the last 7 days, `past-2-weeks` = the last 14 days (the
+default), `past-month` = the last 30 days. `detail_model` is a portable tier token the runner's per-posting
+detail reads use — `fast` (fast and light; the default), `balanced` (more deliberate on nuanced qualitative
+judgments), `high` (highest fidelity), `inherit` (the run's own model); the model each maps to lives in your
+platform's adapter → Model tiers, and the fan-out itself defers to → Concurrent detail reads.
 `parallel_detail_reads` is optional and records whether the user approved parallel subagents for detail
 reads on hosts that require explicit authorization. Unset means interactive front-door flows may ask; `true`
 means use parallel subagents where available; `false` means read details sequentially. The runner reads this
