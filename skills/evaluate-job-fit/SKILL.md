@@ -13,9 +13,9 @@ relevance judgment** — never a numeric score, never category weights.
 Scope: exactly one posting. Batches are job-search-run's job — it invokes this skill once per posting.
 
 ## Inputs
-- The brief: find the active workspace with the **Discovery procedure** in `references/internals.md` and read its `config.yaml:workspace.preferences_path` (default `preferences.md`); `--workspace <path>` overrides. If a posting is supplied without a workspace (discovery reports `first_run`), accept a brief pasted by the user.
+- The brief: find the active workspace with the **Discovery procedure** in `../../shared/references/internals.md` and read its `config.yaml:workspace.preferences_path` (default `preferences.md`); `--workspace <path>` overrides. If a posting is supplied without a workspace (discovery reports `first_run`), accept a brief pasted by the user.
 - The posting: a pasted job description, a saved `source_id` from `jobs.jsonl`, or a `source_url`+`posting_id`
-  pair to read fresh via agent-data `get-posting` (see `references/agent-data-contract.md`; disclose that this
+  pair to read fresh via agent-data `get-posting` (see `../../shared/references/agent-data-contract.md`; disclose that this
   reads one posting before doing it).
 
 ## Method (model inference — read, reason, judge)
@@ -34,7 +34,7 @@ Scope: exactly one posting. Batches are job-search-run's job — it invokes this
    - **A must-have can't be confirmed from the posting → do NOT reject.** Keep it, set
      `needs_human_check: true`, add the unstated must-have to `unknowns`, and write the exact open
      question into the `reasoning` field (e.g. "Remote not stated — confirm before applying"). There is
-     no separate question field; the question lives in `reasoning`, per `references/conventions.md`.
+     no separate question field; the question lives in `reasoning`, per `../../shared/references/conventions.md`.
    - **Otherwise `relevant: true`**, and assign a coarse band:
      - `strong` — hits the must-haves and most strong preferences.
      - `moderate` — solid alignment with some gaps.
@@ -57,7 +57,7 @@ senior IC in Python; comp not stated."
   "dealbreakers_hit": [], "unknowns": ["compensation not stated"], "needs_human_check": false,
   "posted_at_extracted": "2026-06-25" }  // optional — only when the API posted_at was null and the JD stated a date
 ```
-`match` is `null` when `relevant` is false. Bands and vocabulary are defined in `references/conventions.md`.
+`match` is `null` when `relevant` is false. Bands and vocabulary are defined in `../../shared/references/conventions.md`.
 
 ## Consistency
 Judge dealbreakers before alignment; cite evidence; prefer "unknown" over guessing. When unsure between two

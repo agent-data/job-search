@@ -4,7 +4,7 @@ You routed here because the Discovery procedure (`internals.md`) reported `first
 the user from nothing to **real job matches found seconds ago**, in a few minutes, end-to-end. Be warm and
 brisk — this should feel magical, not like filling out a form.
 
-Follow `internals.md`, `conventions.md`, `errors.md`, and `voice.md` exactly — don't restate their details
+Follow `../../../shared/references/internals.md`, `../../../shared/references/conventions.md`, `../../../shared/references/errors.md`, and `../../../shared/references/voice.md` exactly — don't restate their details
 from memory.
 
 **Ground rule — how you behave, not a speech to give:** every step that can't proceed stops with a
@@ -47,7 +47,7 @@ you haven't verified, and don't tell the user how long anything will take.
 
 **The check (pinned — don't improvise it).** Look for the real command on `PATH` with `command -v
 agent-data`, and confirm it's authenticated — `agent-data whoami` should report `api_key_set: true` (per
-`agent-data-contract.md`).
+`../../../shared/references/agent-data-contract.md`).
 
 - **Already set up** → say so as a verified fact in one short line ("agent-data is ready ✓") and continue.
 - **Missing or not authenticated** → **set it up for the user; don't stop.** Lead with the solution, not an
@@ -309,7 +309,7 @@ recipe/prompt variant; on Codex App Automations, that means the scheduled prompt
 ## 8. Home
 
 You're done. Print the **home view** to land the user on their dashboard — hand off to the format in
-`references/home.md` (status line · latest digest · pipeline · quick actions). Close with a short line that
+`home.md` (status line · latest digest · pipeline · quick actions). Close with a short line that
 they can just tell you what they want next ("run a search now", "add another query", "change how often it
 runs", "update my preferences", "show the latest digest").
 

@@ -3,7 +3,7 @@ title: Core Beliefs — Agent-First Operating Principles
 status: current
 verified: partial
 last_reviewed: 2026-06-22
-code_refs: [scripts/philosophy_guard.py, scripts/doc_lint.py, scripts/build.sh, .github/workflows/ci.yml, shared/references/internals.md, shared/references/conventions.md]
+code_refs: [scripts/philosophy_guard.py, scripts/doc_lint.py, scripts/build.sh, tests/test_reference_resolution.py, .github/workflows/ci.yml, shared/references/internals.md, shared/references/conventions.md]
 ---
 # Core Beliefs — Agent-First Operating Principles
 
@@ -90,17 +90,25 @@ and are linked, never restated here — this doc is a live design-doc subject to
 
 ## 5. Single source of truth
 
-- **Statement.** You edit `shared/references/`, then run the build; you never hand-edit a skill's
-  synced copies.
-- **Why.** Each skill ships self-contained (its own bundled references) so it works as a loose skill
-  with no plugin system. Those copies are *generated* — editing them by hand creates drift that the
-  next build silently erases.
-- **Enforced by.** [scripts/build.sh](../../scripts/build.sh) regenerates every skill's bundled copies
-  from the source, and CI ([.github/workflows/ci.yml](../../.github/workflows/ci.yml)) runs the build
-  and fails if it changed any tracked `skills/` file — so a PR with stale or hand-edited copies is
-  blocked. The rule is stated in [CONTRIBUTING.md](../../CONTRIBUTING.md#single-source-of-truth--never-hand-edit-a-skills-synced-copies).
-- **How to verify.** `./scripts/build.sh` then `git status --porcelain skills` → empty output (the
-  bundled copies are already in sync with the source).
+- **Statement.** Each fact has exactly one canonical home in `shared/references/`; skills reference it
+  in place under the guaranteed bundle install. No fact is hand-copied, and no reference is fanned into
+  per-skill copies tracked in source.
+- **Why.** Every supported host installs the whole pack via its manifest — there is no loose
+  single-skill install — so a skill resolves a sibling reference under the bundle (the corpus
+  compose-by-reference model, AAS-PACK-02/BOUND-03). Where a host cannot resolve a path outside a
+  skill's own directory, the build assembles that host's self-contained copies from the single source
+  (AAS-DIST-03) — a generated copy, never hand-maintained.
+- **Enforced by.** [scripts/build.sh](../../scripts/build.sh) (assembly only where a host needs it;
+  today every host resolves in place, so it regenerates only the content-hash build stamp),
+  [scripts/doc_lint.py](../../scripts/doc_lint.py)'s intra-reference duplication check
+  (`no-shared-reference-duplication`, which guards `shared/references/` and the skill-local originals
+  directly), and the per-host resolution marker tests in
+  [tests/test_reference_resolution.py](../../tests/test_reference_resolution.py).
+- **How to verify.** `git ls-files 'skills/*/references/*.md'` lists only the four skill-local
+  originals (`home.md`, `onboarding.md`, `customization.md`, `scheduling-and-consent.md`) — no fanned
+  copies; `python3 -m pytest -q tests/test_reference_resolution.py` → every in-place pointer resolves
+  under each host's install; `./scripts/build.sh` then `git status --porcelain` → empty (the stamp is
+  already current).
 
 ## 6. Deterministic, testable, headless
 

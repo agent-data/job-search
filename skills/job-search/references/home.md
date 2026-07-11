@@ -4,7 +4,7 @@ You routed here because the Discovery procedure (`internals.md`) reported `first
 show a **compact, glanceable home** for the user's job search, then let them drive the next action by
 **chatting**. Think dashboard, not log dump — a few lines they can scan in seconds.
 
-Follow `internals.md`, `conventions.md`, `errors.md`, and `voice.md` exactly. No numeric scores.
+Follow `../../../shared/references/internals.md`, `../../../shared/references/conventions.md`, `../../../shared/references/errors.md`, and `../../../shared/references/voice.md` exactly. No numeric scores.
 
 ## Gather
 
@@ -15,8 +15,8 @@ Read just what the home view needs (all local):
 - **Schedule marker:** read it from the registry (`internals.md` → Registry) →
   `{"installed":<bool>,"mechanism":<active-mechanism>|null,"set_at":<iso>|null}` — the mechanism value
   is recorded by the active platform (see your platform's adapter → Scheduling).
-- **Update status:** on Claude Code or Codex only, follow `references/update.md` using the bundled
-  `references/build-stamp.md` and the registry `update_check` cache. The result is either
+- **Update status:** on Claude Code or Codex only, follow `../../../shared/references/update.md` using the bundled
+  `../../../shared/references/build-stamp.md` and the registry `update_check` cache. The result is either
   `update_available` with the local/remote build ids and the active adapter's update recipe, or no signal.
   Any check failure means no signal; the home still renders.
 - **Brief age:** the `updated_at:` line near the top of `<ws>/preferences.md` (fall back to `created_at` if absent).
@@ -33,7 +33,7 @@ search') to set it up") and offer to re-onboard, rather than rendering a broken 
 
 ## Render the home
 
-If `references/update.md` reports `update_available`, print this single banner line first, then the normal
+If `../../../shared/references/update.md` reports `update_available`, print this single banner line first, then the normal
 home view:
 
 ```text

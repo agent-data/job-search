@@ -13,26 +13,26 @@ Run ONE headless job-search pass over the workspace. Preflight gates before sear
 subagent per promising posting** (sequential only where the host lacks the primitive or awaits subagent
 approval) → **consolidate** into a digest.
 
-Find the workspace with the **Discovery procedure** in `references/internals.md` UNLESS `--workspace <path>`
+Find the workspace with the **Discovery procedure** in `../../shared/references/internals.md` UNLESS `--workspace <path>`
 is given, which overrides. This run is HEADLESS: never prompt. If discovery reports `first_run` (no
 workspace/config yet) → E-NO-CONFIG naming the **job-search** skill as the fix (HALT, exit 1); onboarding is
 interactive and lives in the `job-search` skill, not here. The job source listing id is `f9a6ec16-0bfd-44d8-b3ee-073776745ee7` — one listing serving every job source; the enabled sources come from `config.yaml` `search.sources` (absent → `["linkedin", "ashby"]`), validated against the contract's enum at preflight (an unknown token → E-SOURCE-UNSUPPORTED: drop it, footnote the fix, continue).
 
 **Retries:** branch only on the error envelope's `retryable` boolean (`true` → retry with backoff up to 3×;
-`false` → never retry), not on the error `code` string — see `references/agent-data-contract.md`.
+`false` → never retry), not on the error `code` string — see `../../shared/references/agent-data-contract.md`.
 
 ## References
 Read these before running, and follow them exactly:
-- `references/agent-data-contract.md` — CLI + routes + retry rules.
-- `references/errors.md` — every E-* with the exact cause+fix wording.
-- `references/conventions.md` — file schemas + digest format.
-- `references/build-stamp.md` — local build version + content hash to write into run records.
-- `references/parallelism.md` — parallel-by-default + how to brief a subagent.
-- `references/voice.md` — how any user-facing line is worded (see **Narrating** below).
+- `../../shared/references/agent-data-contract.md` — CLI + routes + retry rules.
+- `../../shared/references/errors.md` — every E-* with the exact cause+fix wording.
+- `../../shared/references/conventions.md` — file schemas + digest format.
+- `../../shared/references/build-stamp.md` — local build version + content hash to write into run records.
+- `../../shared/references/parallelism.md` — parallel-by-default + how to brief a subagent.
+- `../../shared/references/voice.md` — how any user-facing line is worded (see **Narrating** below).
 
 ## Loop
 0. **Preflight.**
-   - Read `references/build-stamp.md` and parse `version:` + `content_hash:`. Determine
+   - Read `../../shared/references/build-stamp.md` and parse `version:` + `content_hash:`. Determine
      `git_sha` only from the executing Job Search plugin/source root: use
      `git -C <job-search root> rev-parse --short HEAD` when that root is reliably known and has a
      `.git` context; otherwise use `"unknown"`. Never derive `git_sha` from the caller/current
@@ -56,7 +56,7 @@ Read these before running, and follow them exactly:
    `queries[]` with `enabled:true` × each enabled source `s`, call `search-jobs` with `--keywords` (+ `--location`, `--limit`), `--source <s>`, and `--fields id,source_id,source_url,title,company_name,location_display,salary_display,posted_at,detail_available,source`.
    `limit` is the feed size (1–100; the API defaults to 20 — the config template sets 25) — pull generously and lean on **breadth** (several varied
    queries beat one giant pull; there's no pagination and re-runs reorder). See remote-derivation and "as many
-   NEW as possible" in `references/internals.md`.
+   NEW as possible" in `../../shared/references/internals.md`.
    **Echo-verify every 200 response:** if the echoed `data.query.source` (absent = `linkedin`) ≠ the requested
    source → E-SOURCE-IGNORED: skip this source's remaining queries, keep the returned rows under their own
    row-level `source`. A `400 validation_error` with `error.param:"source"` → E-SOURCE-UNSUPPORTED: drop the source, continue.
@@ -93,7 +93,7 @@ Read these before running, and follow them exactly:
    the judgment applies to every row in the group.
 4. **Read the details — parallel by default, sequential where the host requires it.** The reads are
    independent, so the default is the parallel per-posting fan-out. First read `search.parallel_detail_reads`
-   from `config.yaml` (see `references/conventions.md`). This runner is headless: never ask, and never edit
+   from `config.yaml` (see `../../shared/references/conventions.md`). This runner is headless: never ask, and never edit
    config. Resolve the mode against your platform's adapter → Concurrent detail reads: `true` → use the
    parallel fan-out; `false` → read sequentially (an explicit user opt-out); **unset → the adapter's default**
    — hosts that gate subagents behind user approval (e.g. Codex) read sequentially until approved, every other
@@ -143,7 +143,7 @@ Read these before running, and follow them exactly:
 
 ## Briefing each detail subagent
 
-`references/parallelism.md` is the general rule (parallel-by-default + how to brief a subagent that starts with
+`../../shared/references/parallelism.md` is the general rule (parallel-by-default + how to brief a subagent that starts with
 zero context). Applied here: hand each detail subagent the posting's `id`+`source_url` pair, the brief's path,
 the `evaluate-job-fit` skill to follow, and your scan's **steer** — the provisional read plus the specific
 must-have/unknown to confirm (e.g. *"Strong on AI/LLM-IC-Python; confirm remote-US — `location_display` says
@@ -157,11 +157,11 @@ steer a provisional read + open question, never a verdict.
 **Before you say anything:** none of this machinery is user-facing. Internal vocabulary — "headless
 pass", "dedup", "database", "resolving the workspace", `jobs.jsonl`, registry, contract/reference
 files, skill names — never reaches the user; say the outcome, not the mechanism (see the table in
-`references/voice.md`).
+`../../shared/references/voice.md`).
 
 **Scheduled/headless invocations stay quiet** until the 5-line summary + digest. But when this skill runs
 inside a live conversation (onboarding's first run, "run a search now"), narrate progress sparsely per
-`references/voice.md`: one short line per stage, in user outcomes — "Searching for '<keywords>'…" → "Found N
+`../../shared/references/voice.md`: one short line per stage, in user outcomes — "Searching for '<keywords>'…" → "Found N
 postings — M are new." → "Reading the M promising ones in full…" → then the matches as normal message text
 (never a code fence, never just the digest's path, never a title-only list — each match carries its one-line
 reasoning and any ⚠ confirm, per conventions.md → Digest format).

@@ -64,21 +64,20 @@ def test_adapter_sections_renamed_section_fails(tmp_path):
     r = run_validate(tmp_path, "--only", "adapter-sections")
     assert r.returncode == 1 and "Model tiers" in r.stdout
 
-def test_adapter_sections_synced_copy_must_match(tmp_path):
+def test_adapter_sections_resurrected_fanned_copy_flagged(tmp_path):
     _seed_adapters(tmp_path)
-    # a skills/*/references/platform/ copy that drifts from source must fail
+    # the fan-out is removed (belief 5): ANY skills/*/references/platform/ copy is a resurrected
+    # fanned copy and must fail — even a byte-identical one.
     copy_dir = tmp_path / "skills" / "job-search" / "references" / "platform"
     copy_dir.mkdir(parents=True)
-    (copy_dir / "claude.md").write_text(_adapter_md() + "\nDRIFTED EXTRA LINE\n")
+    (copy_dir / "claude.md").write_text(_adapter_md())
     r = run_validate(tmp_path, "--only", "adapter-sections")
-    assert r.returncode == 1 and "synced copy differs" in r.stdout
+    assert r.returncode == 1 and "resurrected" in r.stdout
 
-def test_adapter_sections_synced_copy_matching_passes(tmp_path):
+def test_adapter_sections_single_home_no_skill_copies_passes(tmp_path):
     _seed_adapters(tmp_path)
-    src = (tmp_path / "shared" / "references" / "platform" / "claude.md").read_text()
-    copy_dir = tmp_path / "skills" / "job-search" / "references" / "platform"
-    copy_dir.mkdir(parents=True)
-    (copy_dir / "claude.md").write_text(src)  # byte-for-byte
+    # single-homed adapters with NO per-skill platform copies is the valid steady state.
+    (tmp_path / "skills" / "job-search").mkdir(parents=True)
     r = run_validate(tmp_path, "--only", "adapter-sections")
     assert r.returncode == 0, r.stdout + r.stderr
 

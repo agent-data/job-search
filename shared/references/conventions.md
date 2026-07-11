@@ -1,4 +1,5 @@
 # Workspace conventions & file contracts
+<!-- reference-resolution-marker:8f2a4c1e-single-home — this is the ONE canonical home; every skill reaches it in place. Asserted by tests/test_reference_resolution.py; do not remove. -->
 
 The **workspace** (default the hidden `~/.job-search/`; an existing visible `~/job-search/` is **adopted**, not replaced — see `internals.md`) is PRIVATE per-user data — never committed to a public repo.
 

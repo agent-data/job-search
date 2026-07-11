@@ -23,12 +23,12 @@ This skill has two modes and almost no logic of its own — it **routes**, then 
 - **Returning** → show the job-search home (latest digest, new matches, pipeline) with conversational quick
   actions.
 
-Find the workspace with the **Discovery procedure** in `references/internals.md` (one fact-gathering
+Find the workspace with the **Discovery procedure** in `../../shared/references/internals.md` (one fact-gathering
 command, then its precedence rules); never hard-code its path.
 
 ## Step 0 — route
 
-Run the Discovery procedure (`references/internals.md`) → a workspace, **first_run** yes/no, and a source
+Run the Discovery procedure (`../../shared/references/internals.md`) → a workspace, **first_run** yes/no, and a source
 (`registry | default | legacy | none`).
 
 - `first_run: true` → **say the welcome, then** follow **`references/onboarding.md`** (the first-run
@@ -49,7 +49,7 @@ Run the Discovery procedure (`references/internals.md`) → a workspace, **first
 
 That's the whole router. Everything else is in the two playbooks; read the one you routed to and follow it.
 Step 0 is mechanical — do it **silently**: no "discovery" / "OS state" / `registry` / `first_run` talk in your
-reply (`references/voice.md`). Your first user-facing words are the onboarding welcome (already said, above,
+reply (`../../shared/references/voice.md`). Your first user-facing words are the onboarding welcome (already said, above,
 before the playbook was opened) or the home view.
 
 ## Principles (apply in both modes)
@@ -57,7 +57,7 @@ before the playbook was opened) or the home view.
 - **Conversational-first configuration.** The user changes anything — a query, how often it runs, their
   preferences, the schedule — by **chatting with you**. You apply it by reading `<workspace>/config.yaml`,
   editing it minimally (preserving comments and structure), and writing it back, following the recipes in
-  `references/internals.md`. Hand-editing files is an escape hatch you mention only if asked — never a step
+  `../../shared/references/internals.md`. Hand-editing files is an escape hatch you mention only if asked — never a step
   you require.
 - **No numeric relevance.** Relevance is qualitative — **relevant or not**, and if relevant **weak /
   moderate / strong**, with plain-language reasoning. Never show or invent a fit score, a 0-to-100 scale,
@@ -65,16 +65,16 @@ before the playbook was opened) or the home view.
   math.
 - **Frequency, in human terms.** You tune the system by how often to pull — hourly, daily, weekly.
 - **Every blocked path is a named error.** If something can't proceed (no CLI, no auth, no config, no brief,
-  quota, service down…), name the exact `E-*` from `references/errors.md` with its cause + fix wording and
+  quota, service down…), name the exact `E-*` from `../../shared/references/errors.md` with its cause + fix wording and
   stop there. No silent failures, ever.
 - **Never clobber real user data.** When adopting an existing workspace, only additively create what's
   missing — never overwrite a `config.yaml`, `preferences.md`, or `jobs.jsonl`. See the never-clobber rule
-  in `references/internals.md`.
+  in `../../shared/references/internals.md`.
 
-Read and follow exactly: `references/internals.md` (OS state, discovery, never-clobber adoption, config
-recipes, and the verbatim scheduling block), `references/conventions.md` (workspace layout, `config.yaml`
-schema, `jobs.jsonl` statuses, digest format + counts line), `references/errors.md` (every named error),
-`references/voice.md` (how every reply talks to the user — plain English, zero-context first-run asks,
-render documents inline), `references/update.md` (cached update signal + Claude/Codex update banner), and
-`references/agent-data-contract.md` (the source contract `job-search-run` honors). These are the source of
+Read and follow exactly: `../../shared/references/internals.md` (OS state, discovery, never-clobber adoption, config
+recipes, and the verbatim scheduling block), `../../shared/references/conventions.md` (workspace layout, `config.yaml`
+schema, `jobs.jsonl` statuses, digest format + counts line), `../../shared/references/errors.md` (every named error),
+`../../shared/references/voice.md` (how every reply talks to the user — plain English, zero-context first-run asks,
+render documents inline), `../../shared/references/update.md` (cached update signal + Claude/Codex update banner), and
+`../../shared/references/agent-data-contract.md` (the source contract `job-search-run` honors). These are the source of
 truth; this skill never restates their details from memory.

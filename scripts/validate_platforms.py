@@ -14,9 +14,10 @@ Mirrors scripts/doc_lint.py in shape: scan(root) -> hits; main() prints hits and
 failure, else prints "Platform validation: clean." and returns 0. `--root` arg. Stdlib only.
 
 Seven checks, dispatched via the CHECKS registry:
-  - adapter-sections:  every shared/references/platform/<harness>.md SOURCE adapter carries all 12
-                       canonical `## ` sections (exact names). Synced skills/*/references/platform/
-                       copies are asserted to match their source byte-for-byte.
+  - adapter-sections:  every shared/references/platform/<harness>.md adapter carries all 12 canonical
+                       `## ` sections (exact names). Adapters are single-homed and referenced in place
+                       (belief 5); there are no per-skill synced copies to byte-compare, and a
+                       resurrected skills/*/references/platform/ copy is flagged.
   - manifest-parse:    every manifest JSON that EXISTS parses as valid JSON (an absent optional one
                        is skipped, not a failure). The .opencode/plugins/job-search.js plugin is
                        `node --check`'d IF node is on PATH, else an informational skip (CI without
@@ -89,30 +90,27 @@ def _section_headings(text):
 
 
 def scan_adapter_sections(root):
-    """Every source adapter must carry all 12 canonical `## ` sections (exact names); each synced
-    skills/*/references/platform/ copy must match its source byte-for-byte (build.sh keeps them in
-    sync — a drifted copy would ship a stale adapter on install)."""
+    """Every adapter must carry all 12 canonical `## ` sections (exact names). Adapters are
+    single-homed under shared/references/platform/ and referenced in place (belief 5) — there are no
+    per-skill synced copies to byte-compare. Guard the single-home invariant instead: a resurrected
+    skills/*/references/platform/ copy (the removed fan-out coming back) is flagged."""
     hits = []
-    sources = list(adapter_sources(root))
-    for harness, path in sources:
+    for harness, path in adapter_sources(root):
         rel = os.path.relpath(path, root)
         with open(path, encoding="utf-8", errors="replace") as f:
-            src_text = f.read()
-        present = set(_section_headings(src_text))
+            present = set(_section_headings(f.read()))
         for sec in CANONICAL_SECTIONS:
             if sec not in present:
                 hits.append(f"{rel}: adapter-sections: missing canonical section '## {sec}'")
-        # Synced copies under skills/*/references/platform/<harness>.md must equal the source.
-        for dirpath, _, files in os.walk(os.path.join(root, "skills")):
-            if not dirpath.endswith(os.path.join("references", "platform")):
-                continue
-            copy = os.path.join(dirpath, harness + ".md")
-            if not os.path.isfile(copy):
-                continue
-            with open(copy, encoding="utf-8", errors="replace") as f:
-                if f.read() != src_text:
-                    hits.append(f"{os.path.relpath(copy, root)}: adapter-sections: synced copy "
-                                f"differs from source {rel} (re-run build.sh)")
+    # Single-home guard: no per-skill adapter copy may reappear under skills/*/references/platform/.
+    for dirpath, _, files in os.walk(os.path.join(root, "skills")):
+        if not dirpath.endswith(os.path.join("references", "platform")):
+            continue
+        for fn in sorted(files):
+            if fn.endswith(".md"):
+                hits.append(f"{os.path.relpath(os.path.join(dirpath, fn), root)}: adapter-sections: "
+                            f"fanned adapter copy resurrected — adapters are single-homed in "
+                            f"shared/references/platform/ (belief 5); remove it")
     return hits
 
 

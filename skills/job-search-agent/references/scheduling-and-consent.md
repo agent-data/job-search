@@ -26,7 +26,7 @@ local scheduler) never reaches for the Tier-2 fallback. Read the adapter to lear
 |------|-----|-------|
 | Compose the line | from `schedule.frequency` (your adapter → Run recipe carries the cadence→interval/cron mapping) | The interval table and the verbatim recipe live in the adapter, not here. |
 | Start it (on yes) | start the schedule on the active mechanism | Offer scheduling as a yes/no; check the scheduling marker first so you never re-ask. |
-| Record it | set the scheduling marker (`internals.md` → Registry write rules) | Records the **active** mechanism (your adapter → Scheduling gives its value), so the home view shows the schedule and you don't re-ask. |
+| Record it | set the scheduling marker (`../../../shared/references/internals.md` → Registry write rules) | Records the **active** mechanism (your adapter → Scheduling gives its value), so the home view shows the schedule and you don't re-ask. |
 | Turn it off | stop the active schedule, then clear the scheduling marker | The adapter's Scheduling section gives the teardown for whichever tier is active; the marker reads `installed: false` afterwards. |
 
 `schedule.time` in `config.yaml` is honored when the active scheduler is **wall-clock-based** (a Tier-2
