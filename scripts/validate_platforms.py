@@ -298,8 +298,9 @@ def scan_adapter_cross_refs(root):
     section must exist as a `## ` heading in EVERY source adapter (so the pointer resolves on any
     harness). An arrow whose target matches no canonical name is an unresolved/typo'd pointer."""
     hits = []
-    # Which canonical sections actually exist in every adapter? (scan_adapter_sections already flags
-    # a genuinely missing section; here we guard the cross-ref against a section absent on some host.)
+    # Which canonical sections actually exist in every adapter? Since the 12-section gate was relaxed
+    # to required-if-applicable (T3.3), THIS cross-ref check is the sole enforcer that a *referenced*
+    # section is present on every host — a canonical section that nothing points at may be omitted.
     sources = list(adapter_sources(root))
     per_adapter = {}
     for harness, path in sources:
