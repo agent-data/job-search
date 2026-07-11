@@ -1,8 +1,6 @@
 ---
 name: evaluate-job-fit
 description: Judge whether a single job posting matches the user's Job Preferences Brief — relevant or not, and if relevant a weak/moderate/strong match — with plain-language reasoning, dealbreakers, and unknowns. Use when the user pastes or references a job posting and asks if it fits their preferences, whether to apply, or how good a match it is, or when job-search-run needs to evaluate postings. For many postings at once, job-search-run drives this skill per posting — do not batch here.
-disable-model-invocation: false
-user-invocable: true
 ---
 # evaluate-job-fit
 

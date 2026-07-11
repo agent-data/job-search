@@ -1,8 +1,6 @@
 ---
 name: job-preference-interview
 description: Build or update the user's Job Preferences Brief at a depth they choose — a quick free-form sketch (~1 question), a standard interview, or a thorough pass — producing a prose preferences.md (Summary, Must-haves/dealbreakers, Strong preferences, Nice-to-haves, Red flags). Imports an existing brief too, and can deepen a light brief later. Use when the user wants to set up or refine what they want in a job, or when job-search onboarding needs a brief — "set up my job preferences", "what I want in a job", "redo my preferences interview", "change my must-haves", "import my preferences brief". Not for judging a specific posting (→ evaluate-job-fit).
-disable-model-invocation: false
-user-invocable: true
 ---
 
 # job-preference-interview
