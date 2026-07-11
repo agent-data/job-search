@@ -40,10 +40,11 @@ contracts now live in `shared/references/`).
 - [Plan B/D — Handoff](2026-06-05-plan-b-d-handoff.md) — _status: historical_
 
 ## Forward-looking (aspirational)
-- [Three-Skill Job Search Redesign](2026-07-09-three-skill-redesign.md) — _status: aspirational_
+- [Plugin ↔ guide alignment: refactor design](2026-07-11-plugin-guide-alignment-design.md) — _status: aspirational_
 - [Multi-Harness Portability — Research Dossier](multi-harness-portability.md) — _status: aspirational_
 
 ## Superseded
+- [Three-Skill Job Search Redesign](2026-07-09-three-skill-redesign.md) — _status: superseded_ (superseded by the [plugin ↔ guide alignment design](2026-07-11-plugin-guide-alignment-design.md), which keeps all five skills)
 - [Prompt & Doc Style Guide — legacy single-file redirect](prompt-style-guide.md) — _status: superseded_
 - [Codex Portability — What It Takes to Run job-search on OpenAI Codex](codex-portability.md) — _status: superseded_ (superseded by the [Multi-Harness Portability dossier](multi-harness-portability.md), which generalizes it to seven harnesses)
 

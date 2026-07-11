@@ -1,7 +1,7 @@
 ---
 type: design-doc
 title: Three-Skill Job Search Redesign
-status: aspirational
+status: superseded
 verified: partial
 last_reviewed: 2026-07-09
 code_refs: [AGENTS.md, ARCHITECTURE.md, skills/job-search/SKILL.md, skills/evaluate-job-fit/SKILL.md, shared/references/errors.md, shared/references/internals.md, shared/references/platform/codex.md]
@@ -13,6 +13,12 @@ repos: [job-search-os]
 # Three-Skill Job Search Redesign
 
 ## Status and purpose
+
+> **Superseded 2026-07-11.** This design predates the agent-agnostic-skills series; its central
+> decision — collapsing five skills to three — is rejected on corpus-rule grounds by the
+> [plugin ↔ guide alignment design](2026-07-11-plugin-guide-alignment-design.md), which keeps all
+> five skills (the headless-run vs. interactive-front-door split is a hard execution-model seam,
+> AAS-BOUND-07). Kept for history; do not build from it.
 
 This approved design reduces the shipped Job Search plugin from five skills to exactly three while
 preserving its product behavior and tightening its prompt architecture. It is aspirational until the
