@@ -16,6 +16,7 @@ ONLY = ("--only", "no-shared-reference-duplication")
 # Owned, re-homed distinctive literals and their single canonical homes (D3 result + this dispatch).
 SRC = "linkedin | ashby | greenhouse | lever"   # source enum — owner: agent-data-contract.md
 RH = "degraded (job sources flaky)"             # run-health enum — owner: conventions.md
+FRESH = "any | past-week | past-2-weeks | past-month"  # freshness enum — owner: conventions.md
 
 
 def run_lint(target):
@@ -56,6 +57,22 @@ def test_non_owner_shared_ref_restating_run_health_fails(tmp_path):
     _mk(tmp_path, "shared/references/errors.md", f"A flaky-sources run reports {RH} in the digest.\n")
     r = run_lint(tmp_path)
     assert r.returncode == 1 and "run-health states" in r.stdout, r.stdout + r.stderr
+
+
+def test_non_owner_shared_ref_restating_freshness_fails(tmp_path):
+    # conventions.md OWNS the freshness enum; another shared ref restates it with no pointer.
+    _mk(tmp_path, "shared/references/conventions.md", f'  freshness: "past-2-weeks"  # {FRESH}\n')
+    _mk(tmp_path, "shared/references/internals.md", f"Tune the feed: freshness windows are {FRESH}.\n")
+    r = run_lint(tmp_path)
+    assert r.returncode == 1 and "freshness enum" in r.stdout, r.stdout + r.stderr
+
+
+def test_freshness_owner_and_pointer_pass(tmp_path):
+    # The owner may carry its own enum; a non-owner that restates-but-points is exempt.
+    _mk(tmp_path, "shared/references/conventions.md", f'  freshness: "past-2-weeks"  # {FRESH}\n')
+    _mk(tmp_path, "shared/references/internals.md", f"freshness windows are {FRESH} — see conventions.md.\n")
+    r = run_lint(tmp_path)
+    assert r.returncode == 0, r.stdout + r.stderr
 
 
 # --- must NOT false-positive: owner / pointer / fanned copy --------------------------------------

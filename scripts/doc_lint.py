@@ -250,11 +250,16 @@ def scan_code_refs(root):
 # also enforced ACROSS the reference layer (owner-aware): any non-owner reference file that restates
 # an owned literal without a resolving pointer is flagged. `owner=None` = guarded in KB docs only
 # (display / config enums the runbooks and config-write recipes legitimately restate — e.g. the
-# frequency/status/digest-counts enums — are intentionally NOT reference-layer-enforced; the
-# freshness/detail_model tier tokens were single-homed by T2.1 too but carry no reference-layer
-# residual and the detail_model token also appears in live design docs, so they are not signatured).
+# frequency/status/digest-counts enums — are intentionally NOT reference-layer-enforced). Of the
+# T2.1 config tables, the `freshness` enum IS owner-enforced (single-homed at conventions.md:29,
+# every other mention points, zero KB-doc hits — latent like run-health); `detail_model` and the
+# `limit` default are deliberately NOT signatured — the `fast | balanced | high | inherit` token
+# appears in live design docs, and the limit default's API-20-vs-template-25 tokens are shared with
+# agent-data-contract.md, so signaturing either would false-positive rather than catch drift.
 DUP_SIGNATURES = [
     (re.compile(r"every-2-hours"), "frequency enum", None),
+    (re.compile(r"any \| past-week \| past-2-weeks \| past-month"), "freshness enum",
+     "shared/references/conventions.md"),
     (re.compile(r"YYYY-MM-DDTHH-MM-SSZ"), "run_id format", None),
     (re.compile(r"interested\W+applied\W+rejected"), "job status enum", None),
     (re.compile(r"degraded \(job sources flaky\)"), "run-health states",
