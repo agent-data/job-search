@@ -75,8 +75,9 @@ Read these before running, and follow them exactly:
 2. **Dedup + freshen.** Run the **dedup** step once per enabled source — invoke
    `../../shared/scripts/mechanics/dedup.sh <workspace>/jobs.jsonl <source>` (candidate `source_id`s on
    stdin → the NEW ones on stdout) where a shell runtime exists, else follow the **known-ids** prose
-   fallback (`conventions.md` §jobs.jsonl) → per-source known sets; NEW = rows whose non-null `source_id`
-   is not in THEIR OWN source's set. Record which sources returned rows AND had an EMPTY known set at run start (that triggers the first-pass footnote in
+   fallback (`conventions.md` §jobs.jsonl: build the per-source known set, then NEW = rows whose non-null
+   `source_id` is not in THEIR OWN source's set) → per-source NEW `source_id`s.
+   Record which sources returned rows AND had an EMPTY known set at run start (that triggers the first-pass footnote in
    step 5). Then apply `search.freshness`: drop NEW rows whose `posted_at` is older than the window — **a null
    `posted_at` is NEVER dropped**: treat the row as new-if-unseen and carry a date-unknown mark into the scan
    and digest. Null-`source_id` rows can't be deduped → skip, count "unidentifiable".

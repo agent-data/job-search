@@ -123,7 +123,11 @@ def _is_skill_eval(path):
 def _is_runtime_surface(path):
     if _is_generated_stamp(path) or _is_skill_eval(path):
         return False
-    return path.startswith("skills/") or path.startswith("shared/references/")
+    return (
+        path.startswith("skills/")
+        or path.startswith("shared/references/")
+        or path.startswith("shared/scripts/")
+    )
 
 
 def _primary_version_at(root, base):
