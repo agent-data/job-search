@@ -4,9 +4,10 @@
 The seven non-Claude harnesses (codex, cursor, opencode, gemini, copilot, droid, pi) cannot be
 live-tested in CI — no harness is installed on the runner. Codex is proven by the manual P0 live
 lane (run by hand, off-CI); the remaining six get this STRUCTURAL gate instead. It proves, without
-running any harness, that every platform adapter is complete, every manifest parses, and every
-adapter cross-reference the neutralized skill prose makes actually resolves on every harness — so a
-dangling `→ Section` pointer or a malformed manifest is caught before install. This is the
+running any harness, that every adapter cross-reference the neutralized skill prose makes actually
+resolves on every harness (the section a skill points at is present on every adapter), every manifest
+parses, and the adapter layer stays single-homed — so a dangling `→ Section` pointer or a malformed
+manifest is caught before install. This is the
 platform/-subdir lane the plan calls for (doc_lint.py deliberately scans only the KB, not
 shared/references or skills, so this is a NEW lane, not a doc_lint rule).
 
@@ -14,10 +15,12 @@ Mirrors scripts/doc_lint.py in shape: scan(root) -> hits; main() prints hits and
 failure, else prints "Platform validation: clean." and returns 0. `--root` arg. Stdlib only.
 
 Seven checks, dispatched via the CHECKS registry:
-  - adapter-sections:  every shared/references/platform/<harness>.md adapter carries all 12 canonical
-                       `## ` sections (exact names). Adapters are single-homed and referenced in place
-                       (belief 5); there are no per-skill synced copies to byte-compare, and a
-                       resurrected skills/*/references/platform/ copy is flagged.
+  - adapter-sections:  the canonical `## ` sections are carried required-if-applicable (D7/T3.3): an
+                       adapter may OMIT a section it has no verified content for, or carry it as a
+                       one-line stub — neither is flagged (the referenced-ness coverage lives in
+                       adapter-cross-refs, keyed on sections-present). This check now guards only the
+                       single-home invariant: adapters are single-homed and referenced in place
+                       (belief 5), so a resurrected skills/*/references/platform/ copy is flagged.
   - manifest-parse:    every manifest JSON that EXISTS parses as valid JSON (an absent optional one
                        is skipped, not a failure). The .opencode/plugins/job-search.js plugin is
                        `node --check`'d IF node is on PATH, else an informational skip (CI without
@@ -36,13 +39,17 @@ Seven checks, dispatched via the CHECKS registry:
                        network egress. This catches the live regression where `workspace-write`
                        could read `~/.job-search` but could not persist run artifacts there.
   - codex-parallel-subagents: Codex must document the job-search parallel-detail preference, scoped
-                       profile, explicit scheduled prompt authorization, fallback, and model mapping.
+                       profile, explicit scheduled prompt authorization, fallback, and a resolvable
+                       per-tier model binding in its own tier table (the id is not pinned — finding #24).
   - primary-update-recipes: Claude and Codex adapters must carry exact update recipe command lines for
                        the home-view update banner.
 """
 import argparse, json, os, re, shutil, subprocess, sys
 
-# The 12 canonical adapter sections, in their canonical order (from claude.md / codex.md).
+# The 12 canonical adapter section NAMES, in their canonical order (from claude.md / codex.md). These
+# are the names a cross-reference may resolve to; an adapter carries them required-if-applicable
+# (D7/T3.3) — it need not carry all 12, but any section a skill points at must be present (enforced by
+# scan_adapter_cross_refs, not by requiring the full set here).
 CANONICAL_SECTIONS = (
     "Identity",
     "Tool map",
@@ -94,18 +101,18 @@ def _section_headings(text):
 
 
 def scan_adapter_sections(root):
-    """Every adapter must carry all 12 canonical `## ` sections (exact names). Adapters are
-    single-homed under shared/references/platform/ and referenced in place (belief 5) — there are no
-    per-skill synced copies to byte-compare. Guard the single-home invariant instead: a resurrected
+    """Guard the single-home invariant for the adapter layer.
+
+    The 12 CANONICAL_SECTIONS are carried by an adapter *required-if-applicable* (D7/T3.3, doc-15 rec 2,
+    AAS-ANTI-28): a host with no verified content for a section may OMIT it, or carry it as a one-line
+    "no verified guidance; see the capability matrix" stub — this check flags neither, so the gate stops
+    forcing every host to manufacture authoritative-looking guesses. The real coverage lives in
+    scan_adapter_cross_refs, which enforces that any section a skill actually POINTS AT is present as a
+    `## ` heading in every adapter (a pointer must resolve on every host). So this check no longer
+    inspects section presence; it guards only the single-home rule: adapters live once under
+    shared/references/platform/ and are referenced in place (belief 5), so a resurrected
     skills/*/references/platform/ copy (the removed fan-out coming back) is flagged."""
     hits = []
-    for harness, path in adapter_sources(root):
-        rel = os.path.relpath(path, root)
-        with open(path, encoding="utf-8", errors="replace") as f:
-            present = set(_section_headings(f.read()))
-        for sec in CANONICAL_SECTIONS:
-            if sec not in present:
-                hits.append(f"{rel}: adapter-sections: missing canonical section '## {sec}'")
     # Single-home guard: no per-skill adapter copy may reappear under skills/*/references/platform/.
     for dirpath, _, files in os.walk(os.path.join(root, "skills")):
         if not dirpath.endswith(os.path.join("references", "platform")):
@@ -339,8 +346,9 @@ def scan_codex_workspace_write(root):
 def scan_codex_parallel_subagents(root):
     """Codex subagent collaboration is preference-gated and prompt-authorized. The adapter must pin
     both layers for job-search: a user-approved job-search preference, a scoped Codex profile for
-    headless runs, explicit scheduled prompt wording, a sequential fallback, and the concrete Codex
-    model IDs used for each detail-read tier."""
+    headless runs, explicit scheduled prompt wording, a sequential fallback, and a resolvable model-id
+    binding for each detail-read tier in its own `## Model tiers` table (the id itself is not pinned
+    here — finding #24, AAS-ANTI-29)."""
     hits = []
     rel = os.path.join(PLATFORM_DIR, "codex.md")
     path = os.path.join(root, rel)
@@ -365,15 +373,17 @@ def scan_codex_parallel_subagents(root):
     for needle, message in required:
         if needle not in text:
             hits.append(f"{rel}: codex-parallel-subagents: {message}")
-    tier_rows = (
-        ("fast", "gpt-5.4-mini"),
-        ("balanced", "gpt-5.4"),
-        ("high", "gpt-5.5"),
-    )
-    for tier, model in tier_rows:
-        if not re.search(rf"`{tier}`\s*\|\s*`{re.escape(model)}`", text):
-            hits.append(f"{rel}: codex-parallel-subagents: missing Codex `{tier}` "
-                        f"detail-read model mapping to `{model}`")
+    # Each detail-read tier must be BOUND to a concrete model id in the adapter's own `## Model tiers`
+    # table (a `| `<tier>` | `<model-id>` |` row). We assert the binding RESOLVES — a code-quoted id is
+    # present for each tier — not that it equals a specific literal (finding #24, AAS-ANTI-29): the id
+    # lives in the adapter, the single place it is stamped, so a routine upstream model rename does not
+    # break this gate in a file nothing dates. `inherit` is intentionally excluded — it binds to prose
+    # ("the model this run is already on"), not an id.
+    for tier in ("fast", "balanced", "high"):
+        if not re.search(rf"`{tier}`\s*\|\s*`[^`]+`", text):
+            hits.append(f"{rel}: codex-parallel-subagents: Codex `{tier}` detail-read tier is not bound "
+                        f"to a model id in the `## Model tiers` table (expected a `| `{tier}` | "
+                        f"`<model-id>` |` row)")
     return hits
 
 

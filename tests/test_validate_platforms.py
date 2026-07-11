@@ -48,21 +48,44 @@ def test_adapter_sections_complete_passes(tmp_path):
     r = run_validate(tmp_path, "--only", "adapter-sections")
     assert r.returncode == 0, r.stdout + r.stderr
 
-def test_adapter_sections_missing_section_fails(tmp_path):
+def test_adapter_may_omit_inapplicable_section(tmp_path):
+    # required-if-applicable (doc-15 rec 2, AAS-ANTI-28): an adapter may OMIT a canonical section it has
+    # no verified content for — the gate no longer forces every host to manufacture all 12. With nothing
+    # pointing at it, adapter-sections passes (the omission is not flagged).
     _seed_adapters(tmp_path)
-    # drop the Scheduling heading from one adapter
     p = tmp_path / "shared" / "references" / "platform" / "codex.md"
     p.write_text(p.read_text().replace("## Scheduling\n\nbody for Scheduling.\n\n", ""))
     r = run_validate(tmp_path, "--only", "adapter-sections")
-    assert r.returncode == 1
-    assert "Scheduling" in r.stdout and "codex.md" in r.stdout
+    assert r.returncode == 0, r.stdout + r.stderr
 
-def test_adapter_sections_renamed_section_fails(tmp_path):
+def test_adapter_omitted_section_still_flags_if_referenced(tmp_path):
+    # the relaxation is required-IF-APPLICABLE: omission is allowed ONLY for a section nothing points at.
+    # adapter-sections stays SILENT on the omission (relaxed), but a skill/neutral-body pointer at the
+    # omitted section must STILL flag via the cross-ref layer (skills must not point at nothing). This
+    # proves both halves at once: the section flag is gone; the cross-ref safety net is intact.
     _seed_adapters(tmp_path)
     p = tmp_path / "shared" / "references" / "platform" / "cursor.md"
-    p.write_text(p.read_text().replace("## Model tiers", "## Model levels"))
-    r = run_validate(tmp_path, "--only", "adapter-sections")
-    assert r.returncode == 1 and "Model tiers" in r.stdout
+    p.write_text(p.read_text().replace("## Model tiers\n\nbody for Model tiers.\n\n", ""))
+    sr = tmp_path / "shared" / "references"
+    (sr / "conventions.md").write_text("pick the model via your platform's adapter → Model tiers.\n")
+    r = run_validate(tmp_path, "--only", "adapter-sections", "--only", "adapter-cross-refs")
+    assert r.returncode == 1
+    assert "absent from adapter(s): cursor" in r.stdout           # cross-ref still fires
+    assert "missing canonical section" not in r.stdout            # adapter-sections relaxed
+
+def test_adapter_stub_section_is_an_accepted_cross_ref_target(tmp_path):
+    # doc-15 rec 2: instead of manufacturing content, an adapter may carry a section as a one-line
+    # "no verified guidance" STUB. The stub heading is present, so it still LANDS a skill's pointer
+    # (the cross-ref resolves against sections-present) — omission and stub are both accepted.
+    _seed_adapters(tmp_path)
+    p = tmp_path / "shared" / "references" / "platform" / "cursor.md"
+    p.write_text(p.read_text().replace(
+        "## Model tiers\n\nbody for Model tiers.\n\n",
+        "## Model tiers\n\n_no verified guidance; see the capability matrix_\n\n"))
+    sr = tmp_path / "shared" / "references"
+    (sr / "conventions.md").write_text("pick the model via your platform's adapter → Model tiers.\n")
+    r = run_validate(tmp_path, "--only", "adapter-sections", "--only", "adapter-cross-refs")
+    assert r.returncode == 0, r.stdout + r.stderr
 
 def test_adapter_sections_resurrected_fanned_copy_flagged(tmp_path):
     _seed_adapters(tmp_path)
@@ -342,22 +365,37 @@ def test_codex_parallel_subagent_contract_requires_explicit_prompt(tmp_path):
     assert "Use parallel subagents for all detail reads" in r.stdout
 
 
-def test_codex_parallel_subagent_contract_requires_mini_fast_model(tmp_path):
+def test_codex_parallel_subagent_tier_rename_stays_green(tmp_path):
+    # finding #24 / AAS-ANTI-29: the gate must NOT pin a specific model id. Renaming an id in the
+    # adapter's own tier table (a routine upstream rename) keeps the gate green — the binding still
+    # resolves; only the literal changed. The literal no longer lives in the validator.
     p = tmp_path / "shared" / "references" / "platform"
     p.mkdir(parents=True)
-    (p / "codex.md").write_text(_codex_parallel_doc(model_fast="| `fast` | `gpt-5` |\n"))
+    (p / "codex.md").write_text(_codex_parallel_doc(model_fast="| `fast` | `gpt-6-nano` |\n"))
     r = run_validate(tmp_path, "--only", "codex-parallel-subagents")
-    assert r.returncode == 1
-    assert "gpt-5.4-mini" in r.stdout
+    assert r.returncode == 0, r.stdout + r.stderr
 
 
-def test_codex_parallel_subagent_contract_requires_balanced_model(tmp_path):
+def test_codex_parallel_subagent_missing_tier_binding_fails(tmp_path):
+    # de-literalized but NOT toothless: a tier with no row / no bound id in the table still fails —
+    # the binding must resolve. (Keeps the real coverage; only the specific-id assertion is dropped.)
     p = tmp_path / "shared" / "references" / "platform"
     p.mkdir(parents=True)
     (p / "codex.md").write_text(_codex_parallel_doc(model_balanced=""))
     r = run_validate(tmp_path, "--only", "codex-parallel-subagents")
     assert r.returncode == 1
-    assert "balanced" in r.stdout and "gpt-5.4" in r.stdout
+    assert "balanced" in r.stdout
+
+
+def test_codex_parallel_subagent_unbound_tier_fails(tmp_path):
+    # a tier row PRESENT but not bound to a code-quoted model id (prose placeholder / empty) is
+    # malformed — the binding does not resolve — and still fails.
+    p = tmp_path / "shared" / "references" / "platform"
+    p.mkdir(parents=True)
+    (p / "codex.md").write_text(_codex_parallel_doc(model_high="| `high` | (unset) |\n"))
+    r = run_validate(tmp_path, "--only", "codex-parallel-subagents")
+    assert r.returncode == 1
+    assert "high" in r.stdout
 
 
 # ---- primary-update-recipes ----
