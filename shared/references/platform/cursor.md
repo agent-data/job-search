@@ -2,153 +2,107 @@
 
 The active-platform adapter a skill reads when it runs on **Cursor**. Neutralized prose names an
 action ("ask a closed choice", "show the run recipe") and defers the Cursor-specific literal here.
-Read only the section you need; each is self-contained. Companion reference:
-`../../../docs/design-docs/multi-harness-portability.md` (the dossier) carries the verification
-status and every "pin on install" caveat.
+Read only the section you need. Shared boilerplate is in `_common.md`; the full per-platform study and
+every "confirm on install" item are in the dossier
+(`../../../docs/design-docs/multi-harness-portability.md`).
 
-> **Verification.** Cursor is **not installed** in the environment where this adapter was authored.
-> Every runtime claim below is structural — grounded in vendor documentation and superpowers'
-> shipped integration layer, never a live probe. Items that require a running Cursor instance to
-> confirm carry a **PIN** tag — verify them before relying on the line in shipped copy.
+> **Verification.** Cursor is **not installed** here — every runtime claim below is structural (vendor
+> docs + superpowers' shipped integration layer), not a live probe. This adapter is deliberately lean:
+> it carries only the genuine Cursor residual and honest stubs. Treat every literal as unconfirmed
+> until probed on a running instance (AAS-TEST-15).
 
 ## Identity
 
 The host agent is **Cursor**; refer to it as "Cursor" (or "the agent") in any user-facing line that
-would otherwise say "Claude Code". Cursor reads `AGENTS.md` (and the Cursor-specific entry file
-pointing at it) for instructions.
+would otherwise say "Claude Code". Cursor reads `AGENTS.md` (and a Cursor entry file pointing at it)
+for instructions.
 
 ## Tool map
 
-Skills speak in actions; on Cursor they resolve to these. Cursor is Claude-compatible — the tool
-names below are assumed from the Claude-compatible tool inventory; no Cursor-specific remap was found
-in superpowers' adapter layer. PIN: confirm the exact Cursor tool identifiers on first install.
-
-| Action | Cursor tool |
-|---|---|
-| Read a file | the native read tool (Claude-compatible — PIN exact name) |
-| Write a whole file | the native write tool — see **Whole-file write** below (PIN) |
-| Edit part of a file | the native edit tool (PIN) |
-| Run a shell command | the native shell/terminal tool (PIN) |
-| Search / list files | shell (`grep`/`find`/`rg`) or a native search tool (PIN) |
-| Dispatch a subagent | `Task` or equivalent (assumed Claude-compatible — see **Concurrent detail reads**) (PIN) |
-| Track a task list | a native task-tracking tool, if available (PIN) |
-| Ask a closed-choice question | a structured-choice tool — see **Closed-choice question** (PIN) |
+Skills speak in actions; on Cursor they resolve to Cursor's native tools. Cursor is Claude-compatible,
+so the tool shapes are assumed from the Claude-compatible inventory (no Cursor-specific remap was found
+in superpowers' adapter layer); the exact tool-name literals are unverified here. Subagents dispatch
+via a **`Task`-compatible** tool — see **Concurrent detail reads**. Closed-choice questions use a
+**structured-choice** tool (assumed Claude-compatible) — see **Closed-choice question**.
 
 ## Run recipe
 
-Show the user **verbatim**, copied exactly — do not reconstruct the tokens elsewhere. The headless
-invocation command for Cursor is not confirmed; show the one-off and recurring recipes as soon as a
-live probe confirms the correct command form.
-
-```
-One-off run anytime:
-  [Cursor headless command — confirm on install] 'job-search-run'
-Recurring (consent-gated machine schedule — see Scheduling):
-  cron/launchd wrapping the above command on your cadence
-```
-
-PIN: the exact Cursor headless command and any flags needed (sandboxing, network access, skill
-invocation syntax) — do not publish a recipe line until confirmed on a running Cursor instance.
+Cursor's headless invocation command is **not confirmed** — it was not found in any vendor
+documentation or file read. Do not publish a recipe line until a live probe confirms the correct
+command form (and any sandbox / network / skill-invocation flags); until then, run interactively.
 
 ## Scheduling
 
-Cursor is **Tier 2** (see the dossier §4 scheduling matrix):
-
-- **No native local scheduler found.** No Cursor automation or scheduling subcommand was found in
-  any file read or vendor documentation reviewed. A cloud scheduler does **not** qualify — it cannot
-  see the local `~/.job-search` workspace or the local agent-data auth.
-- **Tier 2 — consent-gated machine schedule.** Because no native local scheduler is available, the
-  sanctioned fallback is a **consent-gated** `crontab`/`launchd` entry wrapping Cursor's headless
-  invocation. Show the exact cron/launchd line to the user **before** writing it, get an explicit
-  yes, never install it silently, and leave it user-removable. Record `scheduling.mechanism: cron`
-  (or `launchd`). PIN: if a native local Cursor scheduler is discovered on install, prefer it and
-  record `scheduling.mechanism` accordingly.
-
-The consent gate travels inside this section — the user must explicitly approve the cron/launchd
-entry before it is written. Never auto-install. The cloud-rejection rationale (no local
-workspace/auth access) is harness-agnostic and applies to any candidate scheduler.
+Cursor is **Tier 2** — no native local scheduler was found in any file or vendor doc reviewed (a cloud
+scheduler does not qualify: it cannot see the local `~/.job-search` workspace or agent-data auth).
+Fall back to a **consent-gated** `crontab`/`launchd` entry wrapping Cursor's headless invocation once
+confirmed: show the exact line, get an explicit yes, never install it silently, leave it
+user-removable, and record `scheduling.mechanism: cron` (or `launchd`). If a native local Cursor
+scheduler is discovered on install, prefer it and record `scheduling.mechanism` accordingly.
 
 ## Headless invocation
 
 The headless launch command for Cursor is **not confirmed** — it was not found in any vendor
-documentation or file read in this session. Keep the **written record as primary** on every run (the three
+documentation or file read. Keep the **written record as primary** on every run (the three
 blocked-run channels and the record-is-primary contract are shared — see `_common.md` → **Written
-record**). PIN: Cursor's headless command, any required flags, and whether its exit code is trustworthy
-(real non-zero on failure vs always-0). Until confirmed, never tell the user a cron wrapper's `$?` will be
-non-zero on a blocked run — surface every outcome through the written record.
+record**). Cursor's exit-code trust is unverified — until confirmed, never tell the user a cron
+wrapper's `$?` will be non-zero on a blocked run; surface every outcome through the written record.
 
 ## Closed-choice question
 
-When an ask has a small closed set of answers, Cursor is assumed to support **a structured-choice
-tool** (Claude-compatible) — PIN: confirm the tool is available and that its labeled-option fidelity
-matches expectations (options rendered as discrete choices, not collapsed to free-text). If the tool
-is unavailable or unconfirmed, ask the same question as prose with the options on numbered lines
-(the fallback `voice.md` already specifies), then read the user's number. Keep authoring the
-header/question/labels in the skill; only the presentation degrades to numbered prose on an
-unconfirmed host.
-
-Do not write the tool's name in user-facing message text — the user sees only the question and
-its choices.
+Cursor is assumed to support a **structured-choice** tool (Claude-compatible), but its availability and
+labeled-option fidelity (discrete choices, not collapsed to free-text) are unverified. If the tool is
+unavailable or unconfirmed, ask the same question as prose with the options on numbered lines (the
+fallback `voice.md` already specifies), then read the user's number. Keep authoring the
+header/question/labels in the skill; only the presentation degrades. Do not write the tool's name in
+user-facing message text — the user sees only the question and its choices.
 
 ## Concurrent detail reads
 
-Cursor is assumed to support isolated-context subagents via a **`Task`-compatible tool**
-(Claude-compatible tool inventory; no Cursor-specific remap found). PIN: confirm `Task` availability,
-any feature-flag or version gate, and whether parallel subagents share filesystem state correctly.
-
-When no subagent slot is available or confirmed, read and judge each posting **sequentially** —
-never block one read on another, but do not fabricate a dispatch. The mandatory sequential fallback
-applies on every harness: read/judge one posting at a time, in order, until the queue is clear.
-Where a subagent primitive is confirmed, dispatch all queued postings **at once, in a single batch**
-— never a one-at-a-time loop.
+Cursor is assumed to support isolated-context subagents via a **`Task`-compatible** tool
+(Claude-compatible inventory; no Cursor-specific remap found), unverified. Where the subagent primitive
+is confirmed, dispatch all queued postings **at once, in a single batch** — never a one-at-a-time loop.
+When no subagent slot is available or confirmed, read and judge each posting **sequentially** — never
+block one read on another, but **do not fabricate a dispatch**.
 
 ## Model tiers
 
-`config.yaml` carries a portable tier token; map it to a Cursor model id here.
+`config.yaml` carries a portable tier token; map it to a Cursor model id here. The tier tokens are the
+portable contract; the concrete Cursor model ids (and whether per-subagent model selection is
+supported) are unverified — confirm on install.
 
 | Tier token | Cursor model |
 |---|---|
-| `fast` | a fast/lightweight Cursor model (PIN exact id) |
-| `balanced` | a mid-tier Cursor model (PIN exact id) |
-| `high` | a capable/frontier Cursor model (PIN exact id) |
+| `fast` | a fast/lightweight Cursor model |
+| `balanced` | a mid-tier Cursor model |
+| `high` | a capable/frontier Cursor model |
 | `inherit` | the model this run is already on |
 
-A legacy model name carried over from another harness's config maps to the nearest tier (default
-`fast`). PIN: exact current Cursor model identifiers and whether per-subagent model selection is
-supported.
+A legacy model name carried over from another harness's config maps to the nearest tier (default `fast`).
 
 ## Whole-file write
 
-On Cursor the whole-file write uses the native write tool (PIN exact name), or write to a temp file then
-`mv` into place. The shared read-modify-write-the-whole-file rule (and the `jobs.jsonl` `>>` append
-exception) is in `_common.md` → **Whole-file write**.
-
-PIN: confirm the exact Cursor write-tool name and whether it performs an atomic replacement or a
-streamed write that could leave a partial file on interruption.
+On Cursor the whole-file write uses the native write tool, or write to a temp file then `mv` into
+place. The shared read-modify-write-the-whole-file rule (and the `jobs.jsonl` `>>` append exception)
+is in `_common.md` → **Whole-file write**. Whether Cursor's write tool is an atomic replacement or a
+streamed write is unverified — the temp-file-then-`mv` path is the safe default until confirmed.
 
 ## Block-alert channel
 
-On Cursor the attention-pull alert surface is **not confirmed** — PIN whether Cursor surfaces an in-editor
-alert, a desktop notification, or neither. The shared two-file durable-guarantee frame (and the
-skip-silently rule when no surface is confirmed) is in `_common.md` → **Block-alert channel**.
+Cursor's attention-pull alert surface is **not confirmed** — skip the alert silently until a live
+channel is confirmed. The shared two-file durable-guarantee frame is in `_common.md` → **Block-alert
+channel**.
 
 ## agent-data setup
 
 Authenticate with the shared harness-neutral `--api-key` path — see `_common.md` → **agent-data auth
-(harness-neutral)** (Cursor has no `--cursor` flag, and `--claude-code` must not be used on Cursor). PIN:
-confirm that agent-data is accessible on `PATH` within Cursor's sandbox and that outbound network calls to
-the agent-data endpoint are not blocked.
+(harness-neutral)** (Cursor has no `--cursor` flag).
 
 ## Packaging & install
 
-Ships as a Cursor plugin: `.cursor-plugin/plugin.json` with `skills: "./skills/"` pointing at the
-**same** one `skills/` tree (no per-platform bundle). The manifest mirrors the structure used by the
-Claude plugin but omits any `agents/` or `commands/` pointers that do not exist in this repo — only
-include fields that resolve to real paths. Install via Cursor's plugin manager.
-
-PIN: confirm whether Cursor reads `.cursor-plugin/plugin.json` directly, whether it also reads
-`~/.claude/skills/` for loose skill installation, and whether plugin skills are invocable namespaced
-(e.g. `job-search:`) or by bare name. Also confirm that `marketplace.json` field expectations for
-Cursor match job-search's actual fields (note: per-plugin marketplace fields differ between
-harnesses — job-search carries `category` but no `version`/`author`; verify the Cursor registry
-accepts this shape).
+Cursor loads the pack from a committed manifest — **the committed manifest is the spec** (AAS-PORT-07):
+`.cursor-plugin/plugin.json` exists in the repo (`skills: "./skills/"`) pointing at the **same** one
+`skills/` tree (no per-platform bundle); it includes only fields that resolve to real paths. Install
+via Cursor's plugin manager. Whether Cursor reads `.cursor-plugin/plugin.json` directly, whether it
+also reads loose skills, and whether plugin skills are invoked namespaced or by bare name are
+unverified — confirm on install.

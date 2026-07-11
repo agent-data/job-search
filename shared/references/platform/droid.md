@@ -2,115 +2,85 @@
 
 The active-platform adapter a skill reads when it runs on **Factory Droid** (`droid`). Neutralized
 prose names an action ("ask a closed choice", "show the run recipe") and defers the Droid-specific
-literal here. Read only the section you need; each is self-contained. Companion reference:
-`../../../docs/design-docs/multi-harness-portability.md` (the dossier) carries the verification status
-and every "pin on install" caveat.
+literal here. Read only the section you need. Shared boilerplate is in `_common.md`; the full
+per-platform study and every "confirm on install" item are in the dossier
+(`../../../docs/design-docs/multi-harness-portability.md`).
 
-> **Verification.** Factory Droid (`droid`) is **not installed** in this environment — every runtime
-> claim is structural, grounded in vendor documentation and superpowers' shipped adapter files, never a
-> live probe. Items unconfirmed on a running instance carry a **PIN** tag — confirm them empirically
-> before relying on the line in shipped copy.
+> **Verification.** Factory Droid (`droid`) is **not installed** here — every runtime claim below is
+> structural (vendor docs + superpowers' shipped adapter files), not a live probe. This adapter is
+> deliberately lean: it carries only the genuine Droid residual and honest stubs. Treat every literal
+> as unconfirmed until probed on a running instance (AAS-TEST-15), on a par with the other
+> un-installed siblings — no capability is asserted flatly here.
 
 ## Identity
 
 The host agent is **Factory Droid**; refer to it as "Droid" (or "the agent") in any user-facing line
-that would otherwise say "Claude Code". Droid reads its session-start context file on launch — PIN:
-the exact filename Droid auto-loads (analogous to `CLAUDE.md`; confirm with `droid --help` on a live
-install).
+that would otherwise say "Claude Code". Droid reads a session-start context file (analogous to
+`CLAUDE.md`) on launch; the exact filename is unverified — confirm with `droid --help` on a live
+install.
 
 ## Tool map
 
-Skills speak in actions; on Droid they resolve to these.
-
-| Action | Droid tool |
-|---|---|
-| Read a file | the native read/file tool |
-| Write a whole file | the native write tool — see **Whole-file write** below |
-| Edit part of a file | the native edit tool |
-| Run a shell command | the native shell/terminal tool |
-| Search / list files | the native search or shell tool (`grep`/`find`) |
-| Dispatch a subagent | `Task` with `subagent_type` — see **Concurrent detail reads** |
-| Track a task list | no dedicated tool; track inline or in a scratch file |
-| Ask a closed-choice question | none — see **Closed-choice question** |
+Skills speak in actions; on Droid they resolve to Droid's native tools. The action vocabulary is the
+portable contract; the native tool-name literals are unverified here. The one host-specific note that
+carries weight: subagents dispatch via **`Task` with `subagent_type`** — see **Concurrent detail
+reads** (the exact accepted `subagent_type` values are unverified). Closed-choice questions have no
+structured UI — see **Closed-choice question**.
 
 ## Run recipe
 
-Show the user **verbatim**, copied exactly — do not reconstruct the tokens elsewhere. `droid exec`
-defaults to **read-only mode**; a search pass writes run records and digests, so the run needs at least
-`--auto low` to permit those writes.
+`droid exec` defaults to **read-only mode**; a search pass writes run records and digests, so the run
+needs at least `--auto low` to permit those writes (whether `--auto low` suffices vs `--auto medium`
+is unverified — confirm on a live install).
 
 ```
 One-off run anytime:
   droid exec --auto low "run job-search-run"
 Recurring (consent-gated machine schedule — see Scheduling):
-  a cron/launchd entry wrapping `droid exec --auto low "run job-search-run"` on your cadence — see Scheduling
+  a cron/launchd entry wrapping the one-off command on your cadence
 ```
 
-PIN: the exact skill-invocation syntax for Droid (callable tool vs namespaced slash vs pure
-auto-invocation) is the highest-risk unverified item — confirm the literal prompt string Droid
-expects to invoke the skill before using the recipe above. PIN: confirm the `--auto low` level
-is sufficient for the scheduled pass (writing run records + digest) and does not require `--auto
-medium` or higher.
+The exact skill-invocation string Droid expects (callable tool vs namespaced slash vs pure
+auto-invocation) is the highest-risk unverified item — confirm it before relying on this recipe.
 
 ## Scheduling
 
-Droid is **Tier 2** — no native local scheduler exists (see the dossier §4 scheduling matrix):
-
-- **No native local scheduler.** Droid's documentation delegates scheduling to external CI/CD systems,
-  citing only a GitHub Actions cron example. GitHub Actions runs on a remote runner — it cannot see the
-  local `~/.job-search` workspace or the local agent-data auth — so it does **not** qualify. There is
-  no Droid equivalent to a native local scheduler (an in-session loop or a daemon automation).
-- **Tier 2 — consent-gated machine schedule.** Fall back to a **consent-gated** `crontab`/`launchd`
-  entry wrapping `droid exec --auto low "run job-search-run"`. Show the exact line to the user, get an
-  explicit yes, never install it silently, and leave it user-removable. Record
-  `scheduling.mechanism: cron` (or `launchd`). The consent gate travels inside this recipe — do not run
-  the cron install without an explicit user confirmation. Droid returns **real exit codes**, so the
-  wrapper may act on `$?` (non-zero = failed run — see **Headless invocation**).
-
-A cloud scheduler (GitHub Actions or equivalent) does **not** qualify — it cannot see the local
-workspace or auth.
-
-To turn scheduling off: remove the crontab entry (`crontab -e`, delete the line), then clear the
-scheduling marker in the registry.
+Droid is **Tier 2** — no native local scheduler (Droid's docs delegate scheduling to external CI/CD,
+citing only a GitHub Actions cron example, which is cloud and cannot see the local `~/.job-search`
+workspace or agent-data auth). Fall back to a **consent-gated** `crontab`/`launchd` entry wrapping
+`droid exec --auto low "run job-search-run"`: show the exact line, get an explicit yes, never install
+it silently, leave it user-removable, and record `scheduling.mechanism: cron` (or `launchd`). To turn
+scheduling off, remove the crontab entry and clear the scheduling marker in the registry.
 
 ## Headless invocation
 
-Run the search pass non-interactively with `droid exec`. The `--auto` flag controls the autonomy
-level — the default is **read-only**, so a writing run (which must record run results and write the
-digest) needs at least `--auto low`:
-
-```
-droid exec --auto low "run job-search-run"
-```
-
-**Exit codes are real** — Droid returns non-zero on failure, including when the objective is unmet,
-the autonomy level is exceeded, or partial changes are abandoned. A Tier-2 cron wrapper may act on
-`$?`. Still surface every outcome through the **written record** (the three blocked-run channels and the
-record-is-primary contract are shared — see `_common.md` → **Written record**); on Droid the real exit
-code is an additional signal, not a replacement. PIN: whether a skill-level HALT (a blocked run stopped by
-the skill itself) maps to a specific non-zero exit code, or only infra/objective failures do — confirm on
-a live install.
+Run the search pass non-interactively with `droid exec --auto low "run job-search-run"` (the default
+is read-only, so a writing run needs at least `--auto low`). Surface every outcome through the
+**written record** (the three blocked-run channels and the record-is-primary contract are shared —
+see `_common.md` → **Written record**). Droid's exit-code behavior is **UNVERIFIED here** — whether
+a headless run (or a skill-level HALT) returns non-zero on a blocked run is unconfirmed on an
+un-installed host; until it is probed on a live install, never tell the user a cron wrapper's `$?`
+will be non-zero on a blocked run, and rely on the written record, not `$?`.
 
 ## Closed-choice question
 
-Droid has **no structured-choice UI** documented. Ask the same
-question as prose with the options on numbered lines (the fallback `voice.md` already specifies), then
-read the user's number. Keep authoring the header/question/labels in the skill; only the presentation
-degrades.
+Droid has **no structured-choice UI** documented. Ask the same question as prose with the options on
+numbered lines (the fallback `voice.md` already specifies), then read the user's number. Keep
+authoring the header/question/labels in the skill; only the presentation degrades.
 
 ## Concurrent detail reads
 
-Droid supports isolated-context subagents via the **`Task`** tool with `subagent_type`. This is
-**enabled by default** — no enabling flag is required (contrast Codex's `multi_agent` feature flag);
-to disable it, toggle the setting off in `/settings` → Experimental. Dispatch all queued postings **at
-once, in a single batch** of concurrent `Task` calls — never a one-at-a-time loop. When no subagent
-slot is available, read and judge each posting **sequentially** — never block one read on another, but
-do not fabricate a dispatch. PIN: the exact `subagent_type` values Droid accepts (e.g. whether
-`"general-purpose"` or a Droid-specific type string is required).
+Droid supports isolated-context subagents via the **`Task`** tool with `subagent_type`. Where the
+subagent primitive is available, dispatch all queued postings **at once, in a single batch** — never
+a one-at-a-time loop. When no subagent slot is available, read and judge each posting
+**sequentially** — never block one read on another, but **do not fabricate a dispatch**. (Whether
+subagents are on by default and the exact `subagent_type` values Droid accepts are unverified.)
 
 ## Model tiers
 
-`config.yaml` carries a portable tier token; map it to a Droid model here.
+`config.yaml` carries a portable tier token; map it to a Droid model here. The tier tokens are the
+portable contract; the concrete Droid model ids are unverified — confirm with `droid models list` or
+equivalent on a live install.
 
 | Tier token | Droid model |
 |---|---|
@@ -120,36 +90,29 @@ do not fabricate a dispatch. PIN: the exact `subagent_type` values Droid accepts
 | `inherit` | the model this run is already on |
 
 A legacy model name carried over from another harness's config maps to the nearest tier (default `fast`).
-PIN: exact current Droid model ids — Factory's model catalog may lag; verify with `droid models list`
-or equivalent on a live install.
 
 ## Whole-file write
 
-On Droid the whole-file write uses the native write tool, or write to a temp file then `mv` into place. The
-shared read-modify-write-the-whole-file rule (and the `jobs.jsonl` `>>` append exception) is in
-`_common.md` → **Whole-file write**.
+On Droid the whole-file write uses the native write tool, or write to a temp file then `mv` into
+place. The shared read-modify-write-the-whole-file rule (and the `jobs.jsonl` `>>` append exception)
+is in `_common.md` → **Whole-file write**.
 
 ## Block-alert channel
 
-On Droid there is **no documented desktop-notification channel** — skip the attention-pull alert silently
-when the `notify.desktop_notify_on_block` knob is set. The shared two-file durable-guarantee frame is in
-`_common.md` → **Block-alert channel**. PIN: confirm whether Droid exposes any attention-pull notification
-API on a live install.
+Droid exposes **no documented desktop-notification channel** — skip the attention-pull alert silently
+when the `notify.desktop_notify_on_block` knob is set (confirm whether any notification API exists on
+a live install). The shared two-file durable-guarantee frame is in `_common.md` → **Block-alert
+channel**.
 
 ## agent-data setup
 
 Authenticate with the shared harness-neutral `--api-key` path — see `_common.md` → **agent-data auth
-(harness-neutral)** (Droid has no `--droid`/`--factory` flag). Verify agent-data is on `PATH` inside
-Droid's execution environment and its network egress is not blocked before the first run.
+(harness-neutral)** (Droid has no `--droid`/`--factory` flag).
 
 ## Packaging & install
 
-Droid's own plugin format uses **`.factory-plugin/plugin.json`** — only `plugin.json` goes inside
-`.factory-plugin/`. Droid also supports reading `.claude-plugin/` via a Claude-plugin compatibility
-layer (the doc says the format is interoperable with plugins built for Claude Code). Superpowers ships
-no `.factory-plugin/` directory and relies on this compat path. PIN: confirm which manifest Droid
-actually loads for job-search — whether `.factory-plugin/plugin.json` must be hand-authored (T5.2
-task) or whether the existing `.claude-plugin/` compat path is sufficient without a separate manifest.
-Both paths point at the **same** one `skills/` tree (no per-platform bundle). Install via Droid's
-plugin manager. PIN: the exact `droid plugin marketplace add` / `install` argument form — verify the
-install command against `droid plugin --help` on a live install.
+Droid loads the pack from a committed manifest — **the committed manifest is the spec** (AAS-PORT-07):
+`.factory-plugin/plugin.json` exists in the repo and points at the **same** one `skills/` tree (no
+per-platform bundle). Droid also supports the `.claude-plugin/` compatibility layer. Install via
+Droid's plugin manager; the exact `droid plugin marketplace add` / `install` argument form is
+unverified — confirm against `droid plugin --help` on a live install.

@@ -2,42 +2,33 @@
 
 The active-platform adapter a skill reads when it runs on **GitHub Copilot CLI** (`copilot`, also
 invocable as `gh copilot`). Neutralized prose names an action ("ask a closed choice", "show the run
-recipe") and defers the Copilot-specific literal here. Read only the section you need; each is
-self-contained. Companion reference:
-`../../../docs/design-docs/multi-harness-portability.md` (the dossier) carries the verification status
-and every "pin on install" caveat.
+recipe") and defers the Copilot-specific literal here. Read only the section you need. Shared
+boilerplate is in `_common.md`; the full per-platform study and every "confirm on install" item are in
+the dossier (`../../../docs/design-docs/multi-harness-portability.md`).
 
-> **Verification.** GitHub Copilot CLI (`copilot`) is **not installed** in this environment — every
-> runtime claim is structural, grounded in vendor documentation and superpowers' shipped adapter files,
-> never a live probe. Items unconfirmed on a running instance carry a **PIN** tag — confirm them
-> empirically before relying on the line in shipped copy.
+> **Verification.** GitHub Copilot CLI (`copilot`) is **not installed** here — every runtime claim
+> below is structural (vendor docs + superpowers' shipped adapter files), not a live probe. This
+> adapter is deliberately lean: it carries only the genuine Copilot residual and honest stubs. Treat
+> every literal as unconfirmed until probed on a running instance (AAS-TEST-15).
 
 ## Identity
 
 The host agent is **GitHub Copilot CLI**; refer to it as "Copilot" (or "the agent") in any user-facing
 line that would otherwise say "Claude Code". Copilot reads `COPILOT.md` from the repo root on session
-start — PIN: whether the `COPILOT_CLI` session-start hook contract is honored in the installed version
-(superpowers confirms it in v1.0.11+).
+start (the `COPILOT_CLI` session-start hook); that file **ships** at the repo root as a thin redirect
+to `AGENTS.md` (mirroring `CLAUDE.md`). Whether the installed version honors the session-start hook is
+unverified here — superpowers confirms it in v1.0.11+.
 
 ## Tool map
 
-Skills speak in actions; on Copilot they resolve to these.
-
-| Action | Copilot tool |
-|---|---|
-| Read a file | the native read/file tool |
-| Write a whole file | the native write tool — see **Whole-file write** below |
-| Edit part of a file | the native edit tool |
-| Run a shell command | the native shell/terminal tool |
-| Search / list files | the native search or shell tool (`grep`/`find`) |
-| Dispatch a subagent | `task` with `agent_type:"general-purpose"` or `"explore"` — see **Concurrent detail reads** |
-| Track a task list | no dedicated tool; track inline or in a scratch file |
-| Ask a closed-choice question | none — see **Closed-choice question** |
+Skills speak in actions; on Copilot they resolve to Copilot's native tools. The action vocabulary is
+the portable contract; the native tool-name literals are unverified here. The one host-specific note
+that carries weight: subagents dispatch via the **`task`** tool (`agent_type:"general-purpose"` for
+full-capability, `agent_type:"explore"` for read-focused; `read_agent`/`list_agents` inspect running
+ones) — see **Concurrent detail reads**. Closed-choice questions have no structured UI — see
+**Closed-choice question**.
 
 ## Run recipe
-
-Show the user **verbatim**, copied exactly — do not reconstruct the tokens elsewhere. Copilot skills are
-invoked by name from the manifest; there is no separate slash-command namespace prefix (PIN: skill-invocation form unconfirmed on a live install).
 
 ```
 One-off run anytime:
@@ -46,102 +37,82 @@ Recurring (consent-gated machine schedule — see Scheduling):
   a cron/launchd entry wrapping the one-off command above, on your cadence
 ```
 
-PIN: the exact `--allow-tool` flag spelling and the `--allow-all-tools` flag name are not confirmed
-against the installed binary — verify with `copilot --help` before using. PIN: exit-code behavior of
-`copilot -p` in a cron context is unverified (see **Headless invocation**).
+The exact `--allow-tool` spellings (and whether an `--allow-all-tools` shorthand exists) are
+unverified — check `copilot --help` on a live install before relying on them.
 
 ## Scheduling
 
-Copilot CLI is **Tier 2** — the first harness where the relaxed-cron rule fires unconditionally (see the
-dossier §4 scheduling matrix):
-
-- **No native local scheduler.** `gh copilot` is a one-shot launcher with no schedule subcommand. GitHub
-  Actions cron is **cloud** — the Actions runner cannot see the local `~/.job-search` workspace or the
-  local agent-data auth — so it does not qualify. There is no Copilot equivalent to a native
-  in-session/local scheduler (nor to Codex Automations).
-- **Tier 2 — consent-gated machine schedule.** Fall back to a **consent-gated** `crontab`/`launchd`
-  entry wrapping `copilot -p "job-search-run" --allow-tool shell --allow-tool read --allow-tool write`.
-  Show the exact line to the user, get an explicit yes, never install it silently, and leave it
-  user-removable. Record `scheduling.mechanism: cron` (or `launchd`). The consent gate travels inside
-  this recipe — do not run the cron install without an explicit user confirmation.
-
-A cloud scheduler (GitHub Actions) does **not** qualify — it cannot see the local workspace or auth.
-
-To turn scheduling off: remove the crontab entry (`crontab -e`, delete the line), then clear the
-scheduling marker in the registry.
+Copilot CLI is **Tier 2** — `gh copilot` is a one-shot launcher with no schedule subcommand, and
+GitHub Actions cron is cloud (the Actions runner cannot see the local `~/.job-search` workspace or
+agent-data auth). Fall back to a **consent-gated** `crontab`/`launchd` entry wrapping
+`copilot -p "job-search-run" --allow-tool shell --allow-tool read --allow-tool write`: show the exact
+line, get an explicit yes, never install it silently, leave it user-removable, and record
+`scheduling.mechanism: cron` (or `launchd`). To turn scheduling off, remove the crontab entry and
+clear the scheduling marker in the registry.
 
 ## Headless invocation
 
-Run the search pass non-interactively with `copilot -p`:
-
-```
-copilot -p "job-search-run" --allow-tool shell --allow-tool read --allow-tool write
-```
-
-PIN: `--allow-all-tools` may be available as a shorthand flag — verify with `copilot --help` before
-using; the full form above is safer. **Exit codes likely real but UNVERIFIED** — the binary is not
-installed here, so unlike harnesses where a headless run can return 0 even on a block, Copilot's
-exit-code behavior is unconfirmed (PIN). Surface every outcome through the **written record** instead (the
-three blocked-run channels and the record-is-primary contract are shared — see `_common.md` → **Written
-record**); on Copilot, whether `$?` can also be trusted is unverified — treat it as a secondary signal, not
-the authority. PIN: confirm exit-code semantics on a live install.
+Run the search pass non-interactively with `copilot -p "job-search-run" --allow-tool shell
+--allow-tool read --allow-tool write`. Surface every outcome through the **written record** (the three
+blocked-run channels and the record-is-primary contract are shared — see `_common.md` → **Written
+record**). Copilot's exit-code behavior is **UNVERIFIED here** — the binary is not installed, so
+whether `$?` is trustworthy on a blocked run is unconfirmed; treat it as a secondary signal, not the
+authority, and never tell the user a cron wrapper's `$?` will be non-zero on a blocked run until it is
+probed on a live install.
 
 ## Closed-choice question
 
-Copilot CLI has **no structured-choice UI** — `EnterPlanMode`/`ExitPlanMode` have no equivalent and no
-structured picker tool is documented. Ask the same question as prose with the options on numbered lines
-(the fallback `voice.md` already specifies), then read the user's number. Keep authoring the
-header/question/labels in the skill; only the presentation degrades.
+Copilot CLI has **no structured-choice UI** — no `Enter/ExitPlanMode` equivalent and no picker tool is
+documented. Ask the same question as prose with the options on numbered lines (the fallback `voice.md`
+already specifies), then read the user's number. Keep authoring the header/question/labels in the
+skill; only the presentation degrades.
 
 ## Concurrent detail reads
 
-Copilot supports isolated-context subagents via the **`task`** tool, with `agent_type:"general-purpose"`
-for full-capability subagents or `agent_type:"explore"` for read-focused ones. Check running agents with
-`read_agent` / `list_agents`. Dispatch all queued postings **at once, in a single batch** of concurrent
-`task` calls — never a one-at-a-time loop. PIN: whether `task` carries any runtime gate or cap is
-undocumented — no enabling flag analogous to Codex's `multi_agent` was found. When no subagent slot is
-available, read and judge each posting **sequentially** — never block one read on another, but do not
-fabricate a dispatch.
+Copilot supports isolated-context subagents via the **`task`** tool
+(`agent_type:"general-purpose"`/`"explore"`). Where the subagent primitive is available, dispatch all
+queued postings **at once, in a single batch** — never a one-at-a-time loop. When no subagent slot is
+available, read and judge each posting **sequentially** — never block one read on another, but **do
+not fabricate a dispatch**. (Whether `task` carries any runtime gate or cap is undocumented.)
 
 ## Model tiers
 
-`config.yaml` carries a portable tier token; map it to a Copilot model here.
+`config.yaml` carries a portable tier token; map it to a Copilot model here. The tier tokens are the
+portable contract; the concrete Copilot model ids and the selector mechanism are unverified — confirm
+with `copilot model list` or equivalent on a live install.
 
 | Tier token | Copilot model |
 |---|---|
-| `fast` | a fast model tier (PIN: exact Copilot model id) |
-| `balanced` | a mid-tier model (PIN: exact id) |
-| `high` | a high-capability model tier (PIN: exact id) |
+| `fast` | a fast model tier |
+| `balanced` | a mid-tier model |
+| `high` | a high-capability model tier |
 | `inherit` | the model this run is already on |
 
 A legacy model name carried over from another harness's config maps to the nearest tier (default `fast`).
-PIN: exact current Copilot model ids and the selector mechanism — verify with `copilot model list` or
-equivalent.
 
 ## Whole-file write
 
-On Copilot the whole-file write uses the native write tool, or write to a temp file then `mv` into place.
-The shared read-modify-write-the-whole-file rule (and the `jobs.jsonl` `>>` append exception) is in
-`_common.md` → **Whole-file write**.
+On Copilot the whole-file write uses the native write tool, or write to a temp file then `mv` into
+place. The shared read-modify-write-the-whole-file rule (and the `jobs.jsonl` `>>` append exception)
+is in `_common.md` → **Whole-file write**.
 
 ## Block-alert channel
 
-On Copilot CLI there is **no documented desktop-notification channel** — skip the attention-pull alert
-silently when the `notify.desktop_notify_on_block` knob is set. The shared two-file durable-guarantee frame
-is in `_common.md` → **Block-alert channel**.
+Copilot CLI exposes **no documented desktop-notification channel** — skip the attention-pull alert
+silently when the `notify.desktop_notify_on_block` knob is set. The shared two-file durable-guarantee
+frame is in `_common.md` → **Block-alert channel**.
 
 ## agent-data setup
 
 Authenticate with the shared harness-neutral `--api-key` path — see `_common.md` → **agent-data auth
-(harness-neutral)** (Copilot has no `--copilot` flag). Verify agent-data is on `PATH` inside Copilot's
-execution environment and its network egress is not blocked before the first run.
+(harness-neutral)** (Copilot has no `--copilot` flag).
 
 ## Packaging & install
 
-Copilot **reuses the Claude Code manifest** — `.claude-plugin/marketplace.json` + `.claude-plugin/plugin.json`
-pointing at the **same** one `skills/` tree (no per-platform bundle, no `.copilot-plugin/` directory —
-superpowers ships none for Copilot). Install via Copilot's plugin manager, referencing the marketplace
-manifest; the plugin manager resolves against `.claude-plugin/marketplace.json`. PIN: the exact
-`copilot plugin marketplace add` / `install` argument form — the marketplace-repo slug used in
-superpowers (`obra/superpowers-marketplace`) may not generalize directly to job-search's own repo slug;
-verify the install command against `copilot plugin --help` on a live install.
+Copilot loads the pack from committed wiring — **the committed manifest is the spec** (AAS-PORT-07):
+it **reuses the Claude Code manifest** (`.claude-plugin/marketplace.json` + `.claude-plugin/plugin.json`,
+both committed) pointing at the **same** one `skills/` tree (no per-platform bundle, no
+`.copilot-plugin/` directory). Install via Copilot's plugin manager, referencing the marketplace
+manifest. The exact `copilot plugin marketplace add` / `install` argument form is unverified — the
+superpowers precedent uses a marketplace-repo slug that may not generalize to job-search's repo slug;
+verify against `copilot plugin --help` on a live install.
