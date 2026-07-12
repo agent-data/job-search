@@ -102,8 +102,9 @@ The user changes config by **chatting**; manual editing is an escape hatch. To a
 - **Tune the feed (`search` block):** `search.freshness` narrows or widens the client-side recency filter on
   `posted_at` (the API has no date param), and `search.detail_model` picks the portable tier the runner's
   per-posting detail reads use — the allowed values for each (the freshness windows and the detail tiers) live
-  in `conventions.md`; the literal model each tier maps to lives in your platform's adapter → Model tiers, and
-  the fan-out itself defers to → Concurrent detail reads. `search.parallel_detail_reads` is optional: unset
+  in `conventions.md`; the agent binds each tier to a concrete model from its own roster — the least-powerful
+  model that does the task well; the fit verdict is a judgment, so never the cheapest.
+  `search.parallel_detail_reads` is optional: unset
   means an interactive front-door flow may ask whether to use parallel subagents where the host requires
   explicit approval; `true` means the user approved; `false` means use sequential detail reads. Only
   conversational front-door flows write this preference; the headless runner reads it and never changes config.

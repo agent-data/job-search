@@ -227,16 +227,15 @@ subagents, skip this whole step (the parallel fan-out is already the default) an
 
 On an **approval-gating host**, if `search.parallel_detail_reads` is unset, ask once after the frequency is
 saved and before the first live run. Ask it as a closed choice; the question must say **subagents** and must
-name the default detail-read model (the mid-tier reviewer floor — the `balanced` tier from your platform's
-adapter → Model tiers).
+name the default detail-read model (the mid-tier reviewer floor — the `balanced` tier; the agent binds it to
+a concrete model from its own roster, the least-powerful that does the judgment well, not the cheapest).
 
 On **yes**:
 
 1. Write `search.parallel_detail_reads: true` to `config.yaml`; preserve comments/structure and keep
    `version: 1`.
 2. Keep `search.detail_model` at its default — the mid-tier reviewer floor (`balanced`) — unless the user
-   explicitly chooses another tier. If they ask what a tier means, name the mapping from your platform's
-   adapter → Model tiers.
+   explicitly chooses another tier. If they ask what a tier means, name the concrete model you'd use for it.
 3. Perform any host-specific subagent setup your host needs
    (e.g. writing a scoped profile so unattended runs may use subagents). Tell the user in plain language what
    the setting does. If the sandbox blocks that write, show the exact path and content;
@@ -346,7 +345,7 @@ runs", "update my preferences", "show the latest digest").
 - [ ] on an approval-gating host, if `search.parallel_detail_reads` was unset, the user was asked once about
       parallel subagents; the answer was written to `config.yaml`; on yes the host-specific subagent setup
       your host needs was performed (or the exact path + content was shown if blocked); the user saw
-      the default detail-read model — the mid-tier reviewer floor (`balanced`-tier) — named from the adapter → Model tiers
+      the default detail-read model — the mid-tier reviewer floor (`balanced`-tier) — named as the concrete model the agent binds it to from its own roster
 - [ ] first **live** `job-search-run` done; strong/moderate matches shown — or the named error if blocked
 - [ ] shown matches include the digest reasoning and any "confirm" warning, not just titles/companies
 - [ ] scheduling offered (two-tier, per the adapter); on yes started + marker set; run recipe shown either

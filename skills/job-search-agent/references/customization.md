@@ -89,9 +89,8 @@ the run uses the parallel fan-out (the default where the host supports it), it f
 subagent per posting (see
 `../../../shared/references/parallelism.md` for the general pattern, the host's own fan-out primitive, and the
 sequential fallback). Each subagent follows the `evaluate-job-fit` skill. This
-key controls which tier those detail readers use — the literal model each tier maps to lives in your
-platform's adapter → Model tiers. When discussing this on a specific host, name the exact model IDs from that
-adapter → Model tiers.
+key controls which tier those detail readers use — the agent binds the tier to a concrete model from its own
+roster. If the user asks which model a tier maps to on this host, name the concrete model you'd use.
 
 The four tiers, what each is for, and which is the default are in the config schema — see
 `../../../shared/references/conventions.md` (the `config.yaml` section).

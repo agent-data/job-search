@@ -102,8 +102,8 @@ Offer these and apply each by **chatting**, editing `config.yaml` per the `inter
   to a single board, or add more company boards to widen coverage); and, where the host needs approval, set
   `search.parallel_detail_reads` (`true | false`) to use parallel subagents or read sequentially. The allowed
   values for each key — the freshness windows, the detail-model tiers, and the source list — live in the
-  config schema in `conventions.md`. Your platform's adapter → Model tiers maps each detail tier to the actual
-  model; when discussing this knob on a specific host, name the exact models from that adapter → Model tiers.
+  config schema in `conventions.md`. The agent binds each detail tier to a concrete model from its own roster;
+  when the user asks which model a tier maps to on this host, name the concrete model you'd use.
   Edit `config.yaml` per the `internals.md` recipes; preserve comments; keep `version: 1`.
 - **Change how often it runs** → set `schedule.frequency` to `hourly | every-2-hours | every-6-hours |
   daily | weekly` (and `schedule.time` for daily/weekly). Reuse the plain-language nudge — "daily suits most
