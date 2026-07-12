@@ -79,7 +79,7 @@ Controls whether promising postings are read through parallel subagents where th
 Only `job-search` / the home view writes this preference after talking with the user. `job-search-run` is
 headless: it reads the value and never edits config itself — `false` reads sequentially, `true` fans out, and
 unset takes the host default (parallel where no approval is required; sequential on hosts that gate subagents
-behind approval — see your platform's adapter → Concurrent detail reads). It also falls back to sequential
+behind approval — see `../../../shared/references/parallelism.md`). It also falls back to sequential
 whenever the host lacks or refuses subagents.
 
 **Detail-read model — `search.detail_model`**
@@ -87,8 +87,8 @@ whenever the host lacks or refuses subagents.
 After the primary pass scans summaries, the agent reads the full details for every promising posting. When
 the run uses the parallel fan-out (the default where the host supports it), it fans out one detail-read
 subagent per posting (see
-`../../../shared/references/parallelism.md` for the general pattern; the fan-out primitive and sequential fallback defer to
-your platform's adapter → Concurrent detail reads). Each subagent follows the `evaluate-job-fit` skill. This
+`../../../shared/references/parallelism.md` for the general pattern, the host's own fan-out primitive, and the
+sequential fallback). Each subagent follows the `evaluate-job-fit` skill. This
 key controls which tier those detail readers use — the literal model each tier maps to lives in your
 platform's adapter → Model tiers. When discussing this on a specific host, name the exact model IDs from that
 adapter → Model tiers.
@@ -98,10 +98,10 @@ The four tiers, what each is for, and which is the default are in the config sch
 
 `balanced` — the **mid-tier reviewer floor** — is the default, because the per-posting fit verdict is a judgment, not a mechanical step: a well-specified, bite-sized review belongs on a mid-tier model, not the cheapest tier. Scale up with `detail_model: high` where the brief's distinctions are fine-grained or the must-have/red-flag list is long. Opt down with `detail_model: fast` (the cheapest tier) for faster, lighter reads — a touch looser on subtle qualitative calls (occasionally an out-of-vocabulary band or a stray numeric value), though the consolidation step after all subagents return still validates and coerces every verdict before anything reaches `jobs.jsonl` or the digest, so no invalid output persists. This is a **fidelity/speed tradeoff**, not a quality-gate — and the genuinely mechanical bulk (dedup, the summary prefilter, provenance) stays cheap regardless of this tier.
 
-> **Note:** Per-subagent tier selection is effective only on hosts that support isolated-context subagents —
-> see your platform's adapter → Concurrent detail reads. The adapter notes whether per-subagent model selection
-> even exists; a single-model host makes the knob inert. If parallel reads are disabled, unavailable, or refused,
-> the same tier still describes the intended detail-read fidelity, but the runner evaluates sequentially.
+> **Note:** Per-subagent tier selection is effective only on hosts that support isolated-context subagents.
+> On a single-model host, or one without isolated-context subagents, the knob is inert. If parallel reads are
+> disabled, unavailable, or refused, the same tier still describes the intended detail-read fidelity, but the
+> runner evaluates sequentially.
 
 ---
 

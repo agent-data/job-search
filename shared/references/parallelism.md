@@ -12,35 +12,30 @@ explicitly (the detail-read tier is configured in `conventions.md`).
 The bar is *mutual independence*: if subtask B needs subtask A's result, they're sequential — don't force them
 parallel. If they don't, running them serially is wasted wall-clock.
 
-Whether an isolated-context concurrent subagent primitive is available, any concurrency cap, and the
-**mandatory sequential fallback** (read and judge each item one at a time — never fabricate a dispatch) live in
-the active platform's adapter → **Concurrent detail reads**. Read your adapter before dispatching; a host with
-no concurrent primitive degrades gracefully through that fallback.
+Use your host's subagent primitive if it has one. If it has none, or no slot is free, degrade gracefully to
+the sequential fallback: read and judge each item one at a time — never fabricate a dispatch.
 
-**Some hosts also require explicit user approval before they will use subagents for job-search detail reads**
-— their adapter → **Concurrent detail reads** says whether this host is one. If your environment gates
-parallel dispatch behind user approval, wait for that approval before fanning out; otherwise fan out by
-default. Treat missing approval as a real boundary on those hosts, not as implied permission: the
-interactive front door may ask and store the answer in `search.parallel_detail_reads`, while a headless
-runner reads that stored preference. How an
-**unset** preference resolves is the adapter's call: an approval-gating host reads sequentially until the user
-approves, but a host that needs no approval keeps the parallel-by-default fan-out above. An explicit `false`
+If your host requires explicit user approval before it will use subagents for job-search detail reads, get
+that approval once before fanning out; otherwise fan out by default. Treat missing approval as a real boundary
+on an approval-gating host, not as implied permission: the interactive front door may ask and store the answer
+in `search.parallel_detail_reads`, while a headless runner reads that stored preference. How an **unset**
+preference resolves depends on your host: one that gates subagents behind approval reads sequentially until the
+user approves, but one that needs no approval keeps the parallel-by-default fan-out above. An explicit `false`
 is always a user opt-out to sequential reads; `true` is always the parallel fan-out where the primitive
 exists.
 
 If the host has a concurrent primitive but refuses more subagents because its thread/slot limit is reached,
 that is **backpressure**, not a run-health error. Keep the already-dispatched work, wait for a completed subagent,
 close it promptly, and dispatch the next queued item. Continue in rolling batches until every queued item has
-either a detail judgment or the adapter's sequential fallback has handled it. Do not mark the run `partial`
+either a detail judgment or the sequential fallback has handled it. Do not mark the run `partial`
 only because capacity forced batching.
 
 ## Briefing a subagent
 
 A fresh subagent starts with **zero context** — it hasn't seen this conversation, what you've tried, or why the
 task matters. Brief it like a sharp colleague who just walked into the room: enough that it can make judgment
-calls, not a terse command (terse command-style prompts produce shallow, generic work). The dispatch verb —
-how you actually invoke a subagent on your platform — is in the active platform's adapter → **Concurrent detail
-reads**. The briefing contract below is harness-agnostic. Each brief carries:
+calls, not a terse command (terse command-style prompts produce shallow, generic work). The briefing contract
+below is harness-agnostic. Each brief carries:
 
 - **The goal, and why it matters** — what you're accomplishing and what its output feeds into.
 - **What you already know or ruled out** — so the subagent doesn't re-derive the obvious or repeat a dead end.

@@ -86,11 +86,11 @@ Notes on each part:
 Offer these and apply each by **chatting**, editing `config.yaml` per the `internals.md` recipes:
 
 - **Run a search now** → disclose it makes live calls, then invoke `job-search-run` against `<ws>`. On a host
-  that gates parallel detail reads behind approval (your platform's adapter → Concurrent detail reads), if
+  that gates parallel detail reads behind approval, if
   `search.parallel_detail_reads` is unset, first ask the same one-time parallel-subagent approval from
-  `onboarding.md` → Parallel detail-read approval; write the answer to `config.yaml`, and on yes perform the
-  host-specific subagent setup the adapter specifies (or show the exact path + content if the sandbox blocks
-  the write). If `search.parallel_detail_reads: true`, include the adapter's required authorization sentence
+  `onboarding.md` → Parallel detail-read approval; write the answer to `config.yaml`, and on yes perform any
+  host-specific subagent setup your host needs (or show the exact path + content if the sandbox blocks
+  the write). If `search.parallel_detail_reads: true`, include the authorization sentence your host requires
   in the invocation context. Then show the fresh digest's strong/moderate matches with each match's
   reasoning line, link, and any "confirm" warning.
 - **Add or edit a query** → append/modify a `queries[]` item

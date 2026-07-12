@@ -218,14 +218,13 @@ user to name keywords.** They can retune anytime; the goal here is zero upfront 
 ### Parallel detail-read approval (approval-gating hosts only)
 
 Some hosts gate parallel subagents behind one explicit user approval before the runner may use them for
-posting-detail reads — your platform's adapter → **Concurrent detail reads** says whether this host is one,
-and supplies the exact approval question plus any host-specific setup. On a host that does **not** gate
+posting-detail reads. If your host gates subagents this way, run this step; if it does **not** gate
 subagents, skip this whole step (the parallel fan-out is already the default) and go to §6.
 
 On an **approval-gating host**, if `search.parallel_detail_reads` is unset, ask once after the frequency is
-saved and before the first live run. Use the exact closed choice from your platform's adapter → Concurrent
-detail reads; the question must say **subagents** and must name the default detail-read model (the mid-tier
-reviewer floor — the `balanced` tier from your platform's adapter → Model tiers).
+saved and before the first live run. Ask it as a closed choice; the question must say **subagents** and must
+name the default detail-read model (the mid-tier reviewer floor — the `balanced` tier from your platform's
+adapter → Model tiers).
 
 On **yes**:
 
@@ -234,9 +233,9 @@ On **yes**:
 2. Keep `search.detail_model` at its default — the mid-tier reviewer floor (`balanced`) — unless the user
    explicitly chooses another tier. If they ask what a tier means, name the mapping from your platform's
    adapter → Model tiers.
-3. Perform any host-specific subagent setup your platform's adapter → Concurrent detail reads specifies
+3. Perform any host-specific subagent setup your host needs
    (e.g. writing a scoped profile so unattended runs may use subagents). Tell the user in plain language what
-   the setting does. If the sandbox blocks that write, show the exact path and content from the adapter;
+   the setting does. If the sandbox blocks that write, show the exact path and content;
    don't silently skip it.
 
 On **no**, write `search.parallel_detail_reads: false` and read details sequentially. Do not ask again unless
@@ -251,9 +250,9 @@ This is the payoff. Disclose it plainly first, then do it:
 Invoke **`job-search-run`** against the workspace (pass `--workspace <workspace>`). It probes the
 source, searches each enabled query, skips postings already seen, judges each new posting against the
 brief, reads full descriptions for the promising ones, and writes a digest. On a host that gates parallel
-detail reads behind approval (your platform's adapter → Concurrent detail reads), if
+detail reads behind approval, if
 `search.parallel_detail_reads: true`, the invocation context must include the exact authorization sentence
-that adapter specifies — the saved config records the user's preference, and that sentence is the run's
+your host requires — the saved config records the user's preference, and that sentence is the run's
 explicit authorization. Then present the result like a
 discovery, not a log dump — surface the **strong and moderate** matches from the digest **as normal message
 text in your reply** (rendered markdown — never a code fence, never just the digest's file path):
@@ -342,7 +341,7 @@ runs", "update my preferences", "show the latest digest").
       acknowledged; `schedule.frequency` set (plain-language nudge)
 - [ ] on an approval-gating host, if `search.parallel_detail_reads` was unset, the user was asked once about
       parallel subagents; the answer was written to `config.yaml`; on yes the host-specific subagent setup
-      the adapter specifies was performed (or the exact path + content was shown if blocked); the user saw
+      your host needs was performed (or the exact path + content was shown if blocked); the user saw
       the default detail-read model — the mid-tier reviewer floor (`balanced`-tier) — named from the adapter → Model tiers
 - [ ] first **live** `job-search-run` done; strong/moderate matches shown — or the named error if blocked
 - [ ] shown matches include the digest reasoning and any "confirm" warning, not just titles/companies

@@ -104,14 +104,13 @@ Read these before running, and follow them exactly:
 4. **Read the details — parallel by default, sequential where the host requires it.** The reads are
    independent, so the default is the parallel per-posting fan-out. First read `search.parallel_detail_reads`
    from `config.yaml` (see `../../shared/references/conventions.md`). This runner is headless: never ask, and
-   never edit config. **Resolve the detail-read MODE** against your platform's adapter → Concurrent detail
-   reads:
+   never edit config. **Resolve the detail-read MODE** per `../../shared/references/parallelism.md`:
 
    | `search.parallel_detail_reads` | Detail-read mode |
    |---|---|
    | `true`  | parallel per-posting fan-out — one subagent per posting, subject to host capacity |
    | `false` | sequential reads (an explicit user opt-out) |
-   | unset   | the adapter's default — hosts that gate subagents behind user approval (see your platform's adapter → Concurrent detail reads) read sequentially until approved; every other host uses the parallel fan-out |
+   | unset   | your host's default — a host that gates subagents behind user approval reads sequentially until approved; every other host uses the parallel fan-out |
 
    **Dispatch the verdict at the mid-tier reviewer floor, with an EXPLICIT model.** The per-posting fit
    verdict is a judgment, not a mechanical step, so it does not run on the cheapest tier. For the parallel
