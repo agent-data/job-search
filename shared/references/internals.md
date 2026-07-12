@@ -23,12 +23,15 @@ prints for every read and write. Never consult or touch any other location — i
 `$JOBSEARCH_OS_REGISTRY` resolves it elsewhere, the default `~/.config/...` path is out of bounds entirely
 (reading it can only mix two registries and confuse the result).
 
-**Write rules (every registry write).** Read the current file first (it may not exist), apply the change to
-the parsed object, and write the whole file back atomically at the resolved `$REG` path — a full replace in
-place (see your platform's adapter → Whole-file write), never a streamed or redirected partial, which can
-truncate or interleave a structured-state file. Preserve any keys you don't own; always keep `"version": 1`;
-store `active_workspace` as an absolute path (expand `~`); 2-space indent; trailing newline; `mkdir -p` the
-parent directory first.
+**Write rules (every structured-state whole-file write).** These govern the registry `config.json` and the
+workspace `config.yaml` alike. Read the current file first (it may not exist), apply the change to the
+parsed object, and write the **whole file back atomically** — a full replace in place, never a streamed,
+redirected, or partial write that can truncate or interleave a structured-state file. Use your host's
+whole-file write tool; where none is guaranteed-atomic, write to a temp file then `mv` it into place.
+Appending one immutable line to the event log (`jobs.jsonl`) stays a legitimate shell `>>` append (a heredoc
+keeps quoting safe). For the registry, write at the resolved `$REG` path; preserve any keys you don't own;
+always keep `"version": 1`; store `active_workspace` as an absolute path (expand `~`); 2-space indent;
+trailing newline; `mkdir -p` the parent directory first.
 If the file exists but is not valid JSON, stop and tell the user (offer to rewrite it from the known
 workspace) — never guess or silently fall through; guessing could switch workspaces. Only the **job-search**
 front door (onboarding / adoption) and the scheduling flows write the registry; the headless runner never
