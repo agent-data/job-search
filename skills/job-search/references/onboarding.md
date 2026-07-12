@@ -318,7 +318,7 @@ stays one command away".
    digest out of it. If the canary **fails**: diagnose the gap, propose and show the exact fix, apply it on
    the user's yes, and re-run — loop until green. If it genuinely can't be made to work, **name the gap
    plainly and do not claim it's scheduled.** Full flow, consent framing, and failure loop:
-   `../../job-search-agent/references/scheduling-and-consent.md` §the canary.
+   `../../../shared/references/internals.md` → Scheduling setup.
 4. **Only after a green canary, record it** so you don't re-ask: set the scheduling marker (`internals.md` →
    Registry write rules — recording the mechanism actually used).
 

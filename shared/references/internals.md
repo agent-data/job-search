@@ -138,7 +138,7 @@ from inside an open session that installs nothing but runs **only while a sessio
 fallback**. On either path, **cloud schedulers do not qualify**: a cloud runner can't see the local
 `~/.job-search` workspace or the local agent-data auth, so a run there reaches neither the user's data nor
 their credentials and produces nothing — the test any candidate scheduler must pass. (Full doctrine, consent
-framing, and canary spec: `../../skills/job-search-agent/references/scheduling-and-consent.md`.)
+framing, and canary spec: the operator manual's `scheduling-and-consent.md`.)
 
 The ACTIONS are the same across hosts; the agent binds each to its own host. Compose the cadence from
 `schedule.frequency`. **Compose the five-field cron time expression with the shared script where a shell
@@ -160,7 +160,7 @@ schedule works via the **config-time canary**: **registration** (it appears in t
 list) + one **real run through the exact scheduled invocation** (its own permissions/env, not this
 session's) proving a fresh `runs/<id>.json` (`run_health` ≠ `blocked`), agent-data reached, and workspace
 written; on failure, diagnose + consent-gated fix + re-run; **never record the marker until the canary is
-green**. Full consent-framed flow: `../../skills/job-search-agent/references/scheduling-and-consent.md`
+green**. Full consent-framed flow: the operator manual's `scheduling-and-consent.md`
 §the canary. Only then set the scheduling marker (write rules above — recording the mechanism actually used).
 
 To turn scheduling off, stop the active schedule, then clear the scheduling marker (write rules above — no
