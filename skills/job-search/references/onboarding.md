@@ -263,8 +263,8 @@ text in your reply** (rendered markdown — never a code fence, never just the d
 
 Handle whatever the run reports, in plain language:
 
-- **Blocked** → the run halts on a named error, surfaced through the run record (whether it also exits
-  non-zero is per-harness — see your platform's adapter → Headless invocation). Show that error's cause +
+- **Blocked** → the run halts on a named error, surfaced through the run record (the run record is the
+  contract; a host exit code, where trustworthy, is an additional signal only). Show that error's cause +
   fix verbatim from `errors.md` and stop the magical framing. Most likely here:
   - **`E-QUOTA`** — agent-data's API limit for this period was reached, so nothing new was pulled. Fix: pull
     less often (e.g. `daily` instead of `hourly` in `config.yaml`) or upgrade the plan. Existing matches are

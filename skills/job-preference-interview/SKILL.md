@@ -59,7 +59,7 @@ the user's own words do (they already said "just a quick sketch" / "make it thor
 the ask). The failure mode: an invoker pre-picks "standard", the depth question silently disappears, and the
 user never learns a one-question sketch existed.
 
-Ask it as a closed choice (see your platform's adapter → Closed-choice question; `../../shared/references/voice.md` → Asking questions keeps the agnostic decision). Header `Depth`; question: "This
+Ask it as a closed choice: a short question with 2–4 labeled options; if your host has no closed-choice UI, ask the same question as prose on numbered lines (`../../shared/references/voice.md` → Asking questions). Header `Depth`; question: "This
 brief is the plain-English 'what I want' that every job posting gets judged against. How deep do you want to
 go? You can always come back for a deeper pass later."; options:
 
@@ -102,8 +102,8 @@ flags included.
   ("good culture" → "small teams, low meeting load, ships weekly"; "decent pay" → "base at least ~$X").
 - **Make answering easy.** Offer a few example options or a simple scale when it helps, and **always** let the
   user say "no preference", "skip", or "that's a dealbreaker". When a question is a genuine pick-one with 2–4
-  natural answers (IC vs. manager; remote / hybrid / onsite), ask it as a closed choice (see your platform's
-  adapter → Closed-choice question); open questions stay prose (`../../shared/references/voice.md` → Asking questions).
+  natural answers (IC vs. manager; remote / hybrid / onsite), ask it as a closed choice; if your host has no
+  closed-choice UI, ask the same question as prose on numbered lines; open questions stay prose (`../../shared/references/voice.md` → Asking questions).
 - Keep every message short — one or two sentences (plus a closed choice's option lines when you're asking
   one); don't lecture or pad. Relax this only when the user explicitly asks you to explain something at
   greater length.

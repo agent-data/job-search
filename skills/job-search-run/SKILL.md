@@ -202,14 +202,13 @@ Every run with a writable workspace ends by writing `runs/<run_id>.json` with at
 this record with `run_health:"blocked"`, `build`, and its `E-*` BEFORE stopping** — this is the
 source the home view reads, so a failed scheduled run is named on the user's next job-search home view.
 When a writable workspace exists, a HALT also writes the blocked `reports/<date>-digest.md` (named
-error + fix as the body). When
-`notify.desktop_notify_on_block` is true, fire an attention-pull alert on a blocked run — defer the
-alert mechanism to your platform's adapter → Block-alert channel.
+error + fix as the body). If your host has an attention-pull surface, fire one alert on a blocked run when
+`notify.desktop_notify_on_block` is set; otherwise the two file channels carry the failure.
 
 The durable guarantee is two file-backed channels (the blocked digest + the home-view run record);
 the alert supplements them and is capability-gated. **Surfacing is the written record — NOT the process
-exit code.** The record is primary on every harness — surface every blocked outcome through it. Whether
-the host exit code is also trustworthy is per-harness; see your platform's adapter → Headless invocation.
+exit code.** The record is primary on every harness — surface every blocked outcome through it. Where your host
+provides a trustworthy exit code, that is an additional signal only, never a replacement.
 
 Exception: **E-NO-CONFIG / first_run** means there is no workspace to write into, so no run record
 or blocked digest can be written — this is inherently visible because the next time the user opens the

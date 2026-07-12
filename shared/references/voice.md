@@ -5,8 +5,7 @@ user as one channel: the text of your replies, rendered as markdown wherever the
 They do **not** see your thinking, your tool calls, the raw results those calls return, the reference
 files you read, or the system's internal vocabulary — only the words you put in a reply. So the reply text
 *is* the whole product surface: nothing offscreen reaches the user. Which surface they're on — a terminal,
-a chat pane, an editor — and exactly how markdown renders there is your platform's adapter's concern, not
-this file's.
+a chat pane, an editor — and exactly how markdown renders depends on your host's surface.
 
 From that premise: **plain English, outcome-first** — tell the user what they're getting, never how the
 machinery works, and if a sentence would only make sense to someone who has read this repo, rewrite it.
@@ -50,8 +49,7 @@ Everything else stays prose: open-ended questions ("what's making you look now?"
 than four actions (the home view's quick actions), and soft nudges riding on other output. The
 question mechanism is machinery — the user sees only the question and its choices, so no tool name
 ever appears in your message text. On a host with no structured picker (or a non-interactive run),
-ask the same question as prose with the options on numbered lines — see your platform's adapter →
-Closed-choice question. This changes how to ask, never whether — a non-interactive run
+ask the same question as prose with the options on numbered lines. This changes how to ask, never whether — a non-interactive run
 (job-search-run) still never prompts.
 
 ## Words that never reach the user
