@@ -141,34 +141,50 @@ and are linked, never restated here — this doc is a live design-doc subject to
 
 ## 7. Consent-gated autonomy
 
-- **Statement.** Scheduling uses the host's scheduler — a native *local* scheduler where one exists
-  (it installs nothing on the machine), else a consent-gated machine schedule — and whichever applies,
-  the agent never initiates a **silent / un-consented** privileged write; scheduling is offered as a
-  yes/no, never assumed.
-- **Why.** Installing a system scheduler is a privileged, persistent change to someone's machine. Where
-  the host has a native *local* scheduler there's no reason for the agent to write the machine at all —
-  prefer it (it installs nothing). Where none exists, a consent-gated machine schedule is allowed *as a
-  fallback*: the exact line is shown first and written only on an explicit yes, and it stays
-  user-removable — it's the user's machine and their explicit call. Either way the user's own machine
-  stays theirs: scheduling is a yes/no they choose, never a silent install, and if they explicitly ask
-  for cron the skills offer the no-install option first, then defer to their choice (decision recorded
-  2026-06-11 — the former PreToolUse deny-hook was removed; it required Python on the user's machine and
-  gated something the user is entitled to do). The two tiers and the "cloud schedulers don't qualify"
-  test are owned by [shared/references/internals.md](../../shared/references/internals.md) (Scheduling
-  setup).
+- **Statement.** Scheduling advocates an **unattended** schedule — a recurring run that fires with **no
+  interactive session open**, on the host's or OS's own scheduler that survives session-close — as the
+  default; a session-bound in-session loop is a **named fallback**. It stays **consent-gated**: the exact
+  machine change is shown first, written only on an explicit yes, and stays user-removable, and the agent
+  never initiates a **silent / un-consented** privileged write. And it never records a schedule as active
+  until a **config-time canary** has proven the real unattended invocation succeeds — writes the workspace,
+  reaches agent-data. Scheduling is offered as a yes/no, never assumed.
+- **Why.** A search only earns its keep if it runs when the user isn't watching, and an in-session loop
+  stops the instant the session closes — so the overnight and next-morning runs, the ones that matter most,
+  silently never fire. This is a **conscious amendment**: the advocacy flips from *installs-nothing* (the
+  old native-local-scheduler preference) to *unattended-reliable*. The re-weighting is
+  **reliability > installs-nothing** — the install-nothing convenience yields to a schedule that actually
+  fires — but never *silent > consented*: an unattended schedule is a real, privileged machine change, so
+  its consent gate is preserved intact (`AAS-AUTO-02`, spend consent on the one-way door). It stays the
+  user's machine and their explicit call — if they ask for cron outright, the no-install option is offered
+  first, then their choice defers (the 2026-06-11 removal of the Python-dependent PreToolUse deny-hook
+  stands: it gated something the user is entitled to do). The mandatory **canary** closes the gap this
+  targets — a run that silently lacked permission to write the workspace or reach agent-data, discovered
+  only the next day (belief 4: no silent failures) — by proving the *real* unattended invocation works
+  before the schedule is called active (`PSG-SUB-06`, prove it works, not that it exists). The
+  unattended-first model (session loop as its named fallback), the "cloud schedulers don't qualify" test,
+  and the canary spec are owned by `skills/job-search-agent/references/scheduling-and-consent.md` and
+  [shared/references/internals.md](../../shared/references/internals.md) (Scheduling setup).
 - **Enforced by.** **Instruction-level + evals** — there is no runtime hook. The stance asserts **no
-  silent / un-consented privileged write**; a machine schedule shown first and approved by the user (the
-  Tier-2 fallback) is explicitly allowed. It is pinned in
+  silent / un-consented privileged write**, and now that the advocated default is an unattended schedule (a
+  real machine change) the same gate covers it: shown first, approved on a yes, user-removable. The
+  unattended-first model, the in-session-loop fallback, the "cloud schedulers don't qualify" test, and the
+  mandatory **config-time canary** are pinned in
   [shared/references/internals.md](../../shared/references/internals.md) (Scheduling setup) and
-  `skills/job-search-agent/references/scheduling-and-consent.md`, stated user-facing in
-  [docs/SECURITY.md](../SECURITY.md), and exercised by the job-search evals (scheduling is verified via
-  the offered yes/no, the composed schedule line for the cadence, and the registry marker — not by an
-  enforced prohibition).
+  `skills/job-search-agent/references/scheduling-and-consent.md`, and stated user-facing in
+  [docs/SECURITY.md](../SECURITY.md). The canary's proof routes through the **written record** — success
+  read from the run artifact, not the process exit code (belief 6) — the same no-silent-failure channel
+  owned by [shared/references/errors.md](../../shared/references/errors.md). Exercised by the job-search
+  evals (scheduling is verified via the offered yes/no, the composed schedule line for the cadence, and the
+  registry marker — not by an enforced prohibition).
 - **How to verify.** Run the job-search evals and confirm the agent *offers* scheduling as a yes/no,
-  composes the correct schedule line for the chosen cadence, records the registry marker on a yes, and
-  never writes a privileged schedule *without* consent. The evals stub scheduling (no real
-  crontab/launchd runs in tests), so a green eval reflects this consent + compose + record behavior, not
-  an enforced prohibition.
+  composes the correct schedule line for the chosen cadence, and — on a yes — records the registry marker,
+  never writing a privileged schedule *without* consent. Because the evals stub scheduling (no real
+  crontab/launchd runs in tests), the canary's "prove the real invocation before recording" gate is
+  verified by inspecting the pinned flow in
+  `skills/job-search-agent/references/scheduling-and-consent.md` +
+  [shared/references/internals.md](../../shared/references/internals.md) (marker set only after a green
+  canary); a green eval reflects the consent + compose + record behavior, not an enforced prohibition or a
+  live canary.
 
 ## 8. Conversational-first configuration
 
