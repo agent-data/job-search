@@ -56,7 +56,7 @@ agent-data`, and confirm it's authenticated — `agent-data whoami` should repor
   error. The internal codes for this state (`E-NO-AGENT-DATA`, `E-NO-AUTH`) are for your reasoning only —
   **never show them to the user** (`voice.md`). Two starting points, one path — a **missing** CLI starts at
   step 1; one that's on `PATH` but **unauthenticated** starts at step 2. Keep these steps in sync with the
-  canonical setup doc (see your platform's adapter → agent-data setup for its URL):
+  canonical, host-agnostic path in `../../../shared/references/agent-data-contract.md` → Auth:
 
   1. **Install it.** Don't ask the user for anything here — no key yet, no confirmation; the API key
      belongs to the connect step. (And don't narrate that — "this needs nothing from you" is non-event
@@ -70,8 +70,8 @@ agent-data`, and confirm it's authenticated — `agent-data whoami` should repor
      **If permission settings block the install** (stricter modes guard agent-chosen global installs),
      that's expected, not an error — no apology spiral, no stopping. One plain line and the exact command
      for the user to run themselves — `npm install -g agent-data` — e.g. "My permission settings want
-     installs run by you. Run this and I'll pick up once it lands." If your harness has an in-session run
-     affordance (see your platform's adapter → agent-data setup), offer it so you see the result directly.
+     installs run by you. Run this and I'll pick up once it lands." If your host can run a shell command
+     in-session so you see its result, use it for the install so you get the outcome directly.
      Pick up at the version check once it lands.
 
      Confirm the install took with `agent-data --version` before moving on — no pre-claimed success.
@@ -83,15 +83,19 @@ agent-data`, and confirm it's authenticated — `agent-data whoami` should repor
      - Copy the key — it starts with `mtk_` — and paste it here.
 
      Ask for the key as a plain prose question — it's a free-text secret, not a closed choice.
-  3. **Authenticate**, substituting the key they pasted into the `init` line from your platform's adapter →
-     agent-data setup (it supplies the exact command and the harness-specific flag — don't reconstruct it
-     here). This saves the key to `~/.agent-data/config.json` and installs the discovery skill for your
-     harness, if any.
+  3. **Authenticate** with the key they pasted — the same universal command on every host:
+
+     ```
+     agent-data init --api-key <KEY> -y
+     ```
+
+     Substitute their key for `<KEY>`. This saves it to `~/.agent-data/config.json`; see
+     `../../../shared/references/agent-data-contract.md` → Auth for the details (don't add a host-specific
+     selector flag).
   4. **Verify it worked** — re-check auth with `agent-data whoami` (`api_key_set: true`). If it still
      reports `api_key_set: false` or you see `401 Invalid API key`, the key was wrong — ask them to
      generate a fresh one and paste it again.
-  5. Some harnesses need a session restart before the newly installed discovery tool loads; others
-     hot-load it (see your platform's adapter → agent-data setup for the post-install load/restart note).
+  5. Some hosts may need a fresh session to pick up a newly-installed CLI on `PATH`.
 
   Once it verifies, confirm in one line and continue. If setup genuinely can't finish (e.g. they can't get a
   key right now), explain plainly where things stand and what's left — still no raw error code.

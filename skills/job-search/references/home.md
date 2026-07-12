@@ -17,10 +17,9 @@ Read just what the home view needs (all local):
 - **Schedule marker:** read it from the registry (`internals.md` → Registry) →
   `{"installed":<bool>,"mechanism":<active-mechanism>|null,"set_at":<iso>|null}` — the mechanism value
   is recorded by the active platform (see your platform's adapter → Scheduling).
-- **Update status:** follow `../../../shared/references/update.md` (it self-gates on whether the active
-  platform's adapter declares a verified update recipe) using the bundled
-  `../../../shared/references/build-stamp.md` and the registry `update_check` cache. The result is either
-  `update_available` with the local/remote build ids and the active adapter's update recipe, or no signal.
+- **Update status:** follow `../../../shared/references/update.md` (it self-gates on the cached update
+  signal) using the bundled `../../../shared/references/build-stamp.md` and the registry `update_check`
+  cache. The result is either `update_available` with the local/remote build ids, or no signal.
   Any check failure means no signal; the home still renders.
 - **Brief age:** the `updated_at:` line near the top of `<ws>/preferences.md` (fall back to `created_at` if absent).
 - **Last run health:** the newest `<ws>/runs/*.json` (its `run_health`), or fall back to the **Run health**
@@ -41,11 +40,11 @@ home view:
 
 ```text
 Update available: Job Search <local_version> <local_hash> -> <remote_version> <remote_hash> — run:
-<platform update recipe>
+<host update command>
 ```
 
-Copy `<platform update recipe>` verbatim from the active platform's adapter → Packaging & install. Do not
-show this banner on adapters without a verified update recipe.
+Fill `<host update command>` from your host's own plugin/skill update mechanism, per `update.md` → Banner
+— the command that updates an already-installed plugin/skill on the host you're running on.
 
 Keep it tight. A good shape:
 

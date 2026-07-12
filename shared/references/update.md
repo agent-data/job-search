@@ -18,11 +18,10 @@ manifest at runtime.
 
 ## When the banner applies
 
-Show the update banner only when the **active platform's adapter declares a verified update recipe** — a
-`### Update recipe` block under its **Packaging & install** section (the Banner section below reads that
-recipe). An adapter without one skips the update check and banner: it may still load and run, but its update
-command path is not a verified product surface yet. This is a self-declared capability gate, not a host
-allowlist — an adapter becomes eligible by carrying a verified recipe, not by being named here.
+Show the update banner whenever an update is available — i.e. the Comparison below finds the cached update
+signal reports a newer build than the local one. The banner tells the user to update through their host's
+own plugin/skill update mechanism; there is no per-host eligibility gate. (A missing or malformed local
+stamp still suppresses the banner — see **Local build** above.)
 
 ## Registry cache
 
@@ -81,9 +80,10 @@ When an update is available, render one compact line above the normal home view:
 
 ```text
 Update available: Job Search <local_version> <local_hash> -> <remote_version> <remote_hash> — run:
-<platform update recipe>
+<host update command>
 ```
 
-Copy the platform update recipe verbatim from the active platform's adapter → Packaging & install.
-Do not reconstruct command tokens in this file. If no verified update recipe exists for the active adapter,
-skip the banner.
+Fill `<host update command>` with your host's own plugin/skill update mechanism — the command a user runs
+to update an already-installed plugin/skill on the host you're running on — composed for that host. If the
+host has no such command, drop the "— run: …" tail and tell the user to reinstall the plugin the way they
+first installed it.
