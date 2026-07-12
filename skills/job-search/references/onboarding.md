@@ -284,38 +284,53 @@ Don't show run internals or scores — just the matches and, if relevant, the na
 
 ## 7. Scheduling (offer it)
 
-Offer to keep the search running automatically, using your platform's scheduler (see your platform's
-adapter → Scheduling). Follow `internals.md` — it is **two-tier**: a native **local** scheduler (preferred)
-installs nothing on the user's machine; where none exists, a **consent-gated machine schedule** (cron /
-launchd) is the sanctioned fallback — shown before it's written, started only on an explicit yes, never
-silent, and user-removable. Say it plainly, including the one tradeoff for whichever tier applies (a
-session-bound local loop runs only while a session is open; a machine schedule runs unattended but writes
-a job to the user's machine).
+Offer to keep the search running automatically. **Advocate the unattended schedule** as the default — one
+that keeps firing with **no session open**, on the host's or the OS's own scheduler (a `cron` or `launchd`
+job, or the host's native unattended scheduler) — because that's the only way the overnight and
+next-morning runs, the ones that matter most, actually happen; an in-session loop stops the instant the
+session closes. Compose the schedule for your own host (there's no per-host recipe to paste — `internals.md`
+→ Scheduling setup). The **in-session loop is the named fallback**, for a host with no unattended scheduler
+or a user who'd rather not change their machine: tell them plainly it **runs only while a session is open**,
+so a quiet overnight is expected and closing the session stops it.
+
+The unattended schedule is a real change to the user's machine, so the consent core is intact: **show the
+exact line first, write it only on an explicit yes, and leave it user-removable** — never silent, never
+auto-installed.
 
 Ask it as a closed choice (`voice.md` → Asking questions). Header `Schedule`; question: "Want me to keep
 checking automatically? New matches will land in a digest without you having to ask."; options: **Yes, keep
-checking** — "runs on your chosen cadence" · **No, I'll run it myself** — "a one-off search stays one
-command away".
+checking** — "runs on its own, on your chosen cadence" · **No, I'll run it myself** — "a one-off search
+stays one command away".
 
-**On yes:**
+**On yes** — start it, prove it, *then* record it:
 
-1. Compose the cadence for the chosen frequency from `internals.md` → Scheduling setup (the
-   frequency→interval/cron mapping lives in your platform's adapter → Run recipe).
-2. **Start the schedule** with your platform's scheduler (see your platform's adapter → Scheduling). If
-   that's a consent-gated machine schedule (Tier 2), **show the user the exact line first and start it only
-   on their explicit yes** — never write a crontab/launchd entry silently. Then record it so you don't
-   re-ask: set the scheduling marker (`internals.md` → Registry write rules — recording the mechanism
-   actually used).
-3. Show the user the exact recipe so they can restart or remove it anytime.
+1. **Compose the cadence** for the chosen frequency from `internals.md` → Scheduling setup (which builds the
+   cron time line with `schedule-line.sh` where a shell runtime exists); the host wraps it with its own
+   command / launchd / interval translation.
+2. **Start the unattended schedule** on the host's own scheduler — but **show the user the exact machine
+   change first and start it only on their explicit yes**; never write a crontab/launchd entry silently.
+3. **Prove it works before you record it — run the canary.** Never tell the user it's scheduled until its
+   exact unattended invocation has succeeded end to end. Confirm the schedule is **registered** (it appears
+   in the host's scheduler), then trigger **one real run through that scheduled invocation** — its own
+   permissions and environment, **not this session's** (this session already holds the access the real run
+   must prove, so running the canary here would pass while the real scheduled run fails) — and confirm it
+   left a fresh, unblocked run record, reached agent-data, and wrote the workspace. The user gets a live
+   digest out of it. If the canary **fails**: diagnose the gap, propose and show the exact fix, apply it on
+   the user's yes, and re-run — loop until green. If it genuinely can't be made to work, **name the gap
+   plainly and do not claim it's scheduled.** Full flow, consent framing, and failure loop:
+   `../../job-search-agent/references/scheduling-and-consent.md` §the canary.
+4. **Only after a green canary, record it** so you don't re-ask: set the scheduling marker (`internals.md` →
+   Registry write rules — recording the mechanism actually used).
 
 **On no:** leave it unscheduled — tell them they can turn it on later by just asking, and that a one-off run
-is always one command away (the exact invocation is in your platform's adapter → Run recipe).
+is always one command away (the composed one-off recipe below).
 
-**Either way, show the recurring-run and one-off-run recipes verbatim from your platform's adapter → Run
-recipe** so the user can start or restart it themselves — copy those lines exactly as written; do not
-reconstruct the tokens here. If `search.parallel_detail_reads: true`, choose the adapter's approved-parallel
-recipe/prompt variant; where the adapter uses a scheduled-prompt authorization, the scheduled prompt
-includes that adapter's required authorization sentence (your platform's adapter → Run recipe / Scheduling).
+**Either way, compose the recurring-run and one-off-run recipes for the host and show both to the user**, so
+they can re-run the search on demand and restart or remove the schedule themselves. If
+`search.parallel_detail_reads: true` and your host gates parallel subagents behind approval, the scheduled
+prompt must include the exact subagent-authorization sentence your host requires — the saved config records
+the user's preference, and that sentence is the scheduled run's explicit authorization. This pack has no
+per-host adapter, so you compose that sentence, and the recipes, for your host yourself.
 
 ## 8. Home
 
@@ -348,9 +363,12 @@ runs", "update my preferences", "show the latest digest").
       the default detail-read model — the mid-tier reviewer floor (`balanced`-tier) — named as the concrete model the agent binds it to from its own roster
 - [ ] first **live** `job-search-run` done; strong/moderate matches shown — or the named error if blocked
 - [ ] shown matches include the digest reasoning and any "confirm" warning, not just titles/companies
-- [ ] scheduling offered (two-tier, per the adapter); on yes started + marker set; run recipe shown either
-      way; if parallel detail reads were approved on an approval-gating host, the scheduled prompt includes
-      the adapter's required parallel-subagent authorization
+- [ ] scheduling offered with the **unattended** schedule advocated as default (in-session loop the named
+      fallback — "runs only while a session is open"); on yes the exact machine change shown first and
+      started on the user's yes, the **canary green (registration + one real scheduled run) before** the
+      marker was set — or the gap named and NOT claimed scheduled; recurring + one-off recipes composed for
+      the host and shown either way; if parallel detail reads were approved on an approval-gating host, the
+      scheduled prompt carries the host's required subagent-authorization sentence
 - [ ] every ask carried one line of plain-English context; the four closed choices (workspace location,
       interview-or-import, frequency, scheduling) asked as closed choices; no internal vocabulary
       reached the user (`voice.md`)
