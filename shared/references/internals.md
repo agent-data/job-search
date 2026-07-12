@@ -44,7 +44,8 @@ does.
   `{"installed": false, "mechanism": null, "set_at": null}` when absent.
 - **Set the scheduling marker** (a recurring run was started): merge
   `"scheduling": {"installed": true, "mechanism": "<active mechanism>", "set_at": "<UTC ISO>"}` — record the
-  mechanism actually used (see your platform's adapter → Scheduling for its value), and take the timestamp
+  mechanism actually used: a short token for the scheduler the agent bound the run to (an unattended
+  `cron`/`launchd` schedule, or `loop` for the in-session fallback). Take the timestamp
   from `date -u +%Y-%m-%dT%H:%M:%S+00:00`.
 - **Clear the scheduling marker** (turn-off): merge
   `"scheduling": {"installed": false, "mechanism": null, "set_at": null}`.
@@ -121,23 +122,27 @@ The user changes config by **chatting**; manual editing is an escape hatch. To a
   the work, not a giant single pull — keep `limit` sensible (its range and default live in `conventions.md`), run several varied queries
   (role synonyms, key locations, remote variants), run often, and dedup; distinct postings accumulate across runs.
 - **Change frequency:** set `schedule.frequency` to one of `hourly | every-2-hours | every-6-hours | daily | weekly`
-  (the cadence→interval mapping for the active scheduler lives in your platform's adapter → Run recipe).
+  (the cadence→cron mapping the active scheduler uses is composed in → Scheduling setup below).
 - **Change run time:** set `schedule.time` (HH:MM, used for daily/weekly).
 - Always keep `version: 1`. NEVER add a score or weight field (philosophy).
 
 ## Scheduling setup
-Schedule the recurring run on the cadence the user picks, using the host's scheduler — the MECHANISM lives in
-your platform's adapter → Scheduling. Read it: it is **two-tier**. **Tier 1** — a native LOCAL scheduler
-(consent-based, installs nothing on the user's machine): use it where the adapter names one. **Tier 2** — no
-native local scheduler: a consent-gated machine-level cron/launchd schedule is the **sanctioned fallback** —
-only on an explicit user yes, with the exact line shown before it is written, never silent, never
-auto-installed, and user-removable. A cloud scheduler that cannot see the local `~/.job-search` workspace or
-the local agent-data auth does **not** qualify on either tier — it is skipped (a run that cannot reach the
-user's data and credentials produces nothing).
+**Advocate an unattended schedule** for the recurring run — one that keeps firing with **no interactive
+session open** — on the host's or the OS's own scheduler that survives session-close (a `cron` or `launchd`
+job, or the host's native unattended scheduler); where that scheduler can re-fire a run missed while the
+machine slept, prefer it. The agent composes the schedule for its own host — there is no per-host recipe to
+look up. Advocate it because an in-session loop stops the instant the session closes, so the overnight and
+next-morning runs — the ones that matter most — silently never happen. When the host has **no** unattended
+scheduler, or the user declines the machine change, offer an **in-session loop** — a recurring run driven
+from inside an open session that installs nothing but runs **only while a session is open** — as the **named
+fallback**. On either path, **cloud schedulers do not qualify**: a cloud runner can't see the local
+`~/.job-search` workspace or the local agent-data auth, so a run there reaches neither the user's data nor
+their credentials and produces nothing — the test any candidate scheduler must pass. (Full doctrine, consent
+framing, and canary spec: `../../skills/job-search-agent/references/scheduling-and-consent.md`.)
 
-The ACTIONS are the same across hosts. Compose the cadence from `schedule.frequency` (the adapter's Run
-recipe carries the cadence→interval/cron mapping). **Compose the five-field cron time expression with the
-shared script where a shell runtime exists:** `../scripts/mechanics/schedule-line.sh <frequency> [HH:MM]`
+The ACTIONS are the same across hosts; the agent binds each to its own host. Compose the cadence from
+`schedule.frequency`. **Compose the five-field cron time expression with the shared script where a shell
+runtime exists:** `../scripts/mechanics/schedule-line.sh <frequency> [HH:MM]`
 prints `minute hour day-of-month month day-of-week` for the cadence; the host then wraps it with its own
 command/launchd or interval translation. **Fallback (no shell runtime) — compose it directly:**
 `hourly → 0 * * * *`; `every-2-hours → 0 */2 * * *`; `every-6-hours → 0 */6 * * *`;
@@ -145,10 +150,18 @@ command/launchd or interval translation. **Fallback (no shell runtime) — compo
 `schedule.time` (`HH:MM`) is honored for daily/weekly and its **default is `08:00`**; strip a single leading
 zero so cron gets `8`/`5`, not `08`/`05`. (Both soft-defaults — Monday for weekly, `08:00` for the time —
 match the script and are pinned by `tests/test_mechanics_scripts.py`.) Offer scheduling as a yes/no; check
-the scheduling marker first so you never re-ask. On yes, start the schedule and set the scheduling marker (write rules above —
-recording the mechanism actually used). ALWAYS also show the **recurring-run recipe** and the **one-off-run
-recipe** verbatim — copy them exactly as written in your platform's adapter → Run recipe; do not reconstruct
-those tokens here.
+the scheduling marker first so you never re-ask. On yes — after showing the user the exact machine change —
+start the **unattended schedule** (the in-session loop only as the fallback above). ALWAYS also **compose the
+recurring-run recipe and the one-off-run recipe for the host** and show both to the user verbatim, so they
+can re-run the search on demand and stop or restart the schedule themselves.
 
-To turn scheduling off, stop the active schedule (the adapter's Scheduling section gives the teardown for
-Tier 1 vs Tier 2), then clear the scheduling marker (write rules above — no more stale `installed: true`).
+**Verify before recording — the canary (mandatory).** Before recording the scheduling marker, verify the
+schedule works via the **config-time canary**: **registration** (it appears in the host scheduler's job
+list) + one **real run through the exact scheduled invocation** (its own permissions/env, not this
+session's) proving a fresh `runs/<id>.json` (`run_health` ≠ `blocked`), agent-data reached, and workspace
+written; on failure, diagnose + consent-gated fix + re-run; **never record the marker until the canary is
+green**. Full consent-framed flow: `../../skills/job-search-agent/references/scheduling-and-consent.md`
+§the canary. Only then set the scheduling marker (write rules above — recording the mechanism actually used).
+
+To turn scheduling off, stop the active schedule, then clear the scheduling marker (write rules above — no
+more stale `installed: true`).
