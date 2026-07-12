@@ -1,8 +1,8 @@
 # OS internals — registry, workspace discovery, config & scheduling
 
 The "OS state" that survives across sessions so any skill finds the user's data identically. There is no
-helper script: the host agent performs these procedures itself, with its file tools (see your platform's
-adapter → Tool map / Whole-file write) and the exact shell lines below. Never hard-code or re-derive the
+helper script: the host agent performs these procedures itself, with its own file-read/write and shell
+tools, plus the exact shell lines below. Never hard-code or re-derive the
 paths and precedence rules — follow the procedures as written; they are the contract every skill shares.
 
 ## Registry (machine-managed OS state — JSON, not YAML)
