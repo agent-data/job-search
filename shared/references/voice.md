@@ -72,6 +72,6 @@ ask the same question as prose with the options on numbered lines. This changes 
   But the error *code* itself (`E-*`) is an internal identifier and never appears in user-facing text:
   surface the plain cause+fix, never "E-NO-AGENT-DATA". The one exception is the `job-search-agent`
   operator manual (for whoever configures the agent), which may name codes when troubleshooting.
-- **Things the user types.** The run recipe and the commands the user types are shown verbatim (from your platform's adapter → Run recipe).
+- **Things the user types.** The run recipe and the commands the user types are shown verbatim (composed for the host).
 - **Where data lives, when asked.** `config.yaml` / `preferences.md` may be named when the user
   asks where something is stored. "Digest" and "brief" are product vocabulary — fine everywhere.

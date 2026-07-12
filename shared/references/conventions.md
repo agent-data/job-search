@@ -31,8 +31,8 @@ search:
   detail_model: "balanced"   # tier the per-posting fit VERDICT runs at — the mid-tier reviewer floor (default): fast | balanced | high | inherit (the agent binds each tier to a concrete model from its own roster — the least-powerful that does the task well; the verdict is a judgment, so never the cheapest)
   # parallel_detail_reads: true  # optional: approved use of parallel subagents for detail reads where the host supports them
 schedule:
-  frequency: "daily"         # hourly | every-2-hours | every-6-hours | daily | weekly — the cadence the schedule runs on (its mapping for the active scheduler → your platform's adapter → Scheduling)
-  time: "08:00"              # HH:MM, honored when the active scheduler is wall-clock-based (a Tier-2 cron/launchd schedule); ignored when it is interval-only (a Tier-1 in-session loop) — see your platform's adapter → Scheduling
+  frequency: "daily"         # hourly | every-2-hours | every-6-hours | daily | weekly — the cadence the schedule runs on (its cron mapping composed via `schedule-line.sh` — see `internals.md` → Scheduling setup)
+  time: "08:00"              # HH:MM, honored when the active scheduler is wall-clock-based (an unattended cron/launchd schedule); ignored when it is interval-only (an in-session loop)
   timezone: "America/Los_Angeles"
 notify:
   digest_path_template: "reports/{date}-digest.md"

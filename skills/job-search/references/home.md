@@ -16,7 +16,8 @@ Read just what the home view needs (all local):
 
 - **Schedule marker:** read it from the registry (`internals.md` → Registry) →
   `{"installed":<bool>,"mechanism":<active-mechanism>|null,"set_at":<iso>|null}` — the mechanism value
-  is recorded by the active platform (see your platform's adapter → Scheduling).
+  records the scheduler the recurring run was bound to, set by the scheduling flow (`internals.md` →
+  Registry write rules).
 - **Update status:** follow `../../../shared/references/update.md` (it self-gates on the cached update
   signal) using the bundled `../../../shared/references/build-stamp.md` and the registry `update_check`
   cache. The result is either `update_available` with the local/remote build ids, or no signal.
@@ -113,12 +114,11 @@ Offer these and apply each by **chatting**, editing `config.yaml` per the `inter
 - **Show your preferences brief** → print `<ws>/preferences.md`'s body in your reply as normal message text
   (wherever the user is reading it — no code fence, skip the front-matter lines, never just the path).
 - **Change or turn off the schedule** → re-run the scheduling flow in `onboarding.md` with the new cadence,
-  then update the scheduling marker. Show the **recurring-run recipe** verbatim from your platform's adapter
-  → Run recipe — copy exactly, do not reconstruct the tokens. If `search.parallel_detail_reads: true`, choose
-  the adapter's approved-parallel recipe/prompt variant; where the adapter uses a scheduled-prompt
-  authorization, the scheduled prompt must include that adapter's required authorization sentence. To turn it
-  off, apply the teardown for whichever scheduling tier is active (see your platform's adapter → Scheduling),
-  then clear the scheduling marker so it reads `installed: false`, and tell the user it's off.
+  then update the scheduling marker. Show the **recurring-run recipe** composed for the host verbatim —
+  copy exactly, do not reconstruct the tokens; when `search.parallel_detail_reads: true`, the composed
+  recipe must carry whatever authorization the host's unattended parallel fan-out needs. To turn it
+  off, stop the active schedule, then clear the scheduling marker (`internals.md` → Registry write rules)
+  so it reads `installed: false`, and tell the user it's off.
 - **Show the latest digest** → print the newest `reports/<date>-digest.md` (strong → moderate → weak →
   filtered-out) unchanged, as normal message text in your reply (wherever the user is reading it — never
   inside a code fence, never just the file path).

@@ -39,7 +39,7 @@ There is no helper script — the OS state is plain files, and every operation o
 |---|---|
 | Find the active workspace + `first_run` + `source` | `../../shared/references/internals.md` → Workspace discovery — the one correct way to find the workspace |
 | Record the active workspace in the registry | `../../shared/references/internals.md` → Registry write rules |
-| Compose the scheduling run recipe for a frequency | your platform's adapter → Run recipe (interval table and verbatim run recipe; namespaced target for plugin installs — plugin skills are only invocable namespaced; bare for loose skills) |
+| Compose the scheduling run recipe for a frequency | `../../shared/references/internals.md` → Scheduling setup (compose the cadence; the host composes its own run recipe) |
 | Read / set / clear the scheduling marker | `../../shared/references/internals.md` → Registry (the `scheduling` object) |
 | Known ids — the dedup set from `jobs.jsonl` | `../../shared/references/conventions.md` → §jobs.jsonl operations |
 | Append one evaluated or status-changed event | `../../shared/references/conventions.md` → §jobs.jsonl operations |
@@ -94,17 +94,15 @@ The agent is designed to be extended — add queries, swap the brief, point the 
 
 ## Scheduling
 
-The scheduling **mechanism** lives in your platform's adapter → Scheduling; the **actions** below are the same on every host. The model is **two-tier** — use whichever applies to the active host:
+The recurring run schedules on the **host's or the OS's own scheduler**; the actions are the same on every host, and the agent composes the schedule and the run recipe for its own host — there is no per-host recipe to look up here.
 
-- **Tier 1 — native local scheduler (preferred).** Where the host has one (see your adapter → Scheduling), use it: it runs where it can see the local `~/.job-search` workspace and the local agent-data auth, and **installs nothing on the user's machine** (no crontab, no launchd, no privileged write). The exact recipe lives in the adapter — do not spell it here.
-- **Tier 2 — no native local scheduler.** A **consent-gated** machine-level cron/launchd schedule is the sanctioned fallback — written **only on an explicit user yes, with the exact line shown before it is written**, never silent, never auto-installed, and user-removable.
-- **Cloud schedulers do not qualify** — a cloud agent can't see the local workspace or the agent-data auth, so a run there reaches neither the user's data nor their credentials and produces nothing.
+- **Unattended schedule (the default).** Advocate a schedule that keeps firing with **no interactive session open** — a `cron` or `launchd` job, or the host's native unattended scheduler that survives session-close. A search is only useful when it runs while the user isn't watching, so reliability outweighs installing nothing. It stays a real machine change: shown before it is written, applied only on an explicit yes, user-removable — never silent, never auto-installed.
+- **In-session loop (the fallback).** When the host has no unattended scheduler, or the user declines the machine change, offer an in-session loop — installs nothing but runs **only while a session is open**. The named fallback, not the recommendation.
+- **Cloud schedulers do not qualify** — a cloud runner can't see the local `~/.job-search` workspace or the local agent-data auth, so a run there reaches neither the user's data nor their credentials and produces nothing.
 
-A given host sits on **whichever tier its adapter names** — a Tier-1-only host never reaches for the Tier-2 fallback. Read the adapter to learn which applies.
+To start scheduling: offer it as a yes/no (check the scheduling marker first — never re-ask if already set); compose the run recipe for the host; start the unattended schedule on an affirmative answer; **prove it with the canary before recording** — never call it scheduled until the exact unattended invocation has been observed to succeed end to end — then set the scheduling marker. To turn scheduling off: stop the active schedule, then clear the scheduling marker. Always show the user the verbatim run recipe composed for the host — copy it exactly as written; do not reconstruct those tokens.
 
-To start scheduling: offer it as a yes/no (check the scheduling marker first — never re-ask if already set); compose the run recipe from your adapter → Run recipe; start it on an affirmative answer; set the scheduling marker. To turn scheduling off: stop the active schedule (see your adapter → Scheduling for the teardown), then clear the scheduling marker. Always show the user the verbatim run recipe **from your adapter → Run recipe** — copy it exactly as written; do not reconstruct those tokens.
-
-For the full consent workflow — including what to do when the user explicitly asks for cron or launchd — see `references/scheduling-and-consent.md`.
+For the full flow — unattended-first advocacy, the consent line, and the mandatory canary (including what to do when the user explicitly asks for cron or launchd) — see `references/scheduling-and-consent.md`.
 
 ---
 
@@ -123,7 +121,7 @@ For the full `E-*` table with exact cause and fix wording: see `../../shared/ref
 | Runs complete but 0 matches even though real postings exist | Query keywords don't match the brief's must-haves | Broaden the query in `config.yaml`, or run the **job-preference-interview** skill to align the brief |
 | 0 results (literally empty) | Keywords too narrow or location too specific | Broaden `keywords` or `location` in the query |
 | Last run: blocked — E-QUOTA | API limit reached for the period | Lower `schedule.frequency` (e.g. `daily` instead of `hourly`), or upgrade your plan at agent-data.motie.dev |
-| Schedule isn't firing | The active schedule stopped (e.g. the host session closed) | Check the scheduling marker in the registry (`../../shared/references/internals.md`); restart it with the run recipe from your platform's adapter → Run recipe (namespaced for plugin installs) |
+| Schedule isn't firing | The active schedule stopped (e.g. an in-session loop's session closed) | Check the scheduling marker in the registry (`../../shared/references/internals.md`); restart it with the run recipe composed for the host |
 | "Stale brief" nudge in the digest | `preferences.md` hasn't been updated in a long time | Run the **job-preference-interview** skill to refresh it |
 
 ---
