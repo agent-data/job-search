@@ -112,18 +112,22 @@ Read these before running, and follow them exactly:
    | `false` | sequential reads (an explicit user opt-out) |
    | unset   | your host's default — a host that gates subagents behind user approval reads sequentially until approved; every other host uses the parallel fan-out |
 
-   **Dispatch the verdict at the mid-tier reviewer floor, with an EXPLICIT model.** The per-posting fit
-   verdict is a judgment, not a mechanical step, so it does not run on the cheapest tier. For the parallel
-   fan-out, dispatch queued postings as one concurrent batch where capacity allows, one subagent per posting,
-   each given an explicitly-set model resolved from `search.detail_model` — default `balanced`, the mid-tier
-   reviewer floor (see `../../shared/references/conventions.md`), **scaled up** to the more capable tier for a
-   higher-risk or ambiguous posting (one whose scan left a must-have/dealbreaker unconfirmed or surfaced
-   conflicting signals), never down to the cheapest `fast` and never reflexively the most capable; the model
-   id each tier maps to is in your platform's adapter → Model tiers. **Never omit the model** — an omitted
-   model silently inherits the session's, defaulting the judgment to whatever is cheapest to hand; `inherit`
-   is the one value that maps to this run's own model, and only because the user set it. The genuinely
-   mechanical bulk — dedup, the summary prefilter (step 3), provenance — already runs cheap in this primary
-   context and the shared scripts, independent of this knob. If the host applies a subagent/thread limit,
+   **Dispatch the verdict at the mid-tier reviewer floor, with an EXPLICIT model.** Dispatch every subtask
+   with an **explicitly specified** model (a required slot — never omit it, or it silently inherits the wrong
+   tier). Use the **least powerful model that can handle the task well, to conserve cost and increase speed**:
+   the mechanical steps (dedup, prefilter, extraction, provenance) on your **cheapest** model; the per-posting
+   fit **verdict is a judgment, so never your cheapest** — the least-powerful model that does *that judgment*
+   well, scaled up for a higher-risk or ambiguous posting (one whose scan left a must-have/dealbreaker
+   unconfirmed or surfaced conflicting signals). **Bind the tier to a concrete model from your own roster.**
+   For the parallel fan-out, dispatch queued postings as one concurrent batch where capacity allows, one
+   subagent per posting, each given that explicit model. `search.detail_model` carries the intent as the
+   portable tier token: default `balanced`, the mid-tier reviewer floor (see
+   `../../shared/references/conventions.md`); `high` for that higher-risk or ambiguous case; never down to the
+   cheapest `fast` and never reflexively the most capable. **Never omit the model** — an omitted model
+   silently inherits the session's, defaulting the judgment to whatever is cheapest to hand; `inherit` is the
+   one value that binds to this run's own model, and only because the user set it. The genuinely mechanical
+   bulk here — dedup, the summary prefilter (step 3), provenance — runs cheap in this primary context and the
+   shared scripts, independent of the `search.detail_model` knob. If the host applies a subagent/thread limit,
    continue in rolling batches; if it refuses subagent spawning or no slot is available, fall back to
    sequential reads (the verdict then runs on this run's own model). Capacity or authorization fallback is not
    a run-health error, and no posting is dropped.
