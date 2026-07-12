@@ -2,7 +2,7 @@
 title: Core Beliefs — Agent-First Operating Principles
 status: current
 verified: partial
-last_reviewed: 2026-07-11
+last_reviewed: 2026-07-12
 code_refs: [scripts/philosophy_guard.py, scripts/doc_lint.py, scripts/build.sh, tests/test_reference_resolution.py, tests/test_mechanics_scripts.py, shared/scripts/mechanics/dedup.sh, .github/workflows/ci.yml, shared/references/internals.md, shared/references/conventions.md]
 ---
 # Core Beliefs — Agent-First Operating Principles
@@ -237,7 +237,11 @@ and are linked, never restated here — this doc is a live design-doc subject to
 - **Statement.** Independent work runs concurrently, not in sequence — a run dispatches mutually-independent
   subtasks (e.g. one detail-read subagent per posting) wherever the host supports it, and briefs each like a
   colleague with zero context. The one carve-out: hosts that gate subagents behind explicit user approval
-  (e.g. Codex) wait for that approval before fanning out; every other host parallelizes by default.
+  (e.g. Codex) wait for that approval before fanning out; every other host parallelizes by default. The tier
+  binds to a concrete model by the agent's self-selection from its own roster — not a per-host adapter table
+  (the `AAS-LANG-04` deviation for this adapter-free pack); the required-slot rule (`AAS-AUTO-07`) and the
+  judgment-never-cheapest floor (`AAS-AUTO-11`) are the mitigation for the one host fact with no runtime
+  backstop.
 - **Why.** Time-to-value is a product feature. Parallelizing independent work turns a serial crawl into one
   concurrent step; isolating each subtask in its own subagent keeps the primary context clean and dispatches each
   isolated subtask on the least powerful model that can do it *well* — sp's spectrum: mechanical steps (dedup,
@@ -249,6 +253,9 @@ and are linked, never restated here — this doc is a live design-doc subject to
   every skill); `job-search-run` embodies it (scan → parallel per-posting fan-out by default, sequential only
   where the host lacks the primitive or awaits subagent approval → consolidate; the `search.detail_model` and
   parallel-approval knobs live in [shared/references/conventions.md](../../shared/references/conventions.md)).
+  Model self-selection is owned by the runner (`skills/job-search-run/SKILL.md`) + `parallelism.md`, with **no
+  adapter model-tier table**: the `config.yaml search.detail_model` tier token is the portable intent, and the
+  agent binds the concrete model from its own roster.
 - **How to verify.** Inspect [shared/references/parallelism.md](../../shared/references/parallelism.md) and
   `skills/job-search-run/SKILL.md`; confirm mutually-independent work is dispatched concurrently by default
   (sequential only where the host lacks the primitive or awaits subagent approval), and that the fallback
