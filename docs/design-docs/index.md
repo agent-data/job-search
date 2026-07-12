@@ -40,6 +40,7 @@ contracts now live in `shared/references/`).
 - [Plan B/D — Handoff](2026-06-05-plan-b-d-handoff.md) — _status: historical_
 
 ## Forward-looking (aspirational)
+- [Verify-don't-encode: adapter-free portability, unattended scheduling, and config-time run verification](2026-07-11-verify-dont-encode-design.md) — _status: aspirational_
 - [Plugin ↔ guide alignment: refactor design](2026-07-11-plugin-guide-alignment-design.md) — _status: aspirational_
 - [Multi-Harness Portability — Research Dossier](multi-harness-portability.md) — _status: aspirational_
 
