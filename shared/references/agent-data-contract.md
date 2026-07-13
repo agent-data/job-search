@@ -1,5 +1,11 @@
 # agent-data Job Postings API — contract
 
+_Last verified against the live CLI: 2026-07-06._ This mirrors a live, evolving service — the routes,
+fields, and error envelopes below are what the CLI returned as of that date. When the actual output
+disagrees (a new field, a renamed error, a source added or dropped), trust the live response, treat the
+stale line here as the thing to fix, and re-stamp this date when you re-verify. Never fill a gap from
+memory: if a field, source, or error code isn't in the real output, it isn't in the contract.
+
 One listing, four sources. Accessed via the `agent-data` CLI (JSON stdout, errors to stderr,
 exit 1 on failure). Every `search-jobs` / `get-posting` call targets exactly ONE source via
 `--source` (`linkedin | ashby | greenhouse | lever`; omitted → `linkedin`) — the API never fans out across
@@ -7,10 +13,24 @@ sources. Aggregation (the per-source fan-out, dedup, and merging) is this client
 
 - **Listing id:** `f9a6ec16-0bfd-44d8-b3ee-073776745ee7` (serves all sources)
 - **CLI shape:** `agent-data call <listing-id> <slug> [--flag value ...]`. Add `--dry-run` to print the
-  resolved request without executing. `agent-data whoami` reports auth.
+  resolved request without executing. Authenticate first — see **Auth** below.
 - **Dedup key:** the PAIR (**`source`**, **`source_id`**) — `source_id` is stable only within its
   source. The row's `id` (format `jp_<12-hex>`) is listing-scoped and NOT stable — use it only as a
   short-lived pairing token with `source_url`.
+
+## Auth
+
+Authenticate once, the same way on every host:
+
+```
+agent-data init --api-key <KEY> -y
+```
+
+This writes the key to `~/.agent-data/config.json` **without installing a discovery skill** — the plugin
+resolves every route from this contract and needs none. `agent-data init` also accepts host-specific
+selector flags that additionally drop a loose discovery skill for that host; the plugin needs none, so
+do **not** pass one here. The CLI must be on `PATH` in the run's execution environment, with outbound
+network egress to the agent-data endpoint permitted. Verify with `agent-data whoami` → `api_key_set: true`.
 
 ## Route: status  (run this first)
 ```

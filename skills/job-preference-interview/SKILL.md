@@ -1,8 +1,6 @@
 ---
 name: job-preference-interview
 description: Build or update the user's Job Preferences Brief at a depth they choose — a quick free-form sketch (~1 question), a standard interview, or a thorough pass — producing a prose preferences.md (Summary, Must-haves/dealbreakers, Strong preferences, Nice-to-haves, Red flags). Imports an existing brief too, and can deepen a light brief later. Use when the user wants to set up or refine what they want in a job, or when job-search onboarding needs a brief — "set up my job preferences", "what I want in a job", "redo my preferences interview", "change my must-haves", "import my preferences brief". Not for judging a specific posting (→ evaluate-job-fit).
-disable-model-invocation: false
-user-invocable: true
 ---
 
 # job-preference-interview
@@ -12,7 +10,7 @@ user-invocable: true
 
 Build the user's **Job Preferences Brief** at a depth they choose — from a one-line sketch to a thorough
 interview — the prose `preferences.md` that `evaluate-job-fit` later reads next to a posting to judge it.
-Follow `references/voice.md` for how you talk and how you present the finished brief — and don't narrate
+Follow `../../shared/references/voice.md` for how you talk and how you present the finished brief — and don't narrate
 setup mechanics (no "resolving the workspace", no reference-file talk; your first words open the
 conversation itself).
 
@@ -30,7 +28,7 @@ This skill is **interactive only** — it asks questions and waits for answers. 
 scheduled run.
 
 ## Where it writes
-Find the workspace with the **Discovery procedure** in `references/internals.md` (one fact-gathering
+Find the workspace with the **Discovery procedure** in `../../shared/references/internals.md` (one fact-gathering
 command, then its precedence rules) and never hard-code its path.
 
 - Write the brief to `<workspace>/<config.workspace.preferences_path>` (default `preferences.md`).
@@ -61,7 +59,7 @@ the user's own words do (they already said "just a quick sketch" / "make it thor
 the ask). The failure mode: an invoker pre-picks "standard", the depth question silently disappears, and the
 user never learns a one-question sketch existed.
 
-Ask it as a closed choice (see your platform's adapter → Closed-choice question; `references/voice.md` → Asking questions keeps the agnostic decision). Header `Depth`; question: "This
+Ask it as a closed choice: a short question with 2–4 labeled options; if your host has no closed-choice UI, ask the same question as prose on numbered lines (`../../shared/references/voice.md` → Asking questions). Header `Depth`; question: "This
 brief is the plain-English 'what I want' that every job posting gets judged against. How deep do you want to
 go? You can always come back for a deeper pass later."; options:
 
@@ -104,9 +102,11 @@ flags included.
   ("good culture" → "small teams, low meeting load, ships weekly"; "decent pay" → "base at least ~$X").
 - **Make answering easy.** Offer a few example options or a simple scale when it helps, and **always** let the
   user say "no preference", "skip", or "that's a dealbreaker". When a question is a genuine pick-one with 2–4
-  natural answers (IC vs. manager; remote / hybrid / onsite), ask it as a closed choice (see your platform's
-  adapter → Closed-choice question); open questions stay prose (`references/voice.md` → Asking questions).
-- Keep every message short. Don't lecture or pad.
+  natural answers (IC vs. manager; remote / hybrid / onsite), ask it as a closed choice; if your host has no
+  closed-choice UI, ask the same question as prose on numbered lines; open questions stay prose (`../../shared/references/voice.md` → Asking questions).
+- Keep every message short — one or two sentences (plus a closed choice's option lines when you're asking
+  one); don't lecture or pad. Relax this only when the user explicitly asks you to explain something at
+  greater length.
 
 ### Flow
 1. **Start** with the user's current situation and what's prompting the search ("What's making you look now?"),
@@ -146,7 +146,7 @@ other numerically. If they volunteer a relative ordering, capture it in words in
 
 ## Output: the brief
 Write the prose document to the path above, with **exactly** these sections —
-`references/conventions.md` ("preferences.md — prose brief") owns the authoritative set (names + order);
+`../../shared/references/conventions.md` ("preferences.md — prose brief") owns the authoritative set (names + order);
 the gloss below is orientation, not a second source of truth:
 
 - **Summary** — 2–3 sentences capturing the ideal role in plain language.
@@ -165,7 +165,7 @@ End the brief with a one-line **How to use this** note, e.g.:
 
 After writing, **show the user the brief itself** — print `preferences.md`'s body directly in your reply as
 normal message text (rendered markdown; no code fence, skip the front-matter lines — see
-`references/voice.md`), say in one line where it's saved, and offer to refine any section.
+`../../shared/references/voice.md`), say in one line where it's saved, and offer to refine any section.
 
 ## Import an existing brief
 If the user already has a brief, accept a **file path** or **pasted prose** instead of interviewing from

@@ -216,8 +216,27 @@ precise command.
 **Why:** Even once a user knows they're behind (`TODO-UPDATE-AVAILABLE`), the update path is host-specific and
 undocumented in-product, so they fall back to manual repo/plugin-manager fiddling.
 **Impact:** a known-stale install stays stale because updating is friction; the coverage/fix gap persists.
-**How to apply:** add an **"Update recipe"** to each platform adapter (alongside the existing Run recipe) — the
-host's plugin-manager update command (on Claude Code, the plugin manager / marketplace update), shown verbatim
-from the active adapter. This rides the same capability-record mechanism as `TODO-DELEGATION-ALTITUDE`:
-`update_recipe` becomes another resolved per-harness literal, so no forked skill and no model-runtime guessing.
+**How to apply:** add **"Update recipe"** entries for the primary tested harnesses first — Claude Code and
+Codex — alongside their existing Run recipes. Show the host's plugin-manager update command verbatim from the
+active adapter. Defer update recipes for other adapters until that adapter is promoted by
+`TODO-HARNESS-SUPPORT-SCOPE` with a live install/run/update verification transcript. This rides the same
+capability-record mechanism as `TODO-DELEGATION-ALTITUDE`: `update_recipe` becomes another resolved
+per-harness literal, so no forked skill and no model-runtime guessing.
 **Linked tests:** none yet.
+
+### P2 — broad harness support is overstated relative to live verification (`TODO-HARNESS-SUPPORT-SCOPE`)
+**What:** Reframe non-Claude/Codex harnesses as "expected to work, not deeply tested" until each has a
+live install/run/update verification lane. Keep Claude Code and Codex as the primary supported surfaces for
+product-critical affordances such as update banners and scheduling recipes.
+**Why:** The repo prematurely extended support language and installation instructions across several
+harnesses, but only Claude Code and Codex have meaningful live testing. Treating every adapter as equally
+supported makes future product work spend effort on unverified surfaces and can hand users commands that were
+never exercised.
+**Impact:** users on unverified harnesses may read aspirational install/update/schedule copy as a tested
+promise; regressions on those hosts stay invisible because CI mostly checks structure, not real runtime
+behavior.
+**How to apply:** mark Claude/Codex as primary supported harnesses in user docs; label other adapters as
+experimental/expected-to-work; require a live verification transcript before promoting any adapter to primary
+or adding product-critical commands like update recipes.
+**Linked tests:** none yet; future adapter-promotion work should add a manual live verification lane to
+`TESTING.md`.

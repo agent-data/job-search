@@ -2,6 +2,8 @@
 
 This reference covers the flexibility and customization workflows — how to honor special requests, narrow results, tune the rubric, and add new capabilities — without breaking the clean defaults.
 
+**Contents:** [1. Honoring an explicit score request](#1-honoring-an-explicit-score-request) · [2. Adding a custom filter](#2-adding-a-custom-filter-or-narrowing-results) · [3. Changing how postings are judged](#3-changing-how-postings-are-judged) · [4. Tuning the search feed & detail reads](#4-tuning-the-search-feed--detail-reads) · [5. Adding a new capability or skill](#5-adding-a-new-capability-or-skill)
+
 ---
 
 ## 1. Honoring an explicit score request
@@ -48,25 +50,21 @@ Importance lives in the bucket assignment, never in numeric weights or score mul
 
 ## 4. Tuning the search feed & detail reads
 
-Four `config.yaml` keys (schema in `shared/references/conventions.md`) control how much the system fetches,
+Four `config.yaml` keys (schema in `../../../shared/references/conventions.md`) control how much the system fetches,
 how fresh it is, whether detail reads run in parallel, and how carefully it reads each posting.
 
 **Recency window — `search.freshness`**
 
 Filters each posting's `posted_at` on the client side after the feed is returned (the search API has no date parameter).
 
-| Value | What passes |
-|---|---|
-| `any` | Everything in the feed regardless of age |
-| `past-week` | Posted within the last 7 days |
-| `past-2-weeks` | Posted within the last 14 days *(default)* |
-| `past-month` | Posted within the last 30 days |
+The four values and the exact window each admits (and which is the default) are in the config schema — see
+`../../../shared/references/conventions.md` (the `config.yaml` section).
 
 Narrowing the window keeps the digest focused on live roles. Widening it is useful when you haven't run a search in a while and want to catch up.
 
 **Feed size — `queries[].limit`**
 
-Sets how many postings each query pulls (1–100, default 25). A higher limit fetches more raw postings per query, but it is not pagination — there is no way to walk deeper pages. The practical path to seeing more new postings is **breadth + frequency**: several varied queries with meaningful keyword differences, run regularly, with dedup preventing repeats from inflating the digest.
+Sets how many postings each query pulls; its range and default (and the API-vs-template distinction) are in the config schema — see `../../../shared/references/conventions.md`. A higher limit fetches more raw postings per query, but it is not pagination — there is no way to walk deeper pages. The practical path to seeing more new postings is **breadth + frequency**: several varied queries with meaningful keyword differences, run regularly, with dedup preventing repeats from inflating the digest.
 
 **Parallel detail reads — `search.parallel_detail_reads`**
 
@@ -81,32 +79,28 @@ Controls whether promising postings are read through parallel subagents where th
 Only `job-search` / the home view writes this preference after talking with the user. `job-search-run` is
 headless: it reads the value and never edits config itself — `false` reads sequentially, `true` fans out, and
 unset takes the host default (parallel where no approval is required; sequential on hosts that gate subagents
-behind approval, e.g. Codex). It also falls back to sequential whenever the host lacks or refuses subagents.
+behind approval — see `../../../shared/references/parallelism.md`). It also falls back to sequential
+whenever the host lacks or refuses subagents.
 
 **Detail-read model — `search.detail_model`**
 
 After the primary pass scans summaries, the agent reads the full details for every promising posting. When
 the run uses the parallel fan-out (the default where the host supports it), it fans out one detail-read
 subagent per posting (see
-`references/parallelism.md` for the general pattern; the fan-out primitive and sequential fallback defer to
-your platform's adapter → Concurrent detail reads). Each subagent follows the `evaluate-job-fit` skill. This
-key controls which tier those detail readers use — the literal model each tier maps to lives in your
-platform's adapter → Model tiers. When discussing this on a specific host, name the exact model IDs from that
-adapter → Model tiers.
+`../../../shared/references/parallelism.md` for the general pattern, the host's own fan-out primitive, and the
+sequential fallback). Each subagent follows the `evaluate-job-fit` skill. This
+key controls which tier those detail readers use — the agent binds the tier to a concrete model from its own
+roster. If the user asks which model a tier maps to on this host, name the concrete model you'd use.
 
-| Value | Behavior |
-|---|---|
-| `fast` | Fast and light *(default)* |
-| `balanced` | More deliberate on nuanced qualitative judgments |
-| `high` | Highest fidelity |
-| `inherit` | Uses the same model as the top-level run |
+The four tiers, what each is for, and which is the default are in the config schema — see
+`../../../shared/references/conventions.md` (the `config.yaml` section).
 
-`fast` is the right starting point for most searches. It is a touch looser on subtle qualitative calls — occasionally emitting an out-of-vocabulary band or a stray numeric value — but the consolidation step after all subagents return validates and coerces every verdict before anything reaches `jobs.jsonl` or the digest, so no invalid output persists. For roles where the brief's distinctions are fine-grained or the must-have/red-flag list is long, set `detail_model: balanced` (or `high`) to improve judgment fidelity. This is a **fidelity/speed tradeoff**, not a quality-gate — the defaults are safe either way.
+`balanced` — the **mid-tier reviewer floor** — is the default, because the per-posting fit verdict is a judgment, not a mechanical step: a well-specified, bite-sized review belongs on a mid-tier model, not the cheapest tier. Scale up with `detail_model: high` where the brief's distinctions are fine-grained or the must-have/red-flag list is long. Opt down with `detail_model: fast` (the cheapest tier) for faster, lighter reads — a touch looser on subtle qualitative calls (occasionally an out-of-vocabulary band or a stray numeric value), though the consolidation step after all subagents return still validates and coerces every verdict before anything reaches `jobs.jsonl` or the digest, so no invalid output persists. This is a **fidelity/speed tradeoff**, not a quality-gate — and the genuinely mechanical bulk (dedup, the summary prefilter, provenance) stays cheap regardless of this tier.
 
-> **Note:** Per-subagent tier selection is effective only on hosts that support isolated-context subagents —
-> see your platform's adapter → Concurrent detail reads. The adapter notes whether per-subagent model selection
-> even exists; a single-model host makes the knob inert. If parallel reads are disabled, unavailable, or refused,
-> the same tier still describes the intended detail-read fidelity, but the runner evaluates sequentially.
+> **Note:** Per-subagent tier selection is effective only on hosts that support isolated-context subagents.
+> On a single-model host, or one without isolated-context subagents, the knob is inert. If parallel reads are
+> disabled, unavailable, or refused, the same tier still describes the intended detail-read fidelity, but the
+> runner evaluates sequentially.
 
 ---
 
@@ -114,7 +108,7 @@ adapter → Model tiers.
 
 See the **"Extending & contributing"** section in `SKILL.md` for the full workflow. Key points:
 
-- Shared references live in `shared/references/*.md`; helper scripts live in `scripts/`. Files under `skills/<skill>/references/` and `skills/<skill>/scripts/` are **generated**, not authored — after any shared edit, run `./scripts/build.sh` to re-sync.
+- Shared references live in `shared/references/*.md`; helper scripts live in `scripts/`. Each fact is single-homed there and referenced in place under the bundle — there are no generated per-skill reference copies to re-sync (`./scripts/build.sh` regenerates only the build stamp).
 - New skills go under `skills/<skill>/` with a `SKILL.md` and `evals/evals.json`. Evals run through the fake `agent-data` shim in `tests/`, not the live CLI.
 - Keep `scripts/philosophy_guard.py` green before opening a PR (no numeric scores or score-threshold config in tracked paths).
 

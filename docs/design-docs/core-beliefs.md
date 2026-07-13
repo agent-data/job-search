@@ -2,8 +2,8 @@
 title: Core Beliefs — Agent-First Operating Principles
 status: current
 verified: partial
-last_reviewed: 2026-06-22
-code_refs: [scripts/philosophy_guard.py, scripts/doc_lint.py, scripts/build.sh, .github/workflows/ci.yml, shared/references/internals.md, shared/references/conventions.md]
+last_reviewed: 2026-07-12
+code_refs: [scripts/philosophy_guard.py, scripts/doc_lint.py, scripts/build.sh, tests/test_reference_resolution.py, tests/test_mechanics_scripts.py, shared/scripts/mechanics/dedup.sh, .github/workflows/ci.yml, shared/references/internals.md, shared/references/conventions.md]
 ---
 # Core Beliefs — Agent-First Operating Principles
 
@@ -90,69 +90,102 @@ and are linked, never restated here — this doc is a live design-doc subject to
 
 ## 5. Single source of truth
 
-- **Statement.** You edit `shared/references/`, then run the build; you never hand-edit a skill's
-  synced copies.
-- **Why.** Each skill ships self-contained (its own bundled references) so it works as a loose skill
-  with no plugin system. Those copies are *generated* — editing them by hand creates drift that the
-  next build silently erases.
-- **Enforced by.** [scripts/build.sh](../../scripts/build.sh) regenerates every skill's bundled copies
-  from the source, and CI ([.github/workflows/ci.yml](../../.github/workflows/ci.yml)) runs the build
-  and fails if it changed any tracked `skills/` file — so a PR with stale or hand-edited copies is
-  blocked. The rule is stated in [CONTRIBUTING.md](../../CONTRIBUTING.md#single-source-of-truth--never-hand-edit-a-skills-synced-copies).
-- **How to verify.** `./scripts/build.sh` then `git status --porcelain skills` → empty output (the
-  bundled copies are already in sync with the source).
+- **Statement.** Each fact has exactly one canonical home in `shared/references/`; skills reference it
+  in place under the guaranteed bundle install. No fact is hand-copied, and no reference is fanned into
+  per-skill copies tracked in source.
+- **Why.** Every supported host installs the whole pack via its manifest — there is no loose
+  single-skill install — so a skill resolves a sibling reference under the bundle (the corpus
+  compose-by-reference model, AAS-PACK-02/BOUND-03). Where a host cannot resolve a path outside a
+  skill's own directory, the build assembles that host's self-contained copies from the single source
+  (AAS-DIST-03) — a generated copy, never hand-maintained.
+- **Enforced by.** [scripts/build.sh](../../scripts/build.sh) (assembly only where a host needs it;
+  today every host resolves in place, so it regenerates only the content-hash build stamp),
+  [scripts/doc_lint.py](../../scripts/doc_lint.py)'s intra-reference duplication check
+  (`no-shared-reference-duplication`, which guards `shared/references/` and the skill-local originals
+  directly), and the per-host resolution marker tests in
+  [tests/test_reference_resolution.py](../../tests/test_reference_resolution.py).
+- **How to verify.** `git ls-files 'skills/*/references/*.md'` lists only the four skill-local
+  originals (`home.md`, `onboarding.md`, `customization.md`, `scheduling-and-consent.md`) — no fanned
+  copies; `python3 -m pytest -q tests/test_reference_resolution.py` → every in-place pointer resolves
+  under each host's install; `./scripts/build.sh` then `git status --porcelain` → empty (the stamp is
+  already current).
 
 ## 6. Deterministic, testable, headless
 
-- **Statement.** The mechanics — dedup, the event log, schedule lines, workspace discovery — are
-  pinned written contracts (exact procedures and portable one-liners) that Claude Code executes
-  natively, with **zero runtime dependencies** on the user's machine; the headless run reports
-  outcomes through records and the digest, not through process exit codes.
+- **Statement.** The fiddly deterministic mechanics are bundled as portable scripts where a runtime
+  exists (AAS-FORM-08), each paired with a named prose-contract fallback for hosts without one
+  (AAS-PORT-01); no third-party runtime dependency ships (AAS-DIST-05). Success is read from the
+  written record, never the process exit code.
 - **Why.** The model handles judgment; everything else must be *specified* deterministically so any
-  skill performs it identically — but it must not require an interpreter the user may not have
-  (Python is not assumed). The named tradeoff, accepted 2026-06-11: the mechanics are model-executed
-  against a pinned contract rather than script-executed, so they are verified by the skill evals and
-  the TESTING.md matrix, not by unit tests. And because a scheduled `claude -p` returns 0 even when
-  it halted, success must be read from the written record, never from the exit code.
-- **Enforced by.** The contracts are owned by
+  skill performs it identically. The scripted form is verified by unit tests; the prose fallback and
+  the judgment layer by the skill evals. This supersedes the 2026-06-11 zero-Python decision for the
+  mechanics only — no *third-party* runtime dependency ships (the scripts are the skills' own portable
+  shell, AAS-DIST-05), and portable **shell** (near-universal) shrinks the no-runtime surface so the
+  mandatory fallback stays a thin residual, not a second full implementation. And because a scheduled
+  `claude -p` returns 0 even when it halted, success must be read from the written record, never from
+  the exit code.
+- **Enforced by.** The mechanics are bundled as portable POSIX-`sh` scripts under
+  `shared/scripts/mechanics/` (dedup, the event log, schedule-line composition, workspace discovery),
+  each reproducing — and paired with — the pinned prose contract owned by
   [shared/references/internals.md](../../shared/references/internals.md) (registry, discovery,
   scheduling marker) and [shared/references/conventions.md](../../shared/references/conventions.md)
-  (the `jobs.jsonl` event-line contract + operations); the skill evals assert on the artifacts those
-  procedures produce (registry bytes, event lines). The "read the record, not the exit code" contract
-  is owned by [shared/references/errors.md](../../shared/references/errors.md).
-- **How to verify.** Run the skill evals (e.g. "run the evals for job-search-run") and the TESTING.md
-  state/discovery checks; confirm registry writes and `jobs.jsonl` lines match the pinned contracts.
+  (the `jobs.jsonl` event-line contract + operations); the runner invokes the script where a shell
+  runtime exists and follows the named prose fallback otherwise. `tests/test_mechanics_scripts.py`
+  pins the scripted form to the contract; the skill evals assert on the artifacts those procedures
+  produce (registry bytes, event lines). The "read the record, not the exit code" contract is owned by
+  [shared/references/errors.md](../../shared/references/errors.md).
+- **How to verify.** Run `python3 -m pytest tests/test_mechanics_scripts.py` (the scripted mechanics
+  reproduce their pinned contracts) plus the skill evals (e.g. "run the evals for job-search-run") and
+  the TESTING.md state/discovery checks; confirm registry writes and `jobs.jsonl` lines match the
+  pinned contracts.
 
 ## 7. Consent-gated autonomy
 
-- **Statement.** Scheduling uses the host's scheduler — a native *local* scheduler where one exists
-  (it installs nothing on the machine), else a consent-gated machine schedule — and whichever applies,
-  the agent never initiates a **silent / un-consented** privileged write; scheduling is offered as a
-  yes/no, never assumed.
-- **Why.** Installing a system scheduler is a privileged, persistent change to someone's machine. Where
-  the host has a native *local* scheduler there's no reason for the agent to write the machine at all —
-  prefer it (it installs nothing). Where none exists, a consent-gated machine schedule is allowed *as a
-  fallback*: the exact line is shown first and written only on an explicit yes, and it stays
-  user-removable — it's the user's machine and their explicit call. Either way the user's own machine
-  stays theirs: scheduling is a yes/no they choose, never a silent install, and if they explicitly ask
-  for cron the skills offer the no-install option first, then defer to their choice (decision recorded
-  2026-06-11 — the former PreToolUse deny-hook was removed; it required Python on the user's machine and
-  gated something the user is entitled to do). The two tiers and the "cloud schedulers don't qualify"
-  test are owned by [shared/references/internals.md](../../shared/references/internals.md) (Scheduling
-  setup).
+- **Statement.** Scheduling advocates an **unattended** schedule — a recurring run that fires with **no
+  interactive session open**, on the host's or OS's own scheduler that survives session-close — as the
+  default; a session-bound in-session loop is a **named fallback**. It stays **consent-gated**: the exact
+  machine change is shown first, written only on an explicit yes, and stays user-removable, and the agent
+  never initiates a **silent / un-consented** privileged write. And it never records a schedule as active
+  until a **config-time canary** has proven the real unattended invocation succeeds — writes the workspace,
+  reaches agent-data. Scheduling is offered as a yes/no, never assumed.
+- **Why.** A search only earns its keep if it runs when the user isn't watching, and an in-session loop
+  stops the instant the session closes — so the overnight and next-morning runs, the ones that matter most,
+  silently never fire. This is a **conscious amendment**: the advocacy flips from *installs-nothing* (the
+  old native-local-scheduler preference) to *unattended-reliable*. The re-weighting is
+  **reliability > installs-nothing** — the install-nothing convenience yields to a schedule that actually
+  fires — but never *silent > consented*: an unattended schedule is a real, privileged machine change, so
+  its consent gate is preserved intact (`AAS-AUTO-02`, spend consent on the one-way door). It stays the
+  user's machine and their explicit call — if they ask for cron outright, the no-install option is offered
+  first, then their choice defers (the 2026-06-11 removal of the Python-dependent PreToolUse deny-hook
+  stands: it gated something the user is entitled to do). The mandatory **canary** closes the gap this
+  targets — a run that silently lacked permission to write the workspace or reach agent-data, discovered
+  only the next day (belief 4: no silent failures) — by proving the *real* unattended invocation works
+  before the schedule is called active (`PSG-SUB-06`, prove it works, not that it exists). The
+  unattended-first model (session loop as its named fallback), the "cloud schedulers don't qualify" test,
+  and the canary spec are owned by `skills/job-search-agent/references/scheduling-and-consent.md` and
+  [shared/references/internals.md](../../shared/references/internals.md) (Scheduling setup).
 - **Enforced by.** **Instruction-level + evals** — there is no runtime hook. The stance asserts **no
-  silent / un-consented privileged write**; a machine schedule shown first and approved by the user (the
-  Tier-2 fallback) is explicitly allowed. It is pinned in
+  silent / un-consented privileged write**, and now that the advocated default is an unattended schedule (a
+  real machine change) the same gate covers it: shown first, approved on a yes, user-removable. The
+  unattended-first model, the in-session-loop fallback, the "cloud schedulers don't qualify" test, and the
+  mandatory **config-time canary** are pinned in
   [shared/references/internals.md](../../shared/references/internals.md) (Scheduling setup) and
-  `skills/job-search-agent/references/scheduling-and-consent.md`, stated user-facing in
-  [docs/SECURITY.md](../SECURITY.md), and exercised by the job-search evals (scheduling is verified via
-  the offered yes/no, the composed schedule line for the cadence, and the registry marker — not by an
-  enforced prohibition).
+  `skills/job-search-agent/references/scheduling-and-consent.md`, and stated user-facing in
+  [docs/SECURITY.md](../SECURITY.md). The canary's proof routes through the **written record** — success
+  read from the run artifact, not the process exit code (belief 6) — the same no-silent-failure channel
+  owned by [shared/references/errors.md](../../shared/references/errors.md). Exercised by the job-search
+  evals (scheduling is verified via the offered yes/no, the composed schedule line for the cadence, and the
+  registry marker — not by an enforced prohibition).
 - **How to verify.** Run the job-search evals and confirm the agent *offers* scheduling as a yes/no,
-  composes the correct schedule line for the chosen cadence, records the registry marker on a yes, and
-  never writes a privileged schedule *without* consent. The evals stub scheduling (no real
-  crontab/launchd runs in tests), so a green eval reflects this consent + compose + record behavior, not
-  an enforced prohibition.
+  composes the correct schedule line for the chosen cadence, and — on a yes — records the registry marker,
+  never writing a privileged schedule *without* consent. Because the evals stub scheduling (no real
+  crontab/launchd runs in tests), the canary's "prove the real invocation before recording" gate is
+  verified by inspecting the pinned flow in
+  `skills/job-search-agent/references/scheduling-and-consent.md` +
+  [shared/references/internals.md](../../shared/references/internals.md) (marker set only after Verify passed —
+  a green canary for the unattended schedule, or the loop fallback's observed first-fire run record); a green
+  eval reflects the consent + compose + record behavior, not an enforced prohibition or a
+  live canary.
 
 ## 8. Conversational-first configuration
 
@@ -221,15 +254,25 @@ and are linked, never restated here — this doc is a live design-doc subject to
 - **Statement.** Independent work runs concurrently, not in sequence — a run dispatches mutually-independent
   subtasks (e.g. one detail-read subagent per posting) wherever the host supports it, and briefs each like a
   colleague with zero context. The one carve-out: hosts that gate subagents behind explicit user approval
-  (e.g. Codex) wait for that approval before fanning out; every other host parallelizes by default.
+  (e.g. Codex) wait for that approval before fanning out; every other host parallelizes by default. The tier
+  binds to a concrete model by the agent's self-selection from its own roster — not a per-host adapter table
+  (the `AAS-LANG-04` deviation for this adapter-free pack); the required-slot rule (`AAS-AUTO-07`) and the
+  judgment-never-cheapest floor (`AAS-AUTO-11`) are the mitigation for the one host fact with no runtime
+  backstop.
 - **Why.** Time-to-value is a product feature. Parallelizing independent work turns a serial crawl into one
-  concurrent step; isolating each subtask in its own subagent keeps the primary context clean and lets a faster,
-  cheaper model do the bulk. A well-briefed subagent makes judgment calls — a terse one returns shallow, generic work.
+  concurrent step; isolating each subtask in its own subagent keeps the primary context clean and dispatches each
+  isolated subtask on the least powerful model that can do it *well* — sp's spectrum: mechanical steps (dedup,
+  provenance, extraction, prefilter) on the cheapest tier; the per-posting fit verdict, a well-specified
+  bite-sized review, at the reviewer floor (a mid-tier model), scaled up for higher-risk postings; the
+  dispatching model always specified explicitly. A well-briefed subagent makes judgment calls — a terse one returns shallow, generic work.
 - **Enforced by.** **Cultural / by design** — no linter for parallelism. The principle and the subagent-briefing
   guidance are owned by [shared/references/parallelism.md](../../shared/references/parallelism.md) (bundled into
   every skill); `job-search-run` embodies it (scan → parallel per-posting fan-out by default, sequential only
   where the host lacks the primitive or awaits subagent approval → consolidate; the `search.detail_model` and
   parallel-approval knobs live in [shared/references/conventions.md](../../shared/references/conventions.md)).
+  Model self-selection is owned by the runner (`skills/job-search-run/SKILL.md`) + `parallelism.md`, with **no
+  adapter model-tier table**: the `config.yaml search.detail_model` tier token is the portable intent, and the
+  agent binds the concrete model from its own roster.
 - **How to verify.** Inspect [shared/references/parallelism.md](../../shared/references/parallelism.md) and
   `skills/job-search-run/SKILL.md`; confirm mutually-independent work is dispatched concurrently by default
   (sequential only where the host lacks the primitive or awaits subagent approval), and that the fallback

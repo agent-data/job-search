@@ -1,53 +1,99 @@
 # Scheduling & consent
 
-How the Job Search Agent schedules its recurring run, and where the "never write the user's machine
-**without consent**" line is drawn.
+How the Job Search Agent schedules its recurring run, why the default is an **unattended** schedule that
+fires with no session open, and where the "never write the user's machine **without consent**" line is drawn.
 
-## Mechanism: the host's scheduler — read your platform's adapter
+## Mechanism: an unattended schedule on the host's own scheduler
 
-The MECHANISM lives in your platform's adapter → Scheduling; the ACTIONS below are the same on every
-host. The model is **two-tier** — use whichever applies to the active host:
+**Advocate an unattended schedule as the default.** Set the recurring run up so it keeps firing with **no
+interactive session open**, using the host's or the OS's own scheduler that survives session-close (e.g.
+launchd, cron, or the host's native unattended scheduler). Where that scheduler can **re-fire a run missed
+while the machine was asleep**, prefer it. The agent composes the schedule for its own host — there is no
+per-host recipe to look up here.
 
-- **Tier 1 — native local scheduler (preferred).** Where the host has one (see your adapter →
-  Scheduling), use it: it runs where it can see the local `~/.job-search` workspace and the local
-  agent-data auth, and **installs nothing on the user's machine** (no crontab, no launchd, no privileged
-  write). The exact recipe lives in the adapter — do not spell it here.
-- **Tier 2 — no native local scheduler.** A **consent-gated** machine-level cron/launchd schedule is the
-  sanctioned fallback — written **only on an explicit user yes, with the exact line shown before it is
-  written**, never silent, never auto-installed, and user-removable.
-- **Cloud schedulers do not qualify** — a cloud agent can't see the local workspace or the `agent-data`
-  auth, so a run there reaches neither the user's data nor their credentials and produces nothing. This is
-  the test any candidate scheduler must pass on either tier.
+Why unattended is the default: a search is only useful if it runs when the user isn't watching. An
+in-session loop stops the instant the session closes, so the overnight and next-morning runs — the ones
+that matter most — silently never happen. The re-weighting is **reliability > installs-nothing**: the
+install-nothing convenience of a session loop yields to a schedule that actually fires. It is **never**
+silent > consented — the unattended schedule is a real machine change, and (see Consent below) it is still
+shown first and written only on an explicit yes.
 
-A given host sits on **whichever tier its adapter names** — a Tier-1-only host (its adapter names a native
-local scheduler) never reaches for the Tier-2 fallback. Read the adapter to learn which applies.
+**Required conditions (state these when you set it up, host-neutral).** *Set up the run so it can write the
+workspace and call agent-data.* Those are the only two things the unattended run must be able to do; the
+canary below is what proves it can. Nothing host-specific beyond that — no harness troubleshooting recipe.
+
+**Fallback — an in-session loop.** When the host has no unattended scheduler, or the user declines the
+machine change, offer an **in-session loop** (a recurring run driven from inside an open interactive
+session) as a named fallback. Tell the user plainly that it runs only while a session is open — so a quiet
+overnight is expected, and closing the session stops it. It installs nothing, but it is the fallback, not
+the recommendation.
+
+**One disqualifier on either path:** cloud schedulers do not qualify — a cloud runner can't see the local
+`~/.job-search` workspace or the local agent-data auth, so a run there reaches neither the user's data nor
+their credentials and produces nothing. This is the test any candidate scheduler must pass.
+
+## Prove it works before recording the schedule — the canary
+
+The canary is **mandatory before recording the schedule**: never tell the user a job is scheduled until its
+exact unattended invocation has been **observed to succeed end to end**. A wrong self-configuration is
+caught now, not discovered the next day. Two layers, both required:
+
+1. **Registration.** Confirm the schedule is actually registered — it appears in the host's or OS's own
+   scheduler job list. This proves it *exists*.
+2. **Execution canary.** Trigger **one real run through the exact scheduled invocation**, then confirm the
+   artifacts it leaves behind: a fresh `runs/<id>.json` whose `run_health` is anything other than `blocked`,
+   evidence that **agent-data was reached**, and evidence that the **workspace was written**. This proves it
+   *works*. Default depth is a **real run** — the truest proof, and the user gets a live digest out of it
+   (the quota cost is one run the first scheduled fire would spend anyway).
+
+**Same context — the non-negotiable part.** The canary must fire through the *real* unattended path:
+non-interactive, no TTY, the **scheduled command's own permissions and environment — not this session's.**
+This interactive session already holds workspace-write and agent-data permission, so running the canary
+here would pass while the real scheduled run fails, proving nothing. Route it through the actual scheduled
+invocation or it does not count.
+
+**If the canary fails, debug it yourself.** There is no host troubleshooting reference to consult — diagnose
+the specific gap from the artifacts (workspace write denied · agent-data unreachable · subagents refused),
+**propose the exact host-appropriate fix, show it, apply it on the user's yes, and re-run the canary.** Loop
+until green. If it cannot be made to work, name the exact gap in the same named-error style the rest of the
+system uses and **stop — do not claim it is scheduled.** No "all set." Only after a **green canary** do you
+set the scheduling marker.
+
+## Actions
+
+The steps are the same whichever scheduler is active; the agent binds each to its own host. The one step
+that differs is **Verify**: the **unattended schedule** must pass the config-time canary below (registration
+in the scheduler's job list + a real run through the *actual scheduled invocation, not this session*), while
+the **in-session-loop fallback** can satisfy neither canary layer — it registers in no scheduler job list and
+its run *is* this session — so it is confirmed instead by observing its **first in-session fire** leave a
+fresh run record before the marker is recorded.
 
 | Step | How | Notes |
 |------|-----|-------|
-| Compose the line | from `schedule.frequency` (your adapter → Run recipe carries the cadence→interval/cron mapping) | The interval table and the verbatim recipe live in the adapter, not here. |
-| Start it (on yes) | start the schedule on the active mechanism | Offer scheduling as a yes/no; check the scheduling marker first so you never re-ask. |
-| Record it | set the scheduling marker (`internals.md` → Registry write rules) | Records the **active** mechanism (your adapter → Scheduling gives its value), so the home view shows the schedule and you don't re-ask. |
-| Turn it off | stop the active schedule, then clear the scheduling marker | The adapter's Scheduling section gives the teardown for whichever tier is active; the marker reads `installed: false` afterwards. |
+| Compose the cadence | from `schedule.frequency`, via `../../../shared/scripts/mechanics/schedule-line.sh <frequency> [HH:MM]` where a shell runtime exists (the prose fallback in `../../../shared/references/internals.md` → Scheduling setup composes the same line directly) | Host-neutral cron time expression; the host wraps it with its own command / launchd / interval translation. |
+| Start it (on yes) | offer scheduling as a yes/no, check the scheduling marker first so you never re-ask, then start the unattended schedule on an affirmative answer | Show the user the exact machine change **before** writing it (Consent below). |
+| Verify | **Unattended:** run the **canary** above — registration + one real scheduled run, proven from the artifacts. **In-session-loop fallback:** it can neither register nor run outside this session, so confirm it by its **first in-session fire** leaving a fresh run record. | Mandatory gate either way: no proof (a green canary, or an observed first-fire run record), no marker. |
+| Record it | set the scheduling marker (`../../../shared/references/internals.md` → Registry write rules) | Records the **active** mechanism so the home view shows the schedule and you don't re-ask. Only after Verify passed (a green canary, or the loop's observed first-fire run record). |
+| Turn it off | stop the active schedule, then clear the scheduling marker (`../../../shared/references/internals.md` → Registry write rules) | The marker reads `installed: false` afterwards. |
 
-`schedule.time` in `config.yaml` is honored when the active scheduler is **wall-clock-based** (a Tier-2
-cron/launchd run fires at the named time) and ignored when the scheduler is **interval-only** (a Tier-1
-in-session loop fires on an interval from when it started, not at a wall-clock time) — see your adapter →
-Scheduling for which the active mechanism is. Always also show the user the verbatim recurring-run and
-one-off-run recipe **from your adapter → Run recipe** — copy them exactly as written; do not reconstruct
-those tokens here.
+`schedule.time` in `config.yaml` is honored when the active scheduler is **wall-clock-based** (an unattended
+cron/launchd run fires at the named time) and ignored when it is **interval-only** (an in-session loop fires
+on an interval from when it started, not at a wall-clock time). Always also compose the **recurring-run and
+one-off-run recipe for the host** and show both to the user verbatim, so they can re-run the search on demand
+and stop or restart the schedule themselves.
 
 ## Consent: where the line is
 
-The stance is instruction-level, carried by every skill in this system. A native local scheduler
-**installs nothing** — prefer it where the adapter names one. A machine-level cron/launchd line is written
-**only on an explicit user yes, with the exact line shown first**, never silent, never auto-installed, and
-user-removable — that is the Tier-2 sanctioned fallback. Reads (`crontab -l`, `launchctl list`), removals,
-and mere mentions of these words were never restricted.
+The stance is instruction-level, carried by every skill in this system: the agent never initiates a
+**silent or un-consented** privileged write. The unattended schedule is a real machine change, so the exact
+change is **shown before it is written**, applied only on an explicit user yes, and stays user-removable —
+never silent, never auto-installed. Advocating the unattended schedule re-weights the old install-nothing
+preference toward reliability; it does **not** loosen this consent gate. Reads (`crontab -l`,
+`launchctl list`), removals, and mere mentions of these words were never restricted.
 
-If the user explicitly asks for cron or launchd, it's their machine and their call: where a native local
-scheduler exists, offer it first so they know the no-install option, then help with what they asked for;
-where none exists, the consent-gated machine schedule is the fallback — show the exact line first, then
-write it on their yes.
+If the user explicitly asks for cron or launchd, it's their machine and their call: help them set up what
+they asked for, showing the exact line first and writing it on their yes. If they'd rather not change the
+machine at all, the in-session loop is the no-install fallback — offer it so they know the option.
 
 There is no enforcement hook behind this stance — it is a design rule, not a technical control. A user
 typing `crontab -e` in their own terminal was always, and remains, entirely their own business.

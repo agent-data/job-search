@@ -35,6 +35,11 @@ See an example digest in [`examples/sample-digest.md`](examples/sample-digest.md
 
 ## Installation
 
+Claude Code and Codex are the primary tested installs today. The other harness entries below are
+structural-only: their manifests are in place, but they have not had the same live verification and may need
+hands-on fixing before a run completes end to end — so treat them as experimental. There is no per-host
+adapter layer; each host resolves its own tools, models, and scheduling from the shared neutral procedures.
+
 Installation differs by harness. If you use more than one, install Job Search separately for each one.
 
 ### Claude Code
@@ -94,8 +99,6 @@ Install the extension straight from git:
 ```bash
 gemini extensions install https://github.com/agent-data/job-search
 ```
-
-Update later with `gemini extensions update job-search`.
 
 Then tell Gemini to run the **job-search** skill.
 

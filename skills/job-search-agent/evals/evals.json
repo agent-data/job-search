@@ -1,15 +1,22 @@
 {
   "skill_name": "job-search-agent",
-  "harness": "Cases that need a workspace: run skills/job-search-run/evals/files/setup-workspace.sh <tmp> to build a workspace + _bin/agent-data shim symlink. Prepend <tmp>/_bin to PATH and set JOBSEARCH_TEST_SCENARIO=happy (or the per-case scenario) so all agent-data calls hit the fake shim (no real credits). Export JOBSEARCH_OS_REGISTRY=<tmp>/registry.json and write that file as {\"version\":1,\"active_workspace\":\"<tmp>\"} so discovery returns the temp workspace. Pre-seed jobs.jsonl where required with `printf '%s\\n' '<event json>' >> <tmp>/jobs.jsonl` (one single-line JSON object per line). Cases without a workspace (e.g. capabilities overview) need no harness setup.",
+  "harness": "Cases that need a workspace: run skills/job-search-run/evals/files/setup-workspace.sh <tmp> to build a workspace + _bin/agent-data shim symlink. Prepend <tmp>/_bin to PATH and set JOBSEARCH_TEST_SCENARIO=happy (or the per-case scenario) so all agent-data calls hit the fake shim (no real credits). Export JOBSEARCH_OS_REGISTRY=<tmp>/registry.json and write that file as {\"version\":1,\"active_workspace\":\"<tmp>\"} so discovery returns the temp workspace. Pre-seed jobs.jsonl where required with `printf '%s\\n' '<event json>' >> <tmp>/jobs.jsonl` (one single-line JSON object per line). Cases without a workspace (e.g. capabilities overview) need no harness setup. HARNESS CAPABILITIES (P7): a DISCOVERY scenario (discovery:true) plants this skill among the siblings it names and drives a NAIVE prompt (no skill named); it passes only if the runner SELECTS must_select and not any must_not_select sibling. Scenarios marked stochastic:true are behavioral (a discipline bait or routing) — run each `reps` times against the shim, record pass-RATE + variance (scripts/eval_harness.py aggregate_reps), and run the no-guidance control arm so the green result is attributable to the skill's guidance, not the base model (control_delta). Tier assertions name the portable tier (fast/balanced/high/inherit) resolved from the Codex adapter's Model-tiers table (shared/references/platform/codex.md), NEVER a literal model id. The N>=5 reps are the OFF-CI live step (AAS-T-10); CI gates structural coherence (python3 scripts/eval_harness.py --root .).",
   "evals": [
     {
       "id": 1,
       "scenario": "explicit score request — honored in reply, not persisted",
+      "stochastic": true,
+      "reps": 5,
+      "control": {
+        "arm": "no-guidance",
+        "strip": "Re-run the same prompt on the base model with the honored-in-reply-but-never-persisted discipline guidance withheld.",
+        "expectation": "The guided arm both HONORS the request in the reply AND keeps the durable log clean; the no-guidance control fails one side (either refuses the request or leaks a score field into jobs.jsonl) at a measurably higher rate (control_delta > 0)."
+      },
       "prompt": "Build a temp workspace + shim (setup-workspace.sh). Pre-seed <tmp>/jobs.jsonl with two evaluated matches by running `printf '%s\\n' '{\"event\":\"evaluated\",\"source_id\":\"1001\",\"title\":\"Senior AI Engineer\",\"company_name\":\"Acme\",\"status\":\"new\",\"relevant\":true,\"match\":\"strong\"}' >> <tmp>/jobs.jsonl` and the same for source_id 1002 (title: 'ML Platform Engineer', company_name: 'Beta Corp'). Then prompt the agent: 'give each of my matches a fit score out of 100.'",
       "expectations": [
         "Provides the requested 0–100 scores for both matches in the reply (honors the explicit user request — flexible on the exact numbers)",
         "Notes once — briefly, without lecturing — that numeric scoring is non-default and that the qualitative bands (strong / moderate / weak) plus the written reasoning are the real signal",
-        "Does NOT write any numeric score field into jobs.jsonl; `grep -c '\"score\"' <tmp>/jobs.jsonl` returns 0 (no score key on any event)",
+        "Does NOT persist any numeric score into jobs.jsonl — inspecting the appended events, none carries a numeric rating under any key (score, rating, fit, points, or the like); the durable log stays verdict-and-provenance only, so the honored number lives in the reply and never in the log",
         "Does NOT write any numeric score into any reports/*.md digest file",
         "If the user were to ask 'save those scores', the agent would write a side file (e.g. reports/<date>-scored.md) rather than appending score fields to the canonical jobs.jsonl log"
       ]
@@ -45,8 +52,30 @@
         "Names the Codex profile path `$CODEX_HOME/job-search.config.toml` (or `~/.codex/job-search.config.toml`) and the required content: [features] multi_agent = true and [agents] max_depth = 1",
         "Shows that CLI scheduled/headless runs need `--profile job-search` and the exact prompt sentence `Use parallel subagents for all detail reads.`",
         "For Codex App Automations, says to include `Use parallel subagents for all detail reads.` in the Automation prompt and does not assume App Automations accept `--profile`",
-        "Names the Codex detail-read model mapping: `fast` = `gpt-5.4-mini`, `balanced` = `gpt-5.4`, `high` = `gpt-5.5`, `inherit` = omit the subagent model override",
+        "Names the Codex detail-read model mapping by resolving each portable tier (`fast` / `balanced` / `high`) from the Codex adapter's Model-tiers table (shared/references/platform/codex.md -> Model tiers) rather than a hardcoded model string, and states that `inherit` omits the subagent model override",
         "States the fallback plainly: if Codex refuses or has no subagent slot, every queued posting is still read sequentially and this is not a run-health error"
+      ]
+    },
+    {
+      "id": 5,
+      "scenario": "discovery — selected among siblings (agent <-> search)",
+      "discovery": true,
+      "stochastic": true,
+      "reps": 5,
+      "siblings": ["job-search", "job-search-run"],
+      "must_select": "job-search-agent",
+      "must_not_select": ["job-search"],
+      "control": {
+        "arm": "no-guidance",
+        "strip": "Present the same naive prompt with job-search-agent's trigger description withheld (only the sibling descriptions visible).",
+        "expectation": "With the description present the runner routes the how-it-works / why-did-it-fail question to job-search-agent; the no-guidance control mis-routes to job-search (daily use / home) at a measurably higher rate (control_delta > 0)."
+      },
+      "prompt": "A returning user with a configured workspace asks, with no skill named: 'How does my job search agent actually decide what to show me, and why did yesterday's run skip so many roles?' The sibling skills job-search (the home / onboarding front door) and job-search-run (a headless search pass) are installed alongside job-search-agent.",
+      "expectations": [
+        "job-search-agent is SELECTED — an explain-how-it-works / why-did-a-run-behave question is the operator manual's job",
+        "job-search is NOT invoked — the user is not asking for the home view, onboarding, or a status glance",
+        "job-search-run is NOT invoked — the user is not asking to run a fresh search now, only to understand the agent's behavior",
+        "The reply describes judgment as qualitative (strong / moderate / weak / not relevant) with no numeric score"
       ]
     }
   ]

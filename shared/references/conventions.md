@@ -1,4 +1,5 @@
 # Workspace conventions & file contracts
+<!-- reference-resolution-marker:8f2a4c1e-single-home — this is the ONE canonical home; every skill reaches it in place. Asserted by tests/test_reference_resolution.py; do not remove. -->
 
 The **workspace** (default the hidden `~/.job-search/`; an existing visible `~/job-search/` is **adopted**, not replaced — see `internals.md`) is PRIVATE per-user data — never committed to a public repo.
 
@@ -25,13 +26,13 @@ workspace:
 queries:
   - { id: "ai-eng-remote", keywords: "AI engineer", location: "United States", limit: 25, enabled: true }
 search:
-  sources: ["linkedin", "ashby"]  # ordered job sources every query runs against: linkedin | ashby | greenhouse | lever — omit the key for this default; greenhouse/lever widen coverage across more company boards
+  sources: ["linkedin", "ashby"]  # ordered job sources every query runs against (the source enum is defined in agent-data-contract.md) — omit the key for this default; greenhouse/lever widen coverage across more company boards
   freshness: "past-2-weeks"  # any | past-week | past-2-weeks | past-month — client-side recency filter on posted_at (no API date param)
-  detail_model: "fast"       # portable tier the per-posting detail reads use: fast | balanced | high | inherit (the model id each maps to → your platform's adapter → Model tiers)
+  detail_model: "balanced"   # tier the per-posting fit VERDICT runs at — the mid-tier reviewer floor (default): fast | balanced | high | inherit (the agent binds each tier to a concrete model from its own roster — the least-powerful that does the task well; the verdict is a judgment, so never the cheapest)
   # parallel_detail_reads: true  # optional: approved use of parallel subagents for detail reads where the host supports them
 schedule:
-  frequency: "daily"         # hourly | every-2-hours | every-6-hours | daily | weekly — the cadence the schedule runs on (its mapping for the active scheduler → your platform's adapter → Scheduling)
-  time: "08:00"              # HH:MM, honored when the active scheduler is wall-clock-based (a Tier-2 cron/launchd schedule); ignored when it is interval-only (a Tier-1 in-session loop) — see your platform's adapter → Scheduling
+  frequency: "daily"         # hourly | every-2-hours | every-6-hours | daily | weekly — the cadence the schedule runs on (its cron mapping composed via `schedule-line.sh` — see `internals.md` → Scheduling setup)
+  time: "08:00"              # HH:MM, honored when the active scheduler is wall-clock-based (an unattended cron/launchd schedule); ignored when it is interval-only (an in-session loop)
   timezone: "America/Los_Angeles"
 notify:
   digest_path_template: "reports/{date}-digest.md"
@@ -42,9 +43,20 @@ against (order = presentation order in per-source counts). An absent key means `
 outside the enum are dropped at preflight with a digest footnote (E-SOURCE-UNSUPPORTED), never a HALT.
 Per-query source targeting is a known deferred knob — all queries run against all enabled sources. The runner
 reads `sources` and never writes it. `freshness` is a client-side recency window on `posted_at` (the API has
-no date param; `any` = no filter); `detail_model` is a portable tier token (`fast | balanced | high | inherit`)
-the runner's per-posting detail reads use — the model each maps to lives in your platform's adapter → Model
-tiers, and the fan-out itself defers to → Concurrent detail reads (`inherit` = the run's own model).
+no date param): `any` = no filter, `past-week` = the last 7 days, `past-2-weeks` = the last 14 days (the
+default), `past-month` = the last 30 days. `detail_model` is a portable tier token for the per-posting **fit verdict** — the
+judgment the detail read produces. Because that verdict is a judgment, not a mechanical step, it runs at the
+**mid-tier reviewer floor**: `balanced` is the default, scaled up to `high` for a higher-risk or ambiguous
+posting, never dispatched on the cheapest tier by default and never reflexively on the most capable. The
+genuinely mechanical bulk — dedup, the summary prefilter, provenance — runs cheap in the runner's primary
+context and the shared scripts, independent of this knob. The tiers: `fast` (the cheapest tier — an explicit
+opt-down: faster, a touch looser on subtle qualitative calls), `balanced` (the mid-tier reviewer floor; the
+default), `high` (highest fidelity), `inherit` (the run's own model — the one value that maps to no explicit
+override, and only by the user's choice; the runner otherwise always dispatches an explicit model). A legacy
+`haiku` / `sonnet` / `opus` value — some `config.yaml` files from earlier versions carry the pre-tier form —
+is accepted as an alias for `fast` / `balanced` / `high` respectively. The agent
+binds each tier to a concrete model from its own roster — the least-powerful model that does the task well;
+the fit verdict is a judgment, so never the cheapest.
 `parallel_detail_reads` is optional and records whether the user approved parallel subagents for detail
 reads on hosts that require explicit authorization. Unset means interactive front-door flows may ask; `true`
 means use parallel subagents where available; `false` means read details sequentially. The runner reads this
@@ -73,8 +85,14 @@ JSON object — never pretty-printed; every event carries a non-empty `"source_i
 literal key `"source"` appears at most once per line (the per-source pre-filter grep depends on it, exactly as
 the `"source_id"`-once rule protects the id extraction); `same_role_as` is a FLAT string — never a nested object (the `"source_id"`-appears-once rule is load-bearing for the grep extraction). Validate an event against this contract before appending it.
 
-Operations (no helper script — perform these exactly):
-- **Known ids** (the dedup set — one per enabled source `S`; missing file = empty set):
+Operations — **run the shared script where a shell runtime exists, else follow the prose fallback**
+(each script reproduces its fallback EXACTLY — pinned by `tests/test_mechanics_scripts.py`; the scripts
+are the skills' own POSIX shell, no third-party dependency):
+- **Known ids** — the dedup step, one per enabled source `S` (missing file = empty set).
+  **Script:** `../scripts/mechanics/dedup.sh "$WS/jobs.jsonl" "$S"` — candidate `source_id`s on stdin,
+  the NEW ones (not already recorded for `S`) on stdout; blank candidate lines (a null `source_id`) are
+  skipped. **Prose fallback** — extract the known set with the pinned pipeline, then keep the candidates
+  not in it:
   ```bash
   grep -E '"source"[[:space:]]*:[[:space:]]*"'"$S"'"' "$WS/jobs.jsonl" 2>/dev/null \
     | grep -o '"source_id"[[:space:]]*:[[:space:]]*"[^"]*"' | cut -d'"' -f4 | sort -u
@@ -82,7 +100,11 @@ Operations (no helper script — perform these exactly):
   (The `"source"` key pattern cannot match `"source_id"`/`"source_url"` — the closing quote
   must follow immediately. Legacy history all carries `source:"linkedin"`, so the linkedin set
   matches every pre-multi-source event: no migration.)
-- **Append one event** (the heredoc keeps quoting safe — apostrophes in `reasoning` are fine):
+- **Append one event** — validate the line against the event-line contract above, then append idempotently.
+  **Script:** `../scripts/mechanics/event-log-append.sh "$WS/jobs.jsonl"` — the single-line event JSON on
+  stdin (it validates, then appends; an `evaluated` event whose `(source, source_id)` is already recorded is
+  a no-op). **Prose fallback** (validate first; the heredoc keeps quoting safe — apostrophes in `reasoning`
+  are fine):
   ```bash
   cat >> "$WS/jobs.jsonl" <<'EOF'
   {"event":"evaluated","ts":"…","source":"…","source_id":"…",…}
@@ -94,7 +116,9 @@ Operations (no helper script — perform these exactly):
 
 ## runs/<run_id>.json — audit log
 ```jsonc
-{ "run_id":"…", "started_at":"…", "completed_at":"…", "status_probe":"ok|degraded|unreachable",
+{ "run_id":"…", "started_at":"…", "completed_at":"…",
+  "build": { "version":"0.4.0", "content_hash":"sha256:abcdef123456", "git_sha":"<short sha|unknown>" },
+  "status_probe":"ok|degraded|unreachable",
   "queries":[ { "query_id":"…", "source":"<source>", "keywords":"…", "results_returned":25, "new":6, "errors":[] } ],
   "sources_searched":["linkedin","ashby"], "sources_failed":[],
   "results_summary":{ "total_results":50, "new_postings":9, "evaluated":9, "detail_read":5,
@@ -103,6 +127,12 @@ Operations (no helper script — perform these exactly):
                "retryable":true, "attempts":3, "final":"gave_up", "request_id":"…" } ],
   "run_health":"healthy|partial|degraded|blocked" }
 ```
+`build.version` and `build.content_hash` are copied from the bundled `references/build-stamp.md`.
+`build.git_sha` is best-effort: use `git -C <job-search root> rev-parse --short HEAD` only when the
+executing Job Search plugin/source root is reliably known and that root has a `.git` context; otherwise
+write `"unknown"`. Never derive `git_sha` from the caller/current working directory, because that can
+record the user's project SHA instead of the Job Search build. The build object is required on every run
+record written by `job-search-run`, including blocked records where a workspace exists.
 
 ## preferences.md — prose brief (the model reads this; NO machine-readable contract, NO weights)
 Sections: a 2–3 sentence **Summary**; **Must-haves / dealbreakers** (the binary filters); **Strong

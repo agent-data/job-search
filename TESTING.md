@@ -17,6 +17,18 @@ it reports; a few checks are pure shell or visual.
 - Mark each test ✅ / ❌ in the **Result** box. The final **Acceptance checklist** is your sign-off.
 - Estimated time: **~75–90 min** for the full pass (the live first-run T2.1 and the §12 evals dominate). The **Smoke subset** — T0.3, T1.1, **T7.13**, T6.1, T7.1 — is a genuine **~10 min** mostly-offline confidence check; it skips the full live onboarding (run T2.1 in the full pass).
 
+### Automated lanes vs. the manual residual
+
+The terminal state (per the AAS-T-10 ruling) is **a structural gate + automated lanes + a shrinking, honestly-labeled manual residual** — not a manual cross-host ritual. What is now **automated** (⚙️, runs in `pytest` / a CLI, host-independent — no manual driving):
+
+- **Scripted mechanics** — `tests/test_mechanics_scripts.py`: the deterministic state operations (jobs.jsonl append/fold, schedule-line composition, workspace discovery) that the skills call out to, unit-tested directly.
+- **Hardened skill evals** — `python3 scripts/eval_harness.py --root .` validates every `skills/*/evals/evals.json` for structural coherence (contiguous ids, well-formed scenarios, a **discovery** scenario per skill for the four overlap pairs, **stochastic** scenarios carrying `reps ≥ 5` + a **no-guidance control** arm, and **no literal model id** — the agent binds each tier to a concrete model from its own roster (self-selection)); `tests/test_eval_harness.py` unit-tests the rep-aggregation (pass-rate + variance) and the control-delta.
+- **Release integrity** — `scripts/check_release_integrity.py`: version-sync across the 8 manifests.
+
+Verifying a host-specific action such as scheduling is now a **runtime config-time canary** check, replacing the deleted per-host **structural adapter validation**.
+
+What stays a **labeled TRANSITIONAL residual** (👤/🤖, driven by hand): the **behavioral cross-host matrix** — actually running a skill end-to-end on each of the seven hosts that are **not installable on the CI runner** (Codex/Cursor/opencode/Gemini/Copilot/Droid/Pi), and the **N ≥ 5 stochastic eval reps** (the discovery/verdict/injection/merge scenarios run against the shim to record real pass-rate + variance + the control delta). These are the **off-CI live-harness step** — expected, not a gap: CI proves the scenarios are *well-formed*; the behavioral reps prove they *pass*, and shrink as hosts become installable. A green structural gate must never be read as a passed behavioral matrix.
+
 ---
 
 ## 0. Setup
@@ -74,10 +86,10 @@ in `-p` commands anyway so the skill is invoked deterministically.
 ```bash
 cd "$JSOS" && python3 -m pytest -q
 ```
-**Expected:** `102 passed` **and `0 failed`** — treat **`0 failed`** as the real gate (the exact count grows as
-tests are added; bump this number when it does). Covers the doc linter, the philosophy guard, and the
-fake-shim self-tests (incl. the `bad-query` scenario behind T7.12) — dev tooling only; the runtime state
-procedures are exercised by the live tests below and the skill evals.
+**Expected:** `170 passed` **and `0 failed`** — treat **`0 failed`** as the real gate (the exact count grows as
+tests are added; bump this number when it does). Covers the doc linter, the philosophy guard, the release-integrity checks, the scripted-mechanics unit tests, the **eval-scenario validator +
+harness math** (`test_eval_harness.py`), and the fake-shim self-tests (incl. the `bad-query` scenario behind
+T7.12) — dev tooling only; the runtime state procedures are exercised by the live tests below and the skill evals.
 **Result:** ⬜
 
 ### 0.4 Canonical test persona (use for every LIVE test) — 👤
@@ -646,12 +658,24 @@ line, Strong/Moderate/Weak, Filtered-out, footnotes).
 
 ---
 
-## 12. Full eval regression — 🤖
+## 12. Full eval regression — 🤖 + ⚙️
 
-Ask Claude, for each skill, to **run its evals** (the `harness` in `skills/<skill>/evals/evals.json`; they use the
-fake-agent-data shim, so zero real credits):
-- `evaluate-job-fit` (3) · `job-search-run` (22) · `job-preference-interview` (3) · `job-search` (8) · `job-search-agent` (4).
-**Expected:** all pass; outputs are philosophy-clean.
+First, the **structural gate** (⚙️, host-independent) — every scenario is well-formed before any is driven:
+```bash
+cd "$JSOS" && python3 scripts/eval_harness.py --root .   # "Eval harness: eval scenarios coherent."
+```
+
+Then ask Claude, for each skill, to **run its evals** (the `harness` in `skills/<skill>/evals/evals.json`; they use the
+fake-agent-data shim, so zero real credits) — **46 scenarios**:
+- `evaluate-job-fit` (4) · `job-search-run` (23) · `job-preference-interview` (4) · `job-search` (10) · `job-search-agent` (5).
+
+Each suite now includes a **discovery** scenario (plant the skill among its siblings, drive a naive prompt, assert the
+right skill is selected and the confusable sibling is not — the four overlap pairs). The judgment-heavy **stochastic**
+scenarios (fit verdicts, injection-resistance, cross-source merge, and every discovery scenario) are marked to run at
+**N ≥ 5** with a **no-guidance control** arm — that behavioral rep loop is the **off-CI live-harness step** (record
+pass-rate + variance + the control delta with `scripts/eval_harness.py` `aggregate_reps` / `control_delta`); a single
+driven pass here is the smoke check.
+**Expected:** the structural gate is clean; every driven scenario passes; outputs are philosophy-clean.
 **Result:** ⬜
 
 ---
@@ -732,7 +756,7 @@ entries carry a date mark; the first-Ashby-pass footnote is present.
 - ⬜ Scheduling correct (the composed `/loop <interval>` matches the pinned table per frequency; `/loop` sets `mechanism:loop`; **zero-Python user path** proven with python3 masked) (§9)
 - ⬜ **No numeric scores/weights/credit knobs** in files **or chat**; frequency is the only cost lever (§10)
 - ⬜ Docs match reality (install commands, error table, sample digest) (§11)
-- ⬜ Full regression green: `pytest` (**102**; gate on `0 failed`) + all five skills' evals (§0.3, §12)
+- ⬜ Full regression green: `pytest` (**170**; gate on `0 failed`) + the eval structural gate (`eval_harness.py`) + all five skills' evals (**46** scenarios) (§0.3, §12)
 - ⬜ Planned config slash-command tests are marked **N/A (pending build)**, not green (§13)
 - ⬜ Multi-source: live Ashby/Greenhouse/Lever rows; shim multi-source run shows per-source counts + first-pass footnote; one source down never blanks the run (§14)
 

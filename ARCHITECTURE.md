@@ -25,7 +25,7 @@ The product framing is an operating system whose userland is your job search:
 | Shared libraries | `shared/references/` — the contracts and pinned procedures the host agent executes |
 | Filesystem | the private per-user workspace (default `~/.job-search/`), never committed |
 | System calls | the agent-data CLI — the one job source the runner shells out to |
-| Cron | the schedule — a native local scheduler where the host has one (installs nothing), else a consent-gated machine schedule; the mechanism is the active platform's (see the platform adapter → Scheduling) |
+| Cron | the schedule — an unattended machine schedule (`cron`/`launchd`, or the host's own scheduler) the agent composes for its host and gates on consent; an in-session loop is the named fallback. See [shared/references/internals.md](shared/references/internals.md) → Scheduling setup |
 
 Where the OS state lives and how the workspace is discovered is specified in
 [shared/references/internals.md](shared/references/internals.md); the on-disk file layout is in
@@ -58,11 +58,12 @@ event-log operations in [shared/references/conventions.md](shared/references/con
 owns the file contracts.
 
 ### scheduling-consent
-Run on a cadence the user controls, on a two-tier rule: a native local scheduler where the host has one,
-else a consent-gated machine schedule — never a SILENT or un-consented privileged write. The
-[job-search](skills/job-search/SKILL.md) skill offers setup from the pinned interval table and records the
-schedule marker in the registry; the concrete mechanism is deferred to the active platform adapter
-(→ Scheduling). The consent-gated stance is an instruction-level design rule carried by every skill
+Run on a cadence the user controls: the agent advocates an **unattended** machine schedule (`cron`/`launchd`
+or the host's own scheduler) it composes for its host — an in-session loop is the named fallback — never a
+SILENT or un-consented privileged write. The
+[job-search](skills/job-search/SKILL.md) skill offers setup from the pinned interval table and, once the
+config-time canary proves the schedule actually runs, records the schedule marker in the registry; the agent
+resolves the concrete mechanism for its own host (there is no per-host adapter). The consent-gated stance is an instruction-level design rule carried by every skill
 ([docs/SECURITY.md](docs/SECURITY.md), [core-beliefs.md](docs/design-docs/core-beliefs.md) Belief 7), not a
 runtime control. The cadence options live in [shared/references/internals.md](shared/references/internals.md).
 
@@ -126,10 +127,11 @@ isolation.
 
 **Distribution.** One `skills/` tree, read in place, ships to every harness via a per-harness manifest —
 `.claude-plugin/`, `.codex-plugin/`, `.cursor-plugin/`, `.factory-plugin/`, `gemini-extension.json`,
-`package.json` — paired with the per-platform adapter under
-[shared/references/platform/](shared/references/platform/claude.md). The **loose skills** mode still works,
-each folder self-contained because the build bundled its dependencies. The contracts are identical across all
-harnesses. Install steps are in [README.md](README.md).
+`package.json`. There is **no per-host adapter layer**: each host resolves its own tools, models, scheduler,
+and permissions from the neutral action-language in the pinned procedures, then verifies the result rather
+than looking up a host-specific recipe. Every supported host installs the whole pack tree, so
+`shared/references/` resolves from each skill in place; the contracts are identical across all harnesses.
+Install steps are in [README.md](README.md).
 
 **Headless run flow.** A scheduled pass runs [job-search-run](skills/job-search-run/SKILL.md): free preflight
 gates (CLI present, config, auth, brief, service status), then one metered search per enabled query, dedup via

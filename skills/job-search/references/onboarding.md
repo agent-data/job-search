@@ -4,7 +4,7 @@ You routed here because the Discovery procedure (`internals.md`) reported `first
 the user from nothing to **real job matches found seconds ago**, in a few minutes, end-to-end. Be warm and
 brisk — this should feel magical, not like filling out a form.
 
-Follow `internals.md`, `conventions.md`, `errors.md`, and `voice.md` exactly — don't restate their details
+Follow `../../../shared/references/internals.md`, `../../../shared/references/conventions.md`, `../../../shared/references/errors.md`, and `../../../shared/references/voice.md` exactly — don't restate their details
 from memory.
 
 **Ground rule — how you behave, not a speech to give:** every step that can't proceed stops with a
@@ -16,6 +16,8 @@ step will say so plainly") — reliability is demonstrated, not promised; meta-a
 **Assume zero context.** A first-run user has never seen this system and doesn't know its words. Per
 `voice.md`: give every question below one short plain-English sentence of what the thing is and why you're
 asking — then ask, closed choices (`voice.md` → Asking questions). No internal vocabulary, ever.
+
+**Contents:** [1. Welcome](#1-welcome) · [2. Prerequisites — agent-data](#2-prerequisites--get-agent-data-ready) · [3. Workspace](#3-workspace) · [4. Preferences](#4-preferences--interview-or-import-a-fork) · [5. Searches + frequency](#5-searches--frequency-derive-from-the-brief--dont-make-the-user-pick-keywords) · [6. First live sample run](#6-first-live-sample-run--the-magical-moment) · [7. Scheduling](#7-scheduling-offer-it) · [8. Home](#8-home)
 
 ---
 
@@ -47,14 +49,14 @@ you haven't verified, and don't tell the user how long anything will take.
 
 **The check (pinned — don't improvise it).** Look for the real command on `PATH` with `command -v
 agent-data`, and confirm it's authenticated — `agent-data whoami` should report `api_key_set: true` (per
-`agent-data-contract.md`).
+`../../../shared/references/agent-data-contract.md`).
 
-- **Already set up** → say so as a verified fact in one short line ("agent-data is ready ✓") and continue.
+- **Already set up** → say so as a verified fact in one short line ("agent-data is ready") and continue.
 - **Missing or not authenticated** → **set it up for the user; don't stop.** Lead with the solution, not an
   error. The internal codes for this state (`E-NO-AGENT-DATA`, `E-NO-AUTH`) are for your reasoning only —
   **never show them to the user** (`voice.md`). Two starting points, one path — a **missing** CLI starts at
   step 1; one that's on `PATH` but **unauthenticated** starts at step 2. Keep these steps in sync with the
-  canonical setup doc (see your platform's adapter → agent-data setup for its URL):
+  canonical, host-agnostic path in `../../../shared/references/agent-data-contract.md` → Auth:
 
   1. **Install it.** Don't ask the user for anything here — no key yet, no confirmation; the API key
      belongs to the connect step. (And don't narrate that — "this needs nothing from you" is non-event
@@ -68,8 +70,8 @@ agent-data`, and confirm it's authenticated — `agent-data whoami` should repor
      **If permission settings block the install** (stricter modes guard agent-chosen global installs),
      that's expected, not an error — no apology spiral, no stopping. One plain line and the exact command
      for the user to run themselves — `npm install -g agent-data` — e.g. "My permission settings want
-     installs run by you. Run this and I'll pick up once it lands." If your harness has an in-session run
-     affordance (see your platform's adapter → agent-data setup), offer it so you see the result directly.
+     installs run by you. Run this and I'll pick up once it lands." If your host can run a shell command
+     in-session so you see its result, use it for the install so you get the outcome directly.
      Pick up at the version check once it lands.
 
      Confirm the install took with `agent-data --version` before moving on — no pre-claimed success.
@@ -81,15 +83,19 @@ agent-data`, and confirm it's authenticated — `agent-data whoami` should repor
      - Copy the key — it starts with `mtk_` — and paste it here.
 
      Ask for the key as a plain prose question — it's a free-text secret, not a closed choice.
-  3. **Authenticate**, substituting the key they pasted into the `init` line from your platform's adapter →
-     agent-data setup (it supplies the exact command and the harness-specific flag — don't reconstruct it
-     here). This saves the key to `~/.agent-data/config.json` and installs the discovery skill for your
-     harness, if any.
+  3. **Authenticate** with the key they pasted — the same universal command on every host:
+
+     ```
+     agent-data init --api-key <KEY> -y
+     ```
+
+     Substitute their key for `<KEY>`. This saves it to `~/.agent-data/config.json`; see
+     `../../../shared/references/agent-data-contract.md` → Auth for the details (don't add a host-specific
+     selector flag).
   4. **Verify it worked** — re-check auth with `agent-data whoami` (`api_key_set: true`). If it still
      reports `api_key_set: false` or you see `401 Invalid API key`, the key was wrong — ask them to
      generate a fresh one and paste it again.
-  5. Some harnesses need a session restart before the newly installed discovery tool loads; others
-     hot-load it (see your platform's adapter → agent-data setup for the post-install load/restart note).
+  5. Some hosts may need a fresh session to pick up a newly-installed CLI on `PATH`.
 
   Once it verifies, confirm in one line and continue. If setup genuinely can't finish (e.g. they can't get a
   key right now), explain plainly where things stand and what's left — still no raw error code.
@@ -179,14 +185,15 @@ user to name keywords.** They can retune anytime; the goal here is zero upfront 
      engineer") — the search API has no remote filter, so without it the feed fills with onsite roles the
      judge then has to cull.
 2. **Write them to `config.yaml`** per the `internals.md` "Add a query" recipe — never make the user open the
-   file. Each item:
+   file. One worked item — the `keywords` and `location` below are **illustrative; derive your own from
+   *this* user's brief, never paste these literal words**:
 
    ```yaml
    - { id: "ml-platform-sf", keywords: "ML platform engineer", location: "San Francisco Bay Area", limit: 25, enabled: true }
    ```
 
-   Give each `id` a short, human slug; keep `enabled: true`; `limit: 25` is a fine default. Preserve the
-   file's comments and structure, and keep `version: 1`.
+   Give each `id` a short, human slug built from that query's own terms; keep `enabled: true`; `limit: 25`
+   is a fine default. Preserve the file's comments and structure, and keep `version: 1`.
 3. **Acknowledge what you saved — don't ask them to choose.** Name the searches you derived and make clear
    they're fully editable, e.g.:
 
@@ -212,24 +219,27 @@ user to name keywords.** They can retune anytime; the goal here is zero upfront 
    allowed value and say which one you set. **Never** add a score or weight field — those
    don't exist in this system.
 
-### Codex detail-read approval
+### Parallel detail-read approval (approval-gating hosts only)
 
-Codex needs one explicit user approval before the runner uses parallel subagents for posting-detail reads.
-On Codex only, if `search.parallel_detail_reads` is unset, ask once after the frequency is saved and before
-the first live run. Use the exact closed choice from your platform's adapter → Concurrent detail reads; the
-question must say **subagents** and must name the default detail-read model (the `fast` tier from your
-platform's adapter → Model tiers).
+Some hosts gate parallel subagents behind one explicit user approval before the runner may use them for
+posting-detail reads. If your host gates subagents this way, run this step; if it does **not** gate
+subagents, skip this whole step (the parallel fan-out is already the default) and go to §6.
+
+On an **approval-gating host**, if `search.parallel_detail_reads` is unset, ask once after the frequency is
+saved and before the first live run. Ask it as a closed choice; the question must say **subagents** and must
+name the default detail-read model (the mid-tier reviewer floor — the `balanced` tier; the agent binds it to
+a concrete model from its own roster, the least-powerful that does the judgment well, not the cheapest).
 
 On **yes**:
 
 1. Write `search.parallel_detail_reads: true` to `config.yaml`; preserve comments/structure and keep
    `version: 1`.
-2. Keep `search.detail_model: "fast"` unless the user explicitly chooses another tier. If they ask what
-   "fast" means, name the mapping from your platform's adapter → Model tiers.
-3. Create or update the Codex profile exactly as specified in your platform's adapter → Concurrent detail
-   reads (`$CODEX_HOME/job-search.config.toml` / `~/.codex/job-search.config.toml`). Tell the user this saves
-   a Codex setting so unattended runs can use subagents. If the sandbox blocks that write, show the exact
-   path and TOML from the adapter; don't silently skip it.
+2. Keep `search.detail_model` at its default — the mid-tier reviewer floor (`balanced`) — unless the user
+   explicitly chooses another tier. If they ask what a tier means, name the concrete model you'd use for it.
+3. Perform any host-specific subagent setup your host needs
+   (e.g. writing a scoped profile so unattended runs may use subagents). Tell the user in plain language what
+   the setting does. If the sandbox blocks that write, show the exact path and content;
+   don't silently skip it.
 
 On **no**, write `search.parallel_detail_reads: false` and read details sequentially. Do not ask again unless
 the user later asks to change it.
@@ -242,10 +252,11 @@ This is the payoff. Disclose it plainly first, then do it:
 
 Invoke **`job-search-run`** against the workspace (pass `--workspace <workspace>`). It probes the
 source, searches each enabled query, skips postings already seen, judges each new posting against the
-brief, reads full descriptions for the promising ones, and writes a digest. On Codex, if
-`search.parallel_detail_reads: true`, the invocation context must include the exact sentence
-`Use parallel subagents for all detail reads.` — the saved config records the user's preference, and this
-sentence is the run's explicit authorization. Then present the result like a
+brief, reads full descriptions for the promising ones, and writes a digest. On a host that gates parallel
+detail reads behind approval, if
+`search.parallel_detail_reads: true`, the invocation context must include the exact authorization sentence
+your host requires — the saved config records the user's preference, and that sentence is the run's
+explicit authorization. Then present the result like a
 discovery, not a log dump — surface the **strong and moderate** matches from the digest **as normal message
 text in your reply** (rendered markdown — never a code fence, never just the digest's file path):
 
@@ -255,8 +266,8 @@ text in your reply** (rendered markdown — never a code fence, never just the d
 
 Handle whatever the run reports, in plain language:
 
-- **Blocked** → the run halts on a named error, surfaced through the run record (whether it also exits
-  non-zero is per-harness — see your platform's adapter → Headless invocation). Show that error's cause +
+- **Blocked** → the run halts on a named error, surfaced through the run record (the run record is the
+  contract; a host exit code, where trustworthy, is an additional signal only). Show that error's cause +
   fix verbatim from `errors.md` and stop the magical framing. Most likely here:
   - **`E-QUOTA`** — agent-data's API limit for this period was reached, so nothing new was pulled. Fix: pull
     less often (e.g. `daily` instead of `hourly` in `config.yaml`) or upgrade the plan. Existing matches are
@@ -273,43 +284,58 @@ Don't show run internals or scores — just the matches and, if relevant, the na
 
 ## 7. Scheduling (offer it)
 
-Offer to keep the search running automatically, using your platform's scheduler (see your platform's
-adapter → Scheduling). Follow `internals.md` — it is **two-tier**: a native **local** scheduler (preferred)
-installs nothing on the user's machine; where none exists, a **consent-gated machine schedule** (cron /
-launchd) is the sanctioned fallback — shown before it's written, started only on an explicit yes, never
-silent, and user-removable. Say it plainly, including the one tradeoff for whichever tier applies (a
-session-bound local loop runs only while a session is open; a machine schedule runs unattended but writes
-a job to the user's machine).
+Offer to keep the search running automatically. **Advocate the unattended schedule** as the default — one
+that keeps firing with **no session open**, on the host's or the OS's own scheduler (a `cron` or `launchd`
+job, or the host's native unattended scheduler) — because that's the only way the overnight and
+next-morning runs, the ones that matter most, actually happen; an in-session loop stops the instant the
+session closes. Compose the schedule for your own host (there's no per-host recipe to paste — `internals.md`
+→ Scheduling setup). The **in-session loop is the named fallback**, for a host with no unattended scheduler
+or a user who'd rather not change their machine: tell them plainly it **runs only while a session is open**,
+so a quiet overnight is expected and closing the session stops it.
+
+The unattended schedule is a real change to the user's machine, so the consent core is intact: **show the
+exact line first, write it only on an explicit yes, and leave it user-removable** — never silent, never
+auto-installed.
 
 Ask it as a closed choice (`voice.md` → Asking questions). Header `Schedule`; question: "Want me to keep
 checking automatically? New matches will land in a digest without you having to ask."; options: **Yes, keep
-checking** — "runs on your chosen cadence" · **No, I'll run it myself** — "a one-off search stays one
-command away".
+checking** — "runs on its own, on your chosen cadence" · **No, I'll run it myself** — "a one-off search
+stays one command away".
 
-**On yes:**
+**On yes** — start it, prove it, *then* record it:
 
-1. Compose the cadence for the chosen frequency from `internals.md` → Scheduling setup (the
-   frequency→interval/cron mapping lives in your platform's adapter → Run recipe).
-2. **Start the schedule** with your platform's scheduler (see your platform's adapter → Scheduling). If
-   that's a consent-gated machine schedule (Tier 2), **show the user the exact line first and start it only
-   on their explicit yes** — never write a crontab/launchd entry silently. Then record it so you don't
-   re-ask: set the scheduling marker (`internals.md` → Registry write rules — recording the mechanism
-   actually used).
-3. Show the user the exact recipe so they can restart or remove it anytime.
+1. **Compose the cadence** for the chosen frequency from `internals.md` → Scheduling setup (which builds the
+   cron time line with `schedule-line.sh` where a shell runtime exists); the host wraps it with its own
+   command / launchd / interval translation.
+2. **Start the unattended schedule** on the host's own scheduler — but **show the user the exact machine
+   change first and start it only on their explicit yes**; never write a crontab/launchd entry silently.
+3. **Prove it works before you record it — run the canary.** Never tell the user it's scheduled until its
+   exact unattended invocation has succeeded end to end. Confirm the schedule is **registered** (it appears
+   in the host's scheduler), then trigger **one real run through that scheduled invocation** — its own
+   permissions and environment, **not this session's** (this session already holds the access the real run
+   must prove, so running the canary here would pass while the real scheduled run fails) — and confirm it
+   left a fresh, unblocked run record, reached agent-data, and wrote the workspace. The user gets a live
+   digest out of it. If the canary **fails**: diagnose the gap, propose and show the exact fix, apply it on
+   the user's yes, and re-run — loop until green. If it genuinely can't be made to work, **name the gap
+   plainly and do not claim it's scheduled.** Full flow, consent framing, and failure loop:
+   `../../../shared/references/internals.md` → Scheduling setup.
+4. **Only after a green canary, record it** so you don't re-ask: set the scheduling marker (`internals.md` →
+   Registry write rules — recording the mechanism actually used).
 
 **On no:** leave it unscheduled — tell them they can turn it on later by just asking, and that a one-off run
-is always one command away (the exact invocation is in your platform's adapter → Run recipe).
+is always one command away (the composed one-off recipe below).
 
-**Either way, show the recurring-run and one-off-run recipes verbatim from your platform's adapter → Run
-recipe** so the user can start or restart it themselves — copy those lines exactly as written; do not
-reconstruct the tokens here. If `search.parallel_detail_reads: true`, choose the adapter's approved-parallel
-recipe/prompt variant; on Codex App Automations, that means the scheduled prompt includes
-`Use parallel subagents for all detail reads.`
+**Either way, compose the recurring-run and one-off-run recipes for the host and show both to the user**, so
+they can re-run the search on demand and restart or remove the schedule themselves. If
+`search.parallel_detail_reads: true` and your host gates parallel subagents behind approval, the scheduled
+prompt must include the exact subagent-authorization sentence your host requires — the saved config records
+the user's preference, and that sentence is the scheduled run's explicit authorization. This pack has no
+per-host adapter, so you compose that sentence, and the recipes, for your host yourself.
 
 ## 8. Home
 
 You're done. Print the **home view** to land the user on their dashboard — hand off to the format in
-`references/home.md` (status line · latest digest · pipeline · quick actions). Close with a short line that
+`home.md` (status line · latest digest · pipeline · quick actions). Close with a short line that
 they can just tell you what they want next ("run a search now", "add another query", "change how often it
 runs", "update my preferences", "show the latest digest").
 
@@ -331,14 +357,18 @@ runs", "update my preferences", "show the latest digest").
 - [ ] `preferences.md` exists (interview or import via `job-preference-interview`)
 - [ ] 2–3 `queries[]` **derived from the brief** and written (no upfront keyword-picking); searches
       acknowledged; `schedule.frequency` set (plain-language nudge)
-- [ ] on Codex, if `search.parallel_detail_reads` was unset, the user was asked once about parallel
-      subagents; the answer was written to `config.yaml`; on yes the Codex job-search profile was written
-      (or the exact path + TOML was shown if blocked); the user saw the default `fast`-tier model named from the adapter → Model tiers
+- [ ] on an approval-gating host, if `search.parallel_detail_reads` was unset, the user was asked once about
+      parallel subagents; the answer was written to `config.yaml`; on yes the host-specific subagent setup
+      your host needs was performed (or the exact path + content was shown if blocked); the user saw
+      the default detail-read model — the mid-tier reviewer floor (`balanced`-tier) — named as the concrete model the agent binds it to from its own roster
 - [ ] first **live** `job-search-run` done; strong/moderate matches shown — or the named error if blocked
 - [ ] shown matches include the digest reasoning and any "confirm" warning, not just titles/companies
-- [ ] scheduling offered (two-tier, per the adapter); on yes started + marker set; run recipe shown either
-      way; if Codex parallel detail reads were approved, the scheduled prompt includes the exact parallel
-      subagent authorization
+- [ ] scheduling offered with the **unattended** schedule advocated as default (in-session loop the named
+      fallback — "runs only while a session is open"); on yes the exact machine change shown first and
+      started on the user's yes, the **canary green (registration + one real scheduled run) before** the
+      marker was set — or the gap named and NOT claimed scheduled; recurring + one-off recipes composed for
+      the host and shown either way; if parallel detail reads were approved on an approval-gating host, the
+      scheduled prompt carries the host's required subagent-authorization sentence
 - [ ] every ask carried one line of plain-English context; the four closed choices (workspace location,
       interview-or-import, frequency, scheduling) asked as closed choices; no internal vocabulary
       reached the user (`voice.md`)
