@@ -6,6 +6,7 @@
       "prompt": "Invoke as an orchestrator would, with a depth-bearing args string (args: 'write the brief — standard interview'); the depth ask must still be offered. Canned answers: depth='standard'; situation='employed, passively looking'; role='senior/staff AI engineer, individual contributor, NOT management'; domain='LLM products at a startup'; location='remote in the US, or SF Bay onsite; onsite elsewhere is a dealbreaker'; comp='wants meaningful equity; base flexible'; wlb='no heavy on-call'; stack='Python + modern LLM tooling'; dealbreakers='primarily people-management; onsite outside SF'. When asked to calibrate, keep it qualitative. Finish the interview.",
       "expectations": [
         "Offers the depth choice (Quick sketch ~1 / Standard ~6–10 / Thorough ~15–20) BEFORE any interview question — even though the invocation args named a depth — as a multiple-choice question (the question box; numbered prose fallback only if the tool is unavailable)",
+        "The depth question's lead is phrased naturally (introduces the brief once, in the agent's own words) and is NOT a verbatim recital of a canned definition; the option labels (Quick sketch / Standard / Thorough) are the fixed menu",
         "Asks questions ONE at a time (not a single long dump)",
         "Writes <tmp>/.job-search/preferences.md containing all five sections: Summary, Must-haves / dealbreakers, Strong preferences, Nice-to-haves, Red flags, plus a created_at line",
         "Items are concrete/observable prose (e.g. 'Remote within the US, or SF Bay onsite')",
