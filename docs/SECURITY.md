@@ -42,26 +42,28 @@ data had leaked into a generated example.
 
 ## Scheduling writes nothing without your explicit consent
 
-Scheduling uses the host's scheduler, and which one applies decides whether your machine is written
-at all. The model is **two-tier**:
+A recurring search needs a scheduler, and setting one up is the only time the system proposes writing to
+your machine. **No schedule is ever written silently or without your explicit yes**, and you are always
+shown the exact line first.
 
-- **Tier 1 — a native *local* scheduler (preferred, where the host has one).** It re-runs the search
-  in-session and **installs nothing on your machine** — no cron line, no launchd plist, no privileged
-  write. The per-host mechanism (for example, an in-session loop) is named by your platform's adapter.
-- **Tier 2 — no native local scheduler.** A machine-level cron/launchd schedule is the sanctioned
-  fallback, written **only on your explicit yes, with the exact line shown to you first** — never
-  silent, never auto-installed, and user-removable.
+For reliability, the agent **advocates an unattended machine schedule** — a `cron` or `launchd` entry (or
+your host's own scheduler) that runs the search even when no session is open, so a pull you're expecting
+actually happens. Because that writes to your machine, it lands **only on your explicit yes, with the exact
+line shown to you first** — never silent, never auto-installed, and always user-removable. If you'd rather
+install nothing, the **named fallback is an in-session loop** that re-runs the search only while a session is
+open: it writes no cron line or plist, but it stops when the session ends.
 
-Either way the agent never initiates a **silent or un-consented** write to your machine: scheduling is
-offered as a yes/no you choose, and a machine schedule lands only after you approve the exact line.
+Whichever you choose, the agent never initiates a **silent or un-consented** write: scheduling is offered as
+a yes/no you choose, and a machine schedule lands only after you approve the exact line. Before recording the
+schedule the agent also runs a one-time **config-time canary** — a real run through the actual scheduled
+invocation — to confirm the job will genuinely work, so a misconfigured schedule fails at setup in front of
+you rather than silently the next day.
 
 This is an **instruction-level design rule**, carried by every skill's pinned references — there is no
 runtime hook enforcing it (the former PreToolUse guard was removed: it required Python on your machine and
-gated something you're entitled to do). If you explicitly ask the agent for cron or launchd, it's your
-machine and your call: where a native local scheduler exists, it offers that first so you know the
-no-install option, then helps with what you asked for; where none exists, the consent-gated machine
-schedule is the fallback — the exact line shown first, then written on your yes. You also remain free to
-run cron or launchd by hand in your own shell, as always. The two-tier scheduling flow is documented in
+gated something you're entitled to do). If you explicitly ask for cron or launchd, it's your machine and your
+call: the agent shows you the exact line first, then writes it on your yes. You also remain free to run cron
+or launchd by hand in your own shell, as always. The scheduling flow is documented in
 [`../shared/references/internals.md`](../shared/references/internals.md) (see the scheduling section).
 
 ## Auth and secrets
