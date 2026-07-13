@@ -34,9 +34,7 @@ decision log matters for future readers. These are Markdown files that live in v
 - **Done:** `docs/exec-plans/completed/`
 - **Exemplar (completed):** [`exec-plans/completed/2026-06-09-voice-and-onboarding-clarity.md`](exec-plans/completed/2026-06-09-voice-and-onboarding-clarity.md)
   — closest match for the body format below (a Non-goals fence, scoped per-task logs, verification
-  baked into each task). For a completed plan that models the full upgraded template — including the
-  Done-when gate and `[BLOCKS]`/`[TUNE]` tags — see
-  [`exec-plans/completed/2026-06-09-prompt-style-conformance.md`](exec-plans/completed/2026-06-09-prompt-style-conformance.md).
+  baked into each task).
 
 Use an execution plan when: the work has more than one logical phase, involves trade-off decisions
 worth recording, or when multiple commits will touch related files over time.

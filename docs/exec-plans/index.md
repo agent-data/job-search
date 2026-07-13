@@ -14,7 +14,6 @@ are archived here.
 - [Documentation Knowledge Base](completed/2026-06-07-doc-knowledge-base.md) — parts describing the removed Python tooling are historical; superseded by the Zero-Python migration
 - [Job Search Agent Hardening & Self-Knowledge Skill](completed/2026-06-07-job-search-agent-hardening.md)
 - [Voice & Onboarding Clarity](completed/2026-06-09-voice-and-onboarding-clarity.md)
-- [Prompt & Doc Style — Corpus Style Guide and Conformance Audit](completed/2026-06-09-prompt-style-conformance.md)
 - [Zero-Python Shipped Surface](completed/2026-06-11-zero-python-shipped-surface.md)
 - [Public OSS Release Readiness](completed/2026-06-15-public-oss-release-readiness.md)
 - [Multi-Harness Portability — Adapter Layer + Per-Platform Distribution](completed/2026-06-22-multi-harness-portability.md)
