@@ -1,17 +1,16 @@
 #!/usr/bin/env python3
 """Eval-harness support: validate the skill eval scenarios and provide the pieces the
-LIVE (Claude-driven) harness needs — a rep aggregator (pass-rate + variance), a no-guidance
-control-delta, and a model-tier resolver keyed on the platform adapter (never a literal id).
+LIVE (Claude-driven) harness needs — a rep aggregator (pass-rate + variance) and a no-guidance
+control-delta.
 
 Context. The skill evals are a LIVE HARNESS: each `skills/<skill>/evals/evals.json` carries a
 prose `harness` (how to set up the fake-agent-data shim + drive the skill) and per-scenario
 `expectations` graded by the driver. There is no pytest that "runs" a skill — the behavioral
 N>=5 reps happen off-CI against the shim. What CI CAN gate is the SCENARIOS' structural
 coherence and the deterministic math the driver feeds its observed pass/fail into. That is this
-module: `validate_evals` is the structural gate; `aggregate_reps` / `control_delta` are the
-rate+variance + control-arm capability; `resolve_tier` / `parse_adapter_tiers` prove a tier
-token binds to a model id via the adapter table (the eval-surface twin of the validator's
-model-id de-literalization). Stdlib only; mirrors doc_lint/philosophy_guard shape
+module: `validate_evals` is the structural gate — it also de-literalizes the model id (evals must
+name the portable tier the agent self-binds, never a host model id); `aggregate_reps` /
+`control_delta` are the rate+variance + control-arm capability. Stdlib only; mirrors doc_lint/philosophy_guard shape
 (scan -> hits; main prints and returns 1 on failure).
 """
 import argparse
@@ -32,8 +31,6 @@ OVERLAP_PAIRS = (
     ("evaluate-job-fit", "job-search-run"),            # fit -> run
 )
 MODEL_ID_LITERAL = re.compile(r"gpt-5", re.I)  # AAS-TEST-04 / finding #24: no host model id in evals.
-ADAPTER_ROW = re.compile(r"^\|\s*`([^`]+)`\s*\|\s*(.*?)\s*\|\s*$")
-BACKTICK = re.compile(r"`([^`]+)`")
 
 
 # ---------------------------------------------------------------------------
@@ -231,42 +228,6 @@ def control_delta(guided_results, control_results):
         "guided": guided,
         "control": control,
     }
-
-
-# ---------------------------------------------------------------------------
-# Tier binding — resolve a portable tier token via the platform adapter table
-# ---------------------------------------------------------------------------
-def parse_adapter_tiers(text):
-    """Parse a platform adapter's `## Model tiers` table into {tier: model_id_or_None}.
-
-    A row `| \\`balanced\\` | \\`gpt-5.4\\` |` yields balanced -> gpt-5.4; a prose value cell with
-    no backticked id (e.g. `inherit`) yields None (omit the override)."""
-    table = {}
-    in_tiers = False
-    for line in text.splitlines():
-        if line.startswith("## "):
-            in_tiers = line.strip().lower().startswith("## model tiers")
-            continue
-        if not in_tiers:
-            continue
-        m = ADAPTER_ROW.match(line)
-        if not m:
-            continue
-        tier = m.group(1).strip()
-        if tier.lower() in ("tier", "portable tier", "config tier"):  # header row
-            continue
-        idmatch = BACKTICK.search(m.group(2))
-        table[tier] = idmatch.group(1) if idmatch else None
-    return table
-
-
-def resolve_tier(tier, table):
-    """Resolve a portable tier token to a model id via an adapter table (None == omit override).
-    Raises KeyError if the tier is not in the adapter — a tier the evals assert but the adapter
-    does not define is a real coherence bug."""
-    if tier not in table:
-        raise KeyError(f"tier {tier!r} not defined in adapter table {sorted(table)}")
-    return table[tier]
 
 
 # ---------------------------------------------------------------------------

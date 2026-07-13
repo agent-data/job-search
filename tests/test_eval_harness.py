@@ -1,10 +1,10 @@
 """Unit tests for scripts/eval_harness.py — the eval-scenario validator + the live-harness
-support math (rep aggregation, control-delta, tier resolution).
+support math (rep aggregation, control-delta).
 
 Two jobs: (1) prove the REAL five evals.json are coherent, carry a discovery scenario per skill,
 mark the named judgment-heavy scenarios stochastic with a control arm, and hold no host model-id
 literal; (2) unit-test the deterministic helpers the off-CI live harness feeds observed pass/fail
-into (aggregate_reps / control_delta) and the adapter-backed tier resolver.
+into (aggregate_reps / control_delta).
 """
 import json
 import pathlib
@@ -227,8 +227,3 @@ def test_control_delta_guided_beats_control():
 def test_control_delta_no_lift_is_flagged():
     d = eh.control_delta([1, 0, 1, 0, 0], [1, 1, 0, 1, 1])  # guided 0.4 < control 0.8
     assert d["guided_beats_control"] is False
-
-
-def test_resolve_tier_unknown_raises():
-    with pytest.raises(KeyError):
-        eh.resolve_tier("turbo", {"fast": "x", "balanced": "y"})

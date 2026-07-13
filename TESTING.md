@@ -22,9 +22,10 @@ it reports; a few checks are pure shell or visual.
 The terminal state (per the AAS-T-10 ruling) is **a structural gate + automated lanes + a shrinking, honestly-labeled manual residual** — not a manual cross-host ritual. What is now **automated** (⚙️, runs in `pytest` / a CLI, host-independent — no manual driving):
 
 - **Scripted mechanics** — `tests/test_mechanics_scripts.py`: the deterministic state operations (jobs.jsonl append/fold, schedule-line composition, workspace discovery) that the skills call out to, unit-tested directly.
-- **Hardened skill evals** — `python3 scripts/eval_harness.py --root .` validates every `skills/*/evals/evals.json` for structural coherence (contiguous ids, well-formed scenarios, a **discovery** scenario per skill for the four overlap pairs, **stochastic** scenarios carrying `reps ≥ 5` + a **no-guidance control** arm, and **no literal model id** — tiers bind via the adapter table); `tests/test_eval_harness.py` unit-tests the rep-aggregation (pass-rate + variance), the control-delta, and the tier resolver.
-- **Platform-adapter structural validation ×8** — `python3 scripts/validate_platforms.py`: every host adapter has the 12 canonical sections; host literals live only where the adapter/validator can check them.
+- **Hardened skill evals** — `python3 scripts/eval_harness.py --root .` validates every `skills/*/evals/evals.json` for structural coherence (contiguous ids, well-formed scenarios, a **discovery** scenario per skill for the four overlap pairs, **stochastic** scenarios carrying `reps ≥ 5` + a **no-guidance control** arm, and **no literal model id** — the agent binds each tier to a concrete model from its own roster (self-selection)); `tests/test_eval_harness.py` unit-tests the rep-aggregation (pass-rate + variance) and the control-delta.
 - **Release integrity** — `scripts/check_release_integrity.py`: version-sync across the 8 manifests.
+
+Verifying a host-specific action such as scheduling is now a **runtime config-time canary** check, replacing the deleted per-host **structural adapter validation**.
 
 What stays a **labeled TRANSITIONAL residual** (👤/🤖, driven by hand): the **behavioral cross-host matrix** — actually running a skill end-to-end on each of the seven hosts that are **not installable on the CI runner** (Codex/Cursor/opencode/Gemini/Copilot/Droid/Pi), and the **N ≥ 5 stochastic eval reps** (the discovery/verdict/injection/merge scenarios run against the shim to record real pass-rate + variance + the control delta). These are the **off-CI live-harness step** — expected, not a gap: CI proves the scenarios are *well-formed*; the behavioral reps prove they *pass*, and shrink as hosts become installable. A green structural gate must never be read as a passed behavioral matrix.
 
@@ -85,9 +86,8 @@ in `-p` commands anyway so the skill is invoked deterministically.
 ```bash
 cd "$JSOS" && python3 -m pytest -q
 ```
-**Expected:** `217 passed` **and `0 failed`** — treat **`0 failed`** as the real gate (the exact count grows as
-tests are added; bump this number when it does). Covers the doc linter, the philosophy guard, the platform-adapter
-validator, the release-integrity checks, the scripted-mechanics unit tests, the **eval-scenario validator +
+**Expected:** `170 passed` **and `0 failed`** — treat **`0 failed`** as the real gate (the exact count grows as
+tests are added; bump this number when it does). Covers the doc linter, the philosophy guard, the release-integrity checks, the scripted-mechanics unit tests, the **eval-scenario validator +
 harness math** (`test_eval_harness.py`), and the fake-shim self-tests (incl. the `bad-query` scenario behind
 T7.12) — dev tooling only; the runtime state procedures are exercised by the live tests below and the skill evals.
 **Result:** ⬜
@@ -756,7 +756,7 @@ entries carry a date mark; the first-Ashby-pass footnote is present.
 - ⬜ Scheduling correct (the composed `/loop <interval>` matches the pinned table per frequency; `/loop` sets `mechanism:loop`; **zero-Python user path** proven with python3 masked) (§9)
 - ⬜ **No numeric scores/weights/credit knobs** in files **or chat**; frequency is the only cost lever (§10)
 - ⬜ Docs match reality (install commands, error table, sample digest) (§11)
-- ⬜ Full regression green: `pytest` (**217**; gate on `0 failed`) + the eval structural gate (`eval_harness.py`) + all five skills' evals (**46** scenarios) (§0.3, §12)
+- ⬜ Full regression green: `pytest` (**170**; gate on `0 failed`) + the eval structural gate (`eval_harness.py`) + all five skills' evals (**46** scenarios) (§0.3, §12)
 - ⬜ Planned config slash-command tests are marked **N/A (pending build)**, not green (§13)
 - ⬜ Multi-source: live Ashby/Greenhouse/Lever rows; shim multi-source run shows per-source counts + first-pass footnote; one source down never blanks the run (§14)
 
