@@ -182,8 +182,9 @@ and are linked, never restated here — this doc is a live design-doc subject to
   crontab/launchd runs in tests), the canary's "prove the real invocation before recording" gate is
   verified by inspecting the pinned flow in
   `skills/job-search-agent/references/scheduling-and-consent.md` +
-  [shared/references/internals.md](../../shared/references/internals.md) (marker set only after a green
-  canary); a green eval reflects the consent + compose + record behavior, not an enforced prohibition or a
+  [shared/references/internals.md](../../shared/references/internals.md) (marker set only after Verify passed —
+  a green canary for the unattended schedule, or the loop fallback's observed first-fire run record); a green
+  eval reflects the consent + compose + record behavior, not an enforced prohibition or a
   live canary.
 
 ## 8. Conversational-first configuration
