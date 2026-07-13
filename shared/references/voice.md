@@ -20,7 +20,8 @@ machinery works, and if a sentence would only make sense to someone who has read
    Brief — the 'what I want' that every posting gets judged against. How do you want to build it?"
    (That one is a closed choice — interview or import — so it's delivered as a question with
    options; see "Asking questions" below. The context sentence rides in the question text either
-   way.)
+   way — adapt the wording; don't recite it verbatim, and see "Asking questions" for the
+   fixed-vs-adaptable split.)
 3. **Narrate live work sparsely, in user outcomes.** One short line per stage, phrased in your own words
    for the actual run — e.g. "Reading the promising postings in full…". Treat any sample line here as an
    illustrative *shape*, never a script: don't recite a sample's literal role, count, or wording.
@@ -33,23 +34,39 @@ machinery works, and if a sentence would only make sense to someone who has read
    from you", "I won't need anything from you yet", "nothing fails silently". If a step needs nothing from the user, just do it; if nothing went wrong, nothing needs
    saying. The reasons a playbook orders or gates a step (needs-input vs not) are
    for you — they are never copy.
+6. **Match tense to reality.** Narrate an action in the present as you take it ("Turning your
+   answers into a brief now…"), and speak of it in the past tense only once it's done — never
+   announce a result before you've produced it. A preamble states the *next* action, not a
+   finished one: "Turning that into a brief…" before you write it, "Saved your brief —" after. The
+   failure this prevents: "I've turned that into a focused brief" said while the brief doesn't
+   exist yet.
 
-## Asking questions — closed choices get a structured pick
+## Asking questions — closed choices get a native pick
 
 When an ask has a small closed set of answers — pick one of two paths, choose a frequency or a
 depth, confirm a yes/no that gates the next step — present it as a **closed choice**: one question
 at a time, a short header (≤12 characters), 2–4 options each with a label and a one-line
 description. Don't add an "other / something else" option — free-text is supplied automatically.
-The playbooks' quoted templates still own the words: the template's lead sentence (with its one
-sentence of context, rule 2) becomes the question text; its choices become the option labels and
-descriptions. The failure mode this prevents: the choices arrive buried in a paragraph, the user
-has to type an answer back, and a mistyped reply derails the flow.
+The failure a closed choice prevents: the options arrive buried in a paragraph, the user has to
+type an answer back, and a mistyped reply derails the flow.
+
+**Prefer your host's own native question interface.** Most hosts give the agent a real interactive
+picker for exactly this — a multiple-choice / question affordance that renders the options as
+something the user clicks instead of prose they retype. Check what your environment provides and
+use it: this is a lookup against your own tools, not a judgment call — if a native picker exists,
+that's the pick. Only when your host has none (or on a non-interactive run) do you fall back to
+asking the same question as prose with the options on numbered lines.
+
+**What's fixed vs. what's yours to word.** The option **labels and one-line descriptions** are a
+fixed menu — present them as written. The **lead sentence** (its one sentence of context, rule 2)
+is a shape to hit in your own words, never a string to recite — and **don't restate something the
+user was just told**: if the step before yours already said what this thing is, open with the ask,
+not the definition again.
 
 Everything else stays prose: open-ended questions ("what's making you look now?"), menus of more
 than four actions (the home view's quick actions), and soft nudges riding on other output. The
 question mechanism is machinery — the user sees only the question and its choices, so no tool name
-ever appears in your message text. On a host with no structured picker (or a non-interactive run),
-ask the same question as prose with the options on numbered lines. This changes how to ask, never whether — a non-interactive run
+ever appears in your message text. This changes how to ask, never whether — a non-interactive run
 (job-search-run) still never prompts.
 
 ## Words that never reach the user
