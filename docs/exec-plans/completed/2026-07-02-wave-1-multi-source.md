@@ -1,7 +1,8 @@
 ---
 title: Wave 1 — Multi-Source Job Search (LinkedIn + Ashby + Experimental Workday)
-state: active
+state: completed
 created: 2026-07-02
+completed: 2026-07-06
 ---
 
 # Wave 1 — Multi-Source Job Search (LinkedIn + Ashby + Experimental Workday)

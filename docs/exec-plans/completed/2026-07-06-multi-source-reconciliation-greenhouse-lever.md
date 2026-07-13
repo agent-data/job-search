@@ -1,7 +1,8 @@
 ---
 title: Multi-Source Reconciliation — Greenhouse + Lever in, Workday out, wire-contract drift fixed
-state: active
+state: completed
 created: 2026-07-06
+completed: 2026-07-06
 base_branch: feat/wave-1-multi-source
 ---
 
@@ -601,7 +602,7 @@ def test_get_posting_greenhouse_and_lever_route_per_source():
   - `docs/exec-plans/index.md`: add this plan to the active list (match the existing row format).
   - `TESTING.md`: mirror the Ashby live-test recipe (~:680-698) for Greenhouse and Lever; update any
     source-list/enum mention and refresh the pytest count if one is cited.
-  - `docs/exec-plans/active/2026-07-02-wave-1-multi-source.md`: add a Progress-log line — "2026-07-06:
+  - `docs/exec-plans/completed/2026-07-02-wave-1-multi-source.md`: add a Progress-log line — "2026-07-06:
     the multi-source reconciliation plan folded into this branch **removed the experimental Workday
     track** (API dropped it — now a hard 400) and added Greenhouse + Lever; see
     `2026-07-06-multi-source-reconciliation-greenhouse-lever.md`."

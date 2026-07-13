@@ -65,7 +65,7 @@ Watch items the multi-source wave (PR1–PR3) hands forward — each parked behi
 none with a test yet (the surface it guards isn't built).
 
 ### P3 — merged-entry strings hardcode LinkedIn/Ashby; Ashby-primary is fixed (`TODO-MERGE-SOURCE-PRIMARY`)
-**Resolved 2026-07-06 by [2026-07-06-multi-source-reconciliation-greenhouse-lever](active/2026-07-06-multi-source-reconciliation-greenhouse-lever.md).** Greenhouse + Lever are the third/fourth mergeable board sources; the merged-entry copy, the primary-selection rule (board-source row, earliest in `search.sources`), and run-health `<why>` are now N-source. Kept as a resolved record.
+**Resolved 2026-07-06 by [2026-07-06-multi-source-reconciliation-greenhouse-lever](completed/2026-07-06-multi-source-reconciliation-greenhouse-lever.md).** Greenhouse + Lever are the third/fourth mergeable board sources; the merged-entry copy, the primary-selection rule (board-source row, earliest in `search.sources`), and run-health `<why>` are now N-source. Kept as a resolved record.
 **What:** The cross-source merge bakes the `linkedin`/`ashby` names into the merged-entry copy and always
 picks the Ashby row as the primary of an aliased pair.
 **Why:** Two mergeable sources is the whole world today, so a two-name string and a fixed primary read
@@ -87,7 +87,7 @@ no defined winner — the collapsed role could show either status.
 **Linked tests:** none (watch item).
 
 ### P3 — run-health `<why>` can't name a two-of-three source loss (`TODO-WHY-ENUM-MULTILOSS`)
-**Resolved 2026-07-06 by [2026-07-06-multi-source-reconciliation-greenhouse-lever](active/2026-07-06-multi-source-reconciliation-greenhouse-lever.md).** With Greenhouse + Lever now in routine use, the `<why>` vocabulary gained a "several — but not all — sources lost, each named in `search.sources` order" band (`conventions.md` digest format, `job-search-run` step 5, `errors.md` E-UPSTREAM-STRETCH), so a partial-but-multiple loss is named exactly. Kept as a resolved record.
+**Resolved 2026-07-06 by [2026-07-06-multi-source-reconciliation-greenhouse-lever](completed/2026-07-06-multi-source-reconciliation-greenhouse-lever.md).** With Greenhouse + Lever now in routine use, the `<why>` vocabulary gained a "several — but not all — sources lost, each named in `search.sources` order" band (`conventions.md` digest format, `job-search-run` step 5, `errors.md` E-UPSTREAM-STRETCH), so a partial-but-multiple loss is named exactly. Kept as a resolved record.
 **What:** The run-health `<why>` vocabulary names one lost source or "all sources unavailable"; it can't
 say two of three sources were lost (e.g. LinkedIn and Ashby down while Workday survives).
 **Why:** With the two default sources the only cases are "one lost" or "all lost", both already covered.
