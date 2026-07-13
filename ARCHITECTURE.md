@@ -126,10 +126,11 @@ isolation.
 
 **Distribution.** One `skills/` tree, read in place, ships to every harness via a per-harness manifest —
 `.claude-plugin/`, `.codex-plugin/`, `.cursor-plugin/`, `.factory-plugin/`, `gemini-extension.json`,
-`package.json` — paired with the per-platform adapter under
-`shared/references/platform/`. The **loose skills** mode still works,
-each folder self-contained because the build bundled its dependencies. The contracts are identical across all
-harnesses. Install steps are in [README.md](README.md).
+`package.json`. There is **no per-host adapter layer**: each host resolves its own tools, models, scheduler,
+and permissions from the neutral action-language in the pinned procedures, then verifies the result rather
+than looking up a host-specific recipe. Every supported host installs the whole pack tree, so
+`shared/references/` resolves from each skill in place; the contracts are identical across all harnesses.
+Install steps are in [README.md](README.md).
 
 **Headless run flow.** A scheduled pass runs [job-search-run](skills/job-search-run/SKILL.md): free preflight
 gates (CLI present, config, auth, brief, service status), then one metered search per enabled query, dedup via

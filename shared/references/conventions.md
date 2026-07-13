@@ -52,7 +52,9 @@ genuinely mechanical bulk — dedup, the summary prefilter, provenance — runs 
 context and the shared scripts, independent of this knob. The tiers: `fast` (the cheapest tier — an explicit
 opt-down: faster, a touch looser on subtle qualitative calls), `balanced` (the mid-tier reviewer floor; the
 default), `high` (highest fidelity), `inherit` (the run's own model — the one value that maps to no explicit
-override, and only by the user's choice; the runner otherwise always dispatches an explicit model). The agent
+override, and only by the user's choice; the runner otherwise always dispatches an explicit model). A legacy
+`haiku` / `sonnet` / `opus` value — some `config.yaml` files from earlier versions carry the pre-tier form —
+is accepted as an alias for `fast` / `balanced` / `high` respectively. The agent
 binds each tier to a concrete model from its own roster — the least-powerful model that does the task well;
 the fit verdict is a judgment, so never the cheapest.
 `parallel_detail_reads` is optional and records whether the user approved parallel subagents for detail

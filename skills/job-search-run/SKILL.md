@@ -112,7 +112,7 @@ Read these before running, and follow them exactly:
    | `false` | sequential reads (an explicit user opt-out) |
    | unset   | your host's default — a host that gates subagents behind user approval reads sequentially until approved; every other host uses the parallel fan-out |
 
-   **Dispatch the verdict at the mid-tier reviewer floor, with an EXPLICIT model.** Dispatch every subtask
+   Dispatch every subtask
    with an **explicitly specified** model (a required slot — never omit it, or it silently inherits the wrong
    tier). Use the **least powerful model that can handle the task well, to conserve cost and increase speed**:
    the mechanical steps (dedup, prefilter, extraction, provenance) on your **cheapest** model; the per-posting

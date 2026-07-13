@@ -35,9 +35,10 @@ See an example digest in [`examples/sample-digest.md`](examples/sample-digest.md
 
 ## Installation
 
-Claude Code and Codex are the primary tested installs today. The other harness entries below are expected
-to work from their manifests/adapters, but they have not had the same live verification depth yet; treat
-them as experimental until their adapter is promoted in the tech-debt tracker.
+Claude Code and Codex are the primary tested installs today. The other harness entries below are
+structural-only: their manifests are in place, but they have not had the same live verification and may need
+hands-on fixing before a run completes end to end — so treat them as experimental. There is no per-host
+adapter layer; each host resolves its own tools, models, and scheduling from the shared neutral procedures.
 
 Installation differs by harness. If you use more than one, install Job Search separately for each one.
 

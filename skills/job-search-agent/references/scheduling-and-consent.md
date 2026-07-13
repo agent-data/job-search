@@ -61,14 +61,19 @@ set the scheduling marker.
 
 ## Actions
 
-The steps are the same whichever scheduler is active; the agent binds each to its own host.
+The steps are the same whichever scheduler is active; the agent binds each to its own host. The one step
+that differs is **Verify**: the **unattended schedule** must pass the config-time canary below (registration
+in the scheduler's job list + a real run through the *actual scheduled invocation, not this session*), while
+the **in-session-loop fallback** can satisfy neither canary layer — it registers in no scheduler job list and
+its run *is* this session — so it is confirmed instead by observing its **first in-session fire** leave a
+fresh run record before the marker is recorded.
 
 | Step | How | Notes |
 |------|-----|-------|
 | Compose the cadence | from `schedule.frequency`, via `../../../shared/scripts/mechanics/schedule-line.sh <frequency> [HH:MM]` where a shell runtime exists (the prose fallback in `../../../shared/references/internals.md` → Scheduling setup composes the same line directly) | Host-neutral cron time expression; the host wraps it with its own command / launchd / interval translation. |
 | Start it (on yes) | offer scheduling as a yes/no, check the scheduling marker first so you never re-ask, then start the unattended schedule on an affirmative answer | Show the user the exact machine change **before** writing it (Consent below). |
-| Verify | run the **canary** above — registration + one real scheduled run, proven from the artifacts | Mandatory gate: no green canary, no marker. |
-| Record it | set the scheduling marker (`../../../shared/references/internals.md` → Registry write rules) | Records the **active** mechanism so the home view shows the schedule and you don't re-ask. Only after a green canary. |
+| Verify | **Unattended:** run the **canary** above — registration + one real scheduled run, proven from the artifacts. **In-session-loop fallback:** it can neither register nor run outside this session, so confirm it by its **first in-session fire** leaving a fresh run record. | Mandatory gate either way: no proof (a green canary, or an observed first-fire run record), no marker. |
+| Record it | set the scheduling marker (`../../../shared/references/internals.md` → Registry write rules) | Records the **active** mechanism so the home view shows the schedule and you don't re-ask. Only after Verify passed (a green canary, or the loop's observed first-fire run record). |
 | Turn it off | stop the active schedule, then clear the scheduling marker (`../../../shared/references/internals.md` → Registry write rules) | The marker reads `installed: false` afterwards. |
 
 `schedule.time` in `config.yaml` is honored when the active scheduler is **wall-clock-based** (an unattended

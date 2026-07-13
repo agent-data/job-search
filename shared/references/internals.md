@@ -156,12 +156,15 @@ recurring-run recipe and the one-off-run recipe for the host** and show both to 
 can re-run the search on demand and stop or restart the schedule themselves.
 
 **Verify before recording — the canary (mandatory).** Before recording the scheduling marker, verify the
-schedule works via the **config-time canary**: **registration** (it appears in the host scheduler's job
-list) + one **real run through the exact scheduled invocation** (its own permissions/env, not this
-session's) proving a fresh `runs/<id>.json` (`run_health` ≠ `blocked`), agent-data reached, and workspace
-written; on failure, diagnose + consent-gated fix + re-run; **never record the marker until the canary is
-green**. Full consent-framed flow: the operator manual's `scheduling-and-consent.md`
-§the canary. Only then set the scheduling marker (write rules above — recording the mechanism actually used).
+schedule works. For the **unattended schedule**, use the **config-time canary**: **registration** (it appears
+in the host scheduler's job list) + one **real run through the exact scheduled invocation** (its own
+permissions/env, not this session's) proving a fresh `runs/<id>.json` (`run_health` ≠ `blocked`), agent-data
+reached, and workspace written; on failure, diagnose + consent-gated fix + re-run; **never record the marker
+until the canary is green**. The **in-session-loop fallback** (`mechanism: loop`) can satisfy neither canary
+layer — it registers in no scheduler job list and its run *is* this session — so verify it differently:
+confirm its **first in-session fire** leaves a fresh run record, then record the marker. Full consent-framed
+flow: the operator manual's `scheduling-and-consent.md` §the canary. Only then set the scheduling marker
+(write rules above — recording the mechanism actually used).
 
 To turn scheduling off, stop the active schedule, then clear the scheduling marker (write rules above — no
 more stale `installed: true`).
