@@ -30,8 +30,6 @@ place — only the *synced* `references/*.md` are generated.
 
 ## Before you open a PR: everything must be green
 
-All prompts and docs are held to [`docs/design-docs/prompt-style-guide/index.md`](docs/design-docs/prompt-style-guide/index.md).
-
 Run all of these and make sure they pass:
 
 ```bash

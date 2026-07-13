@@ -17,8 +17,8 @@ doctrine-amendment and prose wording; this plan sequences the work into landable
 not re-derive** decisions.
 
 **Guide anchoring.** Every task cites the AAS / PSG rule IDs it turns on. They resolve against the
-[AAS rule index](../../design-docs/agent-agnostic-skills/14-checklist-and-rule-index.md), the
-[PSG rule index](../../design-docs/prompt-style-guide/09-checklist-and-rule-index.md), and the
+AAS rule index, the
+PSG rule index, and the
 [core beliefs](../../design-docs/core-beliefs.md). Where a rule's line/section moved, the **rule ID is the
 anchor, not the number**.
 
