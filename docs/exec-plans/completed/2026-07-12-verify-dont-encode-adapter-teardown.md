@@ -1,7 +1,8 @@
 ---
 title: Verify-don't-encode — adapter teardown, unattended scheduling & config-time verification
-state: active
+state: completed
 created: 2026-07-12
+completed: 2026-07-13
 ---
 
 # Verify-don't-encode — Implementation Plan
