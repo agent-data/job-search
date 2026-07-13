@@ -4,7 +4,7 @@ title: Three-Skill Job Search Redesign
 status: superseded
 verified: partial
 last_reviewed: 2026-07-09
-code_refs: [AGENTS.md, ARCHITECTURE.md, skills/job-search/SKILL.md, skills/evaluate-job-fit/SKILL.md, shared/references/errors.md, shared/references/internals.md, shared/references/platform/codex.md]
+code_refs: [AGENTS.md, ARCHITECTURE.md, skills/job-search/SKILL.md, skills/evaluate-job-fit/SKILL.md, shared/references/errors.md, shared/references/internals.md]
 claimed_paths: [skills, shared/references, README.md, AGENTS.md, ARCHITECTURE.md, CONTRIBUTING.md, TESTING.md, docs/INTERFACE.md, docs/RELIABILITY.md, docs/SECURITY.md]
 owner_area: Skills & references
 repos: [job-search-os]

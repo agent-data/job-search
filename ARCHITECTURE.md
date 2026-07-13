@@ -127,7 +127,7 @@ isolation.
 **Distribution.** One `skills/` tree, read in place, ships to every harness via a per-harness manifest —
 `.claude-plugin/`, `.codex-plugin/`, `.cursor-plugin/`, `.factory-plugin/`, `gemini-extension.json`,
 `package.json` — paired with the per-platform adapter under
-[shared/references/platform/](shared/references/platform/claude.md). The **loose skills** mode still works,
+`shared/references/platform/`. The **loose skills** mode still works,
 each folder self-contained because the build bundled its dependencies. The contracts are identical across all
 harnesses. Install steps are in [README.md](README.md).
 

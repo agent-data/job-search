@@ -229,27 +229,6 @@ def test_control_delta_no_lift_is_flagged():
     assert d["guided_beats_control"] is False
 
 
-# ---------------------------------------------------------------------------
-# Tier binding — resolved from the platform adapter, never a literal id
-# ---------------------------------------------------------------------------
-def test_parse_adapter_tiers_from_codex_adapter():
-    text = (ROOT / "shared" / "references" / "platform" / "codex.md").read_text(encoding="utf-8")
-    table = eh.parse_adapter_tiers(text)
-    # The adapter table is the single source of the model ids the evals must NOT pin.
-    assert table.get("fast") and table.get("balanced") and table.get("high")
-    assert table["inherit"] is None
-    assert eh.resolve_tier("balanced", table) == table["balanced"]
-
-
 def test_resolve_tier_unknown_raises():
     with pytest.raises(KeyError):
         eh.resolve_tier("turbo", {"fast": "x", "balanced": "y"})
-
-
-def test_eval_tier_tokens_resolve_in_the_adapter():
-    """Every tier token the evals assert (fast/balanced/high/inherit) must resolve in the Codex
-    adapter — the de-literalized assertions stay adapter-backed, not dangling."""
-    text = (ROOT / "shared" / "references" / "platform" / "codex.md").read_text(encoding="utf-8")
-    table = eh.parse_adapter_tiers(text)
-    for tier in ("fast", "balanced", "high", "inherit"):
-        eh.resolve_tier(tier, table)  # raises KeyError if the adapter dropped a tier

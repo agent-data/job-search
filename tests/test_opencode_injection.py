@@ -9,7 +9,7 @@ must follow the AAS-PORT-08 lifecycle rather than unconditionally prepending a s
   - COMPACTION RE-INJECT: when compaction drops the bootstrap, the next transform re-adds it.
 
 These are behavioral assertions against the real committed plugin, exercised through node (skipped
-when node is absent, mirroring the validate_platforms node checks — CI without node must not fail).
+when node is absent, mirroring the node checks CI runs — CI without node must not fail).
 This is a structural, not-live-verified proof (opencode is not installed here): it exercises the
 transform function directly, not a running opencode instance.
 """

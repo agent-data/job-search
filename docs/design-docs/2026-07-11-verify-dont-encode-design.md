@@ -4,7 +4,7 @@ title: "Verify-don't-encode: adapter-free portability, unattended scheduling, an
 status: aspirational
 verified: partial
 last_reviewed: 2026-07-11
-code_refs: [shared/references/platform/claude.md, shared/references/platform/codex.md, shared/references/platform/_common.md, shared/references/internals.md, shared/references/conventions.md, shared/references/parallelism.md, shared/references/errors.md, shared/references/agent-data-contract.md, shared/references/voice.md, skills/job-search-agent/references/scheduling-and-consent.md, skills/job-search/references/onboarding.md, skills/job-search-run/SKILL.md, docs/design-docs/core-beliefs.md, docs/design-docs/agent-agnostic-skills/09-harness-neutral-language.md, docs/design-docs/agent-agnostic-skills/07-autonomy-calibration.md, docs/design-docs/prompt-style-guide/04-subagents-and-delegation.md, scripts/validate_platforms.py, scripts/doc_lint.py, .github/workflows/ci.yml]
+code_refs: [shared/references/internals.md, shared/references/conventions.md, shared/references/parallelism.md, shared/references/errors.md, shared/references/agent-data-contract.md, shared/references/voice.md, skills/job-search-agent/references/scheduling-and-consent.md, skills/job-search/references/onboarding.md, skills/job-search-run/SKILL.md, docs/design-docs/core-beliefs.md, docs/design-docs/agent-agnostic-skills/09-harness-neutral-language.md, docs/design-docs/agent-agnostic-skills/07-autonomy-calibration.md, docs/design-docs/prompt-style-guide/04-subagents-and-delegation.md, scripts/doc_lint.py, .github/workflows/ci.yml]
 claimed_paths: [skills, shared/references, scripts]
 owner_area: Skills & references
 repos: [job-search-os]
