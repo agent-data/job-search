@@ -59,9 +59,19 @@ the user's own words do (they already said "just a quick sketch" / "make it thor
 the ask). The failure mode: an invoker pre-picks "standard", the depth question silently disappears, and the
 user never learns a one-question sketch existed.
 
-Ask it as a closed choice: a short question with 2–4 labeled options; if your host has no closed-choice UI, ask the same question as prose on numbered lines (`../../shared/references/voice.md` → Asking questions). Header `Depth`; question: "This
-brief is the plain-English 'what I want' that every job posting gets judged against. How deep do you want to
-go? You can always come back for a deeper pass later."; options:
+Ask it as a closed choice (`../../shared/references/voice.md` → Asking questions — prefer your host's
+native question interface; numbered prose only if it has none). Header `Depth`. The lead sentence is
+yours to word (voice.md → Asking questions), and **whether you introduce the brief at all depends on
+how you got here**:
+
+- **Mid-onboarding** (invoked with onboarding context): onboarding has *just* told the user what the
+  brief is — don't say it again. Open with the depth ask only, e.g. "How deep do you want to go? You
+  can start light and go deeper anytime."
+- **Standalone** (the user came straight here): introduce the brief in one line of your own — the
+  plain-English picture of what they want that every posting gets judged against — then ask how deep
+  to go.
+
+Options (present these labels and descriptions as written):
 
 1. **Quick sketch** — "~1 question — describe what you want in a sentence or two; see matching jobs right away."
 2. **Standard interview** — "~6–10 questions, one at a time, over what matters most."
@@ -102,8 +112,9 @@ flags included.
   ("good culture" → "small teams, low meeting load, ships weekly"; "decent pay" → "base at least ~$X").
 - **Make answering easy.** Offer a few example options or a simple scale when it helps, and **always** let the
   user say "no preference", "skip", or "that's a dealbreaker". When a question is a genuine pick-one with 2–4
-  natural answers (IC vs. manager; remote / hybrid / onsite), ask it as a closed choice; if your host has no
-  closed-choice UI, ask the same question as prose on numbered lines; open questions stay prose (`../../shared/references/voice.md` → Asking questions).
+  natural answers (IC vs. manager; remote / hybrid / onsite), ask it as a closed choice
+  (`../../shared/references/voice.md` → Asking questions — prefer your host's native question
+  interface; numbered prose only if it has none); open questions stay prose.
 - Keep every message short — one or two sentences (plus a closed choice's option lines when you're asking
   one); don't lecture or pad. Relax this only when the user explicitly asks you to explain something at
   greater length.
