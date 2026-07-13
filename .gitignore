@@ -7,3 +7,8 @@ __pycache__/
 # Local-only strategy/working docs — never published; kept outside docs/ so doc_lint
 # (which walks the filesystem, not git) doesn't demand index entries CI can't resolve.
 docs-private/
+
+# Job-search runtime data — never commit a real résumé / preferences / digest into this public repo
+preferences.md
+resumes/
+reports/
