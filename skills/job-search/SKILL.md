@@ -37,7 +37,8 @@ Run the Discovery procedure (`../../shared/references/internals.md`) → a works
   turn. The pull to defer it is strong — finish the silent prep, batch the talking into one final message.
   Resist it: that batching is this skill's known failure mode, and whatever goes wrong next (a failed
   check, a blocked install) must land on a user who has already been greeted and told what's happening.
-  About to run a tool without having greeted? Stop — greet first. The welcome, verbatim or close to it:
+  About to run a tool without having greeted? Stop — greet first. The welcome — hit these beats in your own
+  words (a warm one-liner: you'll set up their search together and end on real matches found live), e.g.:
 
   > "Let's set up your job search. I'll check a couple of prerequisites, make you a private workspace,
   > learn what you're looking for, save your first search, and then actually pull live postings and show

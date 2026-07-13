@@ -142,10 +142,10 @@ where they're hunting, and matched jobs live here and shouldn't be committed to 
 ## 4. Preferences — interview or import (a fork)
 
 The system needs a **Job Preferences Brief** (prose `preferences.md`) — the "what I want" half that the
-runner reads against each posting. This is a closed two-way choice, so ask it as a closed choice
-(`voice.md` → Asking questions), the what-it-is context riding in the question text. Header `Brief`;
-question: "Next I need your **Job Preferences Brief** — the plain-English 'what I want' that every posting
-gets judged against. How do you want to build it?"; options:
+runner reads against each posting. Ask it as a closed choice (`voice.md` → Asking questions): the lead
+sentence is yours to word — introduce the brief in one plain line (what it is, why it's next) and ask how
+they want to build it. This is the one place onboarding introduces the brief; the interview you hand off
+to won't repeat the definition. Header `Brief`; options:
 
 - **Interview me** — "I'll ask questions and write the brief from your answers — you pick how deep to go."
 - **Import one** — "you already have it written down — paste it or give me the path."
@@ -234,7 +234,7 @@ the user later asks to change it.
 
 This is the payoff. Disclose it plainly first, then do it:
 
-> "Now I'll run your first search for real — this makes **live calls** to pull and read postings."
+> e.g. "Now I'll run your first search for real — this makes **live calls** to pull and read postings."
 
 Invoke **`job-search-run`** against the workspace (pass `--workspace <workspace>`). It probes the
 source, searches each enabled query, skips postings already seen, judges each new posting against the
@@ -246,7 +246,7 @@ explicit authorization. Then present the result like a
 discovery, not a log dump — surface the **strong and moderate** matches from the digest **as normal message
 text in your reply** (rendered markdown — never a code fence, never just the digest's file path):
 
-> "Here are **N jobs matching your brief**, found seconds ago:"
+> e.g. "Here are **N jobs matching your brief**, found seconds ago:"
 > then the strong matches (title — company — location — one-line reasoning — link), then
 > moderate. Include any "confirm" warning from the digest. Never collapse this to a title-only list.
 
@@ -370,6 +370,6 @@ runs", "update my preferences", "show the latest digest").
       the host and shown either way; if parallel detail reads were approved on an approval-gating host, the
       scheduled prompt carries the host's required subagent-authorization sentence
 - [ ] every ask carried one line of plain-English context; the four closed choices (workspace location,
-      interview-or-import, frequency, scheduling) asked as closed choices; no internal vocabulary
+      interview-or-import, scheduling, frequency) asked as closed choices; no internal vocabulary
       reached the user (`voice.md`)
 - [ ] home view printed
