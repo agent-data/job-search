@@ -17,7 +17,7 @@ step will say so plainly") — reliability is demonstrated, not promised; meta-a
 `voice.md`: give every question below one short plain-English sentence of what the thing is and why you're
 asking — then ask, closed choices (`voice.md` → Asking questions). No internal vocabulary, ever.
 
-**Contents:** [1. Welcome](#1-welcome) · [2. Prerequisites — agent-data](#2-prerequisites--get-agent-data-ready) · [3. Workspace](#3-workspace) · [4. Preferences](#4-preferences--interview-or-import-a-fork) · [5. Searches + frequency](#5-searches--frequency-derive-from-the-brief--dont-make-the-user-pick-keywords) · [6. First live sample run](#6-first-live-sample-run--the-magical-moment) · [7. Scheduling](#7-scheduling-offer-it) · [8. Home](#8-home)
+**Contents:** [1. Welcome](#1-welcome) · [2. Prerequisites — agent-data](#2-prerequisites--get-agent-data-ready) · [3. Workspace](#3-workspace) · [4. Preferences](#4-preferences--interview-or-import-a-fork) · [5. Searches](#5-searches-derive-from-the-brief--dont-make-the-user-pick-keywords) · [6. First live sample run](#6-first-live-sample-run--the-magical-moment) · [7. Scheduling](#7-scheduling-offer-it) · [8. Home](#8-home)
 
 ---
 
@@ -170,7 +170,7 @@ re-print it here; confirm and move on. Either way, the brief ends up at `<worksp
 **`E-NO-PREFERENCES`** (build one with the **job-preference-interview** skill, or point
 `config.yaml:workspace.preferences_path` at your own prose brief).
 
-## 5. Searches + frequency (derive from the brief — don't make the user pick keywords)
+## 5. Searches (derive from the brief — don't make the user pick keywords)
 
 You just built the brief, so you already know what they want. **Derive the searches from it — don't ask the
 user to name keywords.** They can retune anytime; the goal here is zero upfront homework.
@@ -204,20 +204,6 @@ user to name keywords.** They can retune anytime; the goal here is zero upfront 
    the gap — lead with derivation, never a blank "what should I search for?".
    The config already comes preset with a recency window (recent postings only) and a fast model for reading
    posting details — both are tunable anytime just by asking. The config also comes preset with the default job sources (LinkedIn + Ashby company boards) — tunable anytime just by asking.
-4. **Pick a frequency — as a closed choice** (`voice.md` → Asking questions), the plain-language nudge
-   carried by the recommended-first option. Header `Frequency`; question:
-   "How often should I check for new postings? You can change this anytime by just telling me."; options,
-   recommended first:
-
-   - **Daily (Recommended)** — "suits most searches"
-   - **Hourly** — "only for a fast-moving, active search"
-   - **Every 6 hours** — "a few times a day, without the firehose"
-   - **Weekly** — "a slow-burn watch"
-
-   Set `schedule.frequency` to the chosen allowed value: `hourly | every-2-hours | every-6-hours | daily |
-   weekly` — `every-2-hours` has no button, so map a typed answer ("every couple of hours") to the nearest
-   allowed value and say which one you set. **Never** add a score or weight field — those
-   don't exist in this system.
 
 ### Parallel detail-read approval (approval-gating hosts only)
 
@@ -225,7 +211,7 @@ Some hosts gate parallel subagents behind one explicit user approval before the 
 posting-detail reads. If your host gates subagents this way, run this step; if it does **not** gate
 subagents, skip this whole step (the parallel fan-out is already the default) and go to §6.
 
-On an **approval-gating host**, if `search.parallel_detail_reads` is unset, ask once after the frequency is
+On an **approval-gating host**, if `search.parallel_detail_reads` is unset, ask once after the searches are
 saved and before the first live run. Ask it as a closed choice; the question must say **subagents** and must
 name the default detail-read model (the mid-tier reviewer floor — the `balanced` tier; the agent binds it to
 a concrete model from its own roster, the least-powerful that does the judgment well, not the cheapest).
@@ -302,14 +288,27 @@ checking automatically? New matches will land in a digest without you having to 
 checking** — "runs on its own, on your chosen cadence" · **No, I'll run it myself** — "a one-off search
 stays one command away".
 
-**On yes** — start it, prove it, *then* record it:
+**On yes** — pick the cadence, then start it, prove it, and record it:
 
-1. **Compose the cadence** for the chosen frequency from `internals.md` → Scheduling setup (which builds the
-   cron time line with `schedule-line.sh` where a shell runtime exists); the host wraps it with its own
-   command / launchd / interval translation.
-2. **Start the unattended schedule** on the host's own scheduler — but **show the user the exact machine
+1. **Ask how often — now, as part of setting the schedule up.** This is the moment the cadence
+   actually matters, so ask it here, not before there's a schedule: a closed choice (`voice.md` →
+   Asking questions), the plain-language nudge carried by the recommended-first option. Header
+   `Frequency`; lead sentence yours to word (e.g. "How often should it check?"); options, recommended
+   first:
+   - **Daily (Recommended)** — "suits most searches"
+   - **Hourly** — "only for a fast-moving, active search"
+   - **Every 6 hours** — "a few times a day, without the firehose"
+   - **Weekly** — "a slow-burn watch"
+
+   Set `schedule.frequency` to the chosen allowed value: `hourly | every-2-hours | every-6-hours |
+   daily | weekly` — `every-2-hours` has no button, so map a typed answer ("every couple of hours")
+   to the nearest allowed value and say which one you set. **Never** add a score or weight field.
+2. **Compose the cadence** for the chosen frequency from `internals.md` → Scheduling setup (which
+   builds the cron time line with `schedule-line.sh` where a shell runtime exists); the host wraps it
+   with its own command / launchd / interval translation.
+3. **Start the unattended schedule** on the host's own scheduler — but **show the user the exact machine
    change first and start it only on their explicit yes**; never write a crontab/launchd entry silently.
-3. **Prove it works before you record it — run the canary.** Never tell the user it's scheduled until its
+4. **Prove it works before you record it — run the canary.** Never tell the user it's scheduled until its
    exact unattended invocation has succeeded end to end. Confirm the schedule is **registered** (it appears
    in the host's scheduler), then trigger **one real run through that scheduled invocation** — its own
    permissions and environment, **not this session's** (this session already holds the access the real run
@@ -319,7 +318,7 @@ stays one command away".
    the user's yes, and re-run — loop until green. If it genuinely can't be made to work, **name the gap
    plainly and do not claim it's scheduled.** Full flow, consent framing, and failure loop:
    `../../../shared/references/internals.md` → Scheduling setup.
-4. **Only after a green canary, record it** so you don't re-ask: set the scheduling marker (`internals.md` →
+5. **Only after a green canary, record it** so you don't re-ask: set the scheduling marker (`internals.md` →
    Registry write rules — recording the mechanism actually used).
 
 **On no:** leave it unscheduled — tell them they can turn it on later by just asking, and that a one-off run
@@ -356,7 +355,7 @@ runs", "update my preferences", "show the latest digest").
       `jobs.jsonl`; the active workspace recorded in the registry
 - [ ] `preferences.md` exists (interview or import via `job-preference-interview`)
 - [ ] 2–3 `queries[]` **derived from the brief** and written (no upfront keyword-picking); searches
-      acknowledged; `schedule.frequency` set (plain-language nudge)
+      acknowledged
 - [ ] on an approval-gating host, if `search.parallel_detail_reads` was unset, the user was asked once about
       parallel subagents; the answer was written to `config.yaml`; on yes the host-specific subagent setup
       your host needs was performed (or the exact path + content was shown if blocked); the user saw
@@ -364,7 +363,8 @@ runs", "update my preferences", "show the latest digest").
 - [ ] first **live** `job-search-run` done; strong/moderate matches shown — or the named error if blocked
 - [ ] shown matches include the digest reasoning and any "confirm" warning, not just titles/companies
 - [ ] scheduling offered with the **unattended** schedule advocated as default (in-session loop the named
-      fallback — "runs only while a session is open"); on yes the exact machine change shown first and
+      fallback — "runs only while a session is open"); on yes the frequency was asked and `schedule.frequency` set
+      (plain-language nudge), then the exact machine change shown first and
       started on the user's yes, the **canary green (registration + one real scheduled run) before** the
       marker was set — or the gap named and NOT claimed scheduled; recurring + one-off recipes composed for
       the host and shown either way; if parallel detail reads were approved on an approval-gating host, the
