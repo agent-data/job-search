@@ -8,5 +8,6 @@ points to the architecture, the agent-first core beliefs, the design/exec plans,
 single source of truth in `shared/references/`.
 
 Running the **job-search** skill on Copilot: the pack installs via the shared `.claude-plugin/`
-manifest; the Copilot tool map, scheduling, headless invocation, and model tiers live in
-`shared/references/platform/copilot.md`.
+manifest; the skills use platform-neutral action vocabulary and the pinned contracts in
+`shared/references/`. Copilot resolves its own tools, scheduler, headless invocation, and model at
+run time by self-selection — there is no per-host adapter file.

@@ -7,7 +7,7 @@ it reports; a few checks are pure shell or visual.
 ## How to use this doc
 
 - **Driver legend:** 🤖 = give the instruction to Claude Code and let it run · 👤 = you run a shell command or eyeball output · ⚙️ = automated (pytest/CLI).
-- **Platform:** written for **macOS** (BSD `stat -f`, `shasum`). Scheduling is native `/loop` (cross-platform; no cron/launchd tests), so the only platform swap is the BSD-isms (`stat -f '%Sm'` → `stat -c '%y'`); `shasum -a 256` and `grep -E` work on both.
+- **Platform:** written for **macOS** (BSD `stat -f`, `shasum`). Scheduling is **unattended-first** (advocated default: a wall-clock `cron`/`launchd` job; in-session `/loop` is the fallback), but this suite drives only the loop/decline path and writes no real crontab, so the only platform swap is the BSD-isms (`stat -f '%Sm'` → `stat -c '%y'`); `shasum -a 256` and `grep -E` work on both.
 - **Live-first.** Tests use the real `agent-data` API (per the project's design and your call). The handful of
   error conditions you can't trigger on demand (quota, outage, stale links) use the bundled **fake-agent-data
   shim** — clearly marked.
@@ -23,7 +23,7 @@ The terminal state (per the AAS-T-10 ruling) is **a structural gate + automated 
 
 - **Scripted mechanics** — `tests/test_mechanics_scripts.py`: the deterministic state operations (jobs.jsonl append/fold, schedule-line composition, workspace discovery) that the skills call out to, unit-tested directly.
 - **Hardened skill evals** — `python3 scripts/eval_harness.py --root .` validates every `skills/*/evals/evals.json` for structural coherence (contiguous ids, well-formed scenarios, a **discovery** scenario per skill for the four overlap pairs, **stochastic** scenarios carrying `reps ≥ 5` + a **no-guidance control** arm, and **no literal model id** — the agent binds each tier to a concrete model from its own roster (self-selection)); `tests/test_eval_harness.py` unit-tests the rep-aggregation (pass-rate + variance) and the control-delta.
-- **Release integrity** — `scripts/check_release_integrity.py`: version-sync across the 8 manifests.
+- **Release integrity** — `scripts/check_release_integrity.py`: version-sync across the 6 manifests.
 
 Verifying a host-specific action such as scheduling is now a **runtime config-time canary** check, replacing the deleted per-host **structural adapter validation**.
 
@@ -127,13 +127,13 @@ claude --plugin-dir "$JSOS" -p "reply with the single word LOADED and do nothing
 **Expected:** `LOADED`, no error. (Confirms the plugin loads without invoking a skill.)
 **Result:** ⬜
 
-### T1.3 Loose-skills self-containment — 👤
+### T1.3 Single-home reference resolution — ⚙️
 ```bash
-cd "$JSOS" && ./scripts/build.sh && git status --short
-ls skills/*/references/internals.md
+cd "$JSOS" && python3 -m pytest -q tests/test_reference_resolution.py
 ```
-**Expected:** build prints the sync line; `git status` is **empty** (committed copies are in sync); every skill
-has its own bundled `references/internals.md`.
+**Expected:** `0 failed` — the shared contracts live **once** under `shared/references/` and resolve in place
+from each skill (skills point at `../../shared/references/<file>.md`); there are **no per-skill bundled copies**.
+The build is stamp-only: `./scripts/build.sh` regenerates `shared/references/build-stamp.md` and nothing else.
 **Result:** ⬜
 
 ### T1.4 Trigger resolves — 🤖
@@ -551,7 +551,14 @@ unchanged. (All tests used `$JSOS_TEST`/temp dirs + declined real scheduling.)
 
 ---
 
-## 9. Scheduling (native `/loop`)
+## 9. Scheduling (unattended-first; in-session `/loop` fallback)
+
+Scheduling is **unattended-first**: the advocated default is an **unattended wall-clock schedule**
+(`cron`/`launchd` where the host has one), with the in-session `/loop` as the **named fallback**. A
+**mandatory config-time canary** must prove the schedule actually fires before it is recorded active in the
+registry. The tests below exercise the **`/loop` fallback** path and the never-write-a-real-crontab consent
+guarantee; the config-time **canary is not yet exercised here** (it is the runtime canary check noted under
+"Automated lanes vs. the manual residual" above — a known residual, not a gap).
 
 ### T9.1 The composed `/loop` line matches the pinned interval table — 🤖
 In a sandboxed session, for each frequency ask: **"if my schedule were <frequency>, what's the exact /loop
@@ -744,7 +751,7 @@ entries carry a date mark; the first-Ashby-pass footnote is present.
 
 ## Acceptance checklist (sign-off)
 
-- ⬜ Install: plugin validates `--strict`; loads via `--plugin-dir`; loose-skills self-contained (§1)
+- ⬜ Install: plugin validates `--strict`; loads via `--plugin-dir`; single-home references resolve (§1)
 - ⬜ Isolation pre-flight passes; canonical persona set before any LIVE test (§0.2, §0.4)
 - ⬜ First-run `/job-search:job-search` onboards end-to-end and shows **real live matches**; TTFV recorded < ~5 min (T2.1)
 - ⬜ Interview produces a **prose** brief; the 0–100 rubric is gone; import + rubric→prose work (§3)

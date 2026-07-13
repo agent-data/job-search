@@ -11,18 +11,11 @@ remains a plain repo file shared by all harnesses.
 ## Tool map
 
 The job-search skills use platform-neutral action vocabulary ("read a file", "ask a closed
-choice", "dispatch a subagent"). On Gemini CLI those actions resolve to Gemini's native tools.
-The mapping — and all Gemini-specific runtime details (scheduling, headless invocation, model
-tiers, agent-data setup) — lives in the platform adapter:
-
-`shared/references/platform/gemini.md`
-
-> **Reconciliation note — no separate `references/gemini-tools.md`.**
-> The platform adapter pattern (`shared/references/platform/<name>.md`) serves as the single
-> tool-map reference for each harness. A standalone `references/gemini-tools.md` is not
-> authored because `shared/references/platform/gemini.md` already carries the full tool table
-> and all runtime detail. `GEMINI.md` points directly at the platform adapter; no intermediate
-> file is needed.
+choice", "dispatch a subagent"). On Gemini CLI those actions resolve to Gemini's native tools,
+which Gemini binds by self-selection at run time — there is no per-host adapter file. The pinned
+contracts and all runtime detail (scheduling, headless invocation, agent-data setup) live once in
+`shared/references/`; Gemini resolves each action, its scheduler, and its model against its own
+capabilities, then verifies the result rather than looking up a host-specific recipe.
 
 ## Repo orientation
 

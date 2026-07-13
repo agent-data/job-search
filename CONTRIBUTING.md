@@ -5,28 +5,25 @@ self-contained — please read these before opening a PR.
 
 > Coding agent, or want the map of this repo? Start with [AGENTS.md](AGENTS.md) — the agent-facing entry point.
 
-## Single source of truth — never hand-edit a skill's synced copies
+## Single source of truth — shared references live once
 
-Each skill folder (`skills/<skill>/`) is shipped **self-contained**: it carries its own copy of the shared
-references so it works as a loose skill with no plugin system. Those copies are **generated**, not authored.
+The shared runtime contracts live **once** under **`shared/references/*.md`** and are the single source of
+truth. The install lays down the whole pack tree, so each skill resolves them **in place** — skills point at
+`../../shared/references/<file>.md`, and there are **no per-skill copies** to keep in sync.
 
-**Edit the source, then build:**
+**Edit the source:**
 
 - Shared references live in **`shared/references/*.md`** (dev tooling lives in `scripts/` — `build.sh` plus
   the Python linters; none of it ships in the skills).
-- After editing a shared reference, run the build to re-sync every skill's bundled copies:
+- Edit the file in `shared/references/` and you're done — every skill sees the change, because they all
+  resolve the same file.
 
-  ```bash
-  ./scripts/build.sh
-  ```
+`./scripts/build.sh` is **stamp-only**: it regenerates `shared/references/build-stamp.md` (the deterministic
+build stamp) and nothing else. It does **not** copy or sync references into the skills.
 
-**Never hand-edit** the synced copies under `skills/<skill>/references/` — your changes there will be
-silently overwritten by the next build. If you find yourself editing a file in that folder, stop and edit
-the source in `shared/references/` instead, then re-run `build.sh` and commit the regenerated copies along
-with the source change.
-
-A skill's own `SKILL.md` and its `evals/` and `references/onboarding.md`-style playbooks *are* authored in
-place — only the *synced* `references/*.md` are generated.
+A skill's own `SKILL.md`, its `evals/`, and the handful of authored playbooks under
+`skills/<skill>/references/` (e.g. `home.md`, `onboarding.md`, `customization.md`,
+`scheduling-and-consent.md`) are **authored originals**, not generated — edit them in place.
 
 ## Before you open a PR: everything must be green
 

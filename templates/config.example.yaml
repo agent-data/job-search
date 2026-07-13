@@ -8,11 +8,11 @@ queries:
 search:
   sources: ["linkedin", "ashby"]   # job sources each query runs against: linkedin | ashby | greenhouse | lever — add "greenhouse"/"lever" to search more company boards
   freshness: "past-2-weeks"    # any | past-week | past-2-weeks | past-month (client-side filter on posted_at)
-  detail_model: "balanced"     # tier the per-posting fit verdict runs at — the mid-tier reviewer floor (default): fast | balanced | high | inherit — see your platform's adapter → Model tiers
+  detail_model: "balanced"     # tier the per-posting fit verdict runs at — the mid-tier reviewer floor (default): fast | balanced | high | inherit — the agent self-selects a model at the named tier from its own roster
   # parallel_detail_reads: true # optional; set after approval to use parallel subagents where supported
 schedule:
-  frequency: "daily"           # hourly | every-2-hours | every-6-hours | daily | weekly — cadence; the schedule mechanism is your platform's (see your adapter → Scheduling)
-  time: "08:00"                # HH:MM — honored when the active scheduler is wall-clock-based (a Tier-2 cron/launchd schedule); ignored when interval-only (a Tier-1 in-session loop) — see your adapter → Scheduling
+  frequency: "daily"           # hourly | every-2-hours | every-6-hours | daily | weekly — how often the search runs; the advocated default is an unattended wall-clock schedule (cron/launchd where the host has one), with an in-session loop as the fallback
+  time: "08:00"                # HH:MM — honored by wall-clock schedulers (cron/launchd); an interval-only in-session loop ignores it and just repeats on the interval
   timezone: "America/Los_Angeles"
 notify:
   digest_path_template: "reports/{date}-digest.md"

@@ -24,6 +24,6 @@ Start here, then follow the pointers.
 - [Plans methodology](docs/PLANS.md) · [Exec-plans index](docs/exec-plans/index.md)
 
 ## Working here
-- **Single source of truth:** edit `shared/references/`, then run `./scripts/build.sh`; never hand-edit `skills/*/references` — build.sh regenerates them and your edit is silently lost.
+- **Single source of truth:** shared contracts live once in `shared/references/` and resolve in place from the installed pack bundle — skills point at them, nothing is copied per-skill. `./scripts/build.sh` only regenerates `shared/references/build-stamp.md`; the few `skills/*/references/*.md` are authored originals, not generated.
 - Dev tooling is stdlib-only Python (nothing Python ships in the skills); scoped conventional commits; `python3 scripts/doc_lint.py --root .` and `python3 -m pytest -q` must be green before a PR.
 - Daily contributor docs: [README](README.md) · [CONTRIBUTING](CONTRIBUTING.md) · [TESTING](TESTING.md)

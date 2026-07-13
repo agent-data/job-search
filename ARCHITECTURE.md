@@ -90,8 +90,9 @@ its native tools. No helper binary or script ships with the skills.
 The single source of truth for every runtime contract:
 [errors.md](shared/references/errors.md), [conventions.md](shared/references/conventions.md),
 [agent-data-contract.md](shared/references/agent-data-contract.md), and
-[internals.md](shared/references/internals.md). [scripts/build.sh](scripts/build.sh) fans this tree into
-each skill so loose-skill installs are self-contained.
+[internals.md](shared/references/internals.md). The install lays down the whole pack tree, so these resolve
+in place from each skill — nothing is fanned into per-skill copies; [scripts/build.sh](scripts/build.sh)
+only regenerates the build stamp (`shared/references/build-stamp.md`).
 
 ### skill-layer
 The five programs: [job-search](skills/job-search/SKILL.md) (front door / home view),
@@ -121,9 +122,10 @@ See [TESTING.md](TESTING.md) for the matrix.
 executes. The references depend on nothing in the skills, so contracts stay authoritative and verifiable in
 isolation.
 
-**Single source of truth + the build.** Authors edit `shared/references/*.md`, then run
-[scripts/build.sh](scripts/build.sh), which copies the references into every skill's bundled `references/`.
-**Never hand-edit a skill's synced copies** — the next build overwrites them silently.
+**Single source of truth + the build.** Authors edit `shared/references/*.md`; there is nothing to sync.
+The install lays down the whole pack tree, so those files resolve in place from each skill — there are **no
+per-skill bundled copies**. [scripts/build.sh](scripts/build.sh) is stamp-only: it regenerates the build
+stamp (`shared/references/build-stamp.md`) and never copies references into the skills.
 
 **Distribution.** One `skills/` tree, read in place, ships to every harness via a per-harness manifest —
 `.claude-plugin/`, `.codex-plugin/`, `.cursor-plugin/`, `.factory-plugin/`, `gemini-extension.json`,
