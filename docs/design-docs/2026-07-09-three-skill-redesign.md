@@ -14,9 +14,9 @@ repos: [job-search-os]
 
 ## Status and purpose
 
-> **Superseded 2026-07-11.** This design predates the agent-agnostic-skills series; its central
+> **Superseded 2026-07-11.** This design predates the later agent-agnostic skill-pack work; its central
 > decision — collapsing five skills to three — is rejected on corpus-rule grounds by the
-> [plugin ↔ guide alignment design](2026-07-11-plugin-guide-alignment-design.md), which keeps all
+> plugin ↔ guide alignment design, which keeps all
 > five skills (the headless-run vs. interactive-front-door split is a hard execution-model seam,
 > AAS-BOUND-07). Kept for history; do not build from it.
 

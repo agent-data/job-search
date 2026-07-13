@@ -113,20 +113,20 @@ Edits `status: current` guide docs that describe **how to write**, not the curre
 first. Apply the **exact wording from the spec's §Doctrine touched**; do not paraphrase.
 
 - [ ] **T0.1 [BLOCKS, S] Add the verify-don't-encode clause to `AAS-LANG-07`** in
-  `docs/design-docs/agent-agnostic-skills/09-harness-neutral-language.md`. Append a **Rule addition** stating:
+  the agent-agnostic skill-pack guidance. Append a **Rule addition** stating:
   *"Where a host-specific action produces an observable artifact, runtime verification substitutes for the
   adapter this rule would otherwise require; the pure-abstraction failure this rule records applies only
   where no runtime backstop exists."* Cite the spec (`2026-07-11-verify-dont-encode-design.md` §Thesis).
-  *Verify:* `doc_lint` clean; `grep -n "verify-don't-encode\|runtime verification substitutes" docs/design-docs/agent-agnostic-skills/09-harness-neutral-language.md` → hits.
+  *Verify:* `doc_lint` clean; the clause is present in the skill-pack guidance.
 
 - [ ] **T0.2 [BLOCKS, S] Note the `AAS-LANG-04` self-selection deviation** in the same file. Add: this pack
   binds the model tier to a concrete id by **agent self-selection from its own roster**, not an adapter table
   — the tier token stays the portable intent; the required-model slot (`AAS-AUTO-07`) and the
   judgment-never-cheapest guardrail (`AAS-AUTO-11`) are the mitigation for the absent runtime backstop.
-  *Verify:* `doc_lint` clean; `grep -n "self-selection" .../09-harness-neutral-language.md` → hits.
+  *Verify:* `doc_lint` clean; the self-selection note is present in the skill-pack guidance.
 
 - [ ] **T0.3 [BLOCKS, S] Update the `PSG-SUB-09` local application** in
-  `docs/design-docs/prompt-style-guide/04-subagents-and-delegation.md` §"What we deliberately do
+  the prompt/doc style guidance §"What we deliberately do
   differently": the Codex subagent-approval gate moves from *"preserved as a harness-specific exception in
   the adapters"* to **a self-aware conditional in the shared body** ("*if* your host gates subagents behind
   approval, get it once before fanning out"). *Verify:* `doc_lint` clean; grep the section shows the

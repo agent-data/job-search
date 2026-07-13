@@ -57,7 +57,7 @@ All hold, run from repo root:
 - [ ] **Claude byte-identity:** with `platform/claude.md` active, a cross-read reproduces today's `/loop` recipe, the four onboarding `AskUserQuestion` choices, the `haiku|sonnet|opus` buckets (as legacy aliases), and the `claude -p` exit-0 rule verbatim
 - [ ] **Neutralization complete:** `grep -rEl 'AskUserQuestion|/loop|claude -p|\b(haiku|sonnet|opus)\b|init --claude-code' shared/references skills` returns **only** `platform/claude.md` (and dev-only docs) — no inline Claude tokens in neutralized prose
 - [ ] **The four hand-authored refs** (`onboarding.md`, `scheduling-and-consent.md`, `home.md`, `customization.md`) carry no stale verbatim copy contradicting the shared tree
-- [ ] **Style-guide conformance:** every neutralized agent-consumed file cross-reads clean against `prompt-style-guide/index.md`
+- [ ] **Style-guide conformance:** every neutralized agent-consumed file cross-reads clean against the repo's prompt/doc style discipline
 - [ ] **Live Codex proof:** `codex exec` runs the search pass against **real** agent-data and returns real matches + writes a digest (transcript in Progress log)
 - [ ] **Scheduling reconciled:** belief #7 + its eval, `SECURITY.md`, and `conventions.md` `schedule.time` no longer assert the blanket no-cron prohibition — all defer to the two-tier rule
 - [ ] **All 7 manifests parse and every adapter resolves its cross-references** (structural lane green)

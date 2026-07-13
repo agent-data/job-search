@@ -6,9 +6,7 @@ contracts now live in `shared/references/`).
 
 ## Living
 - [Core Beliefs — Agent-First Operating Principles](core-beliefs.md) — _status: current_
-- [Plugin ↔ guide alignment audit: skills, references & adapters vs the AAS + PSG rules](2026-07-10-plugin-guide-alignment-audit.md) — _status: current_
 - [Verify-don't-encode: adapter-free portability, unattended scheduling, and config-time run verification](2026-07-11-verify-dont-encode-design.md) — _status: current_
-- [Plugin ↔ guide alignment: refactor design](2026-07-11-plugin-guide-alignment-design.md) — _status: current_
 
 ## Historical design snapshots
 - [Job Search OS — Original Design Spec](2026-06-05-os-design.md) — _status: historical_
@@ -19,7 +17,7 @@ contracts now live in `shared/references/`).
 - [Multi-Harness Portability — Research Dossier](multi-harness-portability.md) — _status: aspirational_
 
 ## Superseded
-- [Three-Skill Job Search Redesign](2026-07-09-three-skill-redesign.md) — _status: superseded_ (superseded by the [plugin ↔ guide alignment design](2026-07-11-plugin-guide-alignment-design.md), which keeps all five skills)
+- [Three-Skill Job Search Redesign](2026-07-09-three-skill-redesign.md) — _status: superseded_ (superseded by the later plugin↔guide alignment work, which keeps all five skills)
 - [Codex Portability — What It Takes to Run job-search on OpenAI Codex](codex-portability.md) — _status: superseded_ (superseded by the [Multi-Harness Portability dossier](multi-harness-portability.md), which generalizes it to seven harnesses)
 
 ---
@@ -39,7 +37,7 @@ each doc's frontmatter `status`.
 | Value | Meaning |
 |-------|---------|
 | `current` | Live and authoritative — the team stands behind it today; keep it true as the code changes. (In use: core-beliefs, the style guide, the onboarding spec.) |
-| `superseded` | Replaced by a newer doc; kept only for history. Excluded from the no-shared-reference-duplication check, like `historical`. (In use: `codex-portability.md`, plus the legacy single-file `prompt-style-guide.md` redirect.) |
+| `superseded` | Replaced by a newer doc; kept only for history. Excluded from the no-shared-reference-duplication check, like `historical`. (In use: `codex-portability.md`.) |
 | `historical` | A frozen snapshot of past design — read for rationale, not as the live contract (which now lives in `shared/references/`). Wears a snapshot banner. (In use: the three dated `2026-06-05-*` design specs.) |
 | `aspirational` | Describes intended, not-yet-built behavior. (Defined; none live yet.) |
 

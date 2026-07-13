@@ -7,9 +7,8 @@ completed: 2026-06-10
 
 # Prompt & Doc Style — Corpus Style Guide and Conformance Audit
 
-> **How this plan was produced.** The reference standard is the Claude Code system-prompt corpus
-> (`~/prod/claude-code-system-prompts`, Piebald extraction @ v2.1.170 — verbatim strings from the
-> shipped binary; ~350 files). Every file was read (main session + two extraction agents), a style
+> **How this plan was produced.** The reference standard is an external style corpus (kept
+> outside this repo; ~350 files). Every file was read (main session + two extraction agents), a style
 > guide was derived (Part 1), and the plugin's five `SKILL.md` files plus all of `docs/` were
 > audited against it by four parallel reviewers with findings spot-verified against the files
 > (line numbers, drift greps). Recommendations are in Part 3; two direction-setting rewrites in
@@ -63,10 +62,9 @@ exec-plans stay untouched (Non-goals). Run the Done-when gate before flipping
 
 # Part 1 — The style guide
 
-*Derived from the Claude Code system-prompt corpus (v2.1.170). Anchor on the NEWEST voice
-(ccVersion ≥ 2.1.13x): older files (2.1.5x and earlier) shout in caps and bare imperatives; the
-mature house voice fuses rules with reasons and trusts the model. Every illustration is quoted
-verbatim from the corpus.*
+*Derived from an external style corpus (kept outside this repo). Anchor on the NEWEST voice:
+older files shout in caps and bare imperatives; the mature house voice fuses rules with reasons
+and trusts the model. Every illustration is quoted from the corpus.*
 
 ## A. Voice
 
@@ -471,11 +469,10 @@ Effort: S (<30 min) / M (half-day) / L (day+). Order within a tier = suggested e
 
 ### P0 — do first
 
-- [x] **R1 [TUNE, S] Land the style guide as a doc.** Extract Part 1 verbatim to
-  `docs/design-docs/prompt-style-guide.md` with design-doc frontmatter (`title`, `status:
-  current`, `verified`, `last_reviewed`, `code_refs`); add it to `design-docs/index.md` (Living)
-  and a one-line pointer in `AGENTS.md` + `CONTRIBUTING.md` ("all prompts and docs follow
-  docs/design-docs/prompt-style-guide.md"). *Verify:* `doc_lint` clean.
+- [x] **R1 [TUNE, S] Land the style guide as a doc.** Land Part 1 as an internal prompt/doc
+  style-guide doc with design-doc frontmatter (`title`, `status: current`, `verified`,
+  `last_reviewed`, `code_refs`); add it to `design-docs/index.md` and a one-line pointer in
+  `AGENTS.md` + `CONTRIBUTING.md`. *Verify:* `doc_lint` clean.
 - [x] **R2 [BLOCKS, S] Re-cut the five frontmatter descriptions** per §2.2's ownership map and
   proposed texts — job-search cedes "find me jobs"; job-search-agent drops "set up, use" and the
   caps; every description gains quoted phrasings + a negative trigger naming the sibling that
@@ -648,7 +645,7 @@ depends on R13 landing with it.)*
 - 2026-06-09 — Plan created: corpus read end-to-end, style guide derived, audit run (4 reviewers,
   findings spot-verified), recommendations and rewrites drafted. No repo files modified yet
   beyond this plan and the exec-plans index entry. `3d5b38c`
-- 2026-06-09 — R1: style guide landed as docs/design-docs/prompt-style-guide.md (verbatim Part 1);
+- 2026-06-09 — R1: style guide landed as an internal style-guide doc (adapted from the external corpus);
   pointers added in AGENTS.md + CONTRIBUTING.md + design-docs index. `71b43fc`
 - 2026-06-09 — R2: five descriptions re-cut per the §2.2 ownership map (job-search cedes "find me jobs"; agent drops caps + "set up, use"; all five gain quoted phrasings + negative triggers). `41fa98b`
 - 2026-06-09 — R3: fixed the two dead filenames in plan-b-d-design (→ `2026-06-05-os-design.md`, `2026-06-05-plan-b-d-handoff.md`); landed a historical-snapshot banner under the handoff H1 covering the 13 `~/cookbooks` + 5 `~/job-search-os` machine-local paths (no in-repo equivalent — left as text under the banner; no `~/job-search-os/<subpath>` pointers exist to re-root). No literal username present (`/Users/<u>` placeholder only). Gates: Done-when grep satisfied (banner is hit #1), doc_lint clean, pytest 92 green. `3cb016c`
@@ -753,9 +750,9 @@ depends on R13 landing with it.)*
 - **Completed exec-plans are exempt from style fixes.** They are verified-as-shipped records;
   rewriting them is churn (B5/E3). Only CI-breaking links get fixed. Lessons feed the template
   (R11) instead.
-- **Anchor on the newest corpus voice.** The corpus spans eras; files from ccVersion ≤ 2.1.5x
-  shout (caps, bare imperatives) while ≥ 2.1.13x fuses rules with reasons. The guide and audit
-  judge against the newer voice — it is what Anthropic itself migrates toward (the migration
+- **Anchor on the newest corpus voice.** The corpus spans eras; its older files
+  shout (caps, bare imperatives) while newer ones fuse rules with reasons. The guide and audit
+  judge against the newer voice — it is the direction the corpus's own authors migrate toward (the migration
   guide instructs dialing back "CRITICAL: YOU MUST" language).
 - **Plugin skills carry, docs point.** The corpus's progressive-disclosure rule (H5/C10) bends
   for plugins: a plugin ships only its own `references/`, so cross-cutting philosophy must be
@@ -829,8 +826,8 @@ depends on R13 landing with it.)*
   approved literal texts. R2 applies those two; "how good a match it is" subsumes "rate this job,"
   so the description carries the intent without a redundant third phrasing.
 - **The style guide ships `verified: partial`, not `verified`.** Its quotes were checked against
-  the corpus at authoring time, but the corpus lives outside the repo (machine-local Piebald
-  extraction), so a future reviewer can't re-verify the claim with repo tooling. This matches the
+  the corpus at authoring time, but the corpus lives outside the repo, so a future reviewer can't
+  re-verify the claim with repo tooling. This matches the
   only sibling Living design doc, core-beliefs.md, which also claims `partial`.
 - **R3/R4 banner seam — the handoff banner landed with R3, not R4.** The R3 Done-when grep
   (`grep -c 'cookbooks' …handoff.md → 0, or every hit under a snapshot banner`) depends on the
