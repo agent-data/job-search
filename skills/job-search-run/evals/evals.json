@@ -291,6 +291,34 @@
         "evaluate-job-fit is NOT invoked — there is no single pasted posting to judge; this is a full multi-posting pull",
         "Runs the search-and-judge pass and writes a digest; output carries no numeric score or credit figures"
       ]
+    },
+    {
+      "id": 24,
+      "scenario": "recency",
+      "prompt": "Build a temp workspace + shim (setup-workspace.sh), PATH=<tmp>/_bin:$PATH, JOBSEARCH_TEST_SCENARIO=recency, JOBSEARCH_FIXTURES=<repo>/tests/fixtures. The sandbox config pins search.freshness: any. Run job-search-run against <tmp> with the instruction: 'pull only jobs published on or after 2026-06-05'. The recency fixture returns three Remote-US linkedin roles dated 2026-06-10 (Northwind, 5001), 2026-06-05 (Umbrella, 5002) and 2026-06-01 (Initrode, 5003). Show the digest + jobs.jsonl.",
+      "expectations": [
+        "Sends --published_on_or_after 2026-06-05 on the search-jobs call (the ad-hoc recency overrides the saved 'any' default) and adds published_at to --fields",
+        "Echo-verifies data.query.published_on_or_after == 2026-06-05 and trusts the server-filtered result (no client-side re-filtering)",
+        "Evaluates the two in-window roles (5001, 5002) and writes an evaluated event for each; the 2026-06-01 role (5003) never enters the pipeline — no get-posting call and NO evaluated event for it (excluded by recency, not by a dealbreaker judgment)",
+        "The digest reflects the requested window and shows the two recent roles; output carries no numeric score, weights, or credit figures; exits 0"
+      ]
+    },
+    {
+      "id": 25,
+      "scenario": "recency",
+      "stochastic": true,
+      "reps": 5,
+      "control": {
+        "arm": "no-guidance",
+        "strip": "Re-run the same prompt with the published_on_or_after echo-verify / client-fallback guidance withheld.",
+        "expectation": "The guided arm detects the absent published_on_or_after echo and client-side filters, so the 2026-06-01 role (5003) is excluded every rep; the no-guidance control trusts the unfiltered legacy response and lets 5003 through (an evaluated event / digest entry for 5003) at a measurably higher rate (control_delta > 0) — proving the echo-verify + fallback guidance holds the line."
+      },
+      "prompt": "Same harness as eval 24 (JOBSEARCH_TEST_SCENARIO=recency, config pins freshness: any, instruction 'pull only jobs published on or after 2026-06-05'), but also export JOBSEARCH_TEST_RECENCY_SWALLOW=1 so the service ignores --published_on_or_after (returns all three rows UNFILTERED and never echoes data.query.published_on_or_after — a legacy server predating the recency param). Run job-search-run against <tmp> and show the digest + jobs.jsonl.",
+      "expectations": [
+        "Detects the absent data.query.published_on_or_after echo (server ignored the param) and falls back to client-side recency filtering by effective date",
+        "Still excludes the 2026-06-01 role (5003): no evaluated event and no digest entry for source_id 5003 — the client fallback drops it even though the server returned it",
+        "Evaluates the two in-window roles (5001, 5002); the digest reflects the requested window; output carries no numeric score/weights/cost; exits 0"
+      ]
     }
   ]
 }
