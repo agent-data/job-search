@@ -4,6 +4,24 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.0] — 2026-07-14
+
+### Added
+- **Server-side recency filtering.** The `search.freshness` window now resolves to the job API's
+  `published_on_or_after` parameter — an inclusive `YYYY-MM-DD` cutoff the service applies **as part of
+  the search** — so a windowed pull returns a full page of genuinely-recent postings instead of
+  over-fetching and discarding stale rows client-side. Freshness filters on each posting's **effective
+  publication date** (the later of the new `published_at` field and `posted_at`), which fixes the prior
+  blind spot where undated Ashby postings always passed the window. The runner echo-verifies the
+  parameter and falls back to a client-side filter on deployments that predate it.
+- **Ad-hoc recency windows.** Beyond the saved `search.freshness` default, you can ask for any one-off
+  window in the moment — "only postings published in the past day", "since June 1" — and that single
+  search uses it, no config edit.
+
+### Changed
+- Freshness null handling moved to **server parity**: under an active window a posting with no known
+  publication date is excluded (the API omits it); `any` keeps everything, unchanged.
+
 ## [0.4.0] — 2026-07-13
 
 ### Added
