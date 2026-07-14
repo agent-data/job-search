@@ -163,7 +163,7 @@ Read these before running, and follow them exactly:
    exists, else follow the **append** prose fallback (validate, then the `cat >>` heredoc) — complete schema
    + event-line contract in conventions.md §jobs.jsonl.
    The event MUST carry provenance — `event:"evaluated"`, `ts`, `run_id`, `source` — **copied from the result row, never a literal**, `query_id`,
-   `title`, `company_name`, `location_display`, `salary_display`, `posted_at`, `posted_at_extracted` (optional — the JD-stated date when the API `posted_at` was null), `source_url`,
+   `title`, `company_name`, `location_display`, `salary_display`, `posted_at`, `posted_at_extracted` (optional — the JD-stated date read when the row's effective date was unknown, i.e. both `published_at` and `posted_at` null), `source_url`,
    `posting_id_at_seen` (the `jp_` id), `detail_read` — AND the judgment — `source_id`, `relevant`, `match`,
    `reasoning`, `dealbreakers_hit`, `unknowns`, `needs_human_check`, `status:"new"`, `first_seen`. For a merged group, append one `evaluated` event per row (each with its own `source`/`source_id`/`source_url`/`posted_at`), all sharing the verdict fields; every NON-primary row's event also carries `"same_role_as":"<source>:<source_id>"` pointing at the primary (the row that got the detail read). Write
    `runs/<run_id>.json` and `reports/<date>-digest.md` (format in conventions.md — the counts line, per-source

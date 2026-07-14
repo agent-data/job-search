@@ -68,8 +68,8 @@ Searches run against the sources listed in `config.yaml` `search.sources` (see
 - **linkedin** — LinkedIn job search, fetched live (slow, seconds per query). Posting links go
   to LinkedIn; LinkedIn withholds the direct application URL.
 - **ashby** — a broad crawl of public Ashby company boards, served from an index (fast).
-  Board links ARE the live apply pages. Boards often omit posting dates — undated matches carry
-  "date not stated" (or a date read out of the posting text) rather than being hidden.
+  Board links ARE the live apply pages. The service supplies a `published_at` for most Ashby rows, so they carry a real date; a rare
+  still-undated match carries "date not stated" (or a date read out of the posting text) rather than being hidden.
 - **greenhouse** — a crawl of public Greenhouse company boards, served from a service-refreshed
   store (fast). Board links ARE the live apply pages. Postings carry real dates, so freshness
   filters normally.

@@ -7,7 +7,7 @@ queries:
   - { id: "ml-platform-sf", keywords: "ML platform engineer", location: "San Francisco Bay Area", limit: 25, enabled: true }
 search:
   sources: ["linkedin", "ashby"]   # job sources each query runs against: linkedin | ashby | greenhouse | lever — add "greenhouse"/"lever" to search more company boards
-  freshness: "past-2-weeks"    # any | past-week | past-2-weeks | past-month (client-side filter on posted_at)
+  freshness: "past-2-weeks"    # any | past-week | past-2-weeks | past-month — recency window (applied server-side; see conventions.md)
   detail_model: "balanced"     # tier the per-posting fit verdict runs at — the mid-tier reviewer floor (default): fast | balanced | high | inherit — the agent self-selects a model at the named tier from its own roster
   # parallel_detail_reads: true # optional; set after approval to use parallel subagents where supported
 schedule:
