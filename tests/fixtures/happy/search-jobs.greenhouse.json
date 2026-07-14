@@ -2,9 +2,9 @@
   { "id": "jp_gh0000000001", "source_id": "acme:7310605",
     "source_url": "https://boards.greenhouse.io/acme/jobs/7310605?gh_jid=7310605",
     "title": "Senior AI Engineer", "company_name": "Acme", "location_display": "Remote, US",
-    "salary_display": null, "posted_at": "2026-05-15T19:01:28", "detail_available": true, "source": "greenhouse" },
+    "salary_display": null, "posted_at": "2026-05-15T19:01:28", "published_at": "2026-05-15T19:01:28", "detail_available": true, "source": "greenhouse" },
   { "id": "jp_gh0000000002", "source_id": "acme:7460760",
     "source_url": "https://boards.greenhouse.io/acme/jobs/7460760?gh_jid=7460760",
     "title": "Staff Platform Engineer", "company_name": "Acme", "location_display": "San Francisco, CA",
-    "salary_display": null, "posted_at": "2026-06-23T13:18:51", "detail_available": true, "source": "greenhouse" }
+    "salary_display": null, "posted_at": "2026-06-23T13:18:51", "published_at": "2026-06-23T13:18:51", "detail_available": true, "source": "greenhouse" }
 ] } }

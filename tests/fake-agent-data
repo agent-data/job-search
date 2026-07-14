@@ -9,8 +9,10 @@ Error-injection scenarios reuse the "happy" fixtures (fallback) for any data the
 Env JOBSEARCH_TEST_DOWN_SOURCE (default "ashby") selects which source one-source-down fails.
 JOBSEARCH_TEST_NOAUTH=1 makes whoami report unauthenticated. `--version` answers (onboarding's
 post-install check); `init` is NOT shimmed — evals stub it in the case prompt.
+JOBSEARCH_TEST_RECENCY_SWALLOW=1 makes search-jobs ignore --published_on_or_after (no echo, no
+filter) — a legacy server predating the recency param (mirrors legacy-source-swallow for --source).
 """
-import json, os, sys
+import json, os, re, sys
 
 SCEN = os.environ.get("JOBSEARCH_TEST_SCENARIO", "happy")
 FIX = os.environ.get("JOBSEARCH_FIXTURES", "")
@@ -87,6 +89,21 @@ def main(argv):
             names = [f"search-jobs.{src}.json"] if src != "linkedin" else ["search-jobs.json"]
             fx = fixture("search-jobs.json", names=names)
             fx.setdefault("data", {}).setdefault("query", {})["source"] = src
+            pub = flag(argv, "--published_on_or_after")
+            if pub is not None:
+                if not re.match(r"\d{4}-\d{2}-\d{2}", pub):  # non-ISO date → 422 (mirrors the live server)
+                    err("validation_error", "Correct the request parameters and retry.", False,
+                        param="published_on_or_after",
+                        details=[{"loc": ["query", "published_on_or_after"],
+                                  "msg": "invalid date", "type": "date_from_datetime_parsing"}])
+                if os.environ.get("JOBSEARCH_TEST_RECENCY_SWALLOW") != "1":  # legacy server ignores it
+                    cutoff = pub[:10]
+                    fx["data"]["query"]["published_on_or_after"] = cutoff
+                    def eff(row):  # effective date = later of published_at/posted_at present; else None
+                        vals = [v for v in (row.get("published_at"), row.get("posted_at")) if v]
+                        return max(vals)[:10] if vals else None
+                    fx["data"]["results"] = [r for r in fx["data"]["results"]
+                                             if eff(r) is not None and eff(r) >= cutoff]
             out(fx)
         if slug == "get-posting":
             if SCEN == "invalid-pair":

@@ -2,11 +2,11 @@
     "results": [
       { "id": "jp_aaaaaaaaaaaa", "source_id": "1001", "source_url": "https://www.linkedin.com/jobs/view/1001",
         "title": "Senior AI Engineer", "company_name": "Acme", "location_display": "Remote (US)",
-        "salary_display": "$180K-$220K", "posted_at": "2026-06-03T00:00:00Z", "source": "linkedin",
+        "salary_display": "$180K-$220K", "posted_at": "2026-06-03T00:00:00Z", "published_at": null, "source": "linkedin",
         "detail_available": true },
       { "id": "jp_bbbbbbbbbbbb", "source_id": "1002", "source_url": "https://www.linkedin.com/jobs/view/1002",
         "title": "ML Engineer", "company_name": "Globex", "location_display": "Austin, TX (Onsite)",
-        "salary_display": "Competitive", "posted_at": "2026-06-02T00:00:00Z", "source": "linkedin",
+        "salary_display": "Competitive", "posted_at": "2026-06-02T00:00:00Z", "published_at": null, "source": "linkedin",
         "detail_available": true } ],
     "warnings": [], "started_at": "2026-06-05T08:00:00Z", "completed_at": "2026-06-05T08:00:02Z" },
   "meta": { "request_id": "req_fakesearch" } }

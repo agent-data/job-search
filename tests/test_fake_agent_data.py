@@ -158,3 +158,39 @@ def test_get_posting_greenhouse_and_lever_route_per_source():
     lv = shim(["call", LISTING, "get-posting", "--posting_id", "jp_lv0000000001",
                "--source_url", "u", "--source", "lever"])
     assert json.loads(lv.stdout)["data"]["employment_type"] == "Full-time"
+
+def test_recency_filter_echoes_and_drops_older_rows():
+    # published_on_or_after echoes and keeps only rows whose effective date >= cutoff
+    r = shim(["call", LISTING, "search-jobs", "--keywords", "x", "--published_on_or_after", "2026-06-03"])
+    data = json.loads(r.stdout)["data"]
+    assert data["query"]["published_on_or_after"] == "2026-06-03"
+    assert [row["id"] for row in data["results"]] == ["jp_aaaaaaaaaaaa"]  # 06-03 kept; 06-02 dropped
+
+def test_recency_filter_uses_published_at_when_posted_at_null_ashby():
+    # ashby posted_at is null; the filter must use published_at (2026-06-04)
+    kept = shim(["call", LISTING, "search-jobs", "--keywords", "x", "--source", "ashby",
+                 "--published_on_or_after", "2026-06-01"])
+    assert len(json.loads(kept.stdout)["data"]["results"]) == 1
+    dropped = shim(["call", LISTING, "search-jobs", "--keywords", "x", "--source", "ashby",
+                    "--published_on_or_after", "2026-06-10"])
+    assert json.loads(dropped.stdout)["data"]["results"] == []
+
+def test_recency_no_param_returns_all_rows_and_no_echo():
+    r = shim(["call", LISTING, "search-jobs", "--keywords", "x"])
+    data = json.loads(r.stdout)["data"]
+    assert "published_on_or_after" not in data["query"]
+    assert len(data["results"]) == 2  # unfiltered
+
+def test_recency_swallow_env_ignores_param_no_echo_no_filter():
+    r = shim(["call", LISTING, "search-jobs", "--keywords", "x", "--published_on_or_after", "2026-06-03"],
+             extra_env={"JOBSEARCH_TEST_RECENCY_SWALLOW": "1"})
+    data = json.loads(r.stdout)["data"]
+    assert "published_on_or_after" not in data["query"]  # absent echo = legacy server ignored it
+    assert len(data["results"]) == 2                      # returned UNFILTERED (incl the 06-02 row)
+
+def test_recency_bad_date_is_422_validation_error():
+    r = shim(["call", LISTING, "search-jobs", "--keywords", "x", "--published_on_or_after", "07-14-2026"])
+    assert r.returncode != 0
+    body = json.loads(r.stderr)["error"]
+    assert body["code"] == "validation_error" and body["param"] == "published_on_or_after" \
+        and body["retryable"] is False
