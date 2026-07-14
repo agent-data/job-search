@@ -1,6 +1,6 @@
 # agent-data Job Postings API — contract
 
-_Last verified against the live CLI: 2026-07-06._ This mirrors a live, evolving service — the routes,
+_Last verified against the live CLI: 2026-07-14._ This mirrors a live, evolving service — the routes,
 fields, and error envelopes below are what the CLI returned as of that date. When the actual output
 disagrees (a new field, a renamed error, a source added or dropped), trust the live response, treat the
 stale line here as the thing to fix, and re-stamp this date when you re-verify. Never fill a gap from
@@ -45,7 +45,8 @@ ask on file: per-source status.)
 ```
 agent-data call f9a6ec16-0bfd-44d8-b3ee-073776745ee7 search-jobs \
   --keywords "<required>" [--location "<optional>"] [--limit <1-100, default 20>] [--source <linkedin|ashby|greenhouse|lever>] \
-  --fields id,source_id,source_url,title,company_name,location_display,salary_display,posted_at,detail_available,source
+  [--published_on_or_after <YYYY-MM-DD>] \
+  --fields id,source_id,source_url,title,company_name,location_display,salary_display,posted_at,published_at,detail_available,source
 ```
 - **No pagination on any source**; re-running may reorder. Vary keywords/location for breadth.
 - **`--source` targets ONE source** (omitted → `linkedin`). Comma-separated or repeated values →
@@ -56,9 +57,19 @@ agent-data call f9a6ec16-0bfd-44d8-b3ee-073776745ee7 search-jobs \
   you requested (an ABSENT echo counts as `linkedin`). On mismatch → E-SOURCE-IGNORED
   (`errors.md`): skip that source's remaining queries this run, and keep any returned rows under
   their own row-level `source` value (they are real rows of whatever source actually answered).
+- **`--published_on_or_after <YYYY-MM-DD>`** (optional; omit → no recency filter) keeps only rows whose
+  **effective publication date** — the later of `published_at` and `posted_at`, using whichever is
+  present — is on or after the date; a row with **no** effective date (both null) is **excluded** when
+  the filter is set. The service applies it **as part of the search** (fills up to `limit` with
+  in-window rows — not a post-slice of the first `limit`) and **echoes** it at
+  `data.query.published_on_or_after` — the legacy-server check, same as `source`: a present, equal echo
+  means the service filtered; an absent/`null` echo means a deployment predating the param, so filter
+  client-side instead. A malformed date is a non-retryable `422 validation_error`
+  (`param:"published_on_or_after"`); a future/over-tight date returns an empty `status:"completed"`
+  result, not an error.
 - **Returns** `data.results[]`, each row (all nullable): `id` (`jp_…`), `source_id`, `source_url`, `title`,
   `company_name`, `location_display`, `salary_display` (FREE TEXT — never parse for numbers), `posted_at`
-  (ISO), `source`, `search_status`, `detail_available` (bool). Also `data.warnings[]`, `data.status`,
+  (ISO), `published_at` (ISO date-time), `source`, `search_status`, `detail_available` (bool). Also `data.warnings[]`, `data.status`,
   `data.started_at/completed_at`, `meta.request_id`.
 - **Errors:** `422 validation_error` (`details[].loc` names the bad param), `400 validation_error` (a bad `fields=` name OR an unsupported `--source`; `error.param` says which), `503 upstream_unavailable` (`retryable:true`).
 
@@ -91,7 +102,8 @@ THAT source this run (per-source stretch) — other sources continue; all enable
 | `source_id` | numeric string | Ashby posting UUID | `<company>:<numeric>` (e.g. `zuora:7310605`) | `<company>:<uuid>` (e.g. `zoox:f4746da4-…`) |
 | `source_url` | `linkedin.com/jobs/view/…` + tracking params | clean canonical `jobs.ashbyhq.com/<company>/<uuid>` — **this IS the live apply page** (link it; never frame as auto-apply) | clean canonical `boards.greenhouse.io/<company>/jobs/<id>?gh_jid=<id>` — **IS the live apply page** | clean canonical `jobs.lever.co/<company>/<uuid>` — **IS the live apply page** |
 | `posted_at` | date-only in search; full timestamp in detail | **null in BOTH** — a date often appears in the JD prose ("Job Posted: …"); extract it during the detail read | **populated** (ISO) in search + detail — freshness applies normally | **populated** (ISO) in search + detail — freshness applies normally |
-| freshness | window applies normally | null rule applies (never drop null; see `conventions.md`) | window applies normally | window applies normally |
+| `published_at` | null (use `posted_at`) | **populated** (drives freshness — `posted_at` is null) | populated (= `posted_at`) | populated (= `posted_at`) |
+| freshness | window applies via effective date | window applies via `published_at` (posted_at null) | window applies via effective date | window applies via effective date |
 | latency / mode | live scrape (seconds) | indexed corpus (~ms); may include months-old or closed postings — the canonical link is how the user verifies openness | service-refreshed store (~ms); detail serves the stored snapshot first, live fallback on cache miss; may include older/closed postings | service-refreshed store (~ms); snapshot-first detail, live fallback on miss; may include older/closed postings |
 | coverage | LinkedIn job search | broad crawl of public Ashby company boards | crawl of public Greenhouse company boards | crawl of public Lever company boards |
 | `salary_display` | usually null; free text — never parse | usually null | usually null; free text — never parse | **may be raw HTML** — still FREE TEXT; never parse for numbers, strip/ignore markup when displaying |
