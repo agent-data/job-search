@@ -61,7 +61,7 @@ user never learns a one-question sketch existed.
 
 Ask it as a closed choice (`../../shared/references/voice.md` → Asking questions — prefer your host's
 native question interface; numbered prose only if it has none). Header `Depth`. The lead sentence is
-yours to word (voice.md → Asking questions), and **whether you introduce the brief at all depends on
+yours to word, and **whether you introduce the brief at all depends on
 how you got here**:
 
 - **Mid-onboarding** (invoked with onboarding context): onboarding has *just* told the user what the
