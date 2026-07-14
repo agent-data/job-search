@@ -61,6 +61,12 @@ Read these before running, and follow them exactly:
    > record to write, so name the error and stop — never fall through to an untrusted workspace.
 1. **Search the feed (one `search-jobs` per enabled query × enabled source; run the whole batch concurrently).** Build the full call list first — one call per (enabled query × enabled source), passing `--source <s>` on each; with 2 queries and `sources: ["linkedin", "ashby"]` that is 4 calls. **The single listing id does not mean a single source** — the one listing serves every source and `--source` selects which; never collapse the fan-out because the listing id repeats. For each
    `queries[]` with `enabled:true` × each enabled source `s`, call `search-jobs` with `--keywords` (+ `--location`, `--limit`), `--source <s>`, and `--fields id,source_id,source_url,title,company_name,location_display,salary_display,posted_at,detail_available,source`.
+   When a recency window is active (`search.freshness` ≠ `any`, or the run carries an ad-hoc recency the
+   user named), also pass `--published_on_or_after <cutoff>` — the window's cutoff date (enum → cutoff in
+   `conventions.md`) or the ad-hoc one, ISO `YYYY-MM-DD` — and add `published_at` to `--fields`.
+   **Echo-verify** `data.query.published_on_or_after`: equal to what you sent → the service filtered this
+   source by recency (do not re-filter in step 2); absent or `null` → a legacy deployment that ignores it,
+   so filter client-side in step 2. An ad-hoc recency the user named for this run overrides `search.freshness`.
    `limit` is the feed size (1–100; the API defaults to 20 — the config template sets 25) — pull generously and lean on **breadth** (several varied
    queries beat one giant pull; there's no pagination and re-runs reorder). See remote-derivation and "as many
    NEW as possible" in `../../shared/references/internals.md`.
@@ -78,9 +84,14 @@ Read these before running, and follow them exactly:
    fallback (`conventions.md` §jobs.jsonl: build the per-source known set, then NEW = rows whose non-null
    `source_id` is not in THEIR OWN source's set) → per-source NEW `source_id`s.
    Record which sources returned rows AND had an EMPTY known set at run start (that triggers the first-pass footnote in
-   step 5). Then apply `search.freshness`: drop NEW rows whose `posted_at` is older than the window — **a null
-   `posted_at` is NEVER dropped**: treat the row as new-if-unseen and carry a date-unknown mark into the scan
-   and digest. Null-`source_id` rows can't be deduped → skip, count "unidentifiable".
+   step 5). Then apply the recency window using each row's **effective date** (the later of `published_at` and
+   `posted_at`, whichever is present). Where the `published_on_or_after` echo came back equal, the service
+   already dropped out-of-window rows — do NOT re-filter. Where the echo was absent (a legacy deployment),
+   drop NEW rows whose effective date is older than the cutoff. Under an active window a row with **no**
+   effective date is dropped (server parity); with `freshness: any` nothing is dropped. Carry the
+   effective date as the row's date into the scan and digest — a row is date-unknown only when both dates
+   are null, and only then does the step-3 detail read try to extract a JD-stated posting date.
+   Null-`source_id` rows can't be deduped → skip, count "unidentifiable".
 3. **Scan the feed here, in this (primary) context — the cheap first pass.** Review every NEW posting's SUMMARY
    fields (title, company, `location_display`, `salary_display`, `posted_at`). Reject the clearly-irrelevant from
    the summary alone — a must-have plainly violated and stated right in the row (e.g. an onsite-elsewhere
