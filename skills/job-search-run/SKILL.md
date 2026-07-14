@@ -65,7 +65,7 @@ Read these before running, and follow them exactly:
    user named), also pass `--published_on_or_after <cutoff>` — the window's cutoff date (enum → cutoff in
    `conventions.md`) or the ad-hoc one, ISO `YYYY-MM-DD` — and add `published_at` to `--fields`.
    **Echo-verify** `data.query.published_on_or_after`: equal to what you sent → the service filtered this
-   source by recency (do not re-filter in step 2); absent or `null` → a legacy deployment that ignores it,
+   source by recency (do not re-filter in step 2); absent, `null`, or a different value than you sent → a deployment that ignored or altered it,
    so filter client-side in step 2. An ad-hoc recency the user named for this run overrides `search.freshness`.
    `limit` is the feed size (1–100; the API defaults to 20 — the config template sets 25) — pull generously and lean on **breadth** (several varied
    queries beat one giant pull; there's no pagination and re-runs reorder). See remote-derivation and "as many
@@ -86,11 +86,11 @@ Read these before running, and follow them exactly:
    Record which sources returned rows AND had an EMPTY known set at run start (that triggers the first-pass footnote in
    step 5). Then apply the recency window using each row's **effective date** (the later of `published_at` and
    `posted_at`, whichever is present). Where the `published_on_or_after` echo came back equal, the service
-   already dropped out-of-window rows — do NOT re-filter. Where the echo was absent (a legacy deployment),
+   already dropped out-of-window rows — do NOT re-filter. Where the echo did not come back equal (absent, null, or altered),
    drop NEW rows whose effective date is older than the cutoff. Under an active window a row with **no**
    effective date is dropped (server parity); with `freshness: any` nothing is dropped. Carry the
    effective date as the row's date into the scan and digest — a row is date-unknown only when both dates
-   are null, and only then does the step-3 detail read try to extract a JD-stated posting date.
+   are null, and only then does the detail read try to extract a JD-stated posting date.
    Null-`source_id` rows can't be deduped → skip, count "unidentifiable".
 3. **Scan the feed here, in this (primary) context — the cheap first pass.** Review every NEW posting's SUMMARY
    fields (title, company, `location_display`, `salary_display`, `posted_at`). Reject the clearly-irrelevant from
@@ -98,8 +98,8 @@ Read these before running, and follow them exactly:
    `location_display`) → record irrelevant, NO detail read. Queue everything relevant-or-uncertain, and for each queued posting jot a one-line
    **steer** for the detail read — your provisional read + the *specific* open questions it must resolve (which
    must-haves are unconfirmed from the summary, what's uncertain), e.g. "looks strong; confirm remote-US —
-   location says Austin" or "confirm IC vs manager; seniority unstated". When a queued row's `posted_at` is
-   null, the steer also asks the detail read to extract a JD-stated posting date if the description names one
+   location says Austin" or "confirm IC vs manager; seniority unstated". When a queued row's effective date is unknown (both `published_at` and `posted_at`
+   null), the steer also asks the detail read to extract a JD-stated posting date if the description names one
    ("Job Posted: …"). The cheap scan does real work — it
    produces the primary's guidance for each detail review, not just a gate.
 
