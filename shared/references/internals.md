@@ -99,8 +99,9 @@ The user changes config by **chatting**; manual editing is an escape hatch. To a
   When the user hasn't named keywords (onboarding, or a vague "add another search"), **derive** them from
   `preferences.md` — role/title + domain terms for `keywords`, the brief's location constraints for
   `location` — then **acknowledge** what you saved rather than asking them to pick.
-- **Tune the feed (`search` block):** `search.freshness` narrows or widens the client-side recency filter on
-  `posted_at` (the API has no date param), and `search.detail_model` picks the portable tier the runner's
+- **Tune the feed (`search` block):** `search.freshness` narrows or widens the recency filter on
+  `posted_at`/`published_at` (server-side via `published_on_or_after`, with a client-side fallback);
+  `search.detail_model` picks the portable tier the runner's
   per-posting detail reads use — the allowed values for each (the freshness windows and the detail tiers) live
   in `conventions.md`; the agent binds each tier to a concrete model from its own roster — the least-powerful
   model that does the task well; the fit verdict is a judgment, so never the cheapest.

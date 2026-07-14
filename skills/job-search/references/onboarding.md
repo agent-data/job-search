@@ -202,7 +202,7 @@ user to name keywords.** They can retune anytime; the goal here is zero upfront 
 
    Only if the brief is too thin to derive anything sensible (rare) do you ask one focused question to fill
    the gap — lead with derivation, never a blank "what should I search for?".
-   The config already comes preset with a recency window (recent postings only) and a fast model for reading
+   The config already comes preset with a recency window (recent postings only — you can change it, or ask for a different window any time) and a fast model for reading
    posting details — both are tunable anytime just by asking. The config also comes preset with the default job sources (LinkedIn + Ashby company boards) — tunable anytime just by asking.
 
 ### Parallel detail-read approval (approval-gating hosts only)

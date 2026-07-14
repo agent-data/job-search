@@ -98,7 +98,7 @@ Offer these and apply each by **chatting**, editing `config.yaml` per the `inter
   Preserve comments; keep `version: 1`. If the user asks for another search without naming keywords,
   **derive** it from their brief (don't make them pick) and acknowledge what you added — same as onboarding
   step 5.
-- **Tune the feed** → set `search.freshness` to narrow or widen the recency window; set `search.detail_model`
+- **Tune the feed** → set `search.freshness` to narrow or widen the recency window (applied server-side), or just ask for a window in the moment — "jobs from the last day" — and that search uses it; set `search.detail_model`
   to control which model tier reads full posting details; set `search.sources` to choose job sources (narrow
   to a single board, or add more company boards to widen coverage); and, where the host needs approval, set
   `search.parallel_detail_reads` (`true | false`) to use parallel subagents or read sequentially. The allowed

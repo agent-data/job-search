@@ -55,12 +55,13 @@ how fresh it is, whether detail reads run in parallel, and how carefully it read
 
 **Recency window — `search.freshness`**
 
-Filters each posting's `posted_at` on the client side after the feed is returned (the search API has no date parameter).
-
-The four values and the exact window each admits (and which is the default) are in the config schema — see
-`../../../shared/references/conventions.md` (the `config.yaml` section).
-
-Narrowing the window keeps the digest focused on live roles. Widening it is useful when you haven't run a search in a while and want to catch up.
+Sets how recent a posting must be. It resolves to a `published_on_or_after` cutoff the search API
+applies server-side (with a client-side fallback where a deployment ignores it), filtering each posting
+by its effective publication date. The four values, the window each admits, and the default are in the
+config schema — see `../../../shared/references/conventions.md` (the `config.yaml` section). Narrowing
+keeps the digest focused on live roles; widening catches up after a gap. You can also ask for a one-off
+window that isn't a preset — "only postings from the past day", "since June 1" — and that single run
+uses it in place of the saved value.
 
 **Feed size — `queries[].limit`**
 
