@@ -27,7 +27,7 @@ queries:
   - { id: "ai-eng-remote", keywords: "AI engineer", location: "United States", limit: 25, enabled: true }
 search:
   sources: ["linkedin", "ashby"]  # ordered job sources every query runs against (the source enum is defined in agent-data-contract.md) — omit the key for this default; greenhouse/lever widen coverage across more company boards
-  freshness: "past-2-weeks"  # any | past-week | past-2-weeks | past-month — client-side recency filter on posted_at (no API date param)
+  freshness: "past-2-weeks"  # any | past-week | past-2-weeks | past-month — recency window; resolves to a server-side published_on_or_after cutoff (client-side fallback if the echo is absent); default past-2-weeks
   detail_model: "balanced"   # tier the per-posting fit VERDICT runs at — the mid-tier reviewer floor (default): fast | balanced | high | inherit (the agent binds each tier to a concrete model from its own roster — the least-powerful that does the task well; the verdict is a judgment, so never the cheapest)
   # parallel_detail_reads: true  # optional: approved use of parallel subagents for detail reads where the host supports them
 schedule:
@@ -42,9 +42,17 @@ The **`search` block** tunes the feed: `sources` is the ordered list of job sour
 against (order = presentation order in per-source counts). An absent key means `["linkedin", "ashby"]`. Tokens
 outside the enum are dropped at preflight with a digest footnote (E-SOURCE-UNSUPPORTED), never a HALT.
 Per-query source targeting is a known deferred knob — all queries run against all enabled sources. The runner
-reads `sources` and never writes it. `freshness` is a client-side recency window on `posted_at` (the API has
-no date param): `any` = no filter, `past-week` = the last 7 days, `past-2-weeks` = the last 14 days (the
-default), `past-month` = the last 30 days. `detail_model` is a portable tier token for the per-posting **fit verdict** — the
+reads `sources` and never writes it. `freshness` is a recency window that resolves to a **`published_on_or_after` cutoff** the search API
+applies server-side, with a client-side filter as fallback. A row's **effective publication date** is
+the later of `published_at` and `posted_at`, using whichever is present (unknown only when both are
+null); the window admits rows whose effective date is on or after the cutoff. `any` sends no cutoff (no
+filter); `past-week` = today − 7 days; `past-2-weeks` = today − 14 days (the default); `past-month` =
+today − 30 days. Those values are the persisted defaults — the cutoff is only a date, so an ad-hoc
+recency the user names for a single run ("only postings published in the past day", "since June 1")
+resolves to its own cutoff and overrides the saved default for that run, with no new enum value. The
+runner sends the cutoff and echo-verifies `data.query.published_on_or_after`; where a deployment omits
+the echo it filters client-side by the same effective date. Under an active window a row with no
+effective date is dropped (server parity); with `any` nothing is dropped. `detail_model` is a portable tier token for the per-posting **fit verdict** — the
 judgment the detail read produces. Because that verdict is a judgment, not a mechanical step, it runs at the
 **mid-tier reviewer floor**: `balanced` is the default, scaled up to `high` for a higher-risk or ambiguous
 posting, never dispatched on the cheapest tier by default and never reflexively on the most capable. The
