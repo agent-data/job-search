@@ -1,0 +1,44 @@
+{
+  "data": {
+    "query": {
+      "keywords": "AI engineer",
+      "location": "United States",
+      "source": "lever",
+      "published_on_or_after": "2026-07-01"
+    },
+    "status": "completed",
+    "results": [
+      {
+        "id": "jp_c50000000003",
+        "source_id": "initech:c3333333-3333-4333-8333-333333333333",
+        "source_url": "https://jobs.lever.co/initech/c3333333-3333-4333-8333-333333333333",
+        "title": "AI Platform Engineer",
+        "company_name": "Initech",
+        "location_display": "Remote (US)",
+        "salary_display": null,
+        "posted_at": "2026-07-12T14:00:00",
+        "published_at": "2026-07-12T14:00:00",
+        "detail_available": true,
+        "source": "lever"
+      },
+      {
+        "id": "jp_c50000000004",
+        "source_id": "umbrella:c4444444-4444-4444-8444-444444444444",
+        "source_url": "https://jobs.lever.co/umbrella/c4444444-4444-4444-8444-444444444444",
+        "title": "Machine Learning Engineer",
+        "company_name": "Umbrella",
+        "location_display": "Seattle, WA",
+        "salary_display": null,
+        "posted_at": "2026-07-11T13:00:00",
+        "published_at": "2026-07-11T13:00:00",
+        "detail_available": true,
+        "source": "lever"
+      }
+    ],
+    "pagination": {"has_more": false, "next_cursor": null},
+    "warnings": [],
+    "started_at": "2026-07-15T08:02:01Z",
+    "completed_at": "2026-07-15T08:02:01Z"
+  },
+  "meta": {"request_id": "req_pagination_lever_2"}
+}

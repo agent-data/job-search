@@ -11,19 +11,52 @@ JOBSEARCH_TEST_NOAUTH=1 makes whoami report unauthenticated. `--version` answers
 post-install check); `init` is NOT shimmed — evals stub it in the case prompt.
 JOBSEARCH_TEST_RECENCY_SWALLOW=1 makes search-jobs ignore --published_on_or_after (no echo, no
 filter) — a legacy server predating the recency param (mirrors legacy-source-swallow for --source).
+JOBSEARCH_TEST_CALL_LOG=<path> appends one JSON object for each attempted listing route.
+JOBSEARCH_TEST_QUOTA_AFTER=<N> rejects the next metered route after N metered attempts in that log.
 """
 import json, os, re, sys
 
 SCEN = os.environ.get("JOBSEARCH_TEST_SCENARIO", "happy")
 FIX = os.environ.get("JOBSEARCH_FIXTURES", "")
 SRC_ALLOWED = ("linkedin", "ashby", "greenhouse", "lever")
+ACTIVE_CALL = None
+CALL_RECORDED = False
+
+
+def record_call(slug, source, cursor, request, outcome, metered):
+    path = os.environ.get("JOBSEARCH_TEST_CALL_LOG")
+    if not path:
+        return
+    with open(path, "a", encoding="utf-8") as f:
+        f.write(json.dumps({"slug": slug, "source": source, "cursor": cursor,
+                            "request": request,
+                            "outcome": outcome, "metered": metered}) + "\n")
+
+
+def begin_call(slug, source, cursor, request, metered):
+    global ACTIVE_CALL, CALL_RECORDED
+    ACTIVE_CALL = {"slug": slug, "source": source, "cursor": cursor,
+                   "request": request, "metered": metered}
+    CALL_RECORDED = False
+
+
+def complete_call(outcome, metered=None):
+    global CALL_RECORDED
+    if ACTIVE_CALL is None or CALL_RECORDED:
+        return
+    record_call(ACTIVE_CALL["slug"], ACTIVE_CALL["source"], ACTIVE_CALL["cursor"],
+                ACTIVE_CALL["request"], outcome,
+                ACTIVE_CALL["metered"] if metered is None else metered)
+    CALL_RECORDED = True
 
 
 def out(obj):  # JSON to stdout, exit 0
+    complete_call("success")
     print(json.dumps(obj)); sys.exit(0)
 
 
 def err(code, message, retryable, param=None, details=None):  # error envelope to stderr, exit 1
+    complete_call("failure")
     body = {"code": code, "message": message, "retryable": retryable,
             "param": param, "request_id": "req_fake", "source": "fake"}
     if details is not None:
@@ -38,6 +71,40 @@ def flag(argv, name):  # value following --name in argv (e.g. --location), or No
         if i + 1 < len(argv):
             return argv[i + 1]
     return None
+
+
+def search_request(argv, source):
+    request = {}
+    for name in ("keywords", "location", "limit", "published_on_or_after", "fields"):
+        value = flag(argv, f"--{name}")
+        if value is not None:
+            request[name] = int(value) if name == "limit" else value
+    request["source"] = source
+    return request
+
+
+def detail_request(argv, source):
+    request = {"source": source}
+    for name in ("posting_id", "source_url", "fields"):
+        value = flag(argv, f"--{name}")
+        if value is not None:
+            request[name] = value
+    return request
+
+
+def metered_attempts():
+    path = os.environ.get("JOBSEARCH_TEST_CALL_LOG")
+    if not path or not os.path.exists(path):
+        return 0
+    with open(path, encoding="utf-8") as f:
+        return sum(1 for line in f if line.strip() and json.loads(line).get("metered") is True)
+
+
+def enforce_quota_after():
+    threshold = os.environ.get("JOBSEARCH_TEST_QUOTA_AFTER")
+    if threshold is not None and metered_attempts() >= int(threshold):
+        complete_call("quota_rejected", metered=False)
+        err("quota_exceeded", "monthly API limit reached", False)
 
 
 def fixture(name, names=None):
@@ -64,15 +131,21 @@ def main(argv):
     if argv[0] == "call":
         slug = argv[2] if len(argv) > 2 else ""
         if slug == "status":
+            begin_call("status", None, None, {}, False)
             if SCEN == "down":
                 err("service_unreachable", "status route unreachable", False)
             out({"status": "degraded" if SCEN == "degraded" else "ok"})
         if slug == "search-jobs":
             src = flag(argv, "--source") or "linkedin"
+            cursor = flag(argv, "--cursor")
+            begin_call("search-jobs", src, cursor, search_request(argv, src), True)
+            enforce_quota_after()
             if SCEN == "legacy-source-swallow":
                 out(fixture("search-jobs.json"))  # --source silently ignored; no echo injected
             if src not in SRC_ALLOWED or (SCEN == "source-unsupported" and src != "linkedin"):
                 err("validation_error", f"Unsupported source {src!r} for source. Allowed values: linkedin, ashby, greenhouse, lever.", False, param="source")
+            if src == "linkedin" and cursor is not None:
+                err("validation_error", "cursor is not supported for linkedin", False, param="cursor")
             if SCEN == "one-source-down" and src == os.environ.get("JOBSEARCH_TEST_DOWN_SOURCE", "ashby"):
                 err("upstream_unavailable", f"{src} search failed", True)
             if SCEN == "stretch":
@@ -86,8 +159,15 @@ def main(argv):
                         param="location",
                         details=[{"loc": ["query", "location"], "msg": "unrecognized location",
                                   "type": "value_error"}])
-            names = [f"search-jobs.{src}.json"] if src != "linkedin" else ["search-jobs.json"]
-            fx = fixture("search-jobs.json", names=names)
+            if SCEN.startswith("pagination"):
+                page = "page-2" if cursor is not None else "page-1"
+                expected = None if page == "page-1" else f"cursor_{src}_2"
+                if cursor != expected:
+                    err("validation_error", "cursor does not match this request", False, param="cursor")
+                fx = fixture(f"search-jobs.{src}.{page}.json")
+            else:
+                names = [f"search-jobs.{src}.json"] if src != "linkedin" else ["search-jobs.json"]
+                fx = fixture("search-jobs.json", names=names)
             fx.setdefault("data", {}).setdefault("query", {})["source"] = src
             pub = flag(argv, "--published_on_or_after")
             if pub is not None:
@@ -106,16 +186,19 @@ def main(argv):
                                              if eff(r) is not None and eff(r) >= cutoff]
             out(fx)
         if slug == "get-posting":
+            src = flag(argv, "--source") or "linkedin"
+            begin_call("get-posting", src, None, detail_request(argv, src), True)
+            enforce_quota_after()
             if SCEN == "invalid-pair":
                 err("validation_error", "posting_id/source_url mismatch", False, param="posting_id")
             if SCEN == "detail-fetch-failed":
                 err("upstream_unavailable", "upstream detail fetch failed", True)
-            src = flag(argv, "--source") or "linkedin"
             pid = flag(argv, "--posting_id") or ""
             if src != "linkedin":
                 out(fixture("get-posting.json",
                             names=[f"get-posting.{src}.{pid}.json", f"get-posting.{src}.json"]))
             out(fixture("get-posting.json"))
+        begin_call(slug, None, None, {}, False)
     err("unsupported", f"unhandled args: {argv}", False)
 
 

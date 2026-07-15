@@ -1,0 +1,44 @@
+{
+  "data": {
+    "query": {
+      "keywords": "AI engineer",
+      "location": "United States",
+      "source": "greenhouse",
+      "published_on_or_after": "2026-07-01"
+    },
+    "status": "completed",
+    "results": [
+      {
+        "id": "jp_b50000000001",
+        "source_id": "acme:8100001",
+        "source_url": "https://boards.greenhouse.io/acme/jobs/8100001?gh_jid=8100001",
+        "title": "Senior AI Engineer",
+        "company_name": "Acme",
+        "location_display": "Remote, US",
+        "salary_display": null,
+        "posted_at": "2026-07-14T15:00:00",
+        "published_at": "2026-07-14T15:00:00",
+        "detail_available": true,
+        "source": "greenhouse"
+      },
+      {
+        "id": "jp_b50000000002",
+        "source_id": "globex:8100002",
+        "source_url": "https://boards.greenhouse.io/globex/jobs/8100002?gh_jid=8100002",
+        "title": "Staff ML Engineer",
+        "company_name": "Globex",
+        "location_display": "Boston, MA",
+        "salary_display": null,
+        "posted_at": "2026-07-13T14:00:00",
+        "published_at": "2026-07-13T14:00:00",
+        "detail_available": true,
+        "source": "greenhouse"
+      }
+    ],
+    "pagination": {"has_more": true, "next_cursor": "cursor_greenhouse_2"},
+    "warnings": [],
+    "started_at": "2026-07-15T08:01:00Z",
+    "completed_at": "2026-07-15T08:01:00Z"
+  },
+  "meta": {"request_id": "req_pagination_greenhouse_1"}
+}
