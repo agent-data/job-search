@@ -240,3 +240,42 @@ experimental/expected-to-work; require a live verification transcript before pro
 or adding product-critical commands like update recipes.
 **Linked tests:** none yet; future adapter-promotion work should add a manual live verification lane to
 `TESTING.md`.
+
+## Pagination and usage-context follow-ups
+
+### P2 — source/frequency increases lack credit-aware previews (`TODO-USAGE-PREVIEW-LEVERS`)
+**What:** Extend the pagination flow's decision-time usage preview to source additions and frequency
+increases, without adding a monetary budget control.
+**Why:** The [shared config recipes](../../shared/references/internals.md) now make review-depth increases
+preview their known first-page call baseline and uncertain additions, but the adjacent outcome levers can
+also increase recurring metered work without the same scoped preview.
+**Impact:** a user can broaden sources or raise cadence without seeing the added-call shape before the
+change; the edit is conversational and reversible and later runs still report actual calls, but informed
+consent is inconsistent across three controls that affect usage.
+**How to apply:** reuse the shared calls-first preview/confirmation pattern for source and frequency
+increases, using the user's enabled query/source counts and cadence while labeling continuation and detail
+work as unknown. Confirm the exact increase before a config write or metered one-off run; keep decreases
+immediate and add no `budget`, `credits`, or `cost` config field.
+**Linked tests:** [`job-search-agent` evals](../../skills/job-search-agent/evals/evals.json) cases 6–10 cover
+the depth-preview pattern only; add source/frequency increase arms and extend [`TESTING.md`
+§4](../../TESTING.md) T4.2–T4.3 with pre-confirmation call/config invariants.
+
+### P3 — future unmetered failures need an accounting cutover (`TODO-UNMETERED-FAILURES`)
+**What:** When agent-data stops metering failed attempts, including failed retry attempts, switch the
+consumer accounting model to that producer contract and update the dated contract, fake shim, errors,
+evals, and historical interpretation together. Successful attempts, including a successful retry, continue
+to follow producer-authoritative metering status.
+**Why:** Today's [pinned producer contract](../../shared/references/agent-data-contract.md) consistently treats
+non-quota failures as metered; changing only one layer after the producer cutover would make local call
+totals and explanations disagree.
+**Impact:** there is no current defect. After the upstream change, stale inference could overstate actual
+calls and make comparable-run estimates mix accounting regimes; explicit producer metering status remains
+authoritative in the meantime.
+**How to apply:** update the canonical dated metering rule first, then make the fake shim and attempt ledger
+mark failed attempts and failed retries unmetered while preserving producer-authoritative status for every
+successful attempt; revise retry/failure diagnostics and quota wording, and update effect-based evals.
+Preserve historical run records byte-for-byte and define how pre-cutover records are excluded from or clearly
+interpreted in comparable-history calculations.
+**Linked tests:** [`tests/test_fake_agent_data.py`](../../tests/test_fake_agent_data.py) attempt-accounting
+cases and [`job-search-run` evals](../../skills/job-search-run/evals/evals.json) cases 1, 6, 30, 31, and 38
+pin current metering, quota, retry, and comparable-history effects.

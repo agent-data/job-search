@@ -4,6 +4,30 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.0] — 2026-07-15
+
+### Added
+- **Opt-in deeper company-board coverage.** Ask to review up to a positive number of unseen roles or to
+  exhaust the currently traversable Ashby, Greenhouse, and Lever results once or on every run. Enabling or
+  increasing depth previews the known call impact and confirms the exact one-off or saved scope first;
+  omitting `search.max_new_postings_per_run` remains first-page-only, and LinkedIn remains first-page-only
+  in every mode.
+- **Calls-first usage context.** Run records retain actual metered-call totals and operation breakdowns;
+  digests and summaries lead with the actual total, and read-only explanations expose the stored breakdown
+  before any clearly labeled pay-as-you-go equivalent. No monetary budget control or invented account charge
+  is added.
+- **Named depth and accounting errors.** `E-BAD-CONFIG` blocks invalid review-depth values before metered
+  work, `E-PAGINATION-INCOMPLETE` keeps trustworthy rows when continuation stops early, and `E-QUOTA`
+  reports the run's actual prior metered calls while treating the rejected attempt as unmetered.
+- **Local one-time deeper-coverage nudge.** A returning home view can offer deeper company-board coverage
+  after local evidence shows zero unseen first-page roles while more board results exist; its per-workspace
+  outcome is recorded locally so the offer does not repeat.
+
+### Compatibility
+- No config migration is required: `config.yaml` stays at `version: 1`, existing workspaces keep their
+  schedules and first-page-only behavior when the optional depth key is absent, and LinkedIn remains
+  first-page-only.
+
 ## [0.5.0] — 2026-07-14
 
 ### Added
