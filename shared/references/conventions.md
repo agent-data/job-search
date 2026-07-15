@@ -199,8 +199,9 @@ stream ended; and any quota halt, source failure, or untrustworthy pagination br
 came from omission (`default`), a conversational one-run override (`one_off`), or config (`saved`).
 
 `agent_data_usage` is attempt-based. Its three `by_operation` counters classify each metered attempt exactly
-once and must sum to `metered_calls`; retry and charged-failure diagnostics are subsets, while quota
-rejections and free-route calls are unmetered, so none of those diagnostic counters is added again. Store
+once and must sum to `metered_calls`. Charged failures are a metered subset; retry attempts are diagnostic
+and count every resolved attempt numbered greater than one even when that retry is unmetered. Quota
+rejections and free-route calls are unmetered, so none of the diagnostic counters is added again. Store
 `unit_rate_usd` and `payg_equivalent_usd` as decimal strings so historical arithmetic does not change after
 a pricing update. The canonical dated metering rules and the rate used to derive these fields live only in
 `agent-data-contract.md`; verify there rather than copying a rate into this contract.
@@ -243,6 +244,7 @@ from `updated_at`** (fall back to `created_at` for briefs written before `update
 # Job search digest — <date>
 Run health: healthy
 9 new postings (6 LinkedIn · 3 Ashby) · 3 strong · 2 moderate · 1 weak · 3 filtered out · <n> searches · <m> detail reads
+Agent-data usage: <N> metered calls this run · about $<payg_equivalent_usd> pay-as-you-go equivalent
 
 ## Strong matches
 - **<title>** — <company> — <location>
@@ -260,8 +262,12 @@ Run health: healthy
 
 <footnotes: stale detail links, partial failures, unidentifiable (null source_id) rows, brief-age nudge; first pass over a source (that source returned rows AND its known-ids set was empty at run start): `First pass over <Source> company boards — this batch can include older postings, since boards don't always state dates.`; per-source outage / unsupported / ignored (one line each — exact texts in `errors.md`)>
 ```
-Strong first. Always show the Run health line and the counts. The parenthetical per-source breakdown in the
-counts line appears ONLY when more than one source was searched; single-source runs keep today's exact line.
+Strong first. Always show the Run health line, counts, and calls-first usage line. Load the verified rate from
+`agent-data-contract.md` and render the stored exact decimal equivalent; the label states that it is context,
+not an account balance or charge. If that canonical rate is unavailable or cannot be verified, use the
+calls-only fallback `Agent-data usage: <N> metered calls this run` with no dollar clause. The parenthetical
+per-source breakdown in the counts line appears ONLY when more than one source was searched; single-source
+runs keep today's exact line.
 The counts line counts result ROWS — a cross-source merged pair contributes to both its sources' breakdown
 figures and to N; the collapse to one role shows in the merged entry itself and in the pipeline/home counts
 (see the alias rule in §jobs.jsonl), never by shrinking N.
