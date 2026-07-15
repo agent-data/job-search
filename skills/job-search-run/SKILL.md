@@ -9,7 +9,7 @@ description: Run one headless, non-interactive job-search pass that finds and ju
 > capabilities), use the **job-search-agent** skill — the operator manual.
 
 Run ONE headless job-search pass over the workspace. Preflight gates before searching; no silent failures.
-**Shape:** search → dedup/freshen → **scan summaries in this (primary) context** → **fan out one parallel
+**Shape:** search → reconcile/paginate/select → **scan selected summaries in this (primary) context** → **fan out one parallel
 subagent per promising posting** (sequential only where the host lacks the primitive or awaits subagent
 approval) → **consolidate** into a digest.
 
@@ -46,9 +46,26 @@ Read these before running, and follow them exactly:
      records.
    - `agent-data` not found on PATH → E-NO-AGENT-DATA (HALT, exit 1).
    - No `config.yaml` → E-NO-CONFIG (HALT, exit 1).
-   - `agent-data whoami`; `api_key_set:false` → E-NO-AUTH (HALT, exit 1).
    - `config.yaml` `version` major unknown → E-CONFIG-VERSION (HALT, exit 1).
    - Brief missing/empty (`workspace.preferences_path`) → E-NO-PREFERENCES (HALT, exit 1, named fix).
+   - Delete stale files whose complete name matches `runs/.pagination-<run_id>.jsonl`, where `<run_id>` has
+     the format in `conventions.md`. Delete them without reading them: scratch is never resumable state.
+   - **Resolve review scope now, before `whoami`, `status`, or any metered call.** An already-confirmed
+     one-off invocation value takes precedence over config and sets `origin:one_off`; the runner never
+     interprets an unconfirmed depth request as consent.
+
+     | Effective value | `mode` | target | origin |
+     |---|---|---:|---|
+     | confirmed one-off first-page override | `first_page` | `null` | `one_off` |
+     | confirmed one-off positive integer / exact `"all"` | `finite` / `all` | integer / `null` | `one_off` |
+     | no one-off; config key omitted | `first_page` | `null` | `default` |
+     | no one-off; config positive integer / exact `"all"` | `finite` / `all` | integer / `null` | `saved` |
+     | no one-off; any other present config value | E-BAD-CONFIG HALT | — | — |
+
+     Use the validation/rendering procedure in `errors.md`; `null`, booleans, zero, negatives, floats,
+     numeric strings, and non-exact spellings of `"all"` are invalid. This skill is headless: never ask for
+     confirmation and never write config. Saved values are durable consent; one-off context is ephemeral.
+   - `agent-data whoami`; `api_key_set:false` → E-NO-AUTH (HALT, exit 1).
    - `agent-data call <listing> status`: `ok` proceed; `degraded` set a flag (set Run health: degraded (job sources flaky);
      note "job sources flaky — results this run may be affected" in the digest; no detail-read cap — read
      promising matches as normal); unreachable → E-SERVICE-DOWN (write a "service down" digest, HALT, exit 1).
@@ -59,40 +76,100 @@ Read these before running, and follow them exactly:
    > home view surfaces it. The named exception is E-NO-CONFIG / first_run with no workspace
    > (and E-BAD-REGISTRY when the corrupt registry leaves no trusted workspace): there is no run
    > record to write, so name the error and stop — never fall through to an untrusted workspace.
-1. **Search the feed (one `search-jobs` per enabled query × enabled source; run the whole batch concurrently).** Build the full call list first — one call per (enabled query × enabled source), passing `--source <s>` on each; with 2 queries and `sources: ["linkedin", "ashby"]` that is 4 calls. **The single listing id does not mean a single source** — the one listing serves every source and `--source` selects which; never collapse the fan-out because the listing id repeats. For each
-   `queries[]` with `enabled:true` × each enabled source `s`, call `search-jobs` with `--keywords` (+ `--location`, `--limit`), `--source <s>`, and `--fields id,source_id,source_url,title,company_name,location_display,salary_display,posted_at,detail_available,source`.
-   When a recency window is active (`search.freshness` ≠ `any`, or the run carries an ad-hoc recency the
-   user named), also pass `--published_on_or_after <cutoff>` — the window's cutoff date (enum → cutoff in
-   `conventions.md`) or the ad-hoc one, ISO `YYYY-MM-DD` — and add `published_at` to `--fields`.
-   **Echo-verify** `data.query.published_on_or_after`: equal to what you sent → the service filtered this
-   source by recency (do not re-filter in step 2); absent, `null`, or a different value than you sent → a deployment that ignored or altered it,
-   so filter client-side in step 2. An ad-hoc recency the user named for this run overrides `search.freshness`.
-   `limit` is the feed size (1–100; the API defaults to 20 — the config template sets 25) — pull generously and lean on **breadth** (several varied
-   queries beat one giant pull; there's no pagination and re-runs reorder). See remote-derivation and "as many
-   NEW as possible" in `../../shared/references/internals.md`.
-   **Echo-verify every 200 response:** if the echoed `data.query.source` (absent = `linkedin`) ≠ the requested
-   source → E-SOURCE-IGNORED: skip this source's remaining queries, keep the returned rows under their own
-   row-level `source`. A `400 validation_error` with `error.param:"source"` → E-SOURCE-UNSUPPORTED: drop the source, continue.
-   - `503 upstream_unavailable` (retryable) → retry up to 3× with backoff; on give-up record the error and continue.
-     **Two consecutive fully-failed queries against the SAME source → E-UPSTREAM-STRETCH for that source: stop searching it; other sources continue. All enabled sources stretched → stop searching entirely (partial digest).** Failure counters are per-source and reset on that source's first success.
-   - `422`/`400 validation_error` (a bad param or `fields=`) → E-BAD-QUERY (name the bad param from `error.param`/`details[].loc`), skip that query.
-   - A quota/limit/payment failure (see errors.md detection) → E-QUOTA (HALT, exit 1).
-   Cross-check before moving on: every enabled source must appear among the attempted calls (each lands in `runs/<run_id>.json` `queries[]` with its `source`); an enabled source with zero attempted calls means the fan-out was mis-executed — dispatch its missing calls now.
-2. **Dedup + freshen.** Run the **dedup** step once per enabled source — invoke
-   `../../shared/scripts/mechanics/dedup.sh <workspace>/jobs.jsonl <source>` (candidate `source_id`s on
-   stdin → the NEW ones on stdout) where a shell runtime exists, else follow the **known-ids** prose
-   fallback (`conventions.md` §jobs.jsonl: build the per-source known set, then NEW = rows whose non-null
-   `source_id` is not in THEIR OWN source's set) → per-source NEW `source_id`s.
-   Record which sources returned rows AND had an EMPTY known set at run start (that triggers the first-pass footnote in
-   step 5). Then apply the recency window using each row's **effective date** (the later of `published_at` and
-   `posted_at`, whichever is present). Where the `published_on_or_after` echo came back equal, the service
-   already dropped out-of-window rows — do NOT re-filter. Where the echo did not come back equal (absent, null, or altered),
-   drop NEW rows whose effective date is older than the cutoff. Under an active window a row with **no**
-   effective date is dropped (server parity); with `freshness: any` nothing is dropped. Carry the
-   effective date as the row's date into the scan and digest — a row is date-unknown only when both dates
-   are null, and only then does the detail read try to extract a JD-stated posting date.
-   Null-`source_id` rows can't be deduped → skip, count "unidentifiable".
-3. **Scan the feed here, in this (primary) context — the cheap first pass.** Review every NEW posting's SUMMARY
+1. **Build immutable streams; fetch every first page.** Create one stream for each enabled query × validated
+   source, ordered by config query order then `search.sources` order. The listing id still serves one source
+   per call: never collapse streams because their listing id repeats. Each stream owns `query_id`, `source`,
+   cursor capability, its ordered queue, in-memory `next_cursor`, `has_more`, `pages_fetched`, `rows_scanned`,
+   seen ordered-page signatures, `attempts`, `request_ids`, and terminal `stop_reason`.
+
+   Freeze the request object once: `keywords`, optional `location`, `limit`, literal `fields`, optional
+   `published_on_or_after`, and `source`. Use the route fields in `agent-data-contract.md`; an active saved or
+   ad-hoc recency adds its cutoff and must include `published_at`, while `any` omits the cutoff. A continuation replays
+   these values byte-for-value and adds only the opaque cursor. `queries[].limit` remains this per-call page
+   size, never the finite run target.
+
+   Build every cursor-null call first, then dispatch all first pages as one concurrent batch. If the host has
+   no concurrent-call primitive, execute that same prebuilt batch in stream order; later reconciliation still
+   uses config order, never completion order. Echo-verify source on every successful page and, when a cutoff
+   was sent, echo-verify that cutoff exactly as specified in `agent-data-contract.md`: a source mismatch takes
+   E-SOURCE-IGNORED; an absent/altered sent-cutoff echo triggers the client-side effective-date filter in step 2.
+
+   LinkedIn is unpaginated by contract. Treat an Ashby/Greenhouse/Lever stream as cursor-capable only while
+   each returned `data.pagination` object is valid; missing/malformed metadata takes the incomplete branch
+   even when its result rows are trustworthy.
+
+   Apply the existing search failures without changing their scope: retry only `retryable:true`; after retry
+   exhaustion feed the per-source E-UPSTREAM-STRETCH breaker; source validation errors drop only that source;
+   bad query parameters skip that query; quota globally halts. Every enabled source must have an attempted
+   first-page stream record before the batch is considered complete.
+
+2. **Reconcile candidates, paginate when consented, then select.** Snapshot known
+   `(source,source_id)` pairs at run start. For each source, feed candidate ids through the shared dedup script
+   as pages arrive (no event is appended before selection settles, so its file view stays the run-start
+   snapshot), or build the same set with the `conventions.md` fallback. Record sources that returned rows with
+   an empty run-start set for the first-pass footnote. Reconcile every completed advancement batch in this order:
+
+   1. Count raw rows by first/continuation page; remove null `source_id` rows as unidentifiable.
+   2. Apply client-side effective-date filtering only where cutoff echo verification failed. Carry the
+      effective date forward; under an active window a row with neither date is excluded.
+   3. Remove pairs already known at run start.
+   4. Collapse an exact same-source pair returned by multiple queries. The earliest stream owns it, while the
+      candidate retains every contributing `query_id` as provenance.
+   5. Conservatively merge the same real-world role across sources: compatible company, equivalent title,
+      compatible location. Uncertainty means distinct roles. Keep every source row for later provenance
+      events and choose the primary board row by `search.sources` order; use LinkedIn only when no board row
+      exists.
+
+   A later merge can free a provisional slot. Reconcile and refill before evaluation; **no posting is judged
+   until pagination and selection have settled**, so unselected unseen rows remain unwritten and eligible in
+   a later run.
+
+   | mode | Select now | Continuation eligibility | Stop |
+   |---|---|---|---|
+   | `first_page` | every unique unseen first-page role | none—never follow even a trustworthy cursor | after every ordinary first-page branch completes |
+   | `finite` | at most target unique roles | healthy board streams whose share still lacks candidates | target settles, or no eligible stream can produce more |
+   | `all` | every unique role found | every healthy board stream with trustworthy `has_more:true` | every healthy board stream ends |
+
+   LinkedIn is always a one-page `unpaginated` stream. In first-page mode, valid board metadata still sets
+   trustworthy `has_more_at_stop`; stop without using its cursor.
+
+   **Finite allocator—run after each reconciliation.** For target `N`, active stream weight is that stream's
+   `query.limit`:
+
+   1. Compute `exact_share = N × weight / sum(active weights)`.
+   2. Assign each stream `floor(exact_share)` slots.
+   3. Assign remaining slots by descending fractional remainder; ties use query order, then source order.
+   4. Fill shares from each stream's ordered unique-candidate queue.
+   5. Redistribute unfilled shares from exhausted/sparse/duplicate-heavy streams across remaining eligible
+      streams by the same calculation.
+   6. When later reconciliation merges selected roles, redistribute every freed slot before evaluation.
+
+   Immediately before the first continuation call, create `runs/.pagination-<run_id>.jsonl` containing only
+   normalized summaries, ownership/provenance, and merge bookkeeping—never a cursor or recovery checkpoint.
+   Pass the pool between phases by this path and read at most 100 lines per chunk; process another bounded
+   chunk when more remain. Remove the file on every handled success, partial stop, quota halt, or other halt.
+
+   Advance all currently eligible streams as one batch, with at most one in-flight call per stream; reconcile
+   the whole completed batch before recomputing eligibility. Never restart page one inside a run. Track each
+   raw ordered page signature as the ordered `(row.source,row.source_id)` list and each non-null cursor in
+   memory only. On every successful continuation, test cursor/signature repetition **before** interpreting
+   terminal metadata; a repeated signature is incomplete even when that response says `has_more:false`.
+
+   | Observed branch | Stream action |
+   |---|---|
+   | returned non-null `next_cursor` already seen, or ordered page signature already seen | keep rows; E-PAGINATION-INCOMPLETE; stop stream |
+   | valid board `has_more:false,next_cursor:null` | mark `sources_exhausted` |
+   | valid `has_more:true` plus new non-empty cursor and new page signature | continue only if mode still needs it |
+   | page contains only known/duplicate rows but cursor and signature advance | valid progress; continue if eligible |
+   | pagination missing/malformed or `has_more:true` cursor missing | keep rows; E-PAGINATION-INCOMPLETE; stop stream |
+   | fresh cursor receives non-retryable cursor validation rejection | never retry or restart page one; E-PAGINATION-INCOMPLETE |
+   | continuation retryable failure | normal retry/backoff; on give-up stop stream and feed source breaker |
+   | quota rejection | global E-QUOTA halt; clean scratch; persist no unsettled judgments |
+
+   Continue unaffected streams after E-PAGINATION-INCOMPLETE. Its diagnostics and user-visible recovery come
+   from `errors.md`; never persist or display the cursor.
+
+3. **Scan the selected roles here, in this (primary) context—the cheap first pass.** Review every selected role's summary
    fields (title, company, `location_display`, `salary_display`, `posted_at`). Reject the clearly-irrelevant from
    the summary alone — a must-have plainly violated and stated right in the row (e.g. an onsite-elsewhere
    `location_display`) → record irrelevant, NO detail read. Queue everything relevant-or-uncertain, and for each queued posting jot a one-line
@@ -103,15 +180,8 @@ Read these before running, and follow them exactly:
    ("Job Posted: …"). The cheap scan does real work — it
    produces the primary's guidance for each detail review, not just a gate.
 
-   **Cross-source merge (conservative).** After forming the NEW set, group rows that are the
-   same real-world role seen on multiple sources: same company (allowing trivial name variants),
-   same or equivalent role title, compatible location → one role. **When uncertain, treat as
-   distinct — two detail reads are cheaper than a wrong merge.** For a merged group: ONE detail
-   read, on a **board-source row** — `ashby`, `greenhouse`, or `lever`, whose `source_url` is the
-   company's canonical live apply page and whose detail is complete. If the group has several board
-   sources, pick the one earliest in the run's `search.sources` order; a `linkedin` row is the
-   target only when the group has NO board source. The steer notes "also on <the other sources>";
-   the judgment applies to every row in the group.
+   For a cross-source group already reconciled in step 2, scan its primary board row (or LinkedIn only when
+   there is no board row). The steer notes the other sources; one detail judgment applies to every source row.
 4. **Read the details — parallel by default, sequential where the host requires it.** The reads are
    independent, so the default is the parallel per-posting fan-out. First read `search.parallel_detail_reads`
    from `config.yaml` (see `../../shared/references/conventions.md`). This runner is headless: never ask, and
@@ -156,7 +226,7 @@ Read these before running, and follow them exactly:
    and returns/records the same structured judgment object. Per-posting errors stay local to that posting:
    `400 validation_error` (not retryable — a `posting_id`/`source_url` pair mismatch) → judge from summary, note "detail link expired"; `503 upstream_unavailable` (retryable) → retry/backoff, then summary-only + note. **No product cap** — every queued posting gets evaluated;
    the scan (relevance), not a count, decides how many.
-5. **Consolidate + persist + report.** Collect the detail-read verdicts and **validate each before it lands**: `match` must be `strong | moderate | weak`, or `null` when `relevant` is false — coerce anything else (a faster delegated model can emit a stray number or out-of-vocab band) and never let a numeric score reach `jobs.jsonl` or the digest — and every event MUST carry a non-empty `source_id`. Then for each NEW posting (the deduped set from step 2 — see Idempotency) append the FULL `evaluated` event
+5. **Consolidate + persist + report.** Collect the detail-read verdicts and **validate each before it lands**: `match` must be `strong | moderate | weak`, or `null` when `relevant` is false — coerce anything else (a faster delegated model can emit a stray number or out-of-vocab band) and never let a numeric score reach `jobs.jsonl` or the digest — and every event MUST carry a non-empty `source_id`. Then for each selected source row append the FULL `evaluated` event
    to `<workspace>/jobs.jsonl` via the **event-log-append** step — invoke
    `../../shared/scripts/mechanics/event-log-append.sh <workspace>/jobs.jsonl` (the single-line event JSON on
    stdin; it validates against the event-line contract and appends idempotently) where a shell runtime
@@ -168,10 +238,57 @@ Read these before running, and follow them exactly:
    `reasoning`, `dealbreakers_hit`, `unknowns`, `needs_human_check`, `status:"new"`, `first_seen`. For a merged group, append one `evaluated` event per row (each with its own `source`/`source_id`/`source_url`/`posted_at`), all sharing the verdict fields; every NON-primary row's event also carries `"same_role_as":"<source>:<source_id>"` pointing at the primary (the row that got the detail read). Write
    `runs/<run_id>.json` and `reports/<date>-digest.md` (format in conventions.md — the counts line, per-source
    breakdown, per-match source tags, and date marks all per that spec; strong → moderate → weak, then
-   "filtered out: N"). Footnotes: first-pass-per-source (for each source flagged in step 2), and one line per
+   "filtered out: N"). Unselected unseen rows receive no detail call, event, or digest entry. Footnotes:
+   first-pass-per-source (for each source flagged in step 2), and one line per
    lost source (stretch / unsupported / ignored — exact texts in `errors.md`). Run health: one lost source →
    `partial (<source> unavailable)`; several (not all) → `partial (<sourceA>, <sourceB> unavailable)`
-   naming each in `search.sources` order; all lost → `partial (all sources unavailable)`. Print a 5-line terminal
+   naming each in `search.sources` order; all lost → `partial (all sources unavailable)`.
+
+   **Persist selection/depth evidence.** Follow the exact `runs/<run_id>.json` schema in `conventions.md`.
+   Each logical stream record carries `query_id`, `source`, `pages_fetched`, `rows_scanned`,
+   `unique_candidates`, `selected_for_review`, `has_more_at_stop`, `stop_reason`, `attempts`, `request_ids`,
+   `upstream_code`, and `retryable`. A valid board boolean is trustworthy at stop; LinkedIn and every
+   untrustworthy/incomplete pagination branch use `null`. `pages_fetched`/`rows_scanned` count successful responses/rows;
+   `unique_candidates` counts post-known, owned candidates; `selected_for_review` counts roles owned by that
+   stream. A valid board intentionally stopped after page 1 is `first_page_complete`; LinkedIn is
+   `unpaginated`; a finite stream stopped early with trustworthy depth remaining is `target_reached`; a valid
+   terminal board page is `sources_exhausted` (even if that same batch also satisfies the run target); and the
+   two failure branches are `pagination_incomplete` and `source_failed`. Never write a cursor, page token,
+   decoded payload, or resume state.
+
+   Persist `review_scope.mode`, `target_new_postings`, and `origin` from preflight, then derive its `outcome`
+   after every stream settles in this precedence order so the outcomes are mutually exclusive:
+
+   | Precedence | Outcome | Exact predicate |
+   |---:|---|---|
+   | 1 | `incomplete` | any quota halt, source failure, or untrustworthy pagination branch |
+   | 2 | `target_reached` | otherwise, `finite` selected exactly `N` unique roles—even if the final batch also exhausted a stream |
+   | 3 | `completed_first_pages` | otherwise, `first_page` and every enabled stream completed its ordinary first-page branch |
+   | 4 | `sources_exhausted` | otherwise, finite/all healthy eligible streams ended before the target or at exhaustive completion |
+
+   `incomplete` wins over every completion claim. A pagination/source limitation makes run health partial;
+   quota remains blocked. The partial-depth message from `errors.md` wins over any end-of-current-results
+   sentence. `results_summary.new_postings` and `evaluated` count selected, persisted unique roles—not every
+   scanned candidate and not alias event rows.
+
+   Populate the exact workspace-local fields `first_page_rows`, `continuation_rows`, `known_rows`,
+   `same_run_cross_query_duplicate_rows`, `cross_source_rows_merged`,
+   `unique_unseen_roles_first_pages`, `unique_unseen_roles_continuations`, and
+   `selected_roles_from_continuations`. They count, respectively: raw rows by page class; occurrences removed
+   as known; rows collapsed across queries; non-primary source rows merged into a real-role group; unique roles
+   first discovered on first pages versus only on continuations; and selected roles from the continuation-only
+   class. A role belongs to the first-page class when any retained source row first appeared there, so no role
+   appears in both page classes.
+
+   Set `deeper_coverage_nudge_eligible:true` **only** when mode is `first_page`, the unique unseen first-page
+   role count is zero, and at least one healthy board stream has trustworthy `has_more_at_stop:true`. Then list
+   exactly those `<query_id>:<source>` streams in config order; otherwise write `false` and `[]`. The runner
+   records evidence only—it never writes the registry's shown marker.
+
+   Pricing, metering, quota wording, and `agent_data_usage` arithmetic remain owned by
+   `agent-data-contract.md`, `errors.md`, and `conventions.md`; do not copy rates or invent account state here.
+
+   Print a 5-line terminal
    summary in this shape:
 
    ```
@@ -183,6 +300,13 @@ Read these before running, and follow them exactly:
    ```
 
    On a blocked HALT, collapse to the named error + fix and the digest path (there are no bands to report).
+
+   **Completion self-check.** Before judgment, verify scope resolved before external calls, every first-page
+   stream was attempted, reconciliation settled, finite selection is at most its target, and no LinkedIn
+   continuation occurred. Before reporting completion, verify every stream field and outcome predicate,
+   unselected unseen rows are absent from `jobs.jsonl`, scratch is gone, and no cursor/token/resume state
+   appears in any run record, digest, jobs log, config, registry, or scratch. Repair a local omission; if
+   trustworthy continuation cannot be established, record `incomplete` instead of claiming completion.
 
 ## Briefing each detail subagent
 

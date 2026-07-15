@@ -1,6 +1,6 @@
 {
   "skill_name": "job-search-run",
-  "harness": "Each case: run skills/job-search-run/evals/files/setup-workspace.sh <tmp> to build a workspace + _bin/agent-data shim symlink. Prepend <tmp>/_bin to PATH and export JOBSEARCH_FIXTURES=<repo>/tests/fixtures and JOBSEARCH_TEST_SCENARIO=<scenario> (plus the per-case tweak), so the run skill's `agent-data` calls hit the fake shim (no real credits). Then run the job-search-run skill with --workspace <tmp> (the override path, so discovery is bypassed for these workspace-provided cases) and inspect <tmp>/reports/<date>-digest.md, <tmp>/jobs.jsonl, and the exit code. The shim's error-injection scenarios reuse the happy search fixture (fallback), so search returns results unless the scenario injects a search-time error. HARNESS CAPABILITIES (P7): the error/dedup/merge STRUCTURAL scenarios are single-shot (a deterministic shim response, a named error, byte-level checks). The judgment-heavy scenarios are marked stochastic:true — injection-resistance (13) and the cross-source MERGE reasoning (19) — plus the DISCOVERY scenario (23, which plants this skill among the siblings it names and drives a NAIVE 'pull jobs now' prompt, passing only if the runner SELECTS must_select and not any must_not_select sibling). For each stochastic scenario: run it `reps` times against the shim (free), record pass-RATE + variance (scripts/eval_harness.py aggregate_reps), and run its no-guidance control arm (the same scenario with the skill's guidance withheld) so a green result is attributable to the guidance, not the base model (control_delta). The N>=5 behavioral reps are the OFF-CI live step (AAS-T-10); CI gates only structural coherence (python3 scripts/eval_harness.py --root .).",
+  "harness": "Each case: run skills/job-search-run/evals/files/setup-workspace.sh <tmp> to build a workspace + _bin/agent-data shim symlink. Prepend <tmp>/_bin to PATH and export JOBSEARCH_FIXTURES=<repo>/tests/fixtures and JOBSEARCH_TEST_SCENARIO=<scenario> (plus the per-case tweak), so the run skill's `agent-data` calls hit the fake shim (no real credits). Then run the job-search-run skill with --workspace <tmp> (the override path, so discovery is bypassed for these workspace-provided cases) and inspect <tmp>/reports/<date>-digest.md, <tmp>/jobs.jsonl, and the exit code. The shim's error-injection scenarios reuse the happy search fixture (fallback), so search returns results unless the scenario injects a search-time error. HARNESS CAPABILITIES (P7): deterministic error/dedup/call/artifact scenarios are single-shot. Cases with actual model variance are marked stochastic:true — injection-resistance (13), cross-source merge reasoning (19), discovery routing (23), and weighted fair-share selection (34). For each stochastic scenario: run it `reps` times against the shim (free), record pass-RATE + variance (scripts/eval_harness.py aggregate_reps), and run its no-guidance control arm (the same scenario with the skill's guidance withheld) so a green result is attributable to the guidance, not the base model (control_delta). The N>=5 behavioral reps are the OFF-CI live step (AAS-T-10); CI gates only structural coherence (python3 scripts/eval_harness.py --root .).",
   "evals": [
     {
       "id": 1,
@@ -383,6 +383,90 @@
         "Both primary remedies use the exact billing URL and restored-access direction, followed by the calls-first dynamic usage sentence and existing-match reassurance; neither contains a lower-frequency/fewer-sources/reduced-target detour, support email, account balance, or plan claim",
         "ARM A comparable-history selection keeps only C1–C5: it excludes C0 because only the five most recent comparable completed records count, excludes X-order/X-source/X-query/X-mode because each mismatches one exact comparison key, and excludes X-unfinished because it did not complete. The selected calls [5,17,11,13,7] have median 11 but a different arithmetic mean; including any adversarial newer record or the sixth-oldest comparable record changes the median/window result",
         "As explicitly requested, ARM A shows the optional local context: it derives purchased_calls at run time from the canonical pay-as-you-go top-up/rate in shared/references/agent-data-contract.md, labels that context as pay-as-you-go, and computes similar_runs=floor(purchased_calls / 11). Under the canonical current values, floor differs from ordinary nearest-integer rounding; this eval asserts no fixed purchased-call literal"
+      ]
+    },
+    {
+      "id": 31,
+      "scenario": "finite one-off override: known rows, cross-query duplicates, continuation selection",
+      "prompt": "Build a temp workspace + shim, enable only source [\"ashby\"], keep both queries enabled, and save search.max_new_postings_per_run as \"all\". Pre-seed jobs.jsonl with (ashby,a1111111-1111-4111-8111-111111111111). Snapshot config.yaml bytes. Set JOBSEARCH_TEST_SCENARIO=pagination, JOBSEARCH_FIXTURES=<repo>/tests/fixtures, and JOBSEARCH_TEST_CALL_LOG=<tmp>/calls.jsonl. Invoke job-search-run with already-confirmed one-off context to review up to 3 unique unseen roles in this run; the caller already captured consent, so the runner must consume that context rather than prompt. Show calls.jsonl, jobs.jsonl, runs/<id>.json, digest, and the config byte comparison.",
+      "expectations": [
+        "The one-off invocation overrides saved \"all\" before status/metered work and records review_scope {mode:finite,target_new_postings:3,origin:one_off,outcome:target_reached}; the headless runner asks no question and config.yaml remains byte-identical with the saved \"all\" value",
+        "Both Ashby first pages are dispatched before continuation. Continuation calls replay each stream's complete immutable request exactly and add only cursor_ashby_2; no stream has more than one in-flight call and no page-one request is restarted",
+        "Known pair a1111111-1111-4111-8111-111111111111 is removed before selection. Exact same-source rows returned under both queries collapse to one role owned by the earlier ai-eng-remote stream while retaining the cross-query duplicate metric",
+        "Exactly these three unseen source pairs are selected and persisted once each: ashby:a2222222-2222-4222-8222-222222222222, ashby:a3333333-3333-4333-8333-333333333333, and ashby:a4444444-4444-4444-8444-444444444444. Every event's query_id is the deterministic owner ai-eng-remote; there is no duplicate event from ml-platform-sf",
+        "No judgment or evaluated event is produced until the continuation batch has been reconciled and the three-role selection settles; results_summary.new_postings and evaluated are 3, not every scanned row",
+        "pagination_metrics records first_page_rows:4, continuation_rows:4, known_rows:2, same_run_cross_query_duplicate_rows:3, unique_unseen_roles_first_pages:1, unique_unseen_roles_continuations:2, selected_roles_from_continuations:2, and no deeper-coverage nudge"
+      ]
+    },
+    {
+      "id": 32,
+      "scenario": "finite saved headless: target stop leaves unselected unseen row unwritten",
+      "prompt": "Build a temp workspace + shim. Enable only the first query, set sources [\"linkedin\",\"ashby\"] in that order, and save search.max_new_postings_per_run: 2. Pre-seed jobs.jsonl with both LinkedIn first-page pairs (linkedin,9100001), (linkedin,9100002) and Ashby pair (ashby,a1111111-1111-4111-8111-111111111111), leaving Ashby a222… unseen. Snapshot config.yaml bytes. Set JOBSEARCH_TEST_SCENARIO=pagination, JOBSEARCH_FIXTURES=<repo>/tests/fixtures, and JOBSEARCH_TEST_CALL_LOG=<tmp>/calls.jsonl. Run job-search-run as a scheduled/headless pass and show the call log plus every artifact.",
+      "expectations": [
+        "Preflight resolves review_scope mode:finite,target_new_postings:2,origin:saved before status or search. Durable consent is consumed without a prompt, and config.yaml remains byte-identical",
+        "The first batch contains exactly one cursor:null search for LinkedIn and one for Ashby. Only Ashby receives one continuation request with cursor_ashby_2 and exact immutable-request replay; LinkedIn never receives a cursor",
+        "Selection is exactly ashby:a2222222-2222-4222-8222-222222222222 from page 1 plus ashby:a3333333-3333-4333-8333-333333333333 from page 2. Ashby a4444444-4444-4444-8444-444444444444 is unseen but unselected, so it gets no get-posting call, no evaluated event, and no digest entry",
+        "Judgment starts only after selection settles. The run record reports target_reached, results_summary.new_postings:2 and evaluated:2, and selected_roles_from_continuations:1; scanned or unselected unseen rows do not inflate those persistent-role counts",
+        "The LinkedIn stream stores pages_fetched:1, has_more_at_stop:null, stop_reason:unpaginated. The Ashby stream stores pages_fetched:2, rows_scanned:4, selected_for_review:2, request provenance, and no cursor field/value"
+      ]
+    },
+    {
+      "id": 33,
+      "scenario": "saved exhaustive traversal: healthy boards drain, LinkedIn stays one page",
+      "prompt": "Build a temp workspace + shim. Enable only the first query, set sources [\"linkedin\",\"ashby\",\"greenhouse\",\"lever\"] in that order, and save search.max_new_postings_per_run: \"all\". Leave jobs.jsonl empty and snapshot config.yaml. Set JOBSEARCH_TEST_SCENARIO=pagination, JOBSEARCH_FIXTURES=<repo>/tests/fixtures, and JOBSEARCH_TEST_CALL_LOG=<tmp>/calls.jsonl. Run job-search-run headlessly; show the complete call log, jobs.jsonl, digest, runs/<id>.json, and scratch state.",
+      "expectations": [
+        "Preflight resolves review_scope {mode:all,target_new_postings:null,origin:saved,outcome:sources_exhausted} without prompting or changing config",
+        "All four cursor:null first pages are dispatched as one batch before any continuation. Ashby, Greenhouse, and Lever each then receive exactly one request using their own opaque page-2 cursor and exact immutable-request replay; LinkedIn receives no cursor request",
+        "Every healthy board stream reaches has_more:false and stop_reason:sources_exhausted with pages_fetched:2 and rows_scanned:4. LinkedIn stores pages_fetched:1, stop_reason:unpaginated, and has_more_at_stop:null",
+        "All 14 distinct (source,source_id) rows from the four first pages and three continuation pages receive exactly one evaluated provenance event. Conservative cross-source merges share one verdict and same_role_as aliases without dropping any source row or duplicating a pair",
+        "pagination_metrics records first_page_rows:8 and continuation_rows:6; review_scope does not claim snapshot completeness, and the digest states only that the ends of the currently available enabled board-source results were reached while LinkedIn remained one page",
+        "The handled success removes runs/.pagination-<run_id>.jsonl, and no durable artifact contains cursor, next_cursor, a decoded token, or resumable continuation state"
+      ]
+    },
+    {
+      "id": 34,
+      "scenario": "finite weighted fair-share redistribution across sparse and duplicate-heavy streams",
+      "stochastic": true,
+      "reps": 5,
+      "control": {
+        "arm": "no-guidance",
+        "strip": "Run the same two-query/three-source fixture with the largest-remainder, deterministic ownership, and redistribution algorithm withheld; retain only a generic instruction to pick up to five unseen roles.",
+        "expectation": "The guided arm converges on the exact five source pairs and per-stream ownership in every rep. The no-guidance arm selects by response/order intuition, judges before reconciliation, or fails to refill duplicate-freed shares at a measurably higher rate (control_delta > 0)."
+      },
+      "prompt": "Build a fresh pagination workspace for each rep. Enable sources [\"ashby\",\"greenhouse\",\"lever\"] and both queries in config order; set ai-eng-remote limit:1 and ml-platform-sf limit:3; save max_new_postings_per_run:5. Pre-seed as known every Ashby fixture pair except a2222222-2222-4222-8222-222222222222, and all four Greenhouse fixture pairs; leave every Lever pair unseen. Thus Ashby can contribute only one role, Greenhouse contributes none, Lever can contribute four, and each later-query stream repeats the earlier query's same-source rows. Run with the pagination shim and a call log, then inspect selected events and every stream record.",
+      "expectations": [
+        "Largest-remainder shares use query.limit as weight over streams, with equal remainders broken by query order then source order; response completion order never changes allocation or ownership",
+        "Known rows and exact same-source/cross-query duplicates consume no slots. Duplicate ownership goes to ai-eng-remote, the earliest deterministic stream, even though its weight is lower",
+        "Exhausted/duplicate-freed shares are repeatedly redistributed before judgment: sparse Ashby contributes exactly a2222222-2222-4222-8222-222222222222, Greenhouse contributes zero, and Lever contributes exactly acme:c1111111-1111-4111-8111-111111111111, globex:c2222222-2222-4222-8222-222222222222, initech:c3333333-3333-4333-8333-333333333333, and umbrella:c4444444-4444-4444-8444-444444444444",
+        "The five selected events are owned by query_id ai-eng-remote; selected_for_review totals by stream are ai-eng-remote:ashby=1 and ai-eng-remote:lever=4, with every other stream zero. The finite outcome is target_reached",
+        "The all-known Greenhouse continuation is valid progress because its cursor advances; no page-one restart or loop occurs, and no evaluation begins before the five-role selection settles",
+        "aggregate_reps records the guided pass rate and variance for at least five fresh reps, and control_delta is positive; structural eval-harness validation alone is not accepted as behavioral proof"
+      ]
+    },
+    {
+      "id": 35,
+      "scenario": "pagination progress guards: repeated cursor, repeated page, rejected fresh cursor",
+      "prompt": "Create THREE isolated one-query, Ashby-only workspaces with saved max_new_postings_per_run:\"all\", separate fixture copies, and separate call logs. REPEATED-CURSOR arm: change page 2 pagination to has_more:true,next_cursor:\"cursor_ashby_2\". REPEATED-PAGE arm: replace page 2's ordered results with page 1's ordered results while leaving a syntactically valid terminal pagination object. REJECTED-FRESH-CURSOR arm: change page 1 next_cursor to \"cursor_ashby_fresh_rejected\", which the fake shim rejects non-retryably as param cursor. Run job-search-run once per arm; show completed logs, run records, jobs logs, digests, durable-artifact cursor scans, and scratch state.",
+      "expectations": [
+        "Each arm terminates with E-PAGINATION-INCOMPLETE for only the affected stream, review_scope.outcome:incomplete, partial run health, trustworthy rows retained, and the approved local-diagnosis/next-run recovery rather than a generic service-update instruction",
+        "Repeated-cursor makes exactly two successful search calls (cursor null, then cursor_ashby_2); detecting the already-seen non-null next cursor prevents a third call or any loop",
+        "Repeated-page makes exactly two successful search calls; the repeated ordered source-row signature is no progress even though metadata is otherwise syntactically valid, so duplicate rows do not produce duplicate events",
+        "Rejected-fresh-cursor makes one successful cursor:null call followed by one non-retryable cursor_ashby_fresh_rejected attempt. That rejection is not retried and never causes a cursor:null/page-one restart inside the run",
+        "Every affected stream records pages_fetched, rows_scanned, stop_reason:pagination_incomplete, attempts, request_ids, upstream_code, and retryable; has_more_at_stop is null whenever continuation state is untrustworthy",
+        "All handled exits remove the current scratch. No run record, digest, jobs log, config, or registry contains a cursor field/value, decoded token, or resume checkpoint; a later run starts at cursor:null"
+      ]
+    },
+    {
+      "id": 36,
+      "scenario": "pagination scratch lifecycle: stale deletion, live creation, bounded chunks, cleanup",
+      "prompt": "Create TWO isolated one-query, Ashby-only workspaces with saved max_new_postings_per_run:\"all\" and pagination fixtures. In each, before the run create runs/.pagination-2000-01-01T00-00-00Z.jsonl containing a cursor-shaped bait record that would poison selection if read. Instrument the temp agent-data shim wrapper and execution trace so every continuation call records whether runs/.pagination-<current-run-id>.jsonl already exists, whether the stale file still exists, whether the current file contains any cursor/next_cursor key or token, and the largest candidate chunk the runner reads. SUCCESS arm runs normally. QUOTA arm sets a separate call log and JOBSEARCH_TEST_QUOTA_AFTER=1 so its first continuation is quota-rejected after one successful first page. Show probe evidence, calls, jobs.jsonl, run/digest artifacts, and final runs directory for both arms.",
+      "expectations": [
+        "At run start the exact-shape stale .pagination-2000-01-01T00-00-00Z.jsonl is deleted without being read, replayed, or resumed; its bait never appears in a request, selection, or durable artifact",
+        "First-page work creates no current-run scratch. Immediately before the first continuation call, the exact runs/.pagination-<current-run-id>.jsonl exists and contains normalized summaries/ownership/provenance only—no cursor, decoded payload, or recovery checkpoint",
+        "Candidate processing reads at most 100 JSONL lines per chunk; when more remain it uses another bounded chunk rather than an unbounded paste",
+        "The success arm traverses page 2, settles selection, persists it, and removes the current scratch. The quota arm creates scratch before the rejected continuation, persists no partial judgments because selection had not settled, writes E-QUOTA blocked artifacts, and also removes scratch",
+        "The existing malformed-pagination partial arm (eval 29), this quota halt, and this success collectively cover cleanup on every handled exit class; after each arm no runs/.pagination-*.jsonl remains",
+        "Complete durable-artifact scans find no cursor/next_cursor key, opaque cursor value, decoded token, or resumable state"
       ]
     }
   ]
