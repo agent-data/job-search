@@ -9,6 +9,7 @@ search:
   sources: ["linkedin", "ashby"]   # job sources each query runs against: linkedin | ashby | greenhouse | lever — add "greenhouse"/"lever" to search more company boards
   freshness: "past-2-weeks"    # any | past-week | past-2-weeks | past-month — recency window (applied server-side; see conventions.md)
   detail_model: "balanced"     # tier the per-posting fit verdict runs at — the mid-tier reviewer floor (default): fast | balanced | high | inherit — the agent self-selects a model at the named tier from its own roster
+  # max_new_postings_per_run: 50  # optional: positive integer or "all"; omit for first-page coverage
   # parallel_detail_reads: true # optional; set after approval to use parallel subagents where supported
 schedule:
   frequency: "daily"           # hourly | every-2-hours | every-6-hours | daily | weekly — how often the search runs; the advocated default is an unattended wall-clock schedule (cron/launchd where the host has one), with an in-session loop as the fallback

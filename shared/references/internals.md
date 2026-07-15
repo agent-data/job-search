@@ -13,7 +13,14 @@ i.e. `~/.config/job-search/config.json` by default. Schema:
 ```json
 { "version": 1,
   "active_workspace": "/Users/<u>/.job-search",
-  "scheduling": { "installed": true, "mechanism": "loop", "set_at": "<iso>" } }
+  "scheduling": { "installed": true, "mechanism": "loop", "set_at": "<iso>" },
+  "deeper_coverage_nudges": {
+    "/Users/<u>/.job-search": {
+      "workspace": "/Users/<u>/.job-search",
+      "shown_at": "<iso>",
+      "outcome": "enabled|declined|deferred"
+    }
+  } }
 ```
 The registry is machine state; the workspace's `config.yaml` stays the user-facing config.
 
@@ -48,6 +55,17 @@ does.
   from `date -u +%Y-%m-%dT%H:%M:%S+00:00`.
 - **Clear the scheduling marker** (turn-off): merge
   `"scheduling": {"installed": false, "mechanism": null, "set_at": null}`.
+- **Read the deeper-coverage nudge marker for workspace W:** expand W to its absolute path and look up that
+  exact path in `deeper_coverage_nudges`; absence means no marker. The map is per absolute workspace, not
+  global, and each marker's `workspace` value must equal its map key.
+- **Set the deeper-coverage nudge marker:** only the **job-search home view**, after it actually displays the
+  evidence-backed deeper-coverage nudge, merges
+  `"deeper_coverage_nudges": {"<absolute W>": {"workspace":"<absolute W>", "shown_at":"<UTC ISO>", "outcome":"enabled|declined|deferred"}}`.
+  Use `enabled` when the user enables deeper coverage, `declined` when they decline, and `deferred` when they
+  leave it for later. The runner never writes this shown marker. A present marker suppresses later automatic
+  nudges for that workspace, including after decline or deferral; the user can still request deeper coverage.
+  Apply the ordinary registry write rules: merge into the current object, preserve every unknown registry
+  key, and atomically replace the whole file.
 
 ## Workspace discovery & first-run detection
 **Run the shared script where a shell runtime exists:** `../scripts/mechanics/workspace-discovery.sh` prints
@@ -118,9 +136,35 @@ The user changes config by **chatting**; manual editing is an escape hatch. To a
 - **Derive "remote" into the query:** `search-jobs` has no remote flag, so when the brief requires remote (or
   rejects onsite-elsewhere), fold `remote` into the query `keywords` and/or set `location` to the brief's allowed
   geographies — otherwise the feed fills with onsite roles the judge then filters out.
-- **Pull as many NEW as possible:** there's no pagination and re-runs reorder, so breadth + frequency + dedup do
-  the work, not a giant single pull — keep `limit` sensible (its range and default live in `conventions.md`), run several varied queries
-  (role synonyms, key locations, remote variants), run often, and dedup; distinct postings accumulate across runs.
+- **Choose one-off or saved review depth:** interpret the user's time scope before changing anything. The
+  accepted `search.max_new_postings_per_run` values and exact run-record fields live in `conventions.md`;
+  `queries[].limit` remains each query/source call's page size, not a run total.
+
+  | User wording | Interpretation | Config write |
+  |---|---|---|
+  | “now,” “once,” “this run” | one-off finite, exhaustive, or first-page override | none |
+  | “each run,” “from now on,” “every time” | saved setting | write the positive integer or exact `"all"` only after preview and confirmation |
+  | ambiguous “scan everything” or depth request | default to one run and say that scope before confirmation | none |
+  | “go back to normal,” “use first-page coverage” | remove the saved key or use a one-off first-page override, according to the explicit time scope | remove immediately when saved |
+
+  Before any one-off or saved enablement/increase (`first_page → finite`, larger finite target, or
+  `finite → all`), first preview the exact requested scope and the known call model, then ask for explicit
+  confirmation, and only after a yes run once or atomically write config. The preview explains that ordinary
+  first pages depend on enabled queries × enabled sources; every continuation board page and full-posting read
+  is another metered operation; a finite target bounds unique roles judged rather than continuation calls;
+  and `"all"` has no reliable call ceiling in advance. Consult `agent-data-contract.md` for the canonical
+  dated metering/rate facts; do not copy a volatile rate into this recipe or invent account state.
+
+  A saved value is durable consent, so scheduled/headless runs use it without prompting. A one-off override
+  records `review_scope.origin:one_off` in the run but never mutates config. Decreasing a finite target,
+  changing `all → finite`, removing the key, or choosing a one-off first-page override is reversible and
+  immediate; make that reduction without confirmation. Always keep config `version: 1`.
+- **Explain my agent-data usage (read-only):** read the workspace's `runs/*.json` records and explain actual
+  `agent_data_usage` call totals, the recorded pay-as-you-go equivalent when present, the operation breakdown,
+  and the configured outcome drivers (frequency, enabled sources/queries, and review mode). Use the decimal
+  strings stored with each historical run; point to `agent-data-contract.md` for current canonical
+  metering/pricing context. Do not write config or registry state, make an API call, infer a current balance or
+  plan, or relabel the recorded equivalent as an actual charge.
 - **Change frequency:** set `schedule.frequency` to one of `hourly | every-2-hours | every-6-hours | daily | weekly`
   (the cadence→cron mapping the active scheduler uses is composed in → Scheduling setup below).
 - **Change run time:** set `schedule.time` (HH:MM, used for daily/weekly).

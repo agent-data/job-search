@@ -29,6 +29,7 @@ search:
   sources: ["linkedin", "ashby"]  # ordered job sources every query runs against (the source enum is defined in agent-data-contract.md) — omit the key for this default; greenhouse/lever widen coverage across more company boards
   freshness: "past-2-weeks"  # any | past-week | past-2-weeks | past-month — recency window; resolves to a server-side published_on_or_after cutoff (client-side fallback if the echo is absent); default past-2-weeks
   detail_model: "balanced"   # tier the per-posting fit VERDICT runs at — the mid-tier reviewer floor (default): fast | balanced | high | inherit (the agent binds each tier to a concrete model from its own roster — the least-powerful that does the task well; the verdict is a judgment, so never the cheapest)
+  # max_new_postings_per_run: 50  # optional: positive integer or "all"; omit for first-page coverage
   # parallel_detail_reads: true  # optional: approved use of parallel subagents for detail reads where the host supports them
 schedule:
   frequency: "daily"         # hourly | every-2-hours | every-6-hours | daily | weekly — the cadence the schedule runs on (its cron mapping composed via `schedule-line.sh` — see `internals.md` → Scheduling setup)
@@ -69,9 +70,23 @@ the fit verdict is a judgment, so never the cheapest.
 reads on hosts that require explicit authorization. Unset means interactive front-door flows may ask; `true`
 means use parallel subagents where available; `false` means read details sequentially. The runner reads this
 field but never writes it.
-**`queries[].limit`** (1–100; the API's own default is 20 when omitted — the config template sets 25 explicitly) is the per-query feed size — pull
-generously across several varied queries rather than one giant pull; there is no pagination, so breadth +
-frequency + dedup accumulate coverage. Query construction (incl. deriving "remote") lives in `internals.md`.
+
+`search.max_new_postings_per_run` is an optional review-depth setting. Its accepted values and resolved
+behavior are:
+
+| Stored value | Resolved review scope |
+|---|---|
+| key omitted | `first_page`: fetch one page from each enabled query × enabled source and never follow a cursor |
+| positive integer | `finite`: continue cursor-capable board streams until at most that many unique unseen real-world roles are selected for judgment, or eligible sources exhaust |
+| exact string `"all"` | `all`: exhaust the currently traversable Ashby, Greenhouse, and Lever streams; LinkedIn remains one page |
+| present `null`, zero, negative integer, float, numeric string, or any other token | invalid config: halt in preflight before any metered call, using E-BAD-CONFIG from `errors.md` |
+
+Omission is the backward-compatible default; it does not prompt, write config, or add continuation calls.
+The finite target bounds unique roles judged after known-id dedup and same-role merging, not page calls:
+known and duplicate rows can require additional pages before the target settles. `queries[].limit` (1–100;
+the API default is 20 when omitted and this template sets 25) remains the per-call page size for one
+query/source request. The additive setting keeps `version: 1`; there is no migration. Conversational one-off
+and saved-change recipes live in `internals.md`.
 
 `run_id` format: UTC timestamp `YYYY-MM-DDTHH-MM-SSZ` (hyphens, not colons, in the time component — safe as a filename on every platform). `<date>` for digests: `YYYY-MM-DD` (local tz).
 
@@ -127,8 +142,36 @@ are the skills' own POSIX shell, no third-party dependency):
 { "run_id":"…", "started_at":"…", "completed_at":"…",
   "build": { "version":"0.4.0", "content_hash":"sha256:abcdef123456", "git_sha":"<short sha|unknown>" },
   "status_probe":"ok|degraded|unreachable",
-  "queries":[ { "query_id":"…", "source":"<source>", "keywords":"…", "results_returned":25, "new":6, "errors":[] } ],
+  "queries":[ {
+    "query_id":"…", "source":"<source>", "keywords":"…", "results_returned":25, "new":6,
+    "pages_fetched":3, "rows_scanned":75, "unique_candidates":31, "selected_for_review":25,
+    "has_more_at_stop":true,
+    "stop_reason":"first_page_complete|target_reached|sources_exhausted|unpaginated|pagination_incomplete|source_failed",
+    "attempts":3, "request_ids":["req_…"], "upstream_code":null, "retryable":null,
+    "errors":[]
+  } ],
   "sources_searched":["linkedin","ashby"], "sources_failed":[],
+  "review_scope": {
+    "mode":"first_page|finite|all", "target_new_postings":null,
+    "origin":"default|one_off|saved",
+    "outcome":"completed_first_pages|target_reached|sources_exhausted|incomplete"
+  },
+  "agent_data_usage": {
+    "metered_calls":9,
+    "unit_rate_usd":"<decimal unit rate used for this run>",
+    "payg_equivalent_usd":"<decimal equivalent for this run>",
+    "pricing_basis":"pay_as_you_go_equivalent",
+    "by_operation": { "initial_search":4, "continuation_search":2, "detail_read":3 },
+    "diagnostics": { "retry_attempts":1, "charged_failures":1, "quota_rejections":0, "free_route_calls":2 }
+  },
+  "pagination_metrics": {
+    "first_page_rows":80, "continuation_rows":50, "known_rows":62,
+    "same_run_cross_query_duplicate_rows":18, "cross_source_rows_merged":4,
+    "unique_unseen_roles_first_pages":0, "unique_unseen_roles_continuations":28,
+    "selected_roles_from_continuations":20,
+    "deeper_coverage_nudge_eligible":true,
+    "deeper_coverage_nudge_streams":["ai-eng-remote:ashby"]
+  },
   "results_summary":{ "total_results":50, "new_postings":9, "evaluated":9, "detail_read":5,
                       "relevant":6, "strong":3, "moderate":2, "weak":1 },
   "errors":[ { "stage":"get-posting", "source_id":"…", "code":"upstream_unavailable",
@@ -141,6 +184,44 @@ executing Job Search plugin/source root is reliably known and that root has a `.
 write `"unknown"`. Never derive `git_sha` from the caller/current working directory, because that can
 record the user's project SHA instead of the Job Search build. The build object is required on every run
 record written by `job-search-run`, including blocked records where a workspace exists.
+
+Each `queries` item is one logical query/source stream. `unpaginated` is reserved for LinkedIn.
+`has_more_at_stop` is boolean only when valid board pagination metadata makes it trustworthy; write `null`
+for LinkedIn and for an incomplete pagination contract branch. `attempts` includes retries, and
+`request_ids` retains the observable request provenance. Never write a cursor, decoded cursor payload, or
+resumable continuation state to the stream or any other durable run-record field.
+
+`review_scope.target_new_postings` is a positive integer only in `finite` mode and `null` otherwise.
+`completed_first_pages` means every enabled stream completed its ordinary first-page branch;
+`target_reached` means a finite selection target settled; `sources_exhausted` means every healthy eligible
+stream ended; and any quota halt, source failure, or untrustworthy pagination branch makes the outcome
+`incomplete` while preserving trustworthy rows already found. `origin` records whether the resolved choice
+came from omission (`default`), a conversational one-run override (`one_off`), or config (`saved`).
+
+`agent_data_usage` is attempt-based. Its three `by_operation` counters classify each metered attempt exactly
+once and must sum to `metered_calls`; retry and charged-failure diagnostics are subsets, while quota
+rejections and free-route calls are unmetered, so none of those diagnostic counters is added again. Store
+`unit_rate_usd` and `payg_equivalent_usd` as decimal strings so historical arithmetic does not change after
+a pricing update. The canonical dated metering rules and the rate used to derive these fields live only in
+`agent-data-contract.md`; verify there rather than copying a rate into this contract.
+
+`pagination_metrics` is local aggregate evidence, not telemetry. The deeper-coverage nudge is eligible only
+when `unique_unseen_roles_first_pages` is zero and at least one healthy cursor-capable stream returned
+trustworthy `has_more:true`; `deeper_coverage_nudge_streams` lists those `<query_id>:<source>` identities and
+is empty when ineligible. The runner records this evidence but never a shown marker; the home-view registry
+marker is owned by `internals.md`.
+
+### Pagination scratch lifecycle
+
+First-page-only runs stay in context and create no scratch file. Immediately before the first continuation
+call, create `runs/.pagination-<run_id>.jsonl` and hand the candidate pool between phases by that path. Write
+only normalized posting summaries, query/source provenance, stream ownership, and merge bookkeeping—never a
+cursor, a decoded payload, or a recovery checkpoint. Process the file in chunks of at most 100 lines; if a
+larger pool remains, process another bounded chunk.
+
+Remove the scratch file on every handled success or halt, including quota and partial-pagination exits. A
+later run may delete stale files matching the exact `.pagination-<run_id>.jsonl` shape, but it must never
+resume, replay, or recover continuation from one.
 
 ## preferences.md — prose brief (the model reads this; NO machine-readable contract, NO weights)
 Sections: a 2–3 sentence **Summary**; **Must-haves / dealbreakers** (the binary filters); **Strong
