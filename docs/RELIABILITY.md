@@ -54,6 +54,14 @@ proven correct *are* — the model is left to do only what genuinely needs judgm
 and everything else is testable. See the **Deterministic, testable, headless** belief in
 [design-docs/core-beliefs.md](design-docs/core-beliefs.md#6-deterministic-testable-headless).
 
+Deeper company-board coverage adds two bounded state rules. Pagination stops a stream when its
+cursor or page signature stops making trustworthy progress, so a bad continuation cannot loop or
+restart at page one. Once continuation begins, the candidate pool moves through a private run-scoped
+scratch file in bounded chunks; handled success, partial, and quota exits all remove it, and a later
+run deletes stale scratch rather than resuming it. The exact progress and lifecycle contracts live in
+[../shared/references/conventions.md](../shared/references/conventions.md), with failure branches in
+[../shared/references/errors.md](../shared/references/errors.md).
+
 ## 2. No silent failures — every blocked path is named
 
 The system never fails quietly. Every condition that stops or degrades a run is a named `E-*`
@@ -65,6 +73,12 @@ every code, its trigger, the exact user-facing wording, and its effect on the ru
 [../shared/references/errors.md](../shared/references/errors.md). This doc deliberately does not
 reproduce any code or its message; the catalogue is the single source of truth and the runner
 follows it verbatim.
+
+An interrupted continuation is degraded rather than hidden: the run keeps trustworthy postings
+already scanned, marks the affected stream and overall depth incomplete, continues healthy streams,
+and surfaces the named partial-depth error in the digest. It never claims exhaustive coverage or
+persists a cursor for later resumption. The branch conditions and diagnostics are owned by
+[../shared/references/errors.md](../shared/references/errors.md).
 
 That "name it, never swallow it" rule is a core belief, enforced in review and by the linters —
 see **No silent failures — named errors** in
@@ -90,6 +104,14 @@ named error (the upstream-stretch case) in
 contrast, is an expected non-error that falls back to summary-only judgment with a footnote
 rather than failing the run. The strategy in one line: be patient with transient failures, give
 up immediately on deterministic ones, and break the circuit when an upstream is clearly down.
+
+Usage accounting follows attempts, not just successful logical operations. Each completed metered
+attempt is classified once; retries and charged failures remain diagnostic subsets, while free routes
+and a quota-rejected attempt stay outside the metered total. That same local ledger supplies the
+calls-first digest line and the exact prior-work count when quota stops a run, avoiding both double
+counting and an invented account charge. The canonical counting rules live in
+[../shared/references/agent-data-contract.md](../shared/references/agent-data-contract.md), and the
+stored record shape lives in [../shared/references/conventions.md](../shared/references/conventions.md).
 
 ## 4. Run health & blocked surfacing — visible without the exit code
 
@@ -138,8 +160,9 @@ Reliability claims are only as good as their tests. Four layers back this system
   proves them is the evals + the TESTING.md matrix below, not pytest.
 - **A credit-free fake `agent-data` shim** (a PATH shim under [../tests/](../tests/)) lets a
   whole run be driven with deterministic, injectable upstream behavior — quota, outage, stale
-  links, degraded service — with **no network and no metered calls**, so the error and retry
-  paths in §2–§4 can be exercised repeatedly and for free.
+  links, degraded service, cursor chains, malformed pagination, and attempt-level quota accounting —
+  with **no network and no metered calls**, so the error, progress, and retry paths in §2–§4 can be
+  exercised repeatedly and for free.
 - **Per-skill evals** measured by the skill-creator harness check the *model's* behavior (each
   skill has its own `evals/` suite) — that the runner actually halts on a blocked gate, judges
   qualitatively, and surfaces the right named error.
@@ -162,7 +185,8 @@ The knowledge base is held to the same standard as the code. Two stdlib guards r
 [../shared/references/](../shared/references/conventions.md) source of truth instead of restating
 a contract literal, that every Markdown link resolves, and that the section indexes stay
 complete — and [../scripts/philosophy_guard.py](../scripts/philosophy_guard.py) fails the build
-if a numeric score, a category weight, or a budget/cost field leaks into shipped output. On top
+if numeric score math, a budget/cost control, or an unverified actual-charge claim leaks into shipped
+output; accurate calls-first context remains allowed. On top
 of the mechanical checks, the doc-reviewer agent catches **semantic** drift the linters can't —
 prose that has quietly diverged from the contract it points at. Together they keep this document,
 and the rest of the KB, honest as the code evolves. The structural map of all of this is

@@ -136,6 +136,10 @@ For an editable/development install, point Pi at a local clone: `pi -e /path/to/
 
 Then tell Pi to run the **job-search** skill.
 
+## Usage and billing
+
+Agent-data usage is metered. Broader, more frequent, and deeper searches can use more calls; Job Search previews added depth and reports each run's usage. Check account-specific details in [billing](https://agent-data.motie.dev/settings/billing).
+
 ## Contributing
 
 Building on or exploring the repo with an AI agent? Start at [AGENTS.md](AGENTS.md), the map of the architecture, design beliefs, and plans — including how one `skills/` tree runs across every supported agent. See [CONTRIBUTING.md](CONTRIBUTING.md) for the dev workflow and [TESTING.md](TESTING.md) for the test harness.

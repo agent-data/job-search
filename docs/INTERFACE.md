@@ -27,7 +27,15 @@ status — by chatting. Skills read `config.yaml` or the relevant file, apply a 
 edit that preserves comments and structure, and write it back. Hand-editing files is an
 escape hatch: it works, but skills never require it or guide users toward it by default.
 
-For the exact config recipes (how to add a query, change frequency, update the brief),
+Review depth uses the same conversational surface. “Review up to 50 new postings this run” is a
+one-off finite request; “review up to 50 every run” is saved; ambiguous “scan everything” defaults
+to one run and says so. Enabling or increasing depth first shows the known calls and uncertain
+additions, then asks for explicit confirmation before a metered run or config write. A confirmed
+saved setting is durable consent for later headless runs; reductions and a return to normal first-
+page coverage take effect immediately.
+
+For the exact config recipes (how to add a query, change frequency, update the brief, or change
+review depth) and the preview arithmetic,
 see [`../shared/references/internals.md`](../shared/references/internals.md).
 
 For the product philosophy behind this (prose-over-knobs, conversational-first),
@@ -58,8 +66,13 @@ sees at a glance:
 - **Latest digest summary** — the date and the counts line from the newest digest.
 - **Pipeline counts** — totals grouped by job status (the status vocabulary is owned by
   [`conventions.md`](../shared/references/conventions.md)) and how many need a human check.
+- **One-time deeper-coverage offer** — only after the latest local run provides the qualifying
+  evidence, and never again after it is shown; the marker and eligibility rules are owned by
+  [`internals.md`](../shared/references/internals.md) and
+  [`home.md`](../skills/job-search/references/home.md).
 - **Quick actions** — conversational prompts: run a search now, add or edit a query,
-  change frequency, update preferences, toggle the schedule, show the latest digest.
+  change frequency or review depth, explain usage, update preferences, toggle the schedule,
+  show the latest digest.
 
 All quick actions are conversational: the user types a sentence; the skill applies it.
 The skill that owns this surface is [`../skills/job-search/SKILL.md`](../skills/job-search/SKILL.md).
@@ -85,9 +98,10 @@ Full spec: [`../skills/job-preference-interview/SKILL.md`](../skills/job-prefere
 
 Each run writes a Markdown digest to `reports/<date>-digest.md`. The digest is the main
 artifact the user reads: it groups postings by match strength, states the run-health,
-includes a counts line, and gives a one-line reason for every shown match so the user can
-audit why it landed in its band. Footnotes cover stale detail links, partial failures, and
-a brief-age nudge when applicable.
+includes a counts line and a calls-first usage summary, and gives a one-line reason for every
+shown match so the user can audit why it landed in its band. Any account-neutral dollar context
+is labeled as a pay-as-you-go equivalent, not an actual charge. Footnotes cover stale detail
+links, incomplete deeper coverage, partial failures, and a brief-age nudge when applicable.
 
 The **exact digest format** (section layout, counts line shape, run-health vocabulary,
 footnote conventions) is owned by

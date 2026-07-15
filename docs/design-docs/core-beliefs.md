@@ -2,8 +2,8 @@
 title: Core Beliefs — Agent-First Operating Principles
 status: current
 verified: partial
-last_reviewed: 2026-07-12
-code_refs: [scripts/philosophy_guard.py, scripts/doc_lint.py, scripts/build.sh, tests/test_reference_resolution.py, tests/test_mechanics_scripts.py, shared/scripts/mechanics/dedup.sh, .github/workflows/ci.yml, shared/references/internals.md, shared/references/conventions.md]
+last_reviewed: 2026-07-15
+code_refs: [scripts/philosophy_guard.py, scripts/doc_lint.py, scripts/build.sh, tests/test_philosophy_guard.py, tests/test_reference_resolution.py, tests/test_mechanics_scripts.py, shared/scripts/mechanics/dedup.sh, .github/workflows/ci.yml, shared/references/internals.md, shared/references/conventions.md]
 ---
 # Core Beliefs — Agent-First Operating Principles
 
@@ -45,17 +45,21 @@ and are linked, never restated here — this doc is a live design-doc subject to
   asks for *in chat* is fine — it just must never be written into a digest, brief, or the job log.
 - **How to verify.** `python3 scripts/philosophy_guard.py --root .` → `Philosophy guard: clean.`
 
-## 2. Frequency, not budget
+## 2. Usage context, not budget controls
 
-- **Statement.** The only cost lever the user touches is *how often* the system runs; cost surfaces
-  reactively, in exactly one place, as a named quota error.
-- **Why.** A budget knob forces users to reason about credits and per-call math they can't predict.
-  Frequency is the lever they actually understand, and the one place cost should ever appear is when a
-  metered call is rejected — with a fix (run less often, or upgrade the plan).
+- **Statement.** Users control outcomes — frequency, sources, and review depth — with exact usage
+  context at decision time and actual calls after a run, never through a monetary budget control.
+- **Why.** Silently increasing metered work leaves users uninformed, while a budget knob makes them
+  micromanage credits and a hard monetary cap instead of choosing the search outcome they want. The
+  agent therefore previews known call impact before an increase, reports calls first afterward, and
+  clearly labels any account-neutral equivalent rather than claiming an actual charge.
 - **Enforced by.** [scripts/philosophy_guard.py](../../scripts/philosophy_guard.py) rejects any
-  `budget` / `credits` / `cost` config field or cost knob in shipped output. The reactive quota error
-  and its fix are owned by [shared/references/errors.md](../../shared/references/errors.md); the
-  frequency enum lives in [shared/references/conventions.md](../../shared/references/conventions.md).
+  `budget` / `credits` / `cost` config field, cost knob, or unverified actual-charge claim in shipped
+  output while allowing accurate calls-first usage context. The outcome levers and usage-record
+  contract live in [shared/references/conventions.md](../../shared/references/conventions.md), the
+  reactive quota error and its fix are owned by
+  [shared/references/errors.md](../../shared/references/errors.md), and canonical pricing/metering facts
+  live only in [shared/references/agent-data-contract.md](../../shared/references/agent-data-contract.md).
 - **How to verify.** `python3 scripts/philosophy_guard.py --root .` → `Philosophy guard: clean.`
 
 ## 3. Private & local

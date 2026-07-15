@@ -100,13 +100,16 @@ brief, `config.yaml`, or `jobs.jsonl`. Keep them intact:
 - **Qualitative relevance, never numeric.** Postings are *relevant or not*, and if relevant *weak / moderate
   / strong*, with reasoning. No 0–100 fit scores, no category weights, no per-criterion points. Importance
   lives in which bucket a preference sits in.
-- **Frequency, not budget.** Users tune *how often* the system runs — never a budget, never credits. Cost
-  surfaces in exactly one place: the reactive `E-QUOTA` named error, whose fix is a lower frequency or a plan
-  upgrade.
+- **Usage context, not budget controls.** Users choose outcomes — frequency, sources, and review depth — and
+  see exact usage context before added metered work plus actual calls after each run. Accurate calls-first
+  context is expected; a `budget`, `credits`, or `cost` config field, hard monetary cap, or invented actual
+  charge is not. Pricing and metering facts live only in `shared/references/agent-data-contract.md`.
 - **Private and local.** The user workspace is private PII with a deny-all `.gitignore` and is never
   committed. No personal data belongs in this repo.
 - **Every blocked path is a named error.** No silent failures: if something can't proceed, name the exact
   `E-*` from `shared/references/errors.md` with its cause + fix.
 
-If a change would add a score, a weight, a budget knob, or per-call cost surfaced to the user, it's almost
-certainly the wrong direction — open an issue to discuss first.
+If a change would add a score, a weight, or a monetary budget control, it's almost certainly the wrong
+direction — open an issue to discuss first. When a choice changes metered work, give accurate calls-first
+context and point account-specific billing questions to the canonical agent-data sources instead of hiding
+usage or inventing a charge.
