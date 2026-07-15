@@ -539,6 +539,26 @@ effect checks or the off-CI behavioral eval runs.
 | One-time deeper-coverage nudge | `job-search` evals 11–14 | only eligible local evidence renders the offer; shown/declined/deferred/unanswered outcomes write the marker before interaction and suppress every later home view | ⬜ |
 | Usage explanation | `job-search-agent` eval 11 | reads local run records, leads with actual calls and operation breakdown, labels the stored equivalent, makes no API call, and changes no config/registry bytes | ⬜ |
 
+#### Five-run post-release deeper-coverage worksheet — observation only
+
+After release, fill this from `runs/<run_id>.json` for five **comparable finite runs** (same ordered sources,
+enabled query count, and finite review target). This is local product observation, not a release gate. Do not
+generalize from fewer than five runs, and do not let the worksheet or the agent change config automatically;
+any later review-depth change remains a separate conversational choice with its normal consent boundary.
+
+| Run (oldest → newest) | `continuation_rows` | `unique_unseen_roles_continuations` | `selected_roles_from_continuations` | `metered_calls` | `same_run_cross_query_duplicate_rows` | `cross_source_rows_merged` | Notes |
+|---|---:|---:|---:|---:|---:|---:|---|
+| 1 |  |  |  |  |  |  |  |
+| 2 |  |  |  |  |  |  |  |
+| 3 |  |  |  |  |  |  |  |
+| 4 |  |  |  |  |  |  |  |
+| 5 |  |  |  |  |  |  |  |
+
+For each row, copy the first three values and both duplicate/merge counts from `pagination_metrics`, and
+copy calls from `agent_data_usage.metered_calls`. After all five rows exist, note whether continuation is
+consistently contributing unseen and selected roles, and how that observed contribution relates to calls
+and duplicate/merge volume. Record the observation; do not auto-tune `max_new_postings_per_run`.
+
 ---
 
 ## 8. Never-clobber / data safety
@@ -698,8 +718,8 @@ cd "$JSOS" && python3 scripts/eval_harness.py --root .   # "Eval harness: eval s
 ```
 
 Then ask Claude, for each skill, to **run its evals** (the `harness` in `skills/<skill>/evals/evals.json`; they use the
-fake-agent-data shim, so zero real credits) — **70 scenarios**:
-- `evaluate-job-fit` (4) · `job-search-run` (37) · `job-preference-interview` (4) · `job-search` (14) · `job-search-agent` (11).
+fake-agent-data shim, so zero real credits) — **71 scenarios**:
+- `evaluate-job-fit` (4) · `job-search-run` (38) · `job-preference-interview` (4) · `job-search` (14) · `job-search-agent` (11).
 
 Each suite now includes a **discovery** scenario (plant the skill among its siblings, drive a naive prompt, assert the
 right skill is selected and the confusable sibling is not — the four overlap pairs). The judgment-heavy **stochastic**
@@ -788,7 +808,7 @@ entries carry a date mark; the first-Ashby-pass footnote is present.
 - ⬜ Scheduling correct (the composed `/loop <interval>` matches the pinned table per frequency; `/loop` sets `mechanism:loop`; **zero-Python user path** proven with python3 masked) (§9)
 - ⬜ **No numeric scores/weights, budget config, or invented charge** in files or unsolicited chat; accurate calls-first usage context is labeled, and users control frequency, sources, and review depth (§10)
 - ⬜ Docs match reality (install commands, error table, sample digest) (§11)
-- ⬜ Full regression green: `pytest` (**184**; gate on `0 failed`) + the eval structural gate (`eval_harness.py`) + all five skills' evals (**70** scenarios) (§0.3, §12)
+- ⬜ Full regression green: `pytest` (**184**; gate on `0 failed`) + the eval structural gate (`eval_harness.py`) + all five skills' evals (**71** scenarios) (§0.3, §12)
 - ⬜ Planned config slash-command tests are marked **N/A (pending build)**, not green (§13)
 - ⬜ Multi-source: live Ashby/Greenhouse/Lever rows; shim multi-source run shows per-source counts + first-pass footnote; one source down never blanks the run (§14)
 

@@ -487,6 +487,19 @@
         "No get-posting call or new evaluated event occurs; jobs.jsonl remains byte-identical and the digest gives the normal already-seen outcome",
         "The handled success removes runs/.pagination-<run_id>.jsonl and complete durable-artifact scans find no cursor/next_cursor key, opaque token, decoded token, or resumable state"
       ]
+    },
+    {
+      "id": 38,
+      "scenario": "comparable-run estimate boundaries at two, three, and all mode",
+      "prompt": "Create THREE isolated workspaces with separate configs, run histories, call logs, and registry overrides. In every arm, enable only the first query and sources [\"linkedin\",\"ashby\"] in that order, set JOBSEARCH_TEST_SCENARIO=happy, JOBSEARCH_FIXTURES=<repo>/tests/fixtures, JOBSEARCH_TEST_CALL_LOG=<arm>/calls.jsonl, and JOBSEARCH_TEST_QUOTA_AFTER=1; explicitly request the optional local pay-as-you-go purchase context after E-QUOTA. Every seeded record must have a non-null completed_at, healthy run_health, a completed review_scope outcome appropriate to its mode, sources_searched, one query stream per enabled source, and agent_data_usage.metered_calls; snapshot all seeded records before running. TWO arm: current and seeded modes are first_page; seed exactly two comparable completed records with calls 5 and 17, plus newer completed mismatches for reversed source order, query count 2, and mode finite. THREE arm: current and seeded modes are finite with target 25; seed exactly three comparable completed records with calls 5, 11, and 17, plus newer completed mismatches for source order, query count, and first_page mode. ALL arm: current and seeded modes are all; seed five comparable completed records with calls 5, 7, 11, 13, and 17. Run job-search-run once per arm, wait for all already-started calls to settle, derive each current run's metered count only from completed call-log rows whose metered field is true, and show the blocked digest/run record plus seeded-record byte comparisons.",
+      "expectations": [
+        "All three arms take E-QUOTA after observable prior work; the dynamic current-run count and agent_data_usage.metered_calls equal that arm's completed metered:true call-log rows, while the quota-rejected row is unmetered and excluded",
+        "With exactly two comparable completed records, the TWO arm may show the derived pay-as-you-go purchase example but omits every similar-run estimate: it does not say roughly N similar runs and does not substitute any mismatched record to reach the three-record minimum",
+        "With exactly three comparable completed records, the THREE arm accepts the threshold, reports that three comparable runs supplied the median, uses median 11 rather than the arithmetic mean, and computes similar_runs by flooring the canonically derived purchased_calls divided by 11; under the current canonical values the floor differs from nearest-integer rounding",
+        "The THREE arm excludes every newer source-order, query-count, and review-mode mismatch despite their recency, and its estimate includes the required caveat that broader or deeper searches may use more",
+        "When the current review mode is all, the ALL arm omits the similar-run/run-equivalent estimate even with five comparable positive records; the calls-first current-run sentence and optional derived pay-as-you-go purchase example remain distinct from an account charge or balance claim",
+        "Every seeded history file in every arm remains byte-identical; no arm rewrites historical rate/equivalent strings, changes config, invents account state, or derives the current run count from JOBSEARCH_TEST_QUOTA_AFTER"
+      ]
     }
   ]
 }
