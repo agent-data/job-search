@@ -61,12 +61,14 @@
     },
     {
       "id": 6,
-      "scenario": "quota",
-      "prompt": "Same harness but JOBSEARCH_TEST_SCENARIO=quota (the first metered search-jobs is rejected for quota, retryable:false). Run job-search-run and show the digest.",
+      "scenario": "quota on first metered attempt",
+      "prompt": "Same harness but JOBSEARCH_TEST_SCENARIO=quota (the first metered search-jobs is rejected for quota, retryable:false) and JOBSEARCH_TEST_CALL_LOG=<tmp>/calls.jsonl. Before the run, append a sentinel evaluated event to jobs.jsonl and snapshot the file bytes. Run job-search-run; show calls.jsonl, the blocked digest, runs/<id>.json, and the jobs.jsonl before/after comparison.",
       "expectations": [
-        "Surfaces E-QUOTA in plain language (lower schedule.frequency, e.g. daily instead of hourly, or upgrade your agent-data plan) — NO credit/dollar math",
-        "Does not retry the quota error (retryable:false)",
-        "Halts and writes a runs/<id>.json blocked record + blocked digest naming E-QUOTA, with build.version, build.content_hash, and build.git_sha in the blocked record (home surfaces it) — that record is the primary, universal contract; existing matches in jobs.jsonl are left intact; the exit code is platform-scoped (this suite runs on Claude, where a headless run exits 0 even when blocked, so do not assert non-zero; on a trustworthy-exit-code harness — Codex/opencode/Droid — a blocked run exits non-zero)"
+        "Surfaces E-QUOTA with the exact billing URL https://agent-data.motie.dev/settings/billing, states that access must be restored before the run can continue, and says existing matches are unaffected",
+        "The immediate recovery text does NOT offer lower frequency, fewer sources, a reduced review target, a support email, or a plan/balance claim",
+        "calls.jsonl contains the quota-rejected search-jobs attempt with outcome:quota_rejected and metered:false, contains ZERO rows with metered:true, and contains no retry of that non-retryable rejection",
+        "The user-visible dynamic branch says 'No calls were metered for this run.'; runs/<id>.json records agent_data_usage.metered_calls:0 and diagnostics.quota_rejections:1 without counting the rejection as an operation call",
+        "Halts and writes a runs/<id>.json blocked record + blocked digest naming E-QUOTA, with build.version, build.content_hash, and build.git_sha in the blocked record (home surfaces it) — that record is the primary, universal contract; the jobs.jsonl byte snapshot is unchanged, including the sentinel existing match; the exit code is platform-scoped (this suite runs on Claude, where a headless run exits 0 even when blocked, so do not assert non-zero; on a trustworthy-exit-code harness — Codex/opencode/Droid — a blocked run exits non-zero)"
       ]
     },
     {
@@ -331,6 +333,52 @@
         "The INELIGIBLE run records pagination_metrics.unique_unseen_roles_first_pages:1, deeper_coverage_nudge_eligible:false, and deeper_coverage_nudge_streams:[]; healthy trustworthy has_more:true alone is insufficient when a first-page role is unseen",
         "In BOTH arms, the runner neither asks for confirmation nor changes config.yaml; the before/after config bytes are identical",
         "In BOTH arms, the JOBSEARCH_OS_REGISTRY file's before/after bytes are identical, review_sentinel remains present, and deeper_coverage_nudges remains absent: the runner records local eligibility evidence only and never writes the home-view shown marker"
+      ]
+    },
+    {
+      "id": 27,
+      "scenario": "invalid review target: explicit null",
+      "prompt": "Build a temp workspace + shim (setup-workspace.sh), set JOBSEARCH_TEST_SCENARIO=pagination, JOBSEARCH_FIXTURES=<repo>/tests/fixtures, and JOBSEARCH_TEST_CALL_LOG=<tmp>/calls.jsonl. Uncomment search.max_new_postings_per_run and set it to the YAML null value `null`; leave config version at 1. Snapshot jobs.jsonl bytes, run job-search-run against <tmp>, and show calls.jsonl, the blocked digest, runs/<id>.json, and the jobs.jsonl before/after comparison.",
+      "expectations": [
+        "Preflight takes E-BAD-CONFIG (not E-CONFIG-VERSION), renders the actual value as JSON-style `null`, and says it must be a positive whole number or \"all\"",
+        "The recovery is conversational: it offers the phrases 'use normal first-page coverage' to remove the setting and 'review up to 50 new postings each run' to replace it, then says no metered calls were made",
+        "calls.jsonl has ZERO rows with metered:true and no search-jobs/get-posting row; the invalid value halts before external metered work",
+        "Writes the ordinary blocked digest and runs/<id>.json naming E-BAD-CONFIG with run_health blocked and agent_data_usage.metered_calls:0; jobs.jsonl remains byte-identical"
+      ]
+    },
+    {
+      "id": 28,
+      "scenario": "invalid review target: long control-character string",
+      "prompt": "Same isolated harness as eval 27 with JOBSEARCH_TEST_CALL_LOG=<tmp>/calls.jsonl, but set search.max_new_postings_per_run to a YAML double-quoted string whose parsed value begins `bad` followed by newline, tab, U+0001, and then 120 `x` characters (encode those controls in YAML as \\n, \\t, and \\u0001 so config.yaml itself stays inspectable). Run job-search-run and show calls.jsonl plus the E-BAD-CONFIG text from both blocked artifacts.",
+      "expectations": [
+        "The displayed actual-value token is JSON double-quoted; newline, tab, and U+0001 are represented only with JSON escapes (including \\n, \\t, and \\u0001), with no raw control character or injected extra error line",
+        "The displayed actual-value token is at most 80 Unicode characters including quotes and the ellipsis, keeps complete escape sequences, and uses a trailing ellipsis inside the closing JSON quote because the escaped value is longer than the cap",
+        "The remainder of the message uses E-BAD-CONFIG's positive-whole-number-or-\"all\" rule and both conversational remove/replace fixes",
+        "calls.jsonl has ZERO metered:true rows and no search-jobs/get-posting row; the blocked run record reports zero metered calls"
+      ]
+    },
+    {
+      "id": 29,
+      "scenario": "pagination incomplete: malformed continuation metadata",
+      "prompt": "Build a temp workspace + shim, enable only search.sources [\"ashby\",\"greenhouse\"] in that order, and set saved search.max_new_postings_per_run to \"all\". Copy <repo>/tests/fixtures into <tmp>/fixtures, remove data.pagination from pagination/search-jobs.ashby.page-2.json only (leave its two trustworthy result rows and request id intact), then set JOBSEARCH_FIXTURES=<tmp>/fixtures, JOBSEARCH_TEST_SCENARIO=pagination, and JOBSEARCH_TEST_CALL_LOG=<tmp>/calls.jsonl. Run job-search-run; show calls.jsonl, the digest, runs/<id>.json, jobs.jsonl, and whether any runs/.pagination-*.jsonl remains.",
+      "expectations": [
+        "Every affected Ashby stream keeps rows from both pages, stops with E-PAGINATION-INCOMPLETE after the page-2 pagination object is absent, and is not restarted from page one; every healthy Greenhouse stream still follows its cursor through its terminal second page",
+        "The digest says Ashby's deeper results stopped early, substitutes the stream's actual rows-scanned count, says those scanned postings were kept, says the next run retries automatically, and offers local diagnosis if it repeats — it does not vaguely say to update a service or ask the user to send a request ID to a product owner",
+        "Run health is partial because deeper results are incomplete, review_scope.outcome is incomplete, and the depth-limited message wins over any claim that all current results were exhausted",
+        "Each affected runs/<id>.json query stream stores query_id, source, pages_fetched, rows_scanned, stop_reason:pagination_incomplete, request_ids, upstream_code, retryable, and attempts; has_more_at_stop is null and no field anywhere in the run record or scratch artifact contains a cursor/decoded cursor/resume checkpoint",
+        "The handled partial exit removes runs/.pagination-<run_id>.jsonl; jobs.jsonl/digest retain the trustworthy selected rows from the incomplete stream and the completed other streams, while the next run starts from ordinary first pages rather than resuming"
+      ]
+    },
+    {
+      "id": 30,
+      "scenario": "quota after prior metered work",
+      "prompt": "Build a temp workspace + shim with JOBSEARCH_TEST_SCENARIO=happy, JOBSEARCH_FIXTURES=<repo>/tests/fixtures, JOBSEARCH_TEST_CALL_LOG=<tmp>/calls.jsonl, and JOBSEARCH_TEST_QUOTA_AFTER=3 so quota is rejected only after this run has observable metered work. Seed runs/ with six completed records comparable to the impending run (same enabled source list in the same order, enabled query count, and review_scope.mode), plus newer completed non-comparable records that differ on each comparison key; give the six comparable records distinct positive agent_data_usage.metered_calls values and timestamps so the oldest comparable record falls outside the most-recent-five window. Run job-search-run; show calls.jsonl, the blocked digest, all seeded records, and the new runs/<id>.json.",
+      "expectations": [
+        "The E-QUOTA usage sentence reports N by counting this run's actual calls.jsonl rows whose metered field is true before the rejection; the expectation does not assume a literal precursor count, and the rejected row is outcome:quota_rejected with metered:false",
+        "runs/<id>.json agent_data_usage.metered_calls equals that same log-derived N; failed/retried attempts would count when marked metered under the canonical current contract, while the quota rejection increments only diagnostics.quota_rejections",
+        "The primary remedy is the exact billing URL and restored access, followed by the calls-first dynamic usage sentence and existing-match reassurance; it contains no lower-frequency/fewer-sources/reduced-target detour, support email, account balance, or plan claim",
+        "If optional purchase context is shown, its purchased-call count is derived at run time from the canonical pay-as-you-go values in shared/references/agent-data-contract.md and labeled as pay-as-you-go context; no fixed purchased-call example is asserted by this eval",
+        "Any similar-run estimate filters completed records by the exact enabled source list, enabled query count, and review mode, takes only the five most recent comparable records, requires at least three with a positive median, and floors derived_purchased_calls / median; the newer non-comparable records and sixth-oldest comparable record do not affect it"
       ]
     }
   ]

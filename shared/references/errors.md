@@ -10,6 +10,7 @@ Surface every outcome through the written record — the record is **primary on 
 | **E-NO-CONFIG** | `config.yaml` missing in the workspace | "No `config.yaml` found in <workspace>. Run the job-search skill (say 'set up job search') to set it up." | HALT, exit 1 |
 | **E-NO-AUTH** | `agent-data whoami` shows `api_key_set:false` | "agent-data is not authenticated. Run `agent-data init --api-key <KEY> -y`, then verify with `agent-data whoami`. No data was pulled." | HALT, exit 1 |
 | **E-CONFIG-VERSION** | `config.yaml` `version` major is newer than this code supports | "This `config.yaml` was written by a newer version. Update the job-search skills, or check `version:` in config." | HALT, exit 1 |
+| **E-BAD-CONFIG** | `search.max_new_postings_per_run` is present but is not a positive integer or the exact string `"all"` | "`search.max_new_postings_per_run` is <safely rendered value>; it must be a positive whole number or `"all"`. Say “use normal first-page coverage” to remove it, or “review up to 50 new postings each run” to replace it. No metered calls were made." | HALT in preflight before any metered call; write the ordinary blocked artifacts when the workspace is writable |
 | **E-BAD-REGISTRY** | the machine-state registry (`$REG`, the `config.json` in `internals.md`) exists but is **not valid JSON**, so workspace discovery can't be trusted — the grep-extract that reads `active_workspace` can't detect a corrupt-but-non-grepable file | "Your job-search settings file is corrupted, so the active workspace can't be determined safely. Run the job-search skill (say 'set up job search') to repair it from your known workspace. Nothing was pulled." | HALT, exit 1; **NEVER** fall through to a default/legacy workspace (guessing could silently switch workspaces). Write the blocked record when a workspace is independently writable; when the corrupt registry leaves no trusted workspace, name the error and stop (as with E-NO-CONFIG / first_run) |
 | **E-NO-PREFERENCES** | `preferences.md` missing/empty (the no-preferences run path) | "No Job Preferences Brief found. Run the job-preference-interview skill to build one, or point `config.yaml:workspace.preferences_path` at your own prose brief. Nothing was pulled." | HALT, exit 1 |
 | **E-SERVICE-DOWN** | `status` route unreachable / non-200 | "The job-search service is unreachable right now. This is usually temporary — the next scheduled run will retry." | HALT, exit 1, write "service down" digest |
@@ -17,7 +18,87 @@ Surface every outcome through the written record — the record is **primary on 
 | **E-UPSTREAM-STRETCH** | 2 consecutive retryable `503 upstream_unavailable`s on `search-jobs` **against the same source** (all retries exhausted) | "\<Source\> was unreachable this run (repeated upstream errors) — results from the other sources only; the next scheduled run will retry." / all enabled sources stretched: "Job sources were unreachable this run (repeated upstream errors). Partial or no results; the next scheduled run will retry." | stop searching that source, others continue; all stretched → stop searching, partial digest; Run health `partial (<lost source(s) unavailable — each named in search.sources order>)` / `partial (all sources unavailable)` when every enabled source is lost |
 | **E-SOURCE-UNSUPPORTED** | the service answers `400 validation_error` with `error.param:"source"` (its message names the allowed sources), or preflight finds a `search.sources` token outside the contract's source enum (a config typo) | "This agent-data service doesn't recognize the '<source>' job source — searched <the others>. Remove it from `search.sources` in `config.yaml`, or update the agent-data service." | non-retryable; drop that source for the run, continue; Run health `partial (<source> unavailable)` |
 | **E-SOURCE-IGNORED** | a 200 search response whose echoed `data.query.source` ≠ the requested source (an ABSENT echo counts as `linkedin`) — a legacy server silently ignoring `--source` | "The agent-data service predates source selection — only LinkedIn was searched. Update the service, or set `search.sources: ["linkedin"]` to match it." | skip that source's remaining queries this run; keep returned rows under their row-level `source` (they dedup against the genuine calls — no event poisoning); Run health `partial (<source> unavailable)` |
-| **E-QUOTA** | agent-data reports its API limit reached (a call rejected for quota/payment) | "agent-data's API limit for this period has been reached, so no new postings were pulled. This usually means searches are running very often — lower `schedule.frequency` in `config.yaml` (e.g. `daily` instead of `hourly`), or upgrade your plan at agent-data.motie.dev. Your existing matches are unaffected." | HALT, exit 1 |
+| **E-PAGINATION-INCOMPLETE** | a cursor-capable stream cannot continue through a trustworthy pagination-contract branch | "<Source>'s deeper results stopped early; <rows> postings already scanned were kept. The next run retries automatically. If this repeats, ask me to diagnose it." | keep trustworthy rows; stop only the affected stream; continue the others; Run health is partial because depth is incomplete |
+| **E-QUOTA** | agent-data rejects a call for quota/payment | "agent-data's API allowance has been reached, so this run cannot continue until calls are available. Check your account at https://agent-data.motie.dev/settings/billing. Your existing matches are unaffected." Then append exactly one run-usage branch defined below. | global HALT, exit 1; the rejected attempt is unmetered and prior trustworthy work remains intact |
+
+## E-BAD-CONFIG value rendering and preflight
+
+This code is separate from **E-CONFIG-VERSION**: use E-CONFIG-VERSION only for an unsupported newer
+config major. E-BAD-CONFIG applies when `search.max_new_postings_per_run` is present as `null`, zero, a
+negative integer, a float, a numeric string, a boolean, or any other value except a positive integer or the
+exact string `"all"`.
+
+Render the parsed invalid value before substituting it into the message:
+
+1. Use compact JSON lexical forms: strings are double-quoted, quote/backslash characters are escaped, and
+   line breaks, tabs, and every other control character are represented only by JSON escapes such as `\n`,
+   `\t`, or `\u0001`. Never interpolate a raw control character into the digest or run record.
+2. Cap the displayed representation at **80 Unicode characters, including an ellipsis and any outer
+   quotes**. If a JSON-quoted string is longer, retain both quotes, keep the longest prefix of complete
+   escaped units that fits, and put `…` immediately before the closing quote. For another JSON value, keep
+   the longest safely escaped prefix that fits and end it with `…`.
+
+Validate this value during free preflight and stop before the first metered attempt. If the workspace is
+writable, produce the same blocked `runs/<id>.json` and blocked digest as other HALTs; record zero metered
+calls and leave `jobs.jsonl` unchanged. Use the table's conversational remove/replace phrases so recovery
+does not require hand-editing YAML.
+
+## E-PAGINATION-INCOMPLETE branches and diagnostics
+
+This error applies only after a cursor-capable stream has trustworthy rows but cannot safely establish its
+next pagination state:
+
+| Observed continuation branch | Effect |
+|---|---|
+| `data.pagination` is absent, or `has_more:true` has a missing/null cursor | keep the page's rows and stop that stream |
+| a non-null cursor or ordered page signature repeats | keep all rows scanned so far and stop that stream |
+| a fresh cursor receives a non-retryable cursor validation error | never restart at page one; keep prior rows and stop that stream |
+
+Continue every unaffected query/source stream. Mark the run partial for incomplete depth, set the affected
+stream's `stop_reason` to `pagination_incomplete`, and make the run-level review-scope outcome `incomplete`.
+The partial-depth message takes precedence over any claim that all currently available results were
+exhausted. The next run begins that stream again from its ordinary first page; it does not resume, because
+cursors and recovery checkpoints are never persisted.
+
+For each affected stream, store `query_id`, `source`, `pages_fetched`, `rows_scanned`, `request_ids`,
+`upstream_code`, `retryable`, and `attempts`, along with the stop reason. Set `has_more_at_stop` to `null`
+when pagination metadata is untrustworthy. Do not write a cursor, decoded cursor payload, or resumable state
+to the run record, digest, scratch file, or diagnostic. Request IDs remain local diagnostic evidence; the
+user-facing recovery is the message in the table.
+
+## E-QUOTA usage and recovery
+
+The billing link is the immediate recovery because access must be restored before the run can continue.
+Do not lead with or proactively offer lower frequency, fewer sources, or reduced review depth merely because
+quota occurred. If the user later asks how to make calls last, explain those outcome levers and their call
+effects then. Do not invent account balance, current plan, rollover, renewal, or live allowance facts.
+
+Append exactly one of these calls-first sentences to the primary message:
+
+- No prior attempt in this run was metered: `No calls were metered for this run.`
+- One or more prior attempts were metered: `This run used <N> metered calls before the rejection. The rejected call was not metered.`
+
+Derive `N` from this run's attempt evidence, never from a fixed precursor assumption. The current canonical
+metering rule in `agent-data-contract.md` § **Pricing and metering** counts successful attempts and attempts
+explicitly marked metered, including currently metered failures/retries; quota rejections and free routes do
+not count. An explicit charged/metered status from agent-data overrides inference. The run record's
+`agent_data_usage` counters must agree with the displayed `N`, and the quota rejection belongs only in the
+unmetered diagnostic count.
+
+Optional local context may follow the dynamic sentence. Read the current pay-as-you-go unit rate and top-up
+amount from `agent-data-contract.md` at consumption time, then derive
+`purchased_calls = floor(top_up_amount / unit_rate)`; this file deliberately owns none of those volatile
+literals. Present the result only as a **pay-as-you-go purchase example**, after the actual run call count,
+not as an account charge or account state.
+
+For a similar-run estimate, filter local run records to completed runs with the exact same enabled source
+list (including order), enabled query count, and review mode; take at most the five most recent comparable
+records. Require at least three records and a positive median `metered_calls`, then compute
+`similar_runs = floor(purchased_calls / median_calls)`. Say how many comparable records supplied the median
+(`last five` only when five exist), and warn that broader or deeper searches may use more. Omit the
+similar-run estimate for review mode `all`, a zero median, or fewer than three comparable completed runs;
+the derived pay-as-you-go purchase example may stand alone. Never use this history to claim a balance or
+plan.
 
 ### Expected non-errors (footnotes, not failures)
 - **Pair mismatch** — a `400 validation_error` (`retryable:false`) on `get-posting` whose `error.param` names `posting_id`/`source_url`: the `jp_`/`source_url` pair went stale (the source
