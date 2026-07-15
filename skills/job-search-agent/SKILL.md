@@ -1,6 +1,6 @@
 ---
 name: job-search-agent
-description: The operator manual for the Job Search Agent — configure, customize, extend, or troubleshoot the agent itself, or explain how it works. Use when the user asks how the agent works, why a run failed, what it can do, or how to change its behavior — a query, the schedule, the recency window, the detail-read model, parallel detail reads — "how does my job search agent work", "why did the run fail", "how do I change/add/customize …", "change how often it runs". Not for daily use — onboarding, the home view, and running a search are job-search; the search pass itself is job-search-run.
+description: The operator manual for the Job Search Agent — configure, customize, extend, or troubleshoot the agent itself, or explain how it works. Use when the user asks how the agent works, why a run failed, what it can do, or how to change its behavior — a query, schedule, recency, review depth, usage, detail-read model, or parallel reads — "how does my job search agent work", "explain my agent-data usage", "why did the run fail", "how do I change/add/customize …", "change how often it runs". Not for daily use — onboarding, the home view, and running a search are job-search; the search pass itself is job-search-run.
 ---
 
 # Job Search Agent
@@ -12,7 +12,9 @@ The system in one paragraph: a private, local-first job-search agent. It searche
 Hold these stances in every change you make — each exists for a reason, and several are CI-enforced:
 
 - **Qualitative-by-default.** Relevance is expressed as relevant or not, and if relevant as weak / moderate / strong with plain-language reasoning. No score is computed or stored unless you explicitly ask — and even then a numeric score is never written into your saved digests, `jobs.jsonl`, or preferences brief.
-- **Frequency, in human terms.** You tune the system by how often to pull: hourly, daily, weekly.
+- **Usage context, not budget controls.** The user controls outcomes—frequency, sources, and review depth—and
+  gets a call-impact preview before deeper work plus calls-first actual usage afterward. A dollar figure is
+  only a labeled pay-as-you-go equivalent unless live account data says otherwise.
 - **Private-local.** All data lives under `~/.job-search/` (hidden, deny-all `.gitignore`). Nothing is ever committed to a public repo by the agent.
 - **Every blocked path is a named error.** If anything can't proceed, the agent names the exact `E-*` with its cause and fix, then stops. No silent failures.
 - **Conversational-first config.** You change anything — a query, the frequency, your preferences — by chatting. The agent edits `config.yaml` minimally and writes it back. Hand-editing files is an escape hatch you can always use, not a required step.
@@ -44,6 +46,9 @@ The OS state is plain files, and every operation on it is a pinned procedure in 
 | Known ids — the dedup set from `jobs.jsonl` | `../../shared/references/conventions.md` → §jobs.jsonl operations |
 | Append one evaluated or status-changed event | `../../shared/references/conventions.md` → §jobs.jsonl operations |
 | Current state (fold by (`source`, `source_id`), last-write-wins; alias pairs count as one role) | `../../shared/references/conventions.md` → §jobs.jsonl operations |
+| Read or change one-off/saved review depth (`max_new_postings_per_run`) | `../../shared/references/internals.md` → Config read/update recipes; `references/customization.md` → Review depth |
+| Explain recent agent-data usage without changing state | `references/customization.md` → Explaining agent-data usage; run fields in `../../shared/references/conventions.md` |
+| Read or write the one-time deeper-coverage marker | `../../shared/references/internals.md` → Registry write rules |
 
 ---
 
@@ -51,12 +56,23 @@ The OS state is plain files, and every operation on it is a pinned procedure in 
 
 The user changes configuration by chatting — you apply it by reading `config.yaml`, editing it minimally (preserving comments and structure), and writing it back.
 
-For every supported edit — adding, editing, or pausing a query (`enabled: false`); the `search` block (`sources`, `freshness`, `detail_model`, `parallel_detail_reads`, `queries[].limit`); `schedule.frequency`/`time`; the never-clobber adoption rule; and exact field schemas — see `../../shared/references/internals.md` → "Config read/update recipes". Marking a job status (`new | interested | applied | rejected | archived`) is a `status_changed` event appended to `jobs.jsonl` (the append operation in `../../shared/references/conventions.md` → §jobs.jsonl), not a `config.yaml` edit. To update the brief itself, run `job-preference-interview` or edit `preferences.md` directly.
+For every supported edit — adding, editing, or pausing a query (`enabled: false`); the `search` block
+(`sources`, `freshness`, `detail_model`, `parallel_detail_reads`, `max_new_postings_per_run`, and
+`queries[].limit`); `schedule.frequency`/`time`; the never-clobber adoption rule; and exact field schemas —
+see `../../shared/references/internals.md` → "Config read/update recipes". Review-depth increases require
+the decision-time preview and exact one-off/saved confirmation in `references/customization.md`; decreases
+and removal take effect immediately. “Explain my agent-data usage” is read-only: follow the same reference
+and leave config and registry state untouched. Marking a job status (`new | interested | applied | rejected |
+archived`) is a `status_changed` event appended to `jobs.jsonl` (the append operation in
+`../../shared/references/conventions.md` → §jobs.jsonl), not a `config.yaml` edit. To update the brief itself,
+run `job-preference-interview` or edit `preferences.md` directly.
 
 **Invariants — never break these:**
 - Always preserve `version: 1` in `config.yaml`.
 - Always preserve existing comments and structure when editing.
 - Never add a `score` or `weight` field anywhere.
+- Never add `budget`, `credits`, or `cost` config fields. Accurate calls-first usage and a clearly labeled
+  pay-as-you-go equivalent are context, not a monetary control or an account-balance claim.
 
 ---
 
@@ -86,7 +102,7 @@ E-SOURCE-UNSUPPORTED and E-SOURCE-IGNORED in `../../shared/references/errors.md`
 
 ## Customizing & extending it
 
-The agent is designed to be extended — add queries, swap the brief, point the runner at a different workspace, or build new skills that slot into the same conventions. For the full flexibility workflows — including how to honor an explicit score request without polluting the clean data — see `references/customization.md`.
+The agent is designed to be extended — add queries, swap the brief, point the runner at a different workspace, or build new skills that slot into the same conventions. For the full flexibility workflows — including review depth, usage explanations, and how to honor an explicit score request without polluting the clean data — see `references/customization.md`.
 
 **Run architecture.** Each run scans new posting summaries in the primary context (cheaply rejecting clear dealbreakers), then reads each promising posting in full — by default fanning out one detail-read subagent per posting as a concurrent batch where capacity allows (model = `search.detail_model`, each follows the `evaluate-job-fit` skill). `search.parallel_detail_reads` resolves the mode: `false` reads sequentially, `true` fans out, and unset takes your host's default — a host that gates subagents behind user approval reads sequentially until approved, every other host keeps the parallel fan-out. When the host applies a thread limit it continues in rolling batches; when it refuses or no slot is available it reads sequentially and still evaluates every queued posting. The concurrent dispatch uses your host's own subagent primitive, with the mandatory sequential fallback where it has none. See `../../shared/references/parallelism.md` for the parallel-by-default principle and how to brief a subagent; see `references/customization.md` for the recency, model, parallel-approval, and feed-size knobs.
 
@@ -120,7 +136,7 @@ For the full `E-*` table with exact cause and fix wording: see `../../shared/ref
 |---|---|---|
 | Runs complete but 0 matches even though real postings exist | Query keywords don't match the brief's must-haves | Broaden the query in `config.yaml`, or run the **job-preference-interview** skill to align the brief |
 | 0 results (literally empty) | Keywords too narrow or location too specific | Broaden `keywords` or `location` in the query |
-| Last run: blocked — E-QUOTA | API limit reached for the period | Lower `schedule.frequency` (e.g. `daily` instead of `hourly`), or upgrade your plan at agent-data.motie.dev |
+| Last run: blocked — E-QUOTA | agent-data rejected a call for quota/payment | Check account access at https://agent-data.motie.dev/settings/billing; existing matches are unaffected. Discuss frequency, sources, or review depth only if the user later asks how to make calls last |
 | Schedule isn't firing | The active schedule stopped (e.g. an in-session loop's session closed) | Check the scheduling marker in the registry (`../../shared/references/internals.md`); restart it with the run recipe composed for the host |
 | "Stale brief" nudge in the digest | `preferences.md` hasn't been updated in a long time | Run the **job-preference-interview** skill to refresh it |
 
@@ -133,7 +149,7 @@ For the full `E-*` table with exact cause and fix wording: see `../../shared/ref
 | Workspace layout and `config.yaml` schema | `../../shared/references/conventions.md` |
 | Every `E-*` error with cause + fix | `../../shared/references/errors.md` |
 | OS registry, workspace discovery, config recipes, scheduling | `../../shared/references/internals.md` |
-| agent-data CLI contract (routes, retry rules, listing ID) | `../../shared/references/agent-data-contract.md` |
+| agent-data CLI contract (routes, retry rules, listing ID, pricing/metering) | `../../shared/references/agent-data-contract.md` |
 | The active workspace path | the Discovery procedure — `../../shared/references/internals.md` |
 | Scheduling status | the registry's scheduling marker — `../../shared/references/internals.md` |
 | Customization and flexibility workflows | `references/customization.md` |

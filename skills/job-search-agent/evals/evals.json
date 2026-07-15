@@ -77,6 +77,79 @@
         "job-search-run is NOT invoked — the user is not asking to run a fresh search now, only to understand the agent's behavior",
         "The reply describes judgment as qualitative (strong / moderate / weak / not relevant) with no numeric score"
       ]
+    },
+    {
+      "id": 6,
+      "scenario": "finite review depth — one-off scope previews before running and leaves config unchanged",
+      "prompt": "Build a temp workspace + shim (setup-workspace.sh). Edit config.yaml so it has two enabled queries, search.sources is [linkedin, ashby, greenhouse], schedule.frequency is daily, and search.max_new_postings_per_run is omitted. Export JOBSEARCH_TEST_CALL_LOG=<tmp>/calls.jsonl. Then prompt the agent: 'Review up to 50 new postings this run.' Do not answer a confirmation until the agent has shown its preview; capture config.yaml and calls.jsonl before answering yes, then answer yes and allow the one-off shim-backed run to finish.",
+      "expectations": [
+        "Before the yes, identifies the request as one-off, says the first-page baseline is exactly 6 metered search calls (2 enabled queries x 3 enabled sources), and distinguishes the one-off total from the daily schedule's approximate multiplication",
+        "Before the yes, says every continuation board page and every full-posting detail read adds one metered call; the target of 50 bounds unique roles reviewed, not continuation-page calls",
+        "Asks for explicit confirmation of the exact one-off target before invoking job-search-run; before that yes calls.jsonl has no metered row from this requested run",
+        "After yes, passes a finite one-off override with review_scope origin one_off to the runner and completes the run without writing search.max_new_postings_per_run to config.yaml",
+        "Adds no budget, credits, or cost field and preserves config version 1"
+      ]
+    },
+    {
+      "id": 7,
+      "scenario": "finite review depth — recurring scope confirms before an atomic saved write",
+      "prompt": "Build a temp workspace + shim (setup-workspace.sh). Edit config.yaml so it has two enabled queries, search.sources is [linkedin, ashby], schedule.frequency is daily, and search.max_new_postings_per_run is omitted. Preserve a comment and capture the original bytes. Then prompt the agent: 'Review up to 50 new postings every run.' Do not answer yes until after the preview; inspect config.yaml before confirmation, then answer yes and inspect it again.",
+      "expectations": [
+        "Before the yes, identifies the request as saved/recurring and previews exactly 4 first-page metered search calls per run (2 enabled queries x 2 enabled sources) plus the daily schedule multiplication, before unknown continuation and detail additions",
+        "Before the yes, explains that 50 limits unique roles reviewed rather than page calls and asks for confirmation of the exact recurring target",
+        "config.yaml is byte-for-byte unchanged before the explicit yes; only after yes is search.max_new_postings_per_run: 50 written atomically",
+        "The saved write preserves version 1, unrelated values, comments, and structure and introduces no budget, credits, or cost field",
+        "A later scheduled/headless run consumes the saved value as durable consent without asking the user again"
+      ]
+    },
+    {
+      "id": 8,
+      "scenario": "ambiguous exhaustive request — defaults to one-off and cannot silently persist all",
+      "prompt": "Build a temp workspace + shim (setup-workspace.sh). Use one enabled query, search.sources [linkedin, ashby, lever], schedule.frequency weekly, and omit search.max_new_postings_per_run. Export JOBSEARCH_TEST_CALL_LOG=<tmp>/calls.jsonl. Prompt the agent: 'Scan everything.' Do not answer yes; inspect config.yaml and the call log after the agent responds.",
+      "expectations": [
+        "Resolves the ambiguous time scope to one run and says so; it does not ask the user to choose a time scope that already has a safe default",
+        "Previews exactly 3 first-page metered search calls for this run (1 enabled query x 3 enabled sources), shows the weekly schedule multiplication as context, and states that continuation pages and full-posting reads add unknown calls",
+        "States that exhaustive board traversal has no reliable call ceiling in advance and LinkedIn remains limited to its first page",
+        "Asks for explicit confirmation of the exact one-off exhaustive scope before a runner invocation; before yes calls.jsonl has no metered row from this request",
+        "Does not write search.max_new_postings_per_run or exact all to config.yaml without explicit recurring intent"
+      ]
+    },
+    {
+      "id": 9,
+      "scenario": "recurring exhaustive request — confirms all once, then scheduled runs do not reprompt",
+      "prompt": "Build a temp workspace + shim (setup-workspace.sh). Use two enabled queries, search.sources [linkedin, ashby, greenhouse, lever], schedule.frequency every-6-hours, and omit search.max_new_postings_per_run. Prompt the agent: 'Scan everything every time.' Withhold yes until the preview is complete and verify config is unchanged; then answer yes, inspect config, and invoke a later scheduled/headless run from the saved config.",
+      "expectations": [
+        "Before the yes, identifies recurring exhaustive scope, previews exactly 8 first-page metered search calls per run (2 enabled queries x 4 enabled sources) and multiplies that baseline by the every-6-hours schedule",
+        "Before the yes, states that continuation board pages and full-posting reads add unknown calls, all has no reliable ceiling in advance, and LinkedIn remains one page",
+        "config.yaml is unchanged before yes; only after yes is the exact string all saved as search.max_new_postings_per_run while version 1 and unrelated content are preserved",
+        "The confirmation is for the exact recurring exhaustive scope, not generic permission to change search settings",
+        "The later scheduled/headless run treats the saved setting as durable consent and does not ask for confirmation again"
+      ]
+    },
+    {
+      "id": 10,
+      "scenario": "review-depth decreases and removal are immediate",
+      "prompt": "Build a temp workspace + shim (setup-workspace.sh). Pre-seed config.yaml with search.max_new_postings_per_run: all, two enabled queries, a preserved comment, and version 1. Prompt the agent: 'Use 25 each run instead.' Inspect config. Then prompt: 'Go back to normal first-page coverage every run.' Inspect config again.",
+      "expectations": [
+        "Treats all to finite 25 as a decrease and writes it immediately without a confirmation prompt",
+        "Treats the saved return to normal first-page coverage as removal and immediately removes only search.max_new_postings_per_run without a confirmation prompt",
+        "After removal, queries[].limit values are unchanged and still mean per-call page size; review depth is controlled by omission",
+        "Both writes are atomic whole-file updates that preserve version 1, the comment, unrelated config, and structure",
+        "Adds no budget, credits, cost, score, or weight field"
+      ]
+    },
+    {
+      "id": 11,
+      "scenario": "explain my usage — local calls-first account-neutral help",
+      "prompt": "Build a temp workspace + shim (setup-workspace.sh). Pre-seed three completed runs/*.json records. The newest has agent_data_usage metered_calls 9, by_operation initial_search 4 / continuation_search 2 / detail_read 3, a deliberately historical unit_rate_usd '0.007', payg_equivalent_usd '0.063', pricing_basis pay_as_you_go_equivalent; the two older records have valid different totals and different stored decimal pairs. Set config to two enabled queries, search.sources [linkedin, ashby], review mode finite, and daily frequency. Export JOBSEARCH_TEST_CALL_LOG=<tmp>/calls.jsonl but leave it empty. Prompt the agent: 'Explain my agent-data usage.'",
+      "expectations": [
+        "Reads recent local run records and leads with actual metered-call totals; for the newest run it reports 9 calls and the exact 4 initial / 2 continuation / 3 detail breakdown without double counting diagnostics",
+        "Reports the newest run's stored 0.063 value byte-for-byte without recomputing it from current pricing, labels it pay-as-you-go equivalent, and explicitly says it is not an actual charge because no live account-plan metadata is available",
+        "Explains the configured outcome drivers in human terms (daily frequency, two enabled queries, two enabled sources, finite review depth) without inventing future continuation counts",
+        "Directs account-specific plan, allowance, or billing questions to https://agent-data.motie.dev/settings/billing and does not infer a remaining balance, current plan, rollover, renewal, or exhaustion date",
+        "Makes no agent-data API call and leaves config.yaml and the registry byte-for-byte unchanged",
+        "Adds or recommends no budget, credits, or cost config field; exact current prices and tiers remain delegated to the shared agent-data contract"
+      ]
     }
   ]
 }

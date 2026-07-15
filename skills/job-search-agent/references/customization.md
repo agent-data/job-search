@@ -2,7 +2,7 @@
 
 This reference covers the flexibility and customization workflows — how to honor special requests, narrow results, tune the rubric, and add new capabilities — without breaking the clean defaults.
 
-**Contents:** [1. Honoring an explicit score request](#1-honoring-an-explicit-score-request) · [2. Adding a custom filter](#2-adding-a-custom-filter-or-narrowing-results) · [3. Changing how postings are judged](#3-changing-how-postings-are-judged) · [4. Tuning the search feed & detail reads](#4-tuning-the-search-feed--detail-reads) · [5. Adding a new capability or skill](#5-adding-a-new-capability-or-skill)
+**Contents:** [1. Honoring an explicit score request](#1-honoring-an-explicit-score-request) · [2. Adding a custom filter](#2-adding-a-custom-filter-or-narrowing-results) · [3. Changing how postings are judged](#3-changing-how-postings-are-judged) · [4. Tuning the search feed & detail reads](#4-tuning-the-search-feed--detail-reads) · [5. Explaining agent-data usage](#5-explaining-agent-data-usage) · [6. Adding a new capability or skill](#6-adding-a-new-capability-or-skill)
 
 ---
 
@@ -23,7 +23,7 @@ If the user wants the numbers saved, write them to a clearly-named side file (e.
 
 Two routes depending on where you want the narrowing to happen:
 
-**Source-side (fewer postings fetched):** Edit `queries[]` in `config.yaml`. Tighten `keywords`, add a `location`, lower `limit`, or set `enabled: false` to pause a query entirely. This reduces API calls and noise before judgment runs.
+**Source-side (fewer postings fetched):** Edit `queries[]` in `config.yaml`. Tighten `keywords`, add a `location`, lower `limit`, or set `enabled: false` to pause a query entirely. Lowering `limit` reduces rows returned by each call; disabling a query reduces the number of first-page calls. Both reduce noise before judgment runs.
 
 **Judgment-side (postings fetched but screened out):** For criteria like "only fully-remote" or "no agencies", add them to the **preferences brief** (`preferences.md`) as a must-have or red flag. `evaluate-job-fit` reads the brief and enforces the criterion qualitatively — a must-have that is absent makes the posting not relevant; a red flag present makes it weak or not relevant with a named reason.
 
@@ -50,8 +50,8 @@ Importance lives in the bucket assignment, never in numeric weights or score mul
 
 ## 4. Tuning the search feed & detail reads
 
-Four `config.yaml` keys (schema in `../../../shared/references/conventions.md`) control how much the system fetches,
-how fresh it is, whether detail reads run in parallel, and how carefully it reads each posting.
+Five settings in `config.yaml` (schema in `../../../shared/references/conventions.md`) control page size,
+review depth, recency, whether detail reads run in parallel, and how carefully the agent reads each posting.
 
 **Recency window — `search.freshness`**
 
@@ -65,7 +65,61 @@ uses it in place of the saved value.
 
 **Feed size — `queries[].limit`**
 
-Sets how many postings each query pulls; its range and default (and the API-vs-template distinction) are in the config schema — see `../../../shared/references/conventions.md`. A higher limit fetches more raw postings per query, but it is not pagination — there is no way to walk deeper pages. The practical path to seeing more new postings is **breadth + frequency**: several varied queries with meaningful keyword differences, run regularly, with dedup preventing repeats from inflating the digest.
+Sets the maximum rows requested on each query/source call; its range and default (and the
+API-vs-template distinction) are in the config schema. It is a per-call page size, never the total number
+of roles reviewed in a run.
+
+**Review depth — `search.max_new_postings_per_run`**
+
+Omit this advanced setting for normal first-page coverage. A positive integer asks the agent to judge up
+to that many unique unseen roles; exact `"all"` asks it to exhaust the currently traversable Ashby,
+Greenhouse, and Lever results. LinkedIn remains one page. The accepted values and run-record meanings live
+in `../../../shared/references/conventions.md`; the cursor and metering facts live in
+`../../../shared/references/agent-data-contract.md`.
+
+Interpret time scope before taking action:
+
+| User wording | Scope and effect |
+|---|---|
+| “now,” “once,” “this run” | one-off override; do not write config |
+| “each run,” “from now on,” “every time” | saved setting; write only after preview and confirmation |
+| ambiguous depth request such as “scan everything” | default to one run and say so before confirmation |
+| “go back to normal,” “use first-page coverage” | reduce or remove the saved setting immediately when the time scope is recurring |
+
+Before any enablement or increase, compute the first-page baseline from the current config:
+
+```text
+first-page search calls per run = enabled queries × enabled sources
+scheduled baseline = first-page calls per run × runs in the named period
+```
+
+Then state the unknown additions: every continuation page on one company-board stream adds one metered
+search call, and every full-posting read adds one metered detail call. A finite target bounds roles judged,
+not page calls, because known and duplicate rows can require more pages. `"all"` has no reliable call
+ceiling in advance. If a dollar equivalent helps, load the current verified rate from the canonical
+agent-data contract and label the result **pay-as-you-go equivalent**, never an actual charge.
+
+Ask for an explicit yes to the exact one-off or saved scope before invoking a run or atomically writing
+config. A saved value is durable consent, so later scheduled runs do not ask again. A smaller finite target,
+`all` to finite, removal, or a one-off first-page override is a reversible decrease and takes effect without
+confirmation.
+
+**High-quality scope handling**
+
+- “Review up to 50 new postings this run.” → preview a finite one-off; after yes, run without changing config.
+- “Review up to 50 every run.” → preview a recurring finite change; after yes, save `50`.
+- “Scan everything.” → explicitly make it one-off, name the unbounded-in-advance additions, then confirm.
+- “Scan everything every time.” → preview recurring exhaustive depth; after yes, save `"all"`.
+- “Go back to normal first-page coverage.” → remove the saved setting immediately.
+
+**Low-quality near-misses**
+
+- Treating “scan everything” as recurring and silently saving `"all"`.
+- Writing config or starting metered work before the user confirms the previewed scope.
+- Describing the review target as a credit allowance or promising that it caps page calls.
+
+Emulate the high-quality examples' time-scope resolution, preview ordering, and exact confirmation; never
+use the low-quality near-misses as alternate implementations.
 
 **Parallel detail reads — `search.parallel_detail_reads`**
 
@@ -105,7 +159,23 @@ The four tiers, what each is for, and which is the default are in the config sch
 
 ---
 
-## 5. Adding a new capability or skill
+## 5. Explaining agent-data usage
+
+“Explain my agent-data usage” is a read-only local explanation. Read recent `runs/*.json` records and lead
+with actual `agent_data_usage.metered_calls`; then explain the stored `by_operation` breakdown and the
+configured outcome drivers (frequency, enabled queries, enabled sources, and review mode). Use each
+historical run's stored decimal strings as written—do not recompute an old equivalent with today's rate.
+
+When `payg_equivalent_usd` is present, label it a **pay-as-you-go equivalent**. If live account-plan metadata
+is absent, say the equivalent is not an actual charge and direct account-specific plan, allowance, and
+billing questions to <https://agent-data.motie.dev/settings/billing>. Do not call agent-data for this
+explanation, mutate config or registry state, infer a remaining balance, or claim a plan, rollover, renewal,
+or exhaustion date. Do not add or recommend `budget`, `credits`, or `cost` config fields. Load current exact
+pricing and metering facts only from `../../../shared/references/agent-data-contract.md`.
+
+---
+
+## 6. Adding a new capability or skill
 
 See the **"Extending & contributing"** section in `SKILL.md` for the full workflow. Key points:
 
