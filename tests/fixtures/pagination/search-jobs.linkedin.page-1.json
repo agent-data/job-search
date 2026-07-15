@@ -1,8 +1,6 @@
 {
   "data": {
     "query": {
-      "keywords": "AI engineer",
-      "location": "United States",
       "source": "linkedin",
       "published_on_or_after": "2026-07-01"
     },
