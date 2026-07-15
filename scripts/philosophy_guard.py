@@ -17,12 +17,17 @@ PATTERNS = [
     (re.compile(r"\bcategory weight", re.I), "category weight"),
     (re.compile(r"\b\d+\s*(points|pts)\b", re.I), "points"),
     # budget/credit are forbidden as a CONFIG FIELD or a cost KNOB, not as prose words:
-    (re.compile(r"(?im)^\s*(budget|credits?|cost)\s*[:=]"), "budget/credit/cost config field"),
+    (re.compile(r"(?im)^\s*(?:-\s*)?([\"']?)(budget|credits?|cost)\1\s*[:=]"),
+     "budget/credit/cost config field"),
     (re.compile(r"\bbudget\s*(knob|cap)\b", re.I), "budget knob"),
     (re.compile(r"\bcredit\s*(math|cost|estimate|remaining|balance)\b", re.I), "credit math"),
     (re.compile(r"\b\d+\s*credits?\b", re.I), "credit count"),
-    (re.compile(r"\bactual charge\s*(?::|for\b|was\b|is\b)", re.I), "actual charge"),
 ]
+ACTUAL_CHARGE = re.compile(r"\bactual charge\b", re.I)
+NEGATED_ACTUAL_CHARGE_PREFIX = re.compile(
+    r"(?:\b(?:not|never)\s+(?:(?:an?|the)\s+)?|\bno\s+|\b(?:isn't|isn’t)\s+(?:an?\s+)?)$",
+    re.I,
+)
 
 
 def scan(root):
@@ -39,6 +44,12 @@ def scan(root):
                         for rx, label in PATTERNS:
                             if rx.search(line):
                                 hits.append(f"{os.path.relpath(path, root)}:{i}: {label}: {line.strip()}")
+                        for match in ACTUAL_CHARGE.finditer(line):
+                            if NEGATED_ACTUAL_CHARGE_PREFIX.search(line[:match.start()]):
+                                continue
+                            hits.append(
+                                f"{os.path.relpath(path, root)}:{i}: actual charge: {line.strip()}"
+                            )
     return hits
 
 

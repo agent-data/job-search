@@ -43,26 +43,40 @@ def test_allows_calls_first_payg_equivalent(tmp_path):
     r = run_guard(tmp_path)
     assert r.returncode == 0, r.stdout
 
-def test_still_flags_credit_or_cost_config_fields(tmp_path):
+def test_still_flags_direct_quoted_and_list_config_fields(tmp_path):
     (tmp_path / "templates").mkdir()
-    for name in ("credits", "cost"):
-        (tmp_path / "templates" / f"{name}.yaml").write_text(f"{name}: 100\n")
+    cases = {
+        "credits.yaml": "credits: 100\n",
+        "cost.yaml": "cost: 100\n",
+        "quoted-cost.yaml": '"cost": 100\n',
+        "quoted-credits.yaml": "'credits': 50\n",
+        "list-cost.yaml": "- cost: 100\n",
+    }
+    for name, content in cases.items():
+        (tmp_path / "templates" / name).write_text(content)
     r = run_guard(tmp_path)
     assert r.returncode == 1
-    assert "credits.yaml" in r.stdout and "cost.yaml" in r.stdout
+    assert all(name in r.stdout for name in cases)
 
-def test_flags_unverified_actual_charge_claim(tmp_path):
+def test_flags_positive_actual_charge_claims(tmp_path):
     (tmp_path / "examples").mkdir()
-    (tmp_path / "examples" / "bad-charge.md").write_text(
-        "Your actual charge for this run was $0.072.\n")
+    cases = {
+        "totaled.md": "Actual charge totaled $0.072.\n",
+        "your-charge.md": "Your actual charge: $0.072.\n",
+        "the-charge.md": "The actual charge was $0.072.\n",
+        "run-charge.md": "Your actual charge for this run was $0.072.\n",
+    }
+    for name, content in cases.items():
+        (tmp_path / "examples" / name).write_text(content)
     r = run_guard(tmp_path)
     assert r.returncode == 1
-    assert "actual charge" in r.stdout
+    assert all(name in r.stdout for name in cases)
 
-def test_allows_not_actual_charge_disclaimer(tmp_path):
+def test_allows_negated_actual_charge_disclaimers(tmp_path):
     (tmp_path / "examples").mkdir()
     (tmp_path / "examples" / "usage.md").write_text(
-        "About $0.072 pay-as-you-go equivalent, not an actual charge.\n")
+        "About $0.072 pay-as-you-go equivalent, not an actual charge.\n"
+        "This is not an actual charge: it is only a pay-as-you-go equivalent.\n")
     r = run_guard(tmp_path)
     assert r.returncode == 0, r.stdout
 
