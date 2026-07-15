@@ -90,8 +90,12 @@ Before any enablement or increase, compute the first-page baseline from the curr
 
 ```text
 first-page search calls per run = enabled queries × enabled sources
-scheduled baseline = first-page calls per run × runs in the named period
 ```
+
+Load the exact saved-cadence comparison arithmetic from `../../../shared/references/internals.md` → “Choose
+one-off or saved review depth”; do not substitute another window or run count. Label its result approximate.
+For a one-off, say the schedule does not multiply this run, then give that canonical saved-cadence comparison
+for context. If scheduling is off, say there is no recurring multiplier.
 
 Then state the unknown additions: every continuation page on one company-board stream adds one metered
 search call, and every full-posting read adds one metered detail call. A finite target bounds roles judged,

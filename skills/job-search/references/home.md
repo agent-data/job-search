@@ -148,10 +148,11 @@ For any enablement or increase—first-page coverage to finite, a larger finite 
 
 1. Count current enabled queries and enabled sources. State the exact first-page baseline as
    `<enabled queries> × <enabled sources> = <metered search calls per run>`.
-2. Multiply that baseline by the current schedule for a named period and label calendar totals as
-   approximate. For a one-off request, say the schedule does not multiply this run, then show the saved
-   cadence's multiplication only as a comparison. If scheduling is off, say there is no recurring
-   multiplier.
+2. Load the exact saved-cadence comparison window and run count from
+   `../../../shared/references/internals.md` → “Choose one-off or saved review depth”; do not substitute
+   another period. Multiply the first-page baseline by that run count and label the result approximate. For
+   a one-off request, say the schedule does not multiply this run, then give the canonical saved-cadence
+   comparison as context. If scheduling is off, say there is no recurring multiplier.
 3. State the additions that cannot be known in advance: every continuation page on one company-board
    stream adds one metered search call, and every full-posting read adds one metered detail call. A finite
    target limits unique roles reviewed, not page calls; `"all"` has no reliable call ceiling. LinkedIn
@@ -187,17 +188,24 @@ Current exact pricing and metering facts stay in `../../../shared/references/age
 - **Deeper company-board coverage (one time per absolute workspace).** Render this only when the newest run
   is `first_page`, `pagination_metrics.deeper_coverage_nudge_eligible` is `true`,
   `unique_unseen_roles_first_pages` is zero, at least one listed healthy cursor-capable stream has trustworthy
-  `has_more_at_stop:true`, and the absolute workspace has no registry marker. Explain that the last search
-  found no unseen roles in its first pages while deeper results were available, then offer deeper
-  company-board coverage. State that each additional board page and full-posting read adds a metered call;
-  do not expose cursor strings or turn the home into a page browser.
+  `has_more_at_stop:true`, the current config omits `search.max_new_postings_per_run` (resolved first-page
+  coverage), and the absolute workspace has no registry marker. A saved finite or `"all"` setting suppresses
+  the automatic nudge even if the latest run's first-page evidence is eligible. Explain that the last search
+  found no unseen roles in its first pages while deeper results were available, then offer deeper company-board
+  coverage. State that each additional board page and full-posting read adds a metered call; do not expose
+  cursor strings or turn the home into a page browser.
+
+  As soon as the eligible nudge renders—and before awaiting a reply—atomically merge exactly one marker for
+  the absolute workspace per `internals.md`, with `outcome: deferred`. Preserve every unknown registry key.
+  This provisional marker makes display durable even if the interaction ends without an answer; never append
+  or create a second marker for the same workspace.
 
   If the user asks to enable depth, follow **Review-depth changes**—including the exact first-page baseline,
-  schedule multiplication, unknown additions, and confirmation—before running or writing config. After the
-  displayed nudge resolves, atomically merge exactly one marker for the absolute workspace per
-  `internals.md`: `enabled` only after the confirmed enablement takes effect, `declined` for no, and
-  `deferred` when the user says later or chooses another action. Preserve all unknown registry keys. A
-  present marker suppresses every later automatic nudge for that workspace, including declined/deferred;
+  canonical schedule comparison, unknown additions, and confirmation—before running or writing config. Keep
+  the existing marker `deferred` until confirmed enablement takes effect, then atomically change only that
+  same marker's outcome to `enabled`. A no changes only its outcome to `declined`; preserve its `workspace`
+  and original `shown_at`. Later, another action, or no reply leaves it `deferred`. A present marker suppresses
+  every later automatic nudge for that workspace, including after an unanswered display, decline, or deferral;
   the user can still ask for depth later. Scheduled runs write eligibility evidence only and never this
   shown/outcome marker.
 - **Last run blocked/failed.** If the newest run's `run_health` is `blocked` (or the latest digest shows a

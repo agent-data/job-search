@@ -81,9 +81,9 @@
     {
       "id": 6,
       "scenario": "finite review depth — one-off scope previews before running and leaves config unchanged",
-      "prompt": "Build a temp workspace + shim (setup-workspace.sh). Edit config.yaml so it has two enabled queries, search.sources is [linkedin, ashby, greenhouse], schedule.frequency is daily, and search.max_new_postings_per_run is omitted. Export JOBSEARCH_TEST_CALL_LOG=<tmp>/calls.jsonl. Then prompt the agent: 'Review up to 50 new postings this run.' Do not answer a confirmation until the agent has shown its preview; capture config.yaml and calls.jsonl before answering yes, then answer yes and allow the one-off shim-backed run to finish.",
+      "prompt": "Build a temp workspace + shim (setup-workspace.sh). Edit config.yaml so it has two enabled queries, search.sources is [linkedin, ashby, greenhouse], schedule.frequency is daily, and search.max_new_postings_per_run is omitted. Merge registry scheduling as installed true, mechanism loop, and set_at '<ISO>'. Export JOBSEARCH_TEST_CALL_LOG=<tmp>/calls.jsonl. Then prompt the agent: 'Review up to 50 new postings this run.' Do not answer a confirmation until the agent has shown its preview; capture config.yaml and calls.jsonl before answering yes, then answer yes and allow the one-off shim-backed run to finish.",
       "expectations": [
-        "Before the yes, identifies the request as one-off, says the first-page baseline is exactly 6 metered search calls (2 enabled queries x 3 enabled sources), and distinguishes the one-off total from the daily schedule's approximate multiplication",
+        "Before the yes, identifies the request as one-off, says the first-page baseline is exactly 6 metered search calls (2 enabled queries x 3 enabled sources), says the schedule does not multiply this run, and gives the exact saved daily-cadence comparison of about 180 first-page calls per 30-day month (6 x 30)",
         "Before the yes, says every continuation board page and every full-posting detail read adds one metered call; the target of 50 bounds unique roles reviewed, not continuation-page calls",
         "Asks for explicit confirmation of the exact one-off target before invoking job-search-run; before that yes calls.jsonl has no metered row from this requested run",
         "After yes, passes a finite one-off override with review_scope origin one_off to the runner and completes the run without writing search.max_new_postings_per_run to config.yaml",
@@ -93,22 +93,22 @@
     {
       "id": 7,
       "scenario": "finite review depth — recurring scope confirms before an atomic saved write",
-      "prompt": "Build a temp workspace + shim (setup-workspace.sh). Edit config.yaml so it has two enabled queries, search.sources is [linkedin, ashby], schedule.frequency is daily, and search.max_new_postings_per_run is omitted. Preserve a comment and capture the original bytes. Then prompt the agent: 'Review up to 50 new postings every run.' Do not answer yes until after the preview; inspect config.yaml before confirmation, then answer yes and inspect it again.",
+      "prompt": "Build a temp workspace + shim (setup-workspace.sh). Edit config.yaml so it has two enabled queries, search.sources is [linkedin, ashby], schedule.frequency is daily, and search.max_new_postings_per_run is omitted. Merge registry scheduling as installed true, mechanism loop, and set_at '<ISO>'. Preserve a config comment and capture the original config bytes. Then prompt the agent: 'Review up to 50 new postings every run.' Do not answer yes until after the preview; inspect config.yaml before confirmation, then answer yes and inspect it again. Finally invoke a later scheduled/headless run from the saved config and inspect config.yaml plus the new runs/<id>.json after that run.",
       "expectations": [
-        "Before the yes, identifies the request as saved/recurring and previews exactly 4 first-page metered search calls per run (2 enabled queries x 2 enabled sources) plus the daily schedule multiplication, before unknown continuation and detail additions",
+        "Before the yes, identifies the request as saved/recurring and previews exactly 4 first-page metered search calls per run (2 enabled queries x 2 enabled sources) and about 120 first-page calls per 30-day month at the saved daily cadence (4 x 30), before unknown continuation and detail additions",
         "Before the yes, explains that 50 limits unique roles reviewed rather than page calls and asks for confirmation of the exact recurring target",
         "config.yaml is byte-for-byte unchanged before the explicit yes; only after yes is search.max_new_postings_per_run: 50 written atomically",
         "The saved write preserves version 1, unrelated values, comments, and structure and introduces no budget, credits, or cost field",
-        "A later scheduled/headless run consumes the saved value as durable consent without asking the user again"
+        "The later scheduled/headless run starts without another confirmation prompt, leaves config.yaml saved and otherwise unchanged, and records review_scope mode finite, target_new_postings 50, and origin saved in its new runs/<id>.json"
       ]
     },
     {
       "id": 8,
       "scenario": "ambiguous exhaustive request — defaults to one-off and cannot silently persist all",
-      "prompt": "Build a temp workspace + shim (setup-workspace.sh). Use one enabled query, search.sources [linkedin, ashby, lever], schedule.frequency weekly, and omit search.max_new_postings_per_run. Export JOBSEARCH_TEST_CALL_LOG=<tmp>/calls.jsonl. Prompt the agent: 'Scan everything.' Do not answer yes; inspect config.yaml and the call log after the agent responds.",
+      "prompt": "Build a temp workspace + shim (setup-workspace.sh). Use one enabled query, search.sources [linkedin, ashby, lever], schedule.frequency weekly, and omit search.max_new_postings_per_run. Merge registry scheduling as installed true, mechanism loop, and set_at '<ISO>'. Export JOBSEARCH_TEST_CALL_LOG=<tmp>/calls.jsonl. Prompt the agent: 'Scan everything.' Do not answer yes; inspect config.yaml and the call log after the agent responds.",
       "expectations": [
         "Resolves the ambiguous time scope to one run and says so; it does not ask the user to choose a time scope that already has a safe default",
-        "Previews exactly 3 first-page metered search calls for this run (1 enabled query x 3 enabled sources), shows the weekly schedule multiplication as context, and states that continuation pages and full-posting reads add unknown calls",
+        "Previews exactly 3 first-page metered search calls for this run (1 enabled query x 3 enabled sources), says the schedule does not multiply this one-off, shows the saved weekly cadence as about 12 first-page calls per 4 weeks (3 x 4), and states that continuation pages and full-posting reads add unknown calls",
         "States that exhaustive board traversal has no reliable call ceiling in advance and LinkedIn remains limited to its first page",
         "Asks for explicit confirmation of the exact one-off exhaustive scope before a runner invocation; before yes calls.jsonl has no metered row from this request",
         "Does not write search.max_new_postings_per_run or exact all to config.yaml without explicit recurring intent"
@@ -117,9 +117,9 @@
     {
       "id": 9,
       "scenario": "recurring exhaustive request — confirms all once, then scheduled runs do not reprompt",
-      "prompt": "Build a temp workspace + shim (setup-workspace.sh). Use two enabled queries, search.sources [linkedin, ashby, greenhouse, lever], schedule.frequency every-6-hours, and omit search.max_new_postings_per_run. Prompt the agent: 'Scan everything every time.' Withhold yes until the preview is complete and verify config is unchanged; then answer yes, inspect config, and invoke a later scheduled/headless run from the saved config.",
+      "prompt": "Build a temp workspace + shim (setup-workspace.sh). Use two enabled queries, search.sources [linkedin, ashby, greenhouse, lever], schedule.frequency every-6-hours, and omit search.max_new_postings_per_run. Merge registry scheduling as installed true, mechanism loop, and set_at '<ISO>'. Prompt the agent: 'Scan everything every time.' Withhold yes until the preview is complete and verify config is unchanged; then answer yes, inspect config, and invoke a later scheduled/headless run from the saved config.",
       "expectations": [
-        "Before the yes, identifies recurring exhaustive scope, previews exactly 8 first-page metered search calls per run (2 enabled queries x 4 enabled sources) and multiplies that baseline by the every-6-hours schedule",
+        "Before the yes, identifies recurring exhaustive scope, previews exactly 8 first-page metered search calls per run (2 enabled queries x 4 enabled sources) and about 960 first-page calls per 30-day month at the saved every-6-hours cadence (8 x 120)",
         "Before the yes, states that continuation board pages and full-posting reads add unknown calls, all has no reliable ceiling in advance, and LinkedIn remains one page",
         "config.yaml is unchanged before yes; only after yes is the exact string all saved as search.max_new_postings_per_run while version 1 and unrelated content are preserved",
         "The confirmation is for the exact recurring exhaustive scope, not generic permission to change search settings",

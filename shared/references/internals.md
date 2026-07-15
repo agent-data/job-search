@@ -155,6 +155,20 @@ The user changes config by **chatting**; manual editing is an escape hatch. To a
   and `"all"` has no reliable call ceiling in advance. Consult `agent-data-contract.md` for the canonical
   dated metering/rate facts; do not copy a volatile rate into this recipe or invent account state.
 
+  Use this single canonical saved-cadence comparison for the first-page baseline:
+
+  | Saved cadence | Labeled comparison window | Runs in window | First-page comparison |
+  |---|---:|---:|---:|
+  | `hourly` | 30-day month | 720 | baseline × 720 |
+  | `every-2-hours` | 30-day month | 360 | baseline × 360 |
+  | `every-6-hours` | 30-day month | 120 | baseline × 120 |
+  | `daily` | 30-day month | 30 | baseline × 30 |
+  | `weekly` | 4 weeks | 4 | baseline × 4 |
+
+  Label the result approximate because this is a comparison window, not a billing forecast. For a one-off,
+  say the schedule does not multiply this run, then give the same saved-cadence comparison as context. If
+  scheduling is off, say there is no recurring multiplier.
+
   A saved value is durable consent, so scheduled/headless runs use it without prompting. A one-off override
   records `review_scope.origin:one_off` in the run but never mutates config. Decreasing a finite target,
   changing `all → finite`, removing the key, or choosing a one-off first-page override is reversible and

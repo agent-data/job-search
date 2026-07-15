@@ -163,48 +163,49 @@
     {
       "id": 11,
       "scenario": "eligible deeper-coverage nudge — latest-run evidence is rendered once",
-      "prompt": "PRE-SEED a returning workspace as in case 4. Write a newest runs/2026-07-15T12-00-00Z.json with run_health healthy, review_scope mode first_page/origin default/outcome completed_first_pages, pagination_metrics unique_unseen_roles_first_pages 0, deeper_coverage_nudge_eligible true, deeper_coverage_nudge_streams ['ai-eng-remote:ashby'], and a query stream for ai-eng-remote:ashby with trustworthy has_more_at_stop true and stop_reason first_page_complete. Write registry.json with version 1, active_workspace, and an unrelated sentinel object but no deeper_coverage_nudges marker. Invoke job-search (first_run:false), inspect the home before answering the nudge, then answer 'maybe later' and inspect registry.json.",
+      "prompt": "PRE-SEED a returning workspace as in case 4. Write a newest runs/2026-07-15T12-00-00Z.json with run_health healthy, review_scope mode first_page/origin default/outcome completed_first_pages, pagination_metrics unique_unseen_roles_first_pages 0, deeper_coverage_nudge_eligible true, deeper_coverage_nudge_streams ['ai-eng-remote:ashby'], and a query stream for ai-eng-remote:ashby with trustworthy has_more_at_stop true and stop_reason first_page_complete. Write registry.json with version 1, active_workspace, and an unrelated sentinel object but no deeper_coverage_nudges marker. Invoke job-search (first_run:false), inspect the home and registry before answering the nudge, then answer 'maybe later' and inspect registry.json again.",
       "expectations": [
         "During Gather reads the newest run's eligibility flag, zero-unseen evidence, eligible stream list, and the registry marker for the absolute workspace before deciding whether to render the nudge",
         "Renders one concise nudge explaining that this healthy first-page run found no unseen roles while deeper Ashby results were available; it offers deeper company-board coverage without exposing cursors or page-browser jargon",
         "Before an enablement, explains the additional-call model (one per continuation board page and full-posting read) and does not write search.max_new_postings_per_run merely because the nudge displayed",
-        "After the user leaves it for later, atomically merges one marker at deeper_coverage_nudges[<absolute workspace>] with matching workspace, an ISO shown_at, and outcome deferred",
-        "The registry remains valid JSON, preserves version 1, active_workspace, and the unrelated sentinel object, and contains no duplicate marker for the workspace"
+        "Immediately after rendering and before awaiting an answer, atomically merges one marker at deeper_coverage_nudges[<absolute workspace>] with matching workspace, an ISO shown_at, and provisional outcome deferred",
+        "After the user leaves it for later, the same marker remains deferred; the registry stays valid JSON, preserves version 1, active_workspace, and the unrelated sentinel object, and contains no duplicate marker for the workspace"
       ]
     },
     {
       "id": 12,
       "scenario": "ineligible deeper-coverage nudge — no display and no marker write",
-      "prompt": "PRE-SEED two independent returning workspaces. In sandbox A, the newest healthy first-page run has unique_unseen_roles_first_pages 2 and deeper_coverage_nudge_eligible false even though an Ashby stream has has_more_at_stop true. In sandbox B, it has zero unseen roles but every board stream has has_more_at_stop false and deeper_coverage_nudge_eligible false. Each registry has version 1, active_workspace, an unrelated sentinel key, and no deeper_coverage_nudges entry. Invoke job-search home once in each sandbox and inspect both registries.",
+      "prompt": "PRE-SEED three independent returning-workspace arms. In sandbox A, the newest healthy first-page run has unique_unseen_roles_first_pages 2 and deeper_coverage_nudge_eligible false even though an Ashby stream has has_more_at_stop true. In sandbox B, it has zero unseen roles but every board stream has has_more_at_stop false and deeper_coverage_nudge_eligible false. For arm C, make two otherwise-identical sandbox copies whose newest run has the exact eligible evidence from case 11; set search.max_new_postings_per_run: 50 in one and exact all in the other. Every registry has version 1, active_workspace, an unrelated sentinel key, and no deeper_coverage_nudges entry. Invoke job-search home once in A, B, and both C variants and inspect every registry.",
       "expectations": [
         "Renders no deeper-coverage nudge in sandbox A because the latest run found unseen first-page roles",
         "Renders no deeper-coverage nudge in sandbox B because no healthy cursor-capable stream reported trustworthy has_more true",
+        "Renders no deeper-coverage nudge in either arm C variant because current config already saves finite or all review depth, even though the latest first-page evidence is otherwise eligible",
         "Does not synthesize eligibility from old runs, a non-empty stream list, duplicates, or intuition; the latest run's explicit evidence controls",
-        "Writes no deeper_coverage_nudges marker in either registry and leaves both registry files byte-for-byte unchanged",
-        "Still renders the ordinary returning-user home in both sandboxes"
+        "Writes no deeper_coverage_nudges marker in any registry and leaves every registry file byte-for-byte unchanged",
+        "Still renders the ordinary returning-user home in all sandboxes"
       ]
     },
     {
       "id": 13,
-      "scenario": "declined and deferred deeper-coverage nudges never repeat",
-      "prompt": "PRE-SEED two independent returning workspaces A and B with the exact eligible latest-run evidence from case 11 and no marker. Invoke home in A, answer 'no thanks', inspect the marker, then invoke home again. Invoke home in B, answer 'maybe later', inspect the marker, then invoke home again. Keep a sentinel key in each registry to detect non-merge writes.",
+      "scenario": "declined, deferred, and unanswered deeper-coverage nudges never repeat",
+      "prompt": "PRE-SEED three independent returning workspaces A, B, and C with the exact eligible latest-run evidence from case 11 and no marker. Invoke home in A, answer 'no thanks', inspect the marker, then invoke home again. Invoke home in B, answer 'maybe later', inspect the marker, then invoke home again. Invoke home in C, inspect the marker as soon as the nudge renders, end the interaction without answering, then invoke home again. Keep a sentinel key in each registry to detect non-merge writes.",
       "expectations": [
-        "The first home in each workspace renders the eligible nudge exactly once",
-        "Workspace A atomically records one per-absolute-workspace marker with outcome declined; workspace B atomically records one marker with outcome deferred",
+        "The first home in each workspace renders the eligible nudge exactly once and immediately atomically creates one provisional deferred marker before awaiting a reply",
+        "Workspace A updates its existing marker to declined; workspace B leaves its existing marker deferred; unanswered workspace C leaves its provisional marker deferred without a duplicate",
         "Each marker has workspace equal to its map key and an ISO shown_at, while version 1, active_workspace, and the sentinel key are preserved",
-        "The second home in each workspace reads the present marker and stays quiet even though the latest run remains eligible",
-        "Neither a declined nor deferred answer writes search.max_new_postings_per_run or invokes job-search-run; the user can still request depth later"
+        "The second home in all three workspaces reads the present marker and stays quiet even though the latest run remains eligible, including after C's first interaction ended unanswered",
+        "No declined, deferred, or unanswered path writes search.max_new_postings_per_run or invokes job-search-run; the user can still request depth later"
       ]
     },
     {
       "id": 14,
       "scenario": "enabled deeper-coverage nudge — exact saved scope confirms before config and outcome marker",
-      "prompt": "PRE-SEED a returning workspace with the exact eligible latest-run evidence from case 11. Config has two enabled queries, search.sources [linkedin, ashby], schedule.frequency daily, version 1, and no max_new_postings_per_run. Registry has active_workspace and a sentinel key but no nudge marker. Invoke home. When the nudge appears, say 'review up to 50 every run.' Withhold yes until the preview finishes and inspect config/registry; then answer yes and inspect both files. Invoke home a second time.",
+      "prompt": "PRE-SEED a returning workspace with the exact eligible latest-run evidence from case 11. Config has two enabled queries, search.sources [linkedin, ashby], schedule.frequency daily, version 1, and no max_new_postings_per_run. Registry has active_workspace, scheduling {installed:true, mechanism:'loop', set_at:'<ISO>'}, and a sentinel key but no nudge marker. Invoke home and inspect the registry as soon as the nudge appears. Then say 'review up to 50 every run.' Withhold yes until the preview finishes and inspect config/registry; then answer yes and inspect both files. Invoke home a second time.",
       "expectations": [
-        "Before yes, identifies the requested scope as saved finite depth, previews exactly 4 first-page metered search calls per run (2 enabled queries x 2 enabled sources) with daily schedule multiplication, and states unknown continuation/detail additions",
+        "Before yes, identifies the requested scope as saved finite depth, previews exactly 4 first-page metered search calls per run (2 enabled queries x 2 enabled sources) and about 120 first-page calls per 30-day month at the daily cadence (4 x 30), and states unknown continuation/detail additions",
         "Before yes, explains that 50 bounds unique roles reviewed rather than page calls and asks for confirmation of the exact recurring target",
-        "Before yes, config.yaml remains unchanged and no enabled outcome marker is written; only after yes is search.max_new_postings_per_run: 50 written atomically",
-        "After yes, atomically merges deeper_coverage_nudges[<absolute workspace>] with outcome enabled, matching workspace, and ISO shown_at while preserving registry version, active_workspace, and sentinel key",
+        "As soon as the nudge renders, atomically creates one provisional deferred marker; before yes, config.yaml remains unchanged and that same marker is not enabled; only after yes is search.max_new_postings_per_run: 50 written atomically",
+        "After yes, atomically updates the same deeper_coverage_nudges[<absolute workspace>] marker to outcome enabled without duplicating it, retaining matching workspace and ISO shown_at while preserving registry version, active_workspace, installed scheduling marker, and sentinel key",
         "The second home reads the marker and does not repeat the nudge; later scheduled runs use the saved scope without another confirmation",
         "No budget, credits, or cost config field is added and no account balance or actual charge is inferred"
       ]
