@@ -36,6 +36,60 @@ Read these before running, and follow them exactly:
 - `../../shared/references/parallelism.md` — parallel-by-default + how to brief a subagent.
 - `../../shared/references/voice.md` — how any user-facing line is worded (see **Narrating** below).
 
+## Attempt accounting
+
+Initialize the complete `agent_data_usage` object from `conventions.md` with zero counters before the first
+agent-data attempt. Load the currently verified pay-as-you-go unit rate from
+`agent-data-contract.md` as a decimal string; the contract remains the only home for its value. If the rate
+is absent or its verification cannot be established, keep `unit_rate_usd` and `payg_equivalent_usd` `null`
+and report calls without a dollar clause.
+
+Every agent-data attempt passes through one accounting point **immediately after it resolves and before any
+retry, error branch, or consolidation**. Determine the operation before dispatch: a cursor-null
+`search-jobs` attempt is `initial_search`, a cursor-bearing `search-jobs` attempt is
+`continuation_search`, and `get-posting` is `detail_read`. Track an attempt number per immutable logical
+request, starting at 1; a retry of that same request increments it.
+
+At the accounting point, classify the resolved attempt exactly once:
+
+| Resolved attempt | Additive accounting | Diagnostic accounting |
+|---|---|---|
+| `status` or `whoami`, any outcome | no metered operation | increment `free_route_calls` |
+| quota/payment rejection | no metered operation | increment `quota_rejections` |
+| search/detail success | increment `metered_calls` and its one `by_operation` bucket | none |
+| search/detail non-quota failure | increment `metered_calls` and its one `by_operation` bucket | increment `charged_failures` |
+
+For every metered search/detail attempt whose attempt number is greater than 1, also increment
+`retry_attempts`. Retry and failure counters are diagnostic subsets of attempts already counted by
+operation; never add them to the total a second time. Under the dated current contract, non-quota
+search/detail failures are metered. If a response
+later supplies an explicit charged/metered status, obey that status instead of the outcome inference and
+count a failed attempt in `charged_failures` only when that explicit status says it was charged. Never infer
+an account charge from a displayed equivalent.
+
+After the final accounting point, verify that the three `by_operation` values sum exactly to
+`metered_calls`. Calculate the equivalent with base-10 decimal semantics: remove the decimal point from the
+rate, multiply that integer coefficient by `metered_calls`, then reinsert the same number of fractional
+digits, including trailing zeroes. Do not use binary floating point. Store the canonical rate string and the
+calculated equivalent string in the new run record; never recalculate or rewrite either string in an older
+record.
+
+On a quota rejection, stop dispatching new work, but let every already-started attempt resolve and pass
+through the accounting point before deriving the run's dynamic count. Then use the zero/positive E-QUOTA
+branch in `errors.md`; never substitute the quota threshold, rejection position, or a fixed example as the
+prior-call count. The rejected attempt remains unmetered.
+
+When adding E-QUOTA's optional local purchase context, load the current top-up amount and unit rate from
+`agent-data-contract.md` and derive purchased calls with exact decimal division and floor. Read local run
+records newest-first by `completed_at`; keep only completed records with the exact same ordered
+`sources_searched`, enabled query count (distinct `query_id` values), and `review_scope.mode`, then take at
+most five. With at least three retained records and a positive median `metered_calls`, compute the median
+(middle value for an odd count; exact mean of the two middle values for an even count) and floor purchased
+calls divided by that median. Render the cautious comparable-record count, median, roughly-similar-runs
+clause, and broader/deeper caveat from `errors.md`. For mode `all`, fewer than three records, or a zero
+median, render only the canonical purchase example. This read-only context never claims an account balance
+or plan and never changes config.
+
 ## Loop
 0. **Preflight.**
    - Read `../../shared/references/build-stamp.md` and parse `version:` + `content_hash:`. Determine
@@ -65,10 +119,12 @@ Read these before running, and follow them exactly:
      Use the validation/rendering procedure in `errors.md`; `null`, booleans, zero, negatives, floats,
      numeric strings, and non-exact spellings of `"all"` are invalid. This skill is headless: never ask for
      confirmation and never write config. Saved values are durable consent; one-off context is ephemeral.
-   - `agent-data whoami`; `api_key_set:false` → E-NO-AUTH (HALT, exit 1).
+   - `agent-data whoami`; pass the result through **Attempt accounting**; `api_key_set:false` → E-NO-AUTH
+     (HALT, exit 1).
    - `agent-data call <listing> status`: `ok` proceed; `degraded` set a flag (set Run health: degraded (job sources flaky);
      note "job sources flaky — results this run may be affected" in the digest; no detail-read cap — read
      promising matches as normal); unreachable → E-SERVICE-DOWN (write a "service down" digest, HALT, exit 1).
+     Pass the status result through **Attempt accounting** before taking any branch.
 
    > Before exiting on ANY E-* HALT with a writable workspace (including E-NO-AGENT-DATA,
    > E-NO-AUTH, E-NO-PREFERENCES, E-CONFIG-VERSION, E-SERVICE-DOWN, E-QUOTA), write
@@ -98,7 +154,8 @@ Read these before running, and follow them exactly:
    each returned `data.pagination` object is valid; missing/malformed metadata takes the incomplete branch
    even when its result rows are trustworthy.
 
-   Apply the existing search failures without changing their scope: retry only `retryable:true`; after retry
+   Pass each first-page result through **Attempt accounting** before interpreting it. Apply the existing
+   search failures without changing their scope: retry only `retryable:true`; after retry
    exhaustion feed the per-source E-UPSTREAM-STRETCH breaker; source validation errors drop only that source;
    bad query parameters skip that query; quota globally halts. Every enabled source must have an attempted
    first-page stream record before the batch is considered complete.
@@ -154,6 +211,8 @@ Read these before running, and follow them exactly:
    raw ordered page signature as the ordered `(row.source,row.source_id)` list and each non-null cursor in
    memory only. On every successful continuation, test cursor/signature repetition **before** interpreting
    terminal metadata; a repeated signature is incomplete even when that response says `has_more:false`.
+   Pass every resolved continuation attempt through **Attempt accounting** before retry, protocol, error, or
+   reconciliation handling.
 
    | Observed branch | Stream action |
    |---|---|
@@ -223,7 +282,8 @@ Read these before running, and follow them exactly:
    (`--posting_id`) AND its `--source_url` (the same-row pair) — pass the row's `--source` explicitly (contract
    → get-posting) — judges `description_markdown` + `missing_fields[]`
    (missing = "not stated", never negative) by following that skill and **resolving the steer's open questions**,
-   and returns/records the same structured judgment object. Per-posting errors stay local to that posting:
+   and returns/records the same structured judgment object. Pass every resolved detail attempt through
+   **Attempt accounting** before retry, error, or judgment handling. Per-posting errors stay local to that posting:
    `400 validation_error` (not retryable — a `posting_id`/`source_url` pair mismatch) → judge from summary, note "detail link expired"; `503 upstream_unavailable` (retryable) → retry/backoff, then summary-only + note. **No product cap** — every queued posting gets evaluated;
    the scan (relevance), not a count, decides how many.
 5. **Consolidate + persist + report.** Collect the detail-read verdicts and **validate each before it lands**: `match` must be `strong | moderate | weak`, or `null` when `relevant` is false — coerce anything else (a faster delegated model can emit a stray number or out-of-vocab band) and never let a numeric score reach `jobs.jsonl` or the digest — and every event MUST carry a non-empty `source_id`. Then for each selected source row append the FULL `evaluated` event
@@ -285,19 +345,30 @@ Read these before running, and follow them exactly:
    exactly those `<query_id>:<source>` streams in config order; otherwise write `false` and `[]`. The runner
    records evidence only—it never writes the registry's shown marker.
 
-   Pricing, metering, quota wording, and `agent_data_usage` arithmetic remain owned by
-   `agent-data-contract.md`, `errors.md`, and `conventions.md`; do not copy rates or invent account state here.
+   Persist the complete `agent_data_usage` object from **Attempt accounting** in the new run record. In the
+   digest, put the usage line immediately after the outcome counts line. When the canonical rate was verified,
+   render the calls-first form `Agent-data usage: <N> metered calls this run · about $<exact decimal>
+   pay-as-you-go equivalent`; the equivalent label is mandatory because this is not a balance or charge. When
+   the rate was not verified, render `Agent-data usage: <N> metered calls this run` without a dollar clause.
+   On E-QUOTA, use the dynamic calls counted after already-started attempts settle and append only the optional
+   local context established by **Attempt accounting**.
 
-   Print a 5-line terminal
-   summary in this shape:
+   Pricing, metering, quota wording, canonical values, and the `agent_data_usage` schema remain owned by
+   `agent-data-contract.md`, `errors.md`, and `conventions.md`; do not copy their rate or top-up literals or
+   invent account state here.
+
+   Print a 6-line terminal summary in this shape:
 
    ```
-   Searched <n> queries · <total> postings, <new> new
-   Read <m> in full
+   Ran <n> searches · scanned <total> postings · reviewed <new> new
+   Read <m> promising postings in full
    <s> strong · <md> moderate · <w> weak · <f> filtered out
+   Agent-data usage: <N> metered calls this run · about $<exact decimal> pay-as-you-go equivalent
    Run health: <healthy | partial (<why>) | degraded (job sources flaky) | blocked> · Job Search <version> <content_hash> · git <sha|unknown>
    Digest: <path to reports/<date>-digest.md>
    ```
+
+   If the canonical rate was not verified, the fourth line is the same calls-only form used in the digest.
 
    On a blocked HALT, collapse to the named error + fix and the digest path (there are no bands to report).
 
@@ -328,7 +399,7 @@ pass", "dedup", "database", "resolving the workspace", `jobs.jsonl`, registry, c
 files, skill names — never reaches the user; say the outcome, not the mechanism (see the table in
 `../../shared/references/voice.md`).
 
-**Scheduled/headless invocations stay quiet** until the 5-line summary + digest. But when this skill runs
+**Scheduled/headless invocations stay quiet** until the 6-line summary + digest. But when this skill runs
 inside a live conversation (onboarding's first run, "run a search now"), narrate progress sparsely per
 `../../shared/references/voice.md`: one short line per stage, in user outcomes — "Searching for '<keywords>'…" → "Found N
 postings — M are new." → "Reading the M promising ones in full…" → then the matches as normal message text
