@@ -322,14 +322,15 @@
     },
     {
       "id": 26,
-      "scenario": "pagination default compatibility",
-      "prompt": "Build a temp workspace + shim (setup-workspace.sh), PATH=<tmp>/_bin:$PATH, JOBSEARCH_TEST_SCENARIO=pagination, JOBSEARCH_FIXTURES=<repo>/tests/fixtures, and JOBSEARCH_TEST_CALL_LOG=<tmp>/calls.jsonl. Leave search.max_new_postings_per_run OMITTED. Before running, pre-seed jobs.jsonl with prior evaluated events for every first-page pagination fixture row: (linkedin, 9100001), (linkedin, 9100002), (ashby, a1111111-1111-4111-8111-111111111111), and (ashby, a2222222-2222-4222-8222-222222222222). The Ashby first-page fixture reports data.pagination.has_more:true. Save the config bytes, run job-search-run against <tmp>, then show calls.jsonl, runs/<id>.json, and whether config.yaml changed.",
+      "scenario": "pagination default compatibility + nudge boundary",
+      "prompt": "Create TWO isolated workspaces by running setup-workspace.sh for <tmp>/eligible and <tmp>/ineligible. In both, leave search.max_new_postings_per_run OMITTED, use JOBSEARCH_TEST_SCENARIO=pagination and JOBSEARCH_FIXTURES=<repo>/tests/fixtures, and snapshot config.yaml bytes before the run. Give each arm its own PATH, call log, and canonical registry override: JOBSEARCH_OS_REGISTRY=<workspace>/registry.json. Seed each registry with {\"version\":1,\"active_workspace\":\"<absolute workspace>\",\"review_sentinel\":\"preserve-exactly\"}, then snapshot its bytes. The Ashby first-page fixture reports trustworthy data.pagination.has_more:true. ELIGIBLE arm: pre-seed jobs.jsonl with prior evaluated events for every first-page row: (linkedin, 9100001), (linkedin, 9100002), (ashby, a1111111-1111-4111-8111-111111111111), and (ashby, a2222222-2222-4222-8222-222222222222). Run job-search-run against <tmp>/eligible. INELIGIBLE arm: in a separate jobs.jsonl, pre-seed the same rows EXCEPT (ashby, a2222222-2222-4222-8222-222222222222), leaving exactly one unique unseen first-page role. Run job-search-run against <tmp>/ineligible. For both arms, show the call log and runs/<id>.json; compare the before/after config bytes and registry bytes; show the final registry JSON.",
       "expectations": [
-        "Omission preserves first-page coverage: calls.jsonl contains no search-jobs call with a non-null cursor even though healthy Ashby first pages report has_more:true",
-        "The run record contains review_scope.mode:first_page, review_scope.origin:default, and review_scope.outcome:completed_first_pages",
-        "The runner neither writes config.yaml nor asks for confirmation; an omitted max_new_postings_per_run resolves to backward-compatible first-page-only behavior",
-        "Because all first-page rows are already known and healthy Ashby streams report trustworthy has_more:true, pagination_metrics records zero unique unseen first-page roles and deeper_coverage_nudge_eligible:true with the eligible query/source stream identities; either condition being false would make eligibility false",
-        "The runner records only local nudge evidence and never writes the registry shown marker"
+        "In BOTH isolated arms, omission preserves first-page coverage: the arm's call log contains no search-jobs call with a non-null cursor even though healthy Ashby first pages report has_more:true",
+        "Both run records contain review_scope.mode:first_page, review_scope.origin:default, and review_scope.outcome:completed_first_pages",
+        "The ELIGIBLE run records pagination_metrics.unique_unseen_roles_first_pages:0, deeper_coverage_nudge_eligible:true, and deeper_coverage_nudge_streams:[\"ai-eng-remote:ashby\",\"ml-platform-sf:ashby\"] in deterministic config order",
+        "The INELIGIBLE run records pagination_metrics.unique_unseen_roles_first_pages:1, deeper_coverage_nudge_eligible:false, and deeper_coverage_nudge_streams:[]; healthy trustworthy has_more:true alone is insufficient when a first-page role is unseen",
+        "In BOTH arms, the runner neither asks for confirmation nor changes config.yaml; the before/after config bytes are identical",
+        "In BOTH arms, the JOBSEARCH_OS_REGISTRY file's before/after bytes are identical, review_sentinel remains present, and deeper_coverage_nudges remains absent: the runner records local eligibility evidence only and never writes the home-view shown marker"
       ]
     }
   ]
