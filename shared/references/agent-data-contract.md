@@ -1,10 +1,12 @@
 # agent-data Job Postings API — contract
 
-_Last verified:_ route contract against the live CLI on 2026-07-14; pagination producer contract against
-local producer code/tests on 2026-07-15; pricing/metering values supplied and approved on 2026-07-15
-without a live account/pricing probe. This mirrors a live, evolving service. When actual CLI output or
-live account/pricing metadata disagrees (a new field, a renamed error, a source added or dropped), trust
-the live source, treat the stale line here as the thing to fix, and re-stamp the relevant date when you
+_Last verified:_ route docs and production behavior against the live CLI on 2026-07-15. Live pagination
+evidence covers first-page and exact one-hop continuation calls for Ashby, Greenhouse, and Lever; zero-result
+terminal envelopes for all three; and LinkedIn pagination omission plus non-retryable cursor rejection.
+Opaque cursors and request IDs were not retained. Pricing/metering values were supplied and approved on
+2026-07-15 without a live account/pricing probe. This mirrors a live, evolving service. When actual CLI
+output or live account/pricing metadata disagrees (a new field, a renamed error, a source added or dropped),
+trust the live source, treat the stale line here as the thing to fix, and re-stamp the relevant date when you
 re-verify. Never fill a gap from memory: if a field, source, or error code isn't in the real output, it
 isn't in the contract.
 
