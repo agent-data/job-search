@@ -28,6 +28,8 @@ ROOT = pathlib.Path(__file__).resolve().parents[1]
 SHARED = ROOT / "shared" / "references"
 MECH = ROOT / "shared" / "scripts" / "mechanics"
 LIFECYCLE = SHARED / "run-lifecycle.md"
+LIFECYCLE_LEDGER_PATH = "runs/.lifecycle-{run_id}.jsonl"
+LIFECYCLE_METRICS_PATH = "{workspace}/metrics.json"
 
 # Unique marker planted in the ONE canonical home (shared/references/conventions.md).
 MARKER = "reference-resolution-marker:8f2a4c1e-single-home"
@@ -120,15 +122,97 @@ LIFECYCLE_METRICS = (
     "schedule_verified_at",
 )
 
-LIFECYCLE_PROHIBITED_FIELDS = (
-    "API keys",
-    "auth headers",
-    "environment dumps",
-    "cursors",
-    "full job descriptions",
-    "preferences text",
-    "match prose",
+LIFECYCLE_LEDGER = {
+    "path": LIFECYCLE_LEDGER_PATH,
+    "write_mode": "append_only",
+    "visibility": "hidden",
+    "writer": "coordinator_only",
+}
+
+LIFECYCLE_INVARIANTS = {
+    "presented_counts_as_evaluated": "true",
+    "presented_counts_as_presented": "true",
+    "early_results_terminal": "false",
+    "blocked_counts_as_complete": "false",
+    "interrupted_counts_as_complete": "false",
+}
+
+LIFECYCLE_COMPLETION_CLAUSES = {
+    "remaining_zero": "remaining=0",
+    "in_flight_zero": "in_flight=0",
+    "selected_settled": "selected=evaluated+terminally_skipped",
+    "all_started_attempts_accounted": "each_attempt_started_has_exactly_one_attempt_accounted",
+    "final_run_record_written": "runs/{run_id}.json",
+    "final_digest_written": "reports/{ISO-date}-digest.md",
+    "ledger_closed_complete": "closed_with_complete_state",
+}
+
+LIFECYCLE_RECOVERY = {
+    "closed": "do_not_append_or_replay",
+    "open_after_selection_settled": "resume_queued_and_reconcile_evaluating",
+    "open_before_selection_settled": "close_interrupted_and_restart_with_fresh_call_context",
+}
+
+LIFECYCLE_PROHIBITED_FIELDS = {
+    "api_keys",
+    "auth_headers",
+    "environment_dumps",
+    "pagination_cursors",
+    "opaque_api_continuation_tokens",
+    "full_job_descriptions",
+    "preferences_text",
+    "match_prose",
+}
+
+LIFECYCLE_METRIC_PROPERTIES = {
+    "path": LIFECYCLE_METRICS_PATH,
+    "local_only": "true",
+    "pii_allowed": "false",
+    "telemetry_enabled": "false",
+    "write_mode": "atomic_whole_file",
+}
+
+LIFECYCLE_COMPLETION_IDENTIFIERS = {
+    "remaining",
+    "in_flight",
+    "selected",
+    "evaluated",
+    "terminally_skipped",
+    "attempt_started",
+    "attempt_accounted",
+}
+
+LIFECYCLE_OWNER_IDENTIFIER_SETS = (
+    set(LIFECYCLE_PHASES),
+    set(LIFECYCLE_EVENTS),
+    set(LIFECYCLE_POSTING_STATES),
+    set(LIFECYCLE_CLOSE_STATES),
+    set(LIFECYCLE_METRICS),
 )
+
+
+def _contract_block(text, name):
+    """Body between stable owner-only lifecycle contract markers."""
+    pattern = (
+        rf"<!-- lifecycle-contract:{re.escape(name)} -->\s*"
+        rf"(?P<body>.*?)\s*<!-- /lifecycle-contract:{re.escape(name)} -->"
+    )
+    match = re.search(pattern, text, re.DOTALL)
+    assert match, f"run-lifecycle.md is missing the {name!r} semantic contract block"
+    return match.group("body")
+
+
+def _contract_list(text, name):
+    """Normalized first code token from each list row in a marked contract block."""
+    block = _contract_block(text, name)
+    return tuple(re.findall(r"^\s*(?:\d+\.|-)\s+`([^`]+)`(?:\s|$)", block, re.MULTILINE))
+
+
+def _contract_table(text, name):
+    """Normalized key/value code cells from a marked Markdown table."""
+    block = _contract_block(text, name)
+    rows = re.findall(r"^\s*\|\s*`([^`]+)`\s*\|\s*`([^`]+)`\s*\|\s*$", block, re.MULTILINE)
+    return dict(rows)
 
 
 def _pointer_files():
@@ -232,49 +316,50 @@ def test_run_lifecycle_contract_is_single_homed_and_consumed():
     assert LIFECYCLE.is_file(), "shared/references/run-lifecycle.md is the required single contract home"
 
     for consumer in LIFECYCLE_CONSUMERS:
-        targets = re.findall(r"\[[^]]+\]\(([^)#]+\.md)\)", consumer.read_text(encoding="utf-8"))
+        consumer_text = consumer.read_text(encoding="utf-8")
+        targets = re.findall(r"\[[^]]+\]\(([^)#]+\.md)\)", consumer_text)
         resolved = {(consumer.parent / target).resolve() for target in targets}
         assert LIFECYCLE.resolve() in resolved, (
             f"{consumer.relative_to(ROOT)} must link to shared/references/run-lifecycle.md")
 
+        assert "<!-- lifecycle-contract:" not in consumer_text, (
+            f"{consumer.relative_to(ROOT)} duplicates an owner-only semantic contract marker")
+        assert LIFECYCLE_LEDGER_PATH not in consumer_text, (
+            f"{consumer.relative_to(ROOT)} duplicates the lifecycle ledger path")
+        assert LIFECYCLE_METRICS_PATH not in consumer_text, (
+            f"{consumer.relative_to(ROOT)} duplicates the lifecycle metrics path")
+        consumer_identifiers = set(re.findall(r"\b[A-Za-z][A-Za-z0-9]*(?:[_-][A-Za-z0-9]+)*\b",
+                                              consumer_text))
+        duplicated = [tokens for tokens in LIFECYCLE_OWNER_IDENTIFIER_SETS
+                      if tokens <= consumer_identifiers]
+        assert not duplicated, (
+            f"{consumer.relative_to(ROOT)} duplicates lifecycle contract structure: {duplicated}")
+        completion_structure = LIFECYCLE_COMPLETION_IDENTIFIERS <= consumer_identifiers
+        completion_structure &= all(path in consumer_text for path in (
+            "runs/{run_id}.json", "reports/{ISO-date}-digest.md"))
+        assert not completion_structure, (
+            f"{consumer.relative_to(ROOT)} duplicates the lifecycle completion predicate")
+
+
+def test_run_lifecycle_contract_has_stable_vocabulary():
     text = LIFECYCLE.read_text(encoding="utf-8")
 
-    phase_section = re.search(r"^## Ordered phases\n(?P<body>.*?)(?=^## |\Z)", text, re.MULTILINE | re.DOTALL)
-    assert phase_section, "run-lifecycle.md must define an Ordered phases section"
-    phases = tuple(re.findall(r"^\d+\. `([^`]+)`", phase_section.group("body"), re.MULTILINE))
-    assert phases == LIFECYCLE_PHASES
+    assert _contract_table(text, "ledger") == LIFECYCLE_LEDGER
+    assert _contract_list(text, "phases") == LIFECYCLE_PHASES
+    assert set(_contract_list(text, "events")) == set(LIFECYCLE_EVENTS)
+    assert set(_contract_list(text, "posting-states")) == set(LIFECYCLE_POSTING_STATES)
+    assert set(_contract_list(text, "close-states")) == set(LIFECYCLE_CLOSE_STATES)
+    assert set(_contract_list(text, "metric-timestamps")) == set(LIFECYCLE_METRICS)
 
-    vocabulary_contracts = (
-        (r"The closed event vocabulary is (?P<body>.*?)\.", LIFECYCLE_EVENTS),
-        (r"The closed posting-state vocabulary is (?P<body>.*?)\.", LIFECYCLE_POSTING_STATES),
-        (r"The closed close-state vocabulary is (?P<body>.*?):", LIFECYCLE_CLOSE_STATES),
-        (r"Its product-event fields use these timestamp\n?names: (?P<body>.*?)\.", LIFECYCLE_METRICS),
-    )
-    for pattern, expected in vocabulary_contracts:
-        match = re.search(pattern, text, re.DOTALL)
-        assert match, f"run-lifecycle.md is missing vocabulary contract matching {pattern!r}"
-        assert tuple(re.findall(r"`([^`]+)`", match.group("body"))) == expected
 
-    prohibited = re.search(r"these prohibited fields or values: (?P<body>.*?)\.", text, re.DOTALL)
-    assert prohibited, "run-lifecycle.md must define the prohibited ledger content"
-    prohibited_text = re.sub(r"\s+", " ", prohibited.group("body"))
-    expected_prohibited = ", ".join(LIFECYCLE_PROHIBITED_FIELDS[:-1])
-    expected_prohibited += f", and {LIFECYCLE_PROHIBITED_FIELDS[-1]}"
-    assert prohibited_text == expected_prohibited
+def test_run_lifecycle_contract_pins_completion_recovery_and_privacy():
+    text = LIFECYCLE.read_text(encoding="utf-8")
 
-    required_literals = (
-        "runs/.lifecycle-{run_id}.jsonl",
-        "remaining = 0",
-        "in_flight = 0",
-        "selected = evaluated + terminally_skipped",
-        "runs/{run_id}.json",
-        "reports/{ISO-date}-digest.md",
-        "{workspace}/metrics.json",
-        "atomic whole-file write",
-        "non-resumable",
-    )
-    missing = [literal for literal in required_literals if literal not in text]
-    assert not missing, f"run-lifecycle.md is missing canonical contract literals: {missing}"
+    assert _contract_table(text, "invariants") == LIFECYCLE_INVARIANTS
+    assert _contract_table(text, "completion") == LIFECYCLE_COMPLETION_CLAUSES
+    assert _contract_table(text, "recovery") == LIFECYCLE_RECOVERY
+    assert set(_contract_list(text, "persistence-prohibitions")) == LIFECYCLE_PROHIBITED_FIELDS
+    assert _contract_table(text, "metric-properties") == LIFECYCLE_METRIC_PROPERTIES
 
 
 # ------------------------------------------------------ mechanics-script resolution (P4/T4.2)

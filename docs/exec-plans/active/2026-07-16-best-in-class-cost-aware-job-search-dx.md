@@ -1271,6 +1271,13 @@ AAS-DIST-03/05/06.
   completion self-review confirmed the exact phase/event/posting/close vocabularies, the fail-closed artifact
   and attempt predicate, presented-as-evaluated counting, honest blocked/interrupted closure, and no durable
   cursor, opaque continuation-token, secret, preference, description, or match-prose persistence.
+- 2026-07-16 — T1.1 review-fix RED strengthened semantic tests against the committed contract and reported
+  `2 failed, 27 passed` for missing stable `ledger` and `invariants` blocks. GREEN reported `29 passed` after
+  the canonical owner adopted marked lists/tables for exact normalized vocabularies, completion clauses,
+  recovery branches, persistence exclusions, and metric properties; consumer checks now reject owner
+  structures outside that file. Self-review kept the content denylist ledger-scoped while cursor and opaque
+  continuation-token exclusion remains durable-artifact-wide. Doc lint was clean and full pytest reported
+  `187 passed`.
 
 ## Decision log
 

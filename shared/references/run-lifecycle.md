@@ -7,10 +7,19 @@ point here instead of restating the lifecycle schema.
 
 ## Durable ledger
 
-Every run creates one hidden append-only JSON Lines ledger at `runs/.lifecycle-{run_id}.jsonl` before
-mutable run work begins. The coordinator is its only writer. Each append is one complete event line; existing
-lines are immutable, and a closed ledger accepts no later events. The ledger is the authoritative resume
-record after context compaction or process loss, not the current conversation's recollection.
+<!-- lifecycle-contract:ledger -->
+| Attribute | Contract value |
+|---|---|
+| `path` | `runs/.lifecycle-{run_id}.jsonl` |
+| `write_mode` | `append_only` |
+| `visibility` | `hidden` |
+| `writer` | `coordinator_only` |
+<!-- /lifecycle-contract:ledger -->
+
+Every run creates the ledger above before mutable run work begins. Each append is one complete JSON Lines
+event; existing lines are immutable, and a closed ledger accepts no later events. The ledger is the
+authoritative resume record after context compaction or process loss, not the current conversation's
+recollection.
 
 The ledger stores restricted identifiers, timestamps, enums, and accounting state only. Its path is separate
 from the pagination scratch described in [conventions.md](conventions.md#pagination-scratch-lifecycle), and
@@ -18,6 +27,7 @@ neither file substitutes for the other.
 
 ## Ordered phases
 
+<!-- lifecycle-contract:phases -->
 1. `preflight`
 2. `searching`
 3. `selection_settled`
@@ -26,6 +36,7 @@ neither file substitutes for the other.
 6. `reviewing_remaining`
 7. `finalizing`
 8. `complete`
+<!-- /lifecycle-contract:phases -->
 
 The order is monotonic: a run never returns to an earlier phase. `selection_settled` means the selected set
 is durable before posting review begins. An interactive run enters `early_results_shown` only after it has
@@ -41,8 +52,18 @@ publish only from `finalizing`.
 
 ## Event and posting vocabulary
 
-The closed event vocabulary is `run_started`, `phase_changed`, `posting_state`, `attempt_started`,
-`attempt_accounted`, `brief_revision`, `milestone`, and `run_closed`.
+The event vocabulary is closed:
+
+<!-- lifecycle-contract:events -->
+- `run_started`
+- `phase_changed`
+- `posting_state`
+- `attempt_started`
+- `attempt_accounted`
+- `brief_revision`
+- `milestone`
+- `run_closed`
+<!-- /lifecycle-contract:events -->
 
 - `run_started` establishes the run identity and initial `preflight` phase once.
 - `phase_changed` records a valid forward phase transition other than the terminal `complete` transition.
@@ -54,11 +75,30 @@ The closed event vocabulary is `run_started`, `phase_changed`, `posting_state`, 
 - `milestone` records a closed milestone token, never user-facing result content.
 - `run_closed` is the final line and carries exactly one close state.
 
-The closed posting-state vocabulary is `queued`, `evaluating`, `evaluated`, `presented`, and
-`terminally_skipped`. `presented` is a flag-like evaluated state: a posting whose latest state is
+The posting-state vocabulary is closed:
+
+<!-- lifecycle-contract:posting-states -->
+- `queued`
+- `evaluating`
+- `evaluated`
+- `presented`
+- `terminally_skipped`
+<!-- /lifecycle-contract:posting-states -->
+
+`presented` is a flag-like evaluated state: a posting whose latest state is
 `presented` counts in both `evaluated` and `presented`, so showing it can never make it look unevaluated.
 `terminally_skipped` is reserved for a selected posting that will not be retried in this run; it is not a
 cleanup shortcut for forcing the completion predicate.
+
+<!-- lifecycle-contract:invariants -->
+| Invariant | Contract value |
+|---|---|
+| `presented_counts_as_evaluated` | `true` |
+| `presented_counts_as_presented` | `true` |
+| `early_results_terminal` | `false` |
+| `blocked_counts_as_complete` | `false` |
+| `interrupted_counts_as_complete` | `false` |
+<!-- /lifecycle-contract:invariants -->
 
 Fold posting state last-write-wins per selected identity. Derive counters as follows:
 
@@ -71,20 +111,34 @@ Fold posting state last-write-wins per selected identity. Derive counters as fol
 
 ## Completion and close states
 
-A run is ready to close complete only after every pre-close condition below is verified from the folded
-ledger and filesystem:
+A run satisfies the completion contract only when every clause below is verified from the folded ledger and
+filesystem:
 
-1. `remaining = 0`.
-2. `in_flight = 0`.
-3. `selected = evaluated + terminally_skipped` (where evaluated includes presented postings).
-4. Every `attempt_started` has exactly one matching `attempt_accounted`.
-5. The final `runs/{run_id}.json` and `reports/{ISO-date}-digest.md` have both been written.
+<!-- lifecycle-contract:completion -->
+| Completion clause | Required value |
+|---|---|
+| `remaining_zero` | `remaining=0` |
+| `in_flight_zero` | `in_flight=0` |
+| `selected_settled` | `selected=evaluated+terminally_skipped` |
+| `all_started_attempts_accounted` | `each_attempt_started_has_exactly_one_attempt_accounted` |
+| `final_run_record_written` | `runs/{run_id}.json` |
+| `final_digest_written` | `reports/{ISO-date}-digest.md` |
+| `ledger_closed_complete` | `closed_with_complete_state` |
+<!-- /lifecycle-contract:completion -->
 
-Only then may the coordinator append `run_closed` with close state `complete`. A run is complete only when
-all five pre-close conditions still hold, the ledger is closed, and its close state is `complete`. If any
-condition is unproved, completion is unproved; do not close complete or claim success.
+The first six clauses make a run ready to close. Only then may the coordinator append `run_closed` with
+close state `complete`, which establishes the seventh clause. If any clause is unproved, completion is
+unproved; do not close complete or claim success. In `selected_settled`, evaluated includes presented
+postings. In `all_started_attempts_accounted`, every `attempt_started` has exactly one matching
+`attempt_accounted`. The two final-artifact clauses require the named files to have been written.
 
-The closed close-state vocabulary is `complete`, `blocked`, and `interrupted`:
+The close-state vocabulary is closed:
+
+<!-- lifecycle-contract:close-states -->
+- `complete`
+- `blocked`
+- `interrupted`
+<!-- /lifecycle-contract:close-states -->
 
 - `complete` establishes phase `complete` after the completion predicate passes.
 - `blocked` records a named condition that prevented the run from continuing safely.
@@ -96,15 +150,24 @@ reopened, regardless of close state.
 
 ## Safe recovery and non-resumable search state
 
-After compaction or process loss, read and fold the ledger before acting:
+After compaction or process loss, read and fold the ledger before applying this recovery map:
 
-1. If it is closed, do not append or replay work. Treat only a close state of `complete` as completion.
-2. If it is open and `selection_settled` was reached, preserve settled results and resume queued review.
-   Reconcile any evaluating item and its attempt record explicitly; never assume an unresolved call was free,
-   silently replay it, or mark it evaluated without evidence.
-3. If it is open and `selection_settled` was not reached, close it `interrupted` when the valid ledger prefix
-   permits that append, then start a fresh search with fresh call context. Do not infer a selected set from
-   conversation memory or incomplete scratch.
+<!-- lifecycle-contract:recovery -->
+| Ledger branch | Required action |
+|---|---|
+| `closed` | `do_not_append_or_replay` |
+| `open_after_selection_settled` | `resume_queued_and_reconcile_evaluating` |
+| `open_before_selection_settled` | `close_interrupted_and_restart_with_fresh_call_context` |
+<!-- /lifecycle-contract:recovery -->
+
+- For `closed`, treat only close state `complete` as completion; do not append or replay work for any close
+  state.
+- For `open_after_selection_settled`, preserve settled results and resume queued review. Reconcile every
+  evaluating item and its attempt record explicitly; never assume an unresolved call was free, silently
+  replay it, or mark it evaluated without evidence.
+- For `open_before_selection_settled`, close the run `interrupted` when the valid ledger prefix permits that
+  append, then start a fresh search with fresh call context. Do not infer a selected set from conversation
+  memory or incomplete scratch.
 
 Pagination cursors and other opaque API continuation tokens are non-resumable. Never persist, reconstruct,
 or reuse them from the lifecycle ledger, final run record, digest, registry, jobs log, metrics, or pagination
@@ -114,19 +177,50 @@ explicitly non-resumable bounded candidate handoff; follow its deletion rules in
 
 ## Privacy boundary
 
-The lifecycle ledger must never contain these prohibited fields or values: API keys, auth headers,
-environment dumps, cursors, full job descriptions, preferences text, and match prose. Do not place a secret
-or free-form user/job payload into an identifier field. A request identifier may be stored only as restricted,
-nonsecret attempt provenance; it is not a continuation token.
+The lifecycle ledger must exclude these content classes:
+
+<!-- lifecycle-contract:persistence-prohibitions -->
+- `api_keys` — API keys.
+- `auth_headers` — auth headers.
+- `environment_dumps` — environment dumps.
+- `pagination_cursors` — pagination cursors.
+- `opaque_api_continuation_tokens` — opaque API continuation tokens.
+- `full_job_descriptions` — full job descriptions.
+- `preferences_text` — preferences text.
+- `match_prose` — match prose.
+<!-- /lifecycle-contract:persistence-prohibitions -->
+
+Do not place a secret or free-form user/job payload into an identifier field. A request identifier may be
+stored only as restricted, nonsecret attempt provenance; it is not a continuation token.
 
 The hidden filename is an organization detail, not an access-control boundary. The ledger stays inside the
 private workspace protected by the workspace's deny-all source-control rules.
 
 ## Local metrics
 
-Local milestone evidence lives at `{workspace}/metrics.json`. Its product-event fields use these timestamp
-names: `onboarding_started_at`, `agent_data_ready_at`, `first_live_call_at`,
-`first_relevant_match_ready_at`, `early_results_shown_at`, `run_completed_at`, and `schedule_verified_at`.
+Local milestone evidence has these storage properties:
+
+<!-- lifecycle-contract:metric-properties -->
+| Attribute | Contract value |
+|---|---|
+| `path` | `{workspace}/metrics.json` |
+| `local_only` | `true` |
+| `pii_allowed` | `false` |
+| `telemetry_enabled` | `false` |
+| `write_mode` | `atomic_whole_file` |
+<!-- /lifecycle-contract:metric-properties -->
+
+Its timestamp field vocabulary is closed:
+
+<!-- lifecycle-contract:metric-timestamps -->
+- `onboarding_started_at`
+- `agent_data_ready_at`
+- `first_live_call_at`
+- `first_relevant_match_ready_at`
+- `early_results_shown_at`
+- `run_completed_at`
+- `schedule_verified_at`
+<!-- /lifecycle-contract:metric-timestamps -->
 
 Metrics are local-only, no-PII product evidence, not telemetry. Never transmit them automatically or store
 preferences, resumes, job or posting text, match content, credentials, auth material, environment dumps,
