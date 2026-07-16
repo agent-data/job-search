@@ -3,6 +3,8 @@
 The "OS state" that survives across sessions so any skill finds the user's data identically. The host agent performs these procedures itself, with its own file-read/write and shell
 tools, plus the exact shell lines below. Never hard-code or re-derive the
 paths and precedence rules — follow the procedures as written; they are the contract every skill shares.
+Durable run progression, safe recovery, completion, and local milestone evidence are owned by
+[run-lifecycle.md](run-lifecycle.md); this file does not restate that schema.
 
 ## Registry (machine-managed OS state — JSON, not YAML)
 Location (tests/evals redirect it via `$JOBSEARCH_OS_REGISTRY`):

@@ -287,7 +287,7 @@ Rules: PSG-COMM-09/20; AAS-BOUND-03; AAS-DIST-03.
 
 Rules: AAS-PROC-03/04; AAS-FORM-08/09/14; AAS-LANG-08; PSG-INJ-03/04/05/11/14.
 
-- [ ] **T1.1 [BLOCKS, M] Pin the lifecycle and metrics contract in one public reference.**
+- [x] **T1.1 [BLOCKS, M] Pin the lifecycle and metrics contract in one public reference.**
 
   **Create:** shared/references/run-lifecycle.md
 
@@ -1264,6 +1264,13 @@ AAS-DIST-03/05/06.
   audit found `credential-safe`, `backoff`, and `never auto-update` at lines 248, 266–269, and 272; full doc
   lint reported `Doc lint: clean.` Both follow-ups remain explicitly non-release-blocking, and no hosted-docs
   or sandbox debt item was added.
+- 2026-07-16 — T1.1 RED `python3 -m pytest -q tests/test_reference_resolution.py` exited 1 with the expected
+  absent-contract assertion (`1 failed, 26 passed`). GREEN defined the single lifecycle/metrics owner and
+  linked exactly the architecture, conventions, and internals consumers; the same command reported
+  `27 passed`, doc lint reported `Doc lint: clean.`, and full pytest reported `185 passed`. Privacy and
+  completion self-review confirmed the exact phase/event/posting/close vocabularies, the fail-closed artifact
+  and attempt predicate, presented-as-evaluated counting, honest blocked/interrupted closure, and no durable
+  cursor, opaque continuation-token, secret, preference, description, or match-prose persistence.
 
 ## Decision log
 

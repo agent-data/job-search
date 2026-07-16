@@ -89,10 +89,12 @@ its native tools. No helper binary or script ships with the skills.
 ### shared-references
 The single source of truth for every runtime contract:
 [errors.md](shared/references/errors.md), [conventions.md](shared/references/conventions.md),
-[agent-data-contract.md](shared/references/agent-data-contract.md), and
-[internals.md](shared/references/internals.md). The install lays down the whole pack tree, so these resolve
-in place from each skill — nothing is fanned into per-skill copies; [scripts/build.sh](scripts/build.sh)
-only regenerates the build stamp (`shared/references/build-stamp.md`).
+[agent-data-contract.md](shared/references/agent-data-contract.md),
+[internals.md](shared/references/internals.md), and the durable run and local-metrics contract in
+[run-lifecycle.md](shared/references/run-lifecycle.md). The install lays down the whole pack tree, so these
+resolve in place from each skill — nothing is fanned into per-skill copies;
+[scripts/build.sh](scripts/build.sh) only regenerates the build stamp
+(`shared/references/build-stamp.md`).
 
 ### skill-layer
 The five programs: [job-search](skills/job-search/SKILL.md) (front door / home view),
@@ -158,6 +160,7 @@ When you need an exact runtime detail, go to its owner — do not reproduce it h
 |---|---|
 | Named errors, run-health states, surfacing | [shared/references/errors.md](shared/references/errors.md) |
 | Workspace layout, `config.yaml`, jobs log, digest format | [shared/references/conventions.md](shared/references/conventions.md) |
+| Run lifecycle, completion, recovery, local metrics | [shared/references/run-lifecycle.md](shared/references/run-lifecycle.md) |
 | agent-data CLI: routes, fields, retry rules, listing id | [shared/references/agent-data-contract.md](shared/references/agent-data-contract.md) |
 | Registry, workspace discovery, config recipes, scheduling | [shared/references/internals.md](shared/references/internals.md) |
 

@@ -27,6 +27,7 @@ import pytest
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 SHARED = ROOT / "shared" / "references"
 MECH = ROOT / "shared" / "scripts" / "mechanics"
+LIFECYCLE = SHARED / "run-lifecycle.md"
 
 # Unique marker planted in the ONE canonical home (shared/references/conventions.md).
 MARKER = "reference-resolution-marker:8f2a4c1e-single-home"
@@ -66,6 +67,68 @@ _PTR = re.compile(r"(?:\.\./)*(?:shared/)?references/(?:platform/)?[A-Za-z0-9._-
 # shared/references body). The "run the shared script where a runtime exists" arm must resolve in place to
 # the single scripts home — a dangling invocation would silently drop to the fallback on every host.
 _SCRIPT_PTR = re.compile(r"(?:\.\./)+(?:shared/)?scripts/mechanics/[A-Za-z0-9._-]+\.sh")
+
+LIFECYCLE_CONSUMERS = (
+    ROOT / "ARCHITECTURE.md",
+    SHARED / "conventions.md",
+    SHARED / "internals.md",
+)
+
+LIFECYCLE_PHASES = (
+    "preflight",
+    "searching",
+    "selection_settled",
+    "reviewing_initial_batch",
+    "early_results_shown",
+    "reviewing_remaining",
+    "finalizing",
+    "complete",
+)
+
+LIFECYCLE_EVENTS = (
+    "run_started",
+    "phase_changed",
+    "posting_state",
+    "attempt_started",
+    "attempt_accounted",
+    "brief_revision",
+    "milestone",
+    "run_closed",
+)
+
+LIFECYCLE_POSTING_STATES = (
+    "queued",
+    "evaluating",
+    "evaluated",
+    "presented",
+    "terminally_skipped",
+)
+
+LIFECYCLE_CLOSE_STATES = (
+    "complete",
+    "blocked",
+    "interrupted",
+)
+
+LIFECYCLE_METRICS = (
+    "onboarding_started_at",
+    "agent_data_ready_at",
+    "first_live_call_at",
+    "first_relevant_match_ready_at",
+    "early_results_shown_at",
+    "run_completed_at",
+    "schedule_verified_at",
+)
+
+LIFECYCLE_PROHIBITED_FIELDS = (
+    "API keys",
+    "auth headers",
+    "environment dumps",
+    "cursors",
+    "full job descriptions",
+    "preferences text",
+    "match prose",
+)
 
 
 def _pointer_files():
@@ -162,6 +225,56 @@ def test_no_fanned_reference_copy_remains():
             present.add(p.relative_to(ROOT).as_posix())
     fanned = sorted(present - SKILL_LOCAL_ORIGINALS)
     assert not fanned, f"fanned reference copies still present (must be single-homed): {fanned}"
+
+
+def test_run_lifecycle_contract_is_single_homed_and_consumed():
+    """T1.1: the lifecycle schema has one shared owner and every architecture/reference consumer links it."""
+    assert LIFECYCLE.is_file(), "shared/references/run-lifecycle.md is the required single contract home"
+
+    for consumer in LIFECYCLE_CONSUMERS:
+        targets = re.findall(r"\[[^]]+\]\(([^)#]+\.md)\)", consumer.read_text(encoding="utf-8"))
+        resolved = {(consumer.parent / target).resolve() for target in targets}
+        assert LIFECYCLE.resolve() in resolved, (
+            f"{consumer.relative_to(ROOT)} must link to shared/references/run-lifecycle.md")
+
+    text = LIFECYCLE.read_text(encoding="utf-8")
+
+    phase_section = re.search(r"^## Ordered phases\n(?P<body>.*?)(?=^## |\Z)", text, re.MULTILINE | re.DOTALL)
+    assert phase_section, "run-lifecycle.md must define an Ordered phases section"
+    phases = tuple(re.findall(r"^\d+\. `([^`]+)`", phase_section.group("body"), re.MULTILINE))
+    assert phases == LIFECYCLE_PHASES
+
+    vocabulary_contracts = (
+        (r"The closed event vocabulary is (?P<body>.*?)\.", LIFECYCLE_EVENTS),
+        (r"The closed posting-state vocabulary is (?P<body>.*?)\.", LIFECYCLE_POSTING_STATES),
+        (r"The closed close-state vocabulary is (?P<body>.*?):", LIFECYCLE_CLOSE_STATES),
+        (r"Its product-event fields use these timestamp\n?names: (?P<body>.*?)\.", LIFECYCLE_METRICS),
+    )
+    for pattern, expected in vocabulary_contracts:
+        match = re.search(pattern, text, re.DOTALL)
+        assert match, f"run-lifecycle.md is missing vocabulary contract matching {pattern!r}"
+        assert tuple(re.findall(r"`([^`]+)`", match.group("body"))) == expected
+
+    prohibited = re.search(r"these prohibited fields or values: (?P<body>.*?)\.", text, re.DOTALL)
+    assert prohibited, "run-lifecycle.md must define the prohibited ledger content"
+    prohibited_text = re.sub(r"\s+", " ", prohibited.group("body"))
+    expected_prohibited = ", ".join(LIFECYCLE_PROHIBITED_FIELDS[:-1])
+    expected_prohibited += f", and {LIFECYCLE_PROHIBITED_FIELDS[-1]}"
+    assert prohibited_text == expected_prohibited
+
+    required_literals = (
+        "runs/.lifecycle-{run_id}.jsonl",
+        "remaining = 0",
+        "in_flight = 0",
+        "selected = evaluated + terminally_skipped",
+        "runs/{run_id}.json",
+        "reports/{ISO-date}-digest.md",
+        "{workspace}/metrics.json",
+        "atomic whole-file write",
+        "non-resumable",
+    )
+    missing = [literal for literal in required_literals if literal not in text]
+    assert not missing, f"run-lifecycle.md is missing canonical contract literals: {missing}"
 
 
 # ------------------------------------------------------ mechanics-script resolution (P4/T4.2)
