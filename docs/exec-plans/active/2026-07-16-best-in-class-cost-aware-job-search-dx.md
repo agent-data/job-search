@@ -234,7 +234,7 @@ Commit after every completed task; do not squash a whole phase into one change.
 
 Rules: PSG-COMM-09/20; AAS-BOUND-03; AAS-DIST-03.
 
-- [ ] **T0.1 [BLOCKS, M] Make the design document the complete approved source of truth.**
+- [x] **T0.1 [BLOCKS, M] Make the design document the complete approved source of truth.**
 
   **Modify:**
   - docs/design-docs/2026-07-16-cost-aware-verified-recurring-jobs-design.md
@@ -1252,6 +1252,12 @@ AAS-DIST-03/05/06.
 - 2026-07-16 — Execution pre-flight started on codex/job-postings-pagination at 498afe4. The prior completed
   SDD ledger is archived before this plan's ledger is initialized. Live agent-data calls and scheduler
   writes remain behind T9.4's exact cost-and-machine-change consent gate.
+- 2026-07-16 — T0.1 RED audit exited 0 with the expected design failures at lines 44 (`in-repo prompt`),
+  150 and 311 (`re-canarying`), and 535 (`Current account context is incomplete`). GREEN removed all four
+  hits (the same audit exited 1 with no output), the required approved-term audit exited 0 with
+  `docs-private`, `time to helpful`, `early_results_shown`, `registration drift`, and `activated` present,
+  and full doc lint reported
+  `Doc lint: clean.` The approved DX addendum and design-index summary land in this task's scoped docs commit.
 
 ## Decision log
 

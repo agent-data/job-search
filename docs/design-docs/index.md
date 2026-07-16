@@ -6,7 +6,7 @@ contracts now live in `shared/references/`).
 
 ## Living
 - [Core Beliefs — Agent-First Operating Principles](core-beliefs.md) — _status: current_
-- [Cost-aware decisions, explicit models, and canary-verified recurring jobs](2026-07-16-cost-aware-verified-recurring-jobs-design.md) — _status: current_
+- [Cost-aware decisions, explicit models, and canary-verified recurring jobs](2026-07-16-cost-aware-verified-recurring-jobs-design.md) — _status: current_; the approved DX addendum covers quick activation, durable incremental runs, scheduler liveness, migration/repair, and support truth
 
 ## Historical design snapshots
 - [Job Search OS — Original Design Spec](2026-06-05-os-design.md) — _status: historical_

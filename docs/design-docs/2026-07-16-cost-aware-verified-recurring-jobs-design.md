@@ -41,7 +41,9 @@ canary succeeds.
 - Prefer a harness-native mechanism only when it satisfies the same eligibility gates as every fallback.
 - Write `installed: true` only after registration and execution evidence are green.
 - Preserve existing workspaces and schedules through explicit, non-destructive migration paths.
-- Anchor every skill and reference edit in the in-repo prompt and agent-agnostic style guides.
+- Review every skill and reference edit against the private prompt and agent-agnostic style-guide rule IDs.
+  `docs-private/` is an untracked, authoring-only input; it is absent from the installed plugin, and no
+  runtime skill or shared reference may load, link to, or discover it.
 
 ## Non-goals
 
@@ -84,6 +86,179 @@ An in-session loop is useful as a temporary monitor but does not meet the produc
 job: it stops when the session closes. The new `installed: true` meaning is deliberately narrower — a
 verified unattended job only.
 
+## Approved DX addendum
+
+The following product outcomes were approved after the original design review. They are normative for this
+release and complete the approved delta that implementation must follow. Private style guides under
+`docs-private/` may inform authoring review by stable rule ID, but they do not ship and are never runtime
+dependencies. The installed plugin and its public references must be complete when `docs-private/` is
+absent.
+
+### Persona, time to help, and activation
+
+- **Primary persona:** a technically comfortable job seeker using a coding agent who values the first
+  relevant live match and trustworthy unattended follow-through more than configuration ceremony.
+- **Time to helpful work:** under two minutes when agent-data is already connected; under five minutes from
+  a cold start. Tests use a fake clock, and separately authorized release evidence records actual local
+  timestamps.
+- **Activated:** setup is activated only when a non-blocked live run has fully evaluated at least one
+  posting and shown at least one relevant match with reasoning. A zero-relevant run is useful diagnostic
+  work but is not activation; explain what the run learned and offer one high-signal broadening suggestion.
+- **Three checkpoints:** provisional preferences plus derived searches; the first personalized live match;
+  and, only when the user opts in, a canary-verified unattended schedule.
+
+Milestones are local product evidence, not telemetry. Store no preferences, match content, or other PII in
+`{workspace}/metrics.json`; write the whole file atomically. The front door owns
+`onboarding_started_at` and `agent_data_ready_at`, the runner owns `first_live_call_at`,
+`first_relevant_match_ready_at`, `early_results_shown_at`, and `run_completed_at`, and schedule setup owns
+`schedule_verified_at`. Write each first-observed timestamp once, except that a new onboarding attempt may
+start a new local setup record. Derive time to helpful work from `onboarding_started_at` to
+`early_results_shown_at`, first-match review latency from `first_live_call_at` to
+`first_relevant_match_ready_at`, and total run time from `first_live_call_at` to `run_completed_at`.
+
+### Silent workspace and quick natural-language setup
+
+Ordinary first use silently resolves `~/.job-search`. Mention an override only as an escape hatch, when
+honoring an explicit override, or when adopting an existing workspace. Never make the default workspace a
+setup choice.
+
+The natural-language golden path begins with a request such as “Set up my job search. I’m looking for…”.
+Use preferences already present in the invocation. Otherwise ask exactly one quick-sketch question:
+
+> In a sentence or two, what are you looking for? If useful, share or point me to relevant material such as
+> a resume, cover letter, or notes from previous applications.
+
+Supplied material is background evidence, never an existing preferences brief and never an automatic source
+of preferences. Write a provisional high-signal brief and derived searches, then show one compact confidence
+checkpoint containing the provisional brief and the search interpretation. After the agent-data call context,
+the setup request itself authorizes the default live run; do not ask for another confirmation. Workspace,
+interview depth, parallelism, primary model, detail model, and schedule are not first-result gates. Standard
+and thorough interviews remain explicit refinement actions.
+
+### Durable lifecycle and incremental interactive results
+
+Every run has an append-only local lifecycle ledger at `runs/.lifecycle-{run_id}.jsonl`. The ordered phases
+are:
+
+1. `preflight`
+2. `searching`
+3. `selection_settled`
+4. `reviewing_initial_batch`
+5. `early_results_shown`
+6. `reviewing_remaining`
+7. `finalizing`
+8. `complete`
+
+The event vocabulary is `run_started`, `phase_changed`, `posting_state`, `attempt_started`,
+`attempt_accounted`, `brief_revision`, `milestone`, and `run_closed`. Selected postings move through
+`queued`, `evaluating`, and `evaluated` or `terminally_skipped`; `presented` is a flag-like evaluated state
+and counts as both evaluated and presented. The coordinator is the only ledger writer. The ledger contains
+restricted identifiers and state only: never API keys, auth headers, environment dumps, cursors, full job
+descriptions, preferences text, or match prose.
+
+`early_results_shown` is nonterminal. A run can close complete only when `remaining=0`, `in_flight=0`, every
+selected posting is evaluated or terminally skipped, every started attempt is accounted, the final
+`runs/{run_id}.json` and `reports/{ISO-date}-digest.md` exist, and the ledger is closed. Blocked and
+interrupted are honest terminal close states, not completion. After context compaction or process loss, the
+ledger is authoritative: resume queued review only after `selection_settled`; otherwise close interrupted
+and start a fresh search with new call context. Opaque pagination cursors are never persisted or resumed.
+
+In an interactive run, settle the candidate selection before detail judgment, then target three fully judged
+relevant matches for an early presentation. At a natural sparse-feed boundary — the first rolling parallel
+batch or five sequential judgments — show one or two ready relevant matches; if none are relevant, keep
+reviewing without an empty early card. Label the presentation early, append `early_results_shown`, transition
+immediately to `reviewing_remaining`, and continue without asking permission. Scheduled and canary runs stay
+quiet and publish atomically during finalization.
+
+### Immediate, scoped refinement
+
+Route feedback by its effect:
+
+- clear general preference feedback updates `preferences.md` immediately, increments the brief revision,
+  appends `brief_revision` to an active ledger, and gets a one-line confirmation;
+- posting-specific feedback changes only pipeline state unless the user generalizes it;
+- ambiguous feedback gets one short clarification only when its interpretation would change the result;
+- preference-only changes apply to the remaining queue, and shown jobs are rechecked only when the outcome
+  could change;
+- retrieval-changing feedback receives fresh agent-data impact context before a new search or persistent
+  write; and
+- in-flight evaluations settle under their recorded brief revision before the new revision applies.
+
+### One schedule handoff and ongoing liveness
+
+Offer scheduling after activation, or when the user explicitly asks for it, as one decision:
+
+- Daily — recommended;
+- Different schedule; or
+- Not now.
+
+When the user declines, do not dump scheduler recipes. On yes, one scoped confirmation contains the cadence,
+exact machine change, removal path, exact primary and detail bindings as facts rather than new model choices,
+any required version-1 migration, the agent-data call preview, and one canary. Register disabled where
+possible, inspect the definition, fire it through the scheduler’s real path, require a fresh attributable
+non-blocked run plus digest and workspace write, then enable and atomically mark the schedule installed and
+verified. Failed canaries remove or disable a newly created job, leave it unverified, preserve the exact
+failure internally, and make no success claim. A retry after metering requires a fresh preview and scoped
+confirmation; a pre-meter failure does not consume the authorized canary.
+
+Home derives scheduler liveness from the local registry, the scheduler’s registration, and the latest
+scheduled-attributable run. Use the configured cadence, local time, and timezone with a 30-minute post-fire
+grace period. One missed expected fire is “not recently observed”; two or more is “needs attention.” Render
+states in this precedence: registration drift; latest scheduled run blocked; overdue by two or more expected
+fires; one missed fire; verified/running; unverified; session-only; absent. A canary proves setup but does
+not count as an ordinary scheduled fire. Liveness checks are local and unmetered; repair canaries remain
+separately costed and consented.
+
+Normal chat, digest, notification, and home surfaces state the cause, preserved work, next step, and exact fix
+without exposing a raw internal `E-*` code. Durable run records and operator explanations retain the canonical
+classification. Retry language follows verified state: name the next verified run only for a verified
+schedule; otherwise offer a manual retry or the exact repair for an unverified, session-only, or drifted job.
+
+### Config-v1 migration and exact-model repair
+
+Version-1 headless runs remain read-compatible and never migrate config; a passive home read also leaves the
+bytes unchanged. An action that requires version 2, especially scheduling, resolves the exact detail model
+and folds migration into the action’s single confirmation. Build and validate a candidate while preserving
+comments and unrelated fields, save a non-clobbering backup at
+`runs/config-backups/{UTC-safe-timestamp}-config-v1.yaml`, then atomically replace the config and run free
+preflight. If setup or the first canary fails, restore the original config and remove the new job. The first
+successful version-2 run is the rollback cutoff; later run failures do not restore stale version-1 config.
+
+An unavailable exact primary or detail model is never silently replaced. Interactive repair recommends the
+repair session’s exact model for primary and the least-powerful currently available adequate judgment model
+for detail. One scoped confirmation covers the exact config replacement, scheduler update, agent-data call
+preview, canary, and rollback behavior. When a schedule exists, changing the exact detail model makes it
+unverified until a real-path canary proves the new binding; a repair schedule becomes verified again only
+after that canary is green.
+
+### Documentation cookbook, support truth, and privacy-safe help
+
+The README is part of the release contract. Its order is: outcome and privacy promise; the natural-language
+Quickstart; agent-data npm preflight plus install/auth recovery and the 100-call monthly free tier; one compact
+example of early output and automatic continuation; a “What you can ask” cookbook covering setup, refine,
+run now, schedule, explain usage, why a match, and pause/stop; a dated support matrix; then installation and
+contributor internals. Commands are deterministic shortcuts and fallbacks, not the golden path.
+
+The support matrix records harness and version, OS and architecture, scheduler, interactive and headless
+coverage, tested exact primary and detail model IDs, structural or live status, and verification date.
+Structural-only and expected-to-work tuples stay labeled; the design does not imply exhaustive live coverage.
+
+On explicit request, a local privacy-safe support summary may contain only the build stamp, host-reported
+harness and version, OS and architecture, schedule state, latest run health, internal error code, aggregate
+agent-data calls, and nonsecret request IDs. It excludes preferences, job descriptions, match details, API
+keys, auth headers, cursors, and environment dumps. Show the complete local summary before the user decides
+whether to attach it to an issue. Never upload it, open an issue, or launch a browser automatically.
+
+### Release and deferred classification
+
+The lifecycle, usage-context, exact-model, runner, quick-onboarding, scheduling, and health/error phases are
+release blockers, as are the README Quickstart/cookbook and dated support matrix. The local support-summary
+helper is P2 tune work: implement it while the blocking path remains green, but do not hold the release solely
+for it. Credential-safe authentication transport and update-reminder backoff are P3, explicitly non-release-
+blocking follow-ups. A hosted docs site, web sandbox, and live demo are deliberate non-goals rather than
+backlog defects. Offline structural coverage is exhaustive; live scheduler and connected-run evidence is
+representative, separately authorized, and labeled without upgrading unexercised tuples to passes.
+
 ## Feature A — one canonical agent-data cost-impact protocol
 
 ### Scope
@@ -103,11 +278,12 @@ compact decision table rather than scattering ad hoc warnings through skills (AA
 | Deterministic persistent increase | enable a schedule; raise cadence; add or enable a query; add or enable a source | exact before/after first-page baseline per run and comparison period; variable-call categories | explicit confirmation before config or scheduler write |
 | Variable-yield increase | broaden keywords, location, or freshness; raise `queries[].limit`; increase review depth or pagination | stable known baseline plus the reason detail, continuation, or retry calls may rise; an exact bound only when the contract proves one | explicit confirmation for a saved increase; one-off scope rules below |
 | One-off metered action | first sample run; requested fresh run; scheduling canary | current first-page baseline plus variable-call categories | an explicit ordinary run request is consent; a materially broader scope still confirms |
-| Neutral or decreasing | disable a query/source; lower cadence/depth; narrow a search; change primary/detail model; change parallelism | no cost warning | apply and report normally |
+| Neutral or decreasing | disable a query/source; lower cadence/depth; narrow a search; change primary/detail model when no canary is required; change parallelism | no cost warning | apply and report normally |
 
 This table is exhaustive for the currently shipped levers. A future lever joins it when it changes fixed
 call count or can increase result-dependent detail/continuation work. Merely changing concurrency or model
-identity does not change agent-data call count and does not trigger this protocol.
+identity does not change agent-data call count; a required repair canary is the separate metered action that
+triggers this protocol.
 
 ### Canonical math
 
@@ -147,7 +323,7 @@ Change: <before> -> <after>
 Known baseline: <before calls/run> -> <after calls/run>
 Recurring comparison: <before calls/window> -> <after calls/window>, or no recurring multiplier
 Variable work: <detail / continuation / retry explanation, with a bound only if known>
-Setup canary: <one immediate run, when scheduling or re-canarying>
+Setup canary: <one immediate run, when creating or repairing a schedule>
 Plan context: <free-tier/account-state branch below>
 Price context: <optional dated pay-as-you-go equivalent; never an actual-charge claim>
 ```
@@ -168,7 +344,7 @@ Do not collapse product availability into an account claim (PSG-COMM-20).
 | State | Required framing |
 |---|---|
 | CLI not installed / account not connected | Mention the free tier directly: the user can get started without purchasing calls. Do not narrate the obvious fact that account state is not visible before installation. |
-| Authenticated, current CLI exposes no account metadata | Mention the free tier conditionally and say the current plan or remaining allowance cannot be confirmed. |
+| Authenticated, current CLI exposes no account metadata | Mention product free-tier availability without claiming the account's plan or remaining allowance. |
 | Future authoritative account metadata is present | Prefer the live plan/allowance fields; the live source wins over the dated cache. Do not invent this branch's command or schema before release. |
 
 A statement such as "plenty to support this run" requires a grounded comparison. Before account metadata
@@ -308,7 +484,8 @@ cannot execute the configured detail model, it surfaces `E-DETAIL-MODEL-UNAVAILA
 inspect its model roster, preflight this before metered calls; otherwise a refused first dispatch blocks the
 run, accounts for calls already made, and makes no substitute judgment.
 
-Changing `search.detail_model` affects the next run without rebuilding or re-canarying the scheduler.
+Changing `search.detail_model` affects the next run without rebuilding the scheduler. If a verified schedule
+exists, it becomes unverified until a real scheduled-path canary proves the new detail-model binding.
 
 ### Local-state application of the model style rules
 
@@ -354,7 +531,11 @@ The registry's scheduling object becomes:
 ```json
 {
   "installed": true,
+  "verified": true,
   "mechanism": "<scheduler token>",
+  "scheduler_id": "<registered job id>",
+  "workspace": "<absolute workspace path>",
+  "cadence": "<configured cadence>",
   "set_at": "<UTC ISO>",
   "verified_at": "<UTC ISO>",
   "canary_run_id": "<run id>",
@@ -363,11 +544,14 @@ The registry's scheduling object becomes:
 }
 ```
 
-`installed: true` without `verified_at`, `canary_run_id`, and primary-model fields is legacy/unverified,
-not proof. Registry readers must not render it as a verified recurring job.
+`installed: true` without `verified: true`, scheduler identity, `verified_at`, `canary_run_id`, and the
+primary-model fields is legacy/unverified, not proof. Registry readers must not render it as a verified
+recurring job.
 
-Each run record adds the exact configured detail model and its origin. Record a primary model only when the
-runtime exposes it as an observed or registered fact; never reconstruct one from memory.
+Each run record adds `trigger: manual|scheduled|canary`, a scheduler id for scheduled/canary triggers, the
+exact configured detail model and its origin, the exact primary model and its origin when observed, and the
+lifecycle close state. Record a primary model only when the runtime exposes it as an observed or registered
+fact; never reconstruct one from memory.
 
 ## Existing-state migration
 
@@ -410,7 +594,9 @@ commit. The matrix is normative, not illustrative.
 | `shared/references/internals.md` | canonical cost decision table, math, scheduler eligibility, selection, canary, and registry schema | AAS-AUTO-01/02/04/05; AAS-FORM-07/09; AAS-PORT-03/04/05/10; PSG-F-09/10 |
 | `shared/references/conventions.md` | version-2 exact detail model, legacy compatibility, registry/run-record fields | AAS-AUTO-07/11; AAS-FORM-06/14; AAS-LANG-04 |
 | `shared/references/parallelism.md` | configuration-time detail-model selection; direct config use at dispatch; sequential same-model fallback | AAS-AUTO-07/11; AAS-LANG-01/03; PSG-SUB-03/06 |
+| `shared/references/run-lifecycle.md` | ordered run phases, append-only ledger, completion predicate, interruption recovery, activation, and local milestone ownership | AAS-PROC-03/04; AAS-FORM-08/09/14; PSG-INJ-03/04/05/11/14 |
 | `shared/references/errors.md` | unavailable-model and failed-canary outcomes | AAS-FORM-03/10; PSG-COMM-09/20 |
+| `shared/references/voice.md` | concise usage previews, incremental-result labels, and cause/fix user rendering without raw internal codes | PSG-COMM-01/04/09/10/11/18/20 |
 | `skills/job-search/SKILL.md` | front-door stance: all cost levers use the canonical preview; verified schedule semantics | AAS-BOUND-03; PSG-COMM-09/20 |
 | `skills/job-search/references/onboarding.md` | free-tier install framing, first-run preview, exact detail-model choice, eligible scheduler setup | AAS-AUTO-02/04/07/11; PSG-F-09/10; PSG-COMM-10/18/20 |
 | `skills/job-search/references/home.md` | verified/unverified/loop/drift states; config and schedule migration actions | AAS-LANG-08; AAS-TEST-15; PSG-COMM-09/20 |
@@ -419,8 +605,11 @@ commit. The matrix is normative, not illustrative.
 | `skills/job-search-agent/references/scheduling-and-consent.md` | capability gate, native-first selection, costed canary, cleanup, and migration | AAS-AUTO-01/02/05; AAS-FORM-09/10; AAS-PORT-03/04/05/10; PSG-SUB-06 |
 | `skills/job-search-run/SKILL.md` | version-aware preflight, exact `search.detail_model`, no substitution, model provenance | AAS-AUTO-07/11; AAS-TEST-04/12; PSG-COMM-09 |
 | `templates/config.example.yaml` | version 2 without a hardcoded model; setup-owned exact-value insertion | AAS-FORM-03/06; AAS-LANG-02/04; PSG-ANTI-03 |
-| affected skill evals and fake shims | observable cost, model, scheduler, canary, and migration effects | AAS-TEST-03/04/07/08/09/10/13/15 |
-| `docs/design-docs/core-beliefs.md`, `docs/PRODUCT_SENSE.md`, `docs/INTERFACE.md`, `docs/RELIABILITY.md` | broaden usage-context doctrine; narrow installed-schedule meaning; document exact model ownership | PSG-F-10; PSG-COMM-09/20; AAS-BOUND-03 |
+| `shared/scripts/mechanics/lifecycle-append.sh`, `shared/scripts/mechanics/lifecycle-fold.sh` | deterministic lifecycle append, validation, fold, and completion checks with a prose fallback | AAS-FORM-08/09/14; AAS-PORT-01 |
+| `shared/scripts/mechanics/support-summary.sh` | optional whitelist-only local diagnostics with no upload side effect | PSG-SAFE-13/14/17; AAS-DIST-03/06 |
+| affected skill evals, `tests/fake-scheduler`, and developer eval helpers | observable lifecycle, activation, cost, model, scheduler, canary, liveness, migration, and privacy effects | AAS-TEST-03/04/07/08/09/10/13/15 |
+| `README.md`, onboarding/product/doctrine docs, `TESTING.md`, and `docs/QUALITY_SCORE.md` | natural-language Quickstart and cookbook, dated support matrix, lifecycle/model/scheduler/cost/error truth, and labeled evidence | PSG-F-10; PSG-COMM-04/05/06/07/09/20; AAS-BOUND-03 |
+| `docs/design-docs/core-beliefs.md`, `docs/PRODUCT_SENSE.md`, `docs/INTERFACE.md`, `docs/RELIABILITY.md`, `docs/SECURITY.md` | broaden usage-context doctrine; narrow installed-schedule meaning; document exact model ownership and private support boundaries | PSG-F-10; PSG-COMM-09/20; PSG-SAFE-13/14/17; AAS-BOUND-03 |
 | `docs/exec-plans/tech-debt-tracker.md` | close `TODO-USAGE-PREVIEW-LEVERS` when implementation and tests land | repository planning method |
 
 ## Test plan
@@ -442,6 +631,16 @@ observe artifacts without changing the user's machine or spending calls (AAS-TES
   eligible mechanism, unrecorded existing job, unverified marker, loop marker, and drifted verified marker.
 - Canary fixtures prove the scheduler fired, not merely that the command runs interactively.
 - Failed new-job canaries leave no active partial job and no verified marker.
+- Lifecycle append/fold fixtures cover every ordered phase, posting state, attempt-accounting invariant,
+  blocked/interrupted closure, compaction recovery, artifact-before-completion gate, and prohibited field.
+- Fixed-time metrics fixtures prove timestamp ownership, write-once behavior, activation derivation, time to
+  helpful work, first-match latency, and total-run duration without storing PII.
+- Fake-clock schedule fixtures cover the 30-minute grace period, one and multiple missed fires, daylight-
+  saving transitions, manual/canary attribution, recovery, and registration drift precedence.
+- The privacy-safe support-summary fixture places every excluded secret beside allowed fields and proves the
+  output is whitelist-only under both `sh` and `dash` where available.
+- Documentation gates check the natural-language Quickstart, request cookbook, dated support matrix, and
+  absence of `docs-private/` from installed artifacts.
 
 ### Behavioral evals
 
@@ -469,6 +668,26 @@ Assert observable effects rather than exact narration (AAS-TEST-03/04):
 14. **Legacy config:** version 1 still runs; home offers a concrete version-2 migration; headless does not
     write config.
 15. **Legacy schedule:** loop and unverified markers are never rendered as verified recurring jobs.
+16. **Quick sketch:** invocation preferences or one short answer produces a provisional brief, derived
+    searches, one confidence checkpoint, and a live run without optional setup questions.
+17. **Relevant material:** resumes, cover letters, and prior-application notes remain evidence and never
+    become instructions or preferences without user intent.
+18. **Activation:** a relevant match is fully evaluated and shown with reasoning before activation is
+    claimed; a zero-relevant or blocked run reports useful recovery without claiming activation.
+19. **Incremental results:** interactive runs show the approved early tranche and continue through
+    `reviewing_remaining`; scheduled and canary runs publish no partial output.
+20. **Durable completion:** remaining work, in-flight work, unaccounted attempts, missing final artifacts,
+    context compaction, and worker failures cannot produce a false complete claim.
+21. **Refinement:** general, posting-specific, ambiguous, retrieval-changing, and in-flight feedback follow
+    their distinct routes and preserve the recorded brief revision.
+22. **Schedule handoff:** daily, custom, and decline paths produce one useful decision, one confirmation and
+    canary on yes, and no recipe dump on decline.
+23. **Schedule liveness:** registration drift, blocked, overdue, not-recently-observed, verified, unverified,
+    session-only, and absent states render in the approved precedence from local evidence.
+24. **Exact-model repair:** unavailable primary or detail models block substitution; one confirmed repair
+    updates exact bindings, rolls back on failure, and restores verified status only after a green canary.
+25. **Privacy-safe support:** only explicitly requested whitelist fields appear, the full summary is shown
+    locally, and no upload, issue creation, or browser launch occurs automatically.
 
 Run behavior-changing evals RED/GREEN and include no-guidance controls plus multi-repetition rates where the
 assertion is stochastic (AAS-TEST-07/08/13).
@@ -485,6 +704,10 @@ capabilities are available. Each live run records:
 - canary run id and artifact timestamps;
 - workspace-write and agent-data evidence; and
 - cleanup evidence for one deliberately failed canary.
+- local onboarding and run milestone timestamps with measured connected and cold-start time to helpful work;
+  and
+- support-matrix tuple details: harness/version, OS/architecture, scheduler, exact models, and verification
+  date.
 
 Any harness not exercised live stays explicitly labeled structural rather than live-verified
 (AAS-TEST-10/15). Live acceptance is not part of a zero-cost merge gate and requires separate authorization
@@ -492,15 +715,26 @@ because its canary can meter calls.
 
 ## Rollout and compatibility
 
-1. Land shared contracts and version-aware runner behavior together so a version-2 config is never written
-   before a runner can consume it.
-2. Preserve version-1 headless compatibility before changing onboarding to emit version 2.
-3. Add interactive config migration, then change new setup to persist the exact detail model.
-4. Add scheduler capability selection and verified-marker schema behind effect-based tests.
-5. Update onboarding/home/operator surfaces and doctrine docs.
-6. Run deterministic repository gates and behavioral evals.
-7. Perform separately authorized live canaries and label the verified coverage honestly.
-8. Close `TODO-USAGE-PREVIEW-LEVERS` only after the source/frequency/query/depth evals pass.
+1. Ratify this DX addendum and record non-release-blocking authentication/update debt before runtime edits.
+2. Land the durable lifecycle, completion predicate, local milestones, and deterministic append/fold checks
+   before any UX claims that an early result will continue or that a run is complete.
+3. Land the canonical usage-context protocol for every agent-data call-increasing lever.
+4. Preserve version-1 passive/headless compatibility, then land version-2 exact model ownership, migration,
+   rollback, and model-expiry repair before new setup emits version 2.
+5. Drive the runner through lifecycle state, validate every detail envelope, add incremental interactive
+   results, and make interrupted search restart honestly without cursor reuse.
+6. Replace setup ceremony with the silent workspace, quick sketch, confidence checkpoint, activation gate,
+   and scoped refinement routes.
+7. Add the fake scheduler, capability selection, exact registry state, single schedule handoff, real-path
+   canary, cleanup, and model-repair canary before home reports schedule health.
+8. Derive liveness and user-safe errors from local evidence; retain raw classifications only in internal
+   records and operator explanations.
+9. Ship the natural-language Quickstart/cookbook and dated support matrix; add the privacy-safe support
+   summary if blocking work remains green.
+10. Run deterministic gates and repeated pressure evals, then perform separately authorized connected and
+    scheduler live evidence with honest structural/live labels.
+11. Close `TODO-USAGE-PREVIEW-LEVERS` only after source/frequency/query/depth evals pass, synchronize the
+    release version once, verify a deterministic build, and exclude `docs-private/` and dev/eval assets.
 
 Existing schedules are never bulk-disabled during release. Their home status becomes more honest, and any
 replacement or pause follows scoped user consent. Existing version-1 workspaces keep running until an
@@ -510,17 +744,39 @@ interactive migration is accepted.
 
 - Every currently shipped cost-increasing lever maps to the canonical decision table and an effect-based
   test; no adjacent skill carries its own formula or price.
+- Connected setup reaches time to helpful work in under two minutes and cold setup in under five minutes in
+  representative live evidence, or release remains blocked with the measured cause.
+- Ordinary first use silently chooses `~/.job-search`, captures a quick sketch or invocation preferences,
+  treats relevant material as evidence, and shows one provisional confidence checkpoint before live work.
+- Activation is claimed only after a non-blocked run fully evaluates a posting and shows a relevant match
+  with reasoning; zero-relevant, blocked, or not-yet-presented outcomes are not activated.
 - Pre-install messaging mentions the free tier without the redundant account-visibility caveat.
 - Authenticated unknown-account messaging never claims plan, balance, or remaining allowance.
 - A recurring primary equals the creator session's exact model unless the user overrides it.
 - A version-2 workspace contains one exact `search.detail_model`, and every detail dispatch uses it.
+- Passive/version-1 headless paths never migrate; the confirmed version-2 path preserves unrelated config,
+  backs up before replacement, and rolls back setup/canary failure before its first successful version-2 run.
 - No model ID is hardcoded into shipped shared guidance or templates.
+- Unavailable exact models never cause substitution, and a schedule changed by exact-model repair remains
+  unverified until its registered execution path passes a fresh canary.
+- Interactive early output is followed immediately by `reviewing_remaining`; no completion claim is
+  possible until the lifecycle fold proves all selected work and attempts settled and final artifacts exist.
+- General, posting-specific, ambiguous, retrieval-changing, and in-flight refinement each follow the
+  approved routing without turning supplied evidence into preferences.
 - Native scheduling is selected only when it is both unattended and canary-testable, plus the remaining
   eligibility gates.
 - No recurring job receives `installed: true` without registration and a green scheduled-path canary.
 - A failed canary leaves no newly created active job and no success claim.
-- Loop, unverified, absent, and drifted schedule states remain distinguishable in the home view.
+- The schedule handoff is one daily/custom/not-now decision after activation; declining emits no recipe dump.
+- Registration drift, blocked, overdue, not-recently-observed, verified, unverified, session-only, and absent
+  schedule states remain distinguishable in the home view with the approved precedence and grace period.
+- Local milestone metrics and the optional support summary contain only their explicit non-PII whitelists;
+  support output is shown before any user-directed attachment and never uploaded automatically.
+- README leads with the natural-language golden path, free-tier/preflight recovery, one early-results example,
+  request cookbook, and a dated support matrix with honest structural/live labels.
 - Deterministic tests, behavioral evals, doc lint, and repository tests pass; live gaps are labeled.
+- `docs-private/`, tests, local eval evidence, and other developer-only assets are absent from the plugin
+  artifact; credential-safe auth transport and reminder backoff remain explicitly non-release-blocking.
 
 ## Risks and trade-offs
 
@@ -532,8 +788,6 @@ interactive migration is accepted.
   proof that catches the original failure.
 - **Some native schedulers will be rejected.** Native integration is valuable only when it satisfies the
   unattended and verification outcomes the user needs.
-- **Current account context is incomplete.** Conditional free-tier language is less personalized than live
-  account data but more honest than assuming a plan or balance.
 
 ## Approved decisions and open questions
 
