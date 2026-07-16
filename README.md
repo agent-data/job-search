@@ -1,27 +1,30 @@
 # Job Search
 
-Job Search is a plugin that turns your coding agent into a job search assistant. Describe what you want, and the agent pulls fresh job postings, judges each against your preferences, and generates a ranked digest of the matches.
+Turn your coding agent into an automated job search assistant. Describe what you want, and the agent pulls fresh job postings, judges each against your preferences, and generates a filtered digest of the matches.
 
 <img width="3182" height="2160" alt="job-search-demo-screenshot" src="https://github.com/user-attachments/assets/a3c45a7e-6a93-4afa-86f0-f522c8f8d53c" />
 
-## Quickstart
+## Why use job-search?
 
-- **Set your `agent-data` API key.** Grab one at [agent-data.motie.dev](https://agent-data.motie.dev) (Profile → API Key), then export it:
-
-  ```bash
-  export AGENT_DATA_API_KEY=mtk_…
-  ```
-
-- Give your agent Job Search: [Claude Code](#claude-code) · [Codex](#codex) · [Cursor](#cursor) · [opencode](#opencode) · [Gemini CLI](#gemini-cli) · [GitHub Copilot CLI](#github-copilot-cli) · [Factory Droid](#factory-droid) · [Pi](#pi).
+- **Expansive coverage.** Scan thousands of job postings across portals like Greenhouse and Ashby so that you never miss an exciting opportunity.
+- **Fresh and repeatable.** Limit results to the freshest postings to target opportunities as soon as they become available.
+- **Less keyword noise.** Evaluate each posting against a plain-English brief of your must-haves, dealbreakers, and preferences, instead of matching keywords.
+- **Local-first.** Your preferences, job history, and digests live in a private workspace on your machine.
 
 ## How it works
 
-1. Install Job Search for your coding agent and start it (in Claude Code, run `/job-search`).
-2. The agent asks a few questions to understand the roles you're interested in and saves your preferences locally.
-3. It pulls live job postings, compares each against your preferences, and generates a digest with only the postings that are relevant.
-4. It can also run your search on a schedule (e.g., daily) to surface new matches over time.
+1. Install job-search for your coding agent and kick off the process.
+2. Your agent asks a few questions to understand the roles you're interested in and saves your preferences locally.
+3. It scans portals (Ashby, Greenhouse, and more), compares job postings against your preferences, and generates a digest with only the postings that are most relevant to you.
+4. It can also run your search on a schedule (e.g., daily) to regularly surface new matches.
 
 See an example digest in [`examples/sample-digest.md`](examples/sample-digest.md).
+
+## Quickstart
+
+Turn your agent into a job search assistant: [Claude Code](#claude-code) · [Codex](#codex) · [Cursor](#cursor) · [opencode](#opencode) · [Gemini CLI](#gemini-cli) · [GitHub Copilot CLI](#github-copilot-cli) · [Factory Droid](#factory-droid) · [Pi](#pi).
+
+After installing the plugin, your agent will walk you through the setup process: defining your job preferences, connecting your `agent-data` account (used to supply postings), and kicking off your first search.
 
 ## What's inside
 
@@ -35,12 +38,7 @@ See an example digest in [`examples/sample-digest.md`](examples/sample-digest.md
 
 ## Installation
 
-Claude Code and Codex are the primary tested installs today. The other harness entries below are
-structural-only: their manifests are in place, but they have not had the same live verification and may need
-hands-on fixing before a run completes end to end — so treat them as experimental. There is no per-host
-adapter layer; each host resolves its own tools, models, and scheduling from the shared neutral procedures.
-
-Installation differs by harness. If you use more than one, install Job Search separately for each one.
+Installation differs by harness. If you use more than one, install job-search separately for each one.
 
 ### Claude Code
 
