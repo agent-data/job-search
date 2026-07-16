@@ -91,7 +91,9 @@ The finite target bounds unique roles judged after known-id dedup and same-role 
 known and duplicate rows can require additional pages before the target settles. `queries[].limit` (1–100;
 the API default is 20 when omitted and this template sets 25) remains the per-call page size for one
 query/source request. The additive setting keeps `version: 1`; there is no migration. Conversational one-off
-and saved-change recipes live in `internals.md`.
+and saved-change recipes use the canonical action classes, call preview, and confirmation rules in
+[Agent-data usage decisions](internals.md#agent-data-usage-decisions); this file owns only the stored values
+and resolved review-scope behavior.
 
 `run_id` format: UTC timestamp `YYYY-MM-DDTHH-MM-SSZ` (hyphens, not colons, in the time component — safe as a filename on every platform). `<date>` for digests: `YYYY-MM-DD` (local tz).
 

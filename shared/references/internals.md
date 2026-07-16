@@ -112,6 +112,87 @@ record it as the active workspace in the registry (write rules above — only th
 overwrite an existing `config.yaml`, `preferences.md`, or `jobs.jsonl`; only additively create missing
 `runs/` and `reports/`. Tell the user: "Found an existing workspace at <path> — using it."
 
+## Agent-data usage decisions
+
+The user sees conversation and durable job-search artifacts, not the call arithmetic the agent performs to
+decide what to run. Give concise calls-first context at the decision point, then apply this table. Load the
+current available free-tier and metering facts from
+[agent-data-contract.md § Pricing and metering](agent-data-contract.md#pricing-and-metering); that dated
+contract is the only owner of volatile tier and rate values.
+
+Let `B = enabled_queries * enabled_sources`, counting only enabled queries and valid enabled sources after
+the proposed change. `B` is the known ordinary first-page baseline for one run because every enabled query
+targets every enabled source once. It is not a ceiling: continuation pages, full-posting detail reads,
+failures currently marked metered, and retries currently marked metered can add calls. Never present an
+uncertain addition as a maximum.
+
+<!-- usage-context-contract:action-decisions -->
+| Action family | Action class | Known first-page calls | Uncertain continuation/detail calls | Recurring multiplier | Free-tier fact useful | Confirmation rule |
+|---|---|---|---|---|---|---|
+| `first_live_run` | `one_off` | `B` | `continuation_plus_detail_calls` | `none` | `yes` | `request_is_scoped_consent` |
+| `query_or_source_enable` | `persistent` | `post_change_B_and_delta` | `continuation_plus_detail_calls` | `saved_cadence_window` | `yes` | `confirm_before_write` |
+| `cadence_increase` | `persistent` | `B_per_run` | `continuation_plus_detail_calls` | `current_vs_new_cadence_window` | `yes` | `confirm_before_write` |
+| `saved_review_depth_increase` | `persistent` | `B` | `continuation_plus_detail_calls` | `saved_cadence_window` | `yes` | `confirm_before_write` |
+| `one_off_review_depth_increase` | `one_off` | `B` | `continuation_plus_detail_calls` | `none` | `no` | `request_is_scoped_consent` |
+| `retrieval_broadening_likely_detail_reads` | `persistent` | `B_or_post_change_B` | `detail_calls_likely_not_bounded` | `saved_cadence_window` | `yes` | `confirm_before_write` |
+| `schedule_enable_with_canary` | `persistent` | `B_per_canary_and_run` | `continuation_plus_detail_calls` | `one_canary_plus_saved_cadence_window` | `yes` | `confirm_schedule_and_one_canary` |
+| `metered_canary_retry_or_repair` | `retry_or_repair` | `B_per_canary_attempt` | `continuation_plus_detail_calls` | `approved_attempt_only` | `no` | `confirm_each_metered_canary_attempt` |
+<!-- /usage-context-contract:action-decisions -->
+
+Read the table tokens this way:
+
+- `post_change_B_and_delta` means show both the proposed `B` and its increase from the current baseline.
+  `B_or_post_change_B` uses the current baseline when the enabled query/source counts stay fixed and the
+  proposed baseline when the broadening also changes either count.
+- A `saved_cadence_window` multiplies the per-run context by the saved cadence's labeled comparison window
+  below. `current_vs_new_cadence_window` shows both cadence multipliers. A schedule enablement includes one
+  canary run plus the future saved-cadence comparison; the canary is not silently folded into the multiplier.
+- `continuation_plus_detail_calls` and `detail_calls_likely_not_bounded` are explicitly uncertain. Explain
+  which operations may add calls and why their number depends on returned rows, deduplication, pagination,
+  and which postings merit detail reads. A finite review target bounds roles judged, not calls.
+- `yes` in the free-tier column means the current available product-tier fact helps calibrate the decision;
+  load it from the dated metering contract and state it after the known call count. `no` means omit it by
+  default because it adds little to that scoped decision. Never describe an available tier as the user's
+  plan, remaining allowance, or balance. Do not volunteer an account-visibility caveat when it adds no
+  decision value.
+
+These policy rows pin the cross-action behavior:
+
+<!-- usage-context-contract:policy -->
+| Policy | Decision |
+|---|---|
+| `baseline_formula` | `enabled_queries*enabled_sources` |
+| `baseline_is_ceiling` | `false` |
+| `one_off_request` | `scoped_consent_after_context` |
+| `persistent_increase` | `confirm_before_write` |
+| `metered_repair_or_retry_canary` | `confirm_each_attempt` |
+| `scheduled_headless_run` | `consume_durable_saved_consent` |
+| `neutral_or_decreasing_edit` | `quiet` |
+| `model_or_concurrency_only_edit` | `quiet_unless_canary` |
+| `first_live_context` | `one_or_two_sentences_calls_first_plus_available_free_tier` |
+| `account_claims` | `never_infer_plan_or_balance` |
+| `account_visibility_caveat` | `omit_when_no_decision_value` |
+| `uncertain_additions` | `not_a_ceiling` |
+<!-- /usage-context-contract:policy -->
+
+For a one-off request, the request itself is scoped consent to run once. Give the row's concise context and
+proceed without asking the user to repeat approval; do not write the one-off scope to config. A first live
+run gets one or two sentences: lead with `B` calls, include the current available monthly free-tier fact,
+and say that promising postings or continuation pages may add calls. Do not turn first-run context into an
+account disclaimer.
+
+For a persistent increase, preview the applicable row and ask for scoped confirmation before the atomic
+config write or scheduler change. Enabling a schedule includes consent for its exact machine change and
+exactly one real scheduled-path canary after the preview; a metered repair canary or any metered canary
+retry needs a fresh scoped confirmation for that attempt. Once saved, an enabled query/source set, cadence,
+review depth, retrieval setting, and verified schedule are durable consent: scheduled and other headless
+runs consume those saved choices without prompting.
+
+Neutral or decreasing edits are quiet: apply them without an agent-data warning or confirmation. A model
+or concurrency-only edit is also quiet because it does not itself change agent-data calls; if applying it
+requires a canary, classify that canary under the canary row and show its context. Store only outcome levers
+in config—never introduce monetary-control fields.
+
 ## Config read/update recipes (conversational-first; config.yaml is YAML)
 The user changes config by **chatting**; manual editing is an escape hatch. To apply a change, read
 `<workspace>/config.yaml`, edit it minimally (preserve comments/structure), and write it back.
@@ -147,16 +228,14 @@ The user changes config by **chatting**; manual editing is an escape hatch. To a
   |---|---|---|
   | “now,” “once,” “this run” | one-off finite, exhaustive, or first-page override | none |
   | “each run,” “from now on,” “every time” | saved setting | write the positive integer or exact `"all"` only after preview and confirmation |
-  | ambiguous “scan everything” or depth request | default to one run and say that scope before confirmation | none |
+  | ambiguous “scan everything” or depth request | default to one run and say that scope before running | none |
   | “go back to normal,” “use first-page coverage” | remove the saved key or use a one-off first-page override, according to the explicit time scope | remove immediately when saved |
 
-  Before any one-off or saved enablement/increase (`first_page → finite`, larger finite target, or
-  `finite → all`), first preview the exact requested scope and the known call model, then ask for explicit
-  confirmation, and only after a yes run once or atomically write config. The preview explains that ordinary
-  first pages depend on enabled queries × enabled sources; every continuation board page and full-posting read
-  is another metered operation; a finite target bounds unique roles judged rather than continuation calls;
-  and `"all"` has no reliable call ceiling in advance. Consult `agent-data-contract.md` for the canonical
-  dated metering/rate facts; do not copy a volatile rate into this recipe or invent account state.
+  For any enablement/increase (`first_page → finite`, larger finite target, or `finite → all`), apply the
+  corresponding one-off or saved row in **Agent-data usage decisions** above. The one-off request is scoped
+  consent after the concise preview, so run it once without a second confirmation question. A saved increase
+  needs explicit confirmation before the atomic config write. A finite target bounds unique roles judged
+  rather than continuation calls, and `"all"` has no reliable call ceiling in advance.
 
   Use this single canonical saved-cadence comparison for the first-page baseline:
 
@@ -168,9 +247,9 @@ The user changes config by **chatting**; manual editing is an escape hatch. To a
   | `daily` | 30-day month | 30 | baseline × 30 |
   | `weekly` | 4 weeks | 4 | baseline × 4 |
 
-  Label the result approximate because this is a comparison window, not a billing forecast. For a one-off,
-  say the schedule does not multiply this run, then give the same saved-cadence comparison as context. If
-  scheduling is off, say there is no recurring multiplier.
+  Label the result approximate because this is a comparison window, not a billing forecast. Use it for a
+  saved increase; for a one-off, say the run does not change the recurring schedule and do not attach a
+  recurring multiplier. If scheduling is off, say there is no recurring multiplier.
 
   A saved value is durable consent, so scheduled/headless runs use it without prompting. A one-off override
   records `review_scope.origin:one_off` in the run but never mutates config. Decreasing a finite target,
@@ -211,8 +290,10 @@ command/launchd or interval translation. **Fallback (no shell runtime) — compo
 `schedule.time` (`HH:MM`) is honored for daily/weekly and its **default is `08:00`**; strip a single leading
 zero so cron gets `8`/`5`, not `08`/`05`. (Both soft-defaults — Monday for weekly, `08:00` for the time —
 match the script and are pinned by `tests/test_mechanics_scripts.py`.) Offer scheduling as a yes/no; check
-the scheduling marker first so you never re-ask. On yes — after showing the user the exact machine change —
-start the **unattended schedule** (the in-session loop only as the fallback above). ALWAYS also **compose the
+the scheduling marker first so you never re-ask. Before that choice, give the
+`schedule_enable_with_canary` calls-first context from **Agent-data usage decisions**. On yes — after showing
+the user the exact machine change — the scoped consent covers that change and one real scheduled-path
+canary. Start the **unattended schedule** (the in-session loop only as the fallback above). ALWAYS also **compose the
 recurring-run recipe and the one-off-run recipe for the host** and show both to the user verbatim, so they
 can re-run the search on demand and stop or restart the schedule themselves.
 
@@ -220,8 +301,9 @@ can re-run the search on demand and stop or restart the schedule themselves.
 schedule works. For the **unattended schedule**, use the **config-time canary**: **registration** (it appears
 in the host scheduler's job list) + one **real run through the exact scheduled invocation** (its own
 permissions/env, not this session's) proving a fresh `runs/<id>.json` (`run_health` ≠ `blocked`), agent-data
-reached, and workspace written; on failure, diagnose + consent-gated fix + re-run; **never record the marker
-until the canary is green**. The **in-session-loop fallback** (`mechanism: loop`) can satisfy neither canary
+reached, and workspace written; on failure, diagnose and show the fix, then get fresh scoped confirmation
+before any metered repair or retry canary; **never record the marker until the canary is green**. The
+**in-session-loop fallback** (`mechanism: loop`) can satisfy neither canary
 layer — it registers in no scheduler job list and its run *is* this session — so verify it differently:
 confirm its **first in-session fire** leaves a fresh run record, then record the marker. Full consent-framed
 flow: the operator manual's `scheduling-and-consent.md` §the canary. Only then set the scheduling marker

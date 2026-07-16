@@ -43,16 +43,21 @@ date and downstream tests when the service changes. Do not infer rollover, overa
 behavior not stated here. The pricing values were supplied and approved for this contract; no live
 account/pricing probe was run.
 
+<!-- agent-data-metering-contract:pricing -->
 | Option | Included metered calls | Effective value |
 |---|---:|---:|
-| Free tier | 100 | no charge |
-| Pay as you go | purchased as needed | $0.008 per metered call; $5 adds 625 calls |
-| $30 monthly subscription | 4,000/month | $0.0075/call if fully used |
-| $100 monthly subscription | 15,000/month | about $0.0067/call if fully used |
-| $200 monthly subscription | 40,000/month | $0.005/call if fully used |
+| `free_tier` | `100` | `no_charge` |
+| `pay_as_you_go` | `purchased_as_needed` | `$0.008_per_metered_call;$5_adds_625_calls` |
+| `monthly_subscription_$30` | `4,000_per_month` | `$0.0075_per_call_if_fully_used` |
+| `monthly_subscription_$100` | `15,000_per_month` | `about_$0.0067_per_call_if_fully_used` |
+| `monthly_subscription_$200` | `40,000_per_month` | `$0.005_per_call_if_fully_used` |
+<!-- /agent-data-metering-contract:pricing -->
 
-Subscription effective rates assume full use. Search and detail attempts are metered external calls, so
-use call count as the primary usage measure and do not infer an actual charge without live account data.
+The underscore-delimited cells are stable contract tokens: read them as ordinary spaces when explaining
+the options. Subscription effective rates assume full use. Search and detail attempts are metered external
+calls, so use call count as the primary usage measure and do not infer an actual charge without live account
+data. The action classification, usage preview, and confirmation rules that consume these facts live in
+[Agent-data usage decisions](internals.md#agent-data-usage-decisions).
 
 - Each successful `search-jobs` or `get-posting` attempt counts as one metered call.
 - Failed attempts and retry attempts currently count. The producer plans to make failures unmetered, so

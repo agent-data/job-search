@@ -420,7 +420,7 @@ Rules: AAS-PROC-03/04; AAS-FORM-08/09/14; AAS-LANG-08; PSG-INJ-03/04/05/11/14.
 
 Rules: AAS-AUTO-01/02/04/07; AAS-FORM-07; PSG-TOOL-04/05/14; PSG-COMM-01/09/10/18.
 
-- [ ] **T2.1 [BLOCKS, M] Add one decision table for every call-increasing lever.**
+- [x] **T2.1 [BLOCKS, M] Add one decision table for every call-increasing lever.**
 
   **Modify:**
   - shared/references/agent-data-contract.md
@@ -1307,6 +1307,11 @@ AAS-DIST-03/05/06.
   activation and duration formulas, and pointer-only internals/conventions consumers. The focused contract
   test reported `1 passed, 33 deselected`; combined reference and mechanics tests reported `125 passed`, and
   full pytest reported `255 passed`; doc lint and diff checks were clean.
+- 2026-07-16 — T2.1 RED reported `3 failed, 1 passed` for the missing marked action table, marked pricing
+  facts, and canonical consumer links. GREEN reported `4 passed` after defining the exact eight action
+  families, calls-first baseline and uncertainty fields, recurring multipliers, free-tier usefulness, scoped
+  consent rules, quiet neutral/model-only branches, and durable headless consent. Philosophy guard and doc
+  lint were clean, the combined focused suites reported `14 passed`, and full pytest reported `260 passed`.
 
 ## Decision log
 

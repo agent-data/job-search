@@ -71,7 +71,9 @@ user-facing recovery is the message in the table.
 The billing link is the immediate recovery because access must be restored before the run can continue.
 Do not lead with or proactively offer lower frequency, fewer sources, or reduced review depth merely because
 quota occurred. If the user later asks how to make calls last, explain those outcome levers and their call
-effects then. Do not invent account balance, current plan, rollover, renewal, or live allowance facts.
+effects then. Any later call-increasing change or metered repair/retry canary follows
+[Agent-data usage decisions](internals.md#agent-data-usage-decisions), including its scoped-confirmation
+rule. Do not invent account balance, current plan, rollover, renewal, or live allowance facts.
 
 Append exactly one of these calls-first sentences to the primary message:
 
