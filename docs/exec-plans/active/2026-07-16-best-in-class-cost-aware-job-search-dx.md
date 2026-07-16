@@ -393,7 +393,7 @@ Rules: AAS-PROC-03/04; AAS-FORM-08/09/14; AAS-LANG-08; PSG-INJ-03/04/05/11/14.
       sh -n shared/scripts/mechanics/lifecycle-append.sh
       sh -n shared/scripts/mechanics/lifecycle-fold.sh
 
-- [ ] **T1.3 [BLOCKS, S] Define activation and metric-write ownership.**
+- [x] **T1.3 [BLOCKS, S] Define activation and metric-write ownership.**
 
   **Modify:**
   - shared/references/run-lifecycle.md
@@ -1302,6 +1302,11 @@ AAS-DIST-03/05/06.
   for reference resolution after matching append/fold field-aware privacy checks, portable Gregorian and
   ISO-bound validation, raw-null-or-nonempty enforcement, and non-symlink artifact proof. POSIX `sh`/`dash`
   syntax and diff checks passed, doc lint was clean, and full pytest reported `250 passed`.
+- 2026-07-16 — T1.3 RED reported `1 failed, 33 deselected` for the missing canonical metrics-document block.
+  GREEN defined append-preserved per-attempt setup records, owner-only write-once timestamps, derived-only
+  activation and duration formulas, and pointer-only internals/conventions consumers. The focused contract
+  test reported `1 passed, 33 deselected`; combined reference and mechanics tests reported `125 passed`, and
+  full pytest reported `255 passed`; doc lint and diff checks were clean.
 
 ## Decision log
 

@@ -180,6 +180,49 @@ LIFECYCLE_METRIC_PROPERTIES = {
     "write_mode": "atomic_whole_file",
 }
 
+LIFECYCLE_METRIC_DOCUMENT = {
+    "version": "1",
+    "required_root_keys": "version,active_setup_id,setups",
+    "record_container": "setups[]",
+    "active_selector": "active_setup_id",
+    "record_identity": "setup_id",
+    "identity_format": "setup-{uuid_v4_lowercase}",
+    "timestamp_scope": "per_setup_record",
+    "unobserved_timestamps": "omitted",
+}
+
+LIFECYCLE_METRIC_OWNERS = {
+    "onboarding_started_at": "front_door",
+    "agent_data_ready_at": "front_door",
+    "first_live_call_at": "runner",
+    "first_relevant_match_ready_at": "runner",
+    "early_results_shown_at": "runner",
+    "run_completed_at": "runner",
+    "schedule_verified_at": "schedule_setup",
+}
+
+LIFECYCLE_METRIC_WRITE_RULES = {
+    "timestamp_writer": "owner_only",
+    "first_observation": "write_once",
+    "existing_timestamp": "preserve_exactly",
+    "setup_id": "immutable",
+    "new_onboarding_attempt": "append_new_setup_record",
+    "historical_setup_records": "never_overwrite_or_delete",
+}
+
+LIFECYCLE_ACTIVATION = {
+    "persisted": "false",
+    "run_health": "not_blocked",
+    "fully_evaluated_postings": "at_least_one",
+    "relevant_matches_shown_with_reasoning": "at_least_one",
+}
+
+LIFECYCLE_DERIVED_DURATIONS = {
+    "time_to_help": "onboarding_started_at->early_results_shown_at",
+    "first_match_review_latency": "first_live_call_at->first_relevant_match_ready_at",
+    "total_run_time": "first_live_call_at->run_completed_at",
+}
+
 LIFECYCLE_COMPLETION_SIGNATURE = {
     "remaining=0",
     "in_flight=0",
@@ -202,6 +245,11 @@ LIFECYCLE_OWNER_CONTRACT_GROUPS = (
     set(LIFECYCLE_METRICS),
     LIFECYCLE_COMPLETION_SIGNATURE,
     LIFECYCLE_COMPLETION_MARKED_TOKENS,
+    set(LIFECYCLE_METRIC_DOCUMENT) | set(LIFECYCLE_METRIC_DOCUMENT.values()),
+    set(LIFECYCLE_METRIC_OWNERS) | set(LIFECYCLE_METRIC_OWNERS.values()),
+    set(LIFECYCLE_METRIC_WRITE_RULES) | set(LIFECYCLE_METRIC_WRITE_RULES.values()),
+    set(LIFECYCLE_ACTIVATION) | set(LIFECYCLE_ACTIVATION.values()),
+    set(LIFECYCLE_DERIVED_DURATIONS) | set(LIFECYCLE_DERIVED_DURATIONS.values()),
 )
 
 
@@ -433,6 +481,16 @@ def test_run_lifecycle_contract_pins_completion_recovery_and_privacy():
     assert _contract_table(text, "search-state") == LIFECYCLE_SEARCH_STATE
     assert set(_contract_list(text, "persistence-prohibitions")) == LIFECYCLE_PROHIBITED_FIELDS
     assert _contract_table(text, "metric-properties") == LIFECYCLE_METRIC_PROPERTIES
+
+
+def test_run_lifecycle_contract_pins_metric_ownership_activation_and_durations():
+    text = LIFECYCLE.read_text(encoding="utf-8")
+
+    assert _contract_table(text, "metric-document") == LIFECYCLE_METRIC_DOCUMENT
+    assert _contract_table(text, "metric-owners") == LIFECYCLE_METRIC_OWNERS
+    assert _contract_table(text, "metric-write-rules") == LIFECYCLE_METRIC_WRITE_RULES
+    assert _contract_table(text, "activation") == LIFECYCLE_ACTIVATION
+    assert _contract_table(text, "derived-durations") == LIFECYCLE_DERIVED_DURATIONS
 
 
 # ------------------------------------------------------ mechanics-script resolution (P4/T4.2)

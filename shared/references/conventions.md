@@ -4,8 +4,9 @@
 The **workspace** (default the hidden `~/.job-search/`; an existing visible `~/job-search/` is **adopted**, not replaced — see `internals.md`) is PRIVATE per-user data — never committed to a public repo.
 
 Durable run progression, completion, recovery, and local milestone evidence are owned by
-[run-lifecycle.md](run-lifecycle.md). This file owns the workspace artifacts and final record shapes; it
-does not restate the lifecycle schema.
+[run-lifecycle.md](run-lifecycle.md), including the metrics document, ownership, activation, and duration
+contracts. This file owns the workspace artifacts and final record shapes; it does not restate those
+lifecycle contracts.
 
 ```
 ~/.job-search/

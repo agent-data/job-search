@@ -4,7 +4,8 @@ The "OS state" that survives across sessions so any skill finds the user's data 
 tools, plus the exact shell lines below. Never hard-code or re-derive the
 paths and precedence rules — follow the procedures as written; they are the contract every skill shares.
 Durable run progression, safe recovery, completion, and local milestone evidence are owned by
-[run-lifecycle.md](run-lifecycle.md); this file does not restate that schema.
+[run-lifecycle.md](run-lifecycle.md), including the setup-record shape, timestamp writers, activation
+predicate, and derived durations; this file does not restate those contracts.
 
 ## Registry (machine-managed OS state — JSON, not YAML)
 Location (tests/evals redirect it via `$JOBSEARCH_OS_REGISTRY`):
@@ -224,7 +225,9 @@ until the canary is green**. The **in-session-loop fallback** (`mechanism: loop`
 layer — it registers in no scheduler job list and its run *is* this session — so verify it differently:
 confirm its **first in-session fire** leaves a fresh run record, then record the marker. Full consent-framed
 flow: the operator manual's `scheduling-and-consent.md` §the canary. Only then set the scheduling marker
-(write rules above — recording the mechanism actually used).
+(write rules above — recording the mechanism actually used). After that proof succeeds, apply the
+schedule-setup-owned local milestone procedure in [run-lifecycle.md](run-lifecycle.md); registration alone
+does not satisfy that procedure.
 
 To turn scheduling off, stop the active schedule, then clear the scheduling marker (write rules above — no
 more stale `installed: true`).

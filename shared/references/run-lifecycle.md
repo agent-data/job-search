@@ -361,8 +361,121 @@ Its timestamp field vocabulary is closed:
 - `schedule_verified_at`
 <!-- /lifecycle-contract:metric-timestamps -->
 
+Every timestamp above is scoped to one setup attempt; there is no duplicate aggregate timestamp at the
+document root. The required document and record shape is:
+
+<!-- lifecycle-contract:metric-document -->
+| Attribute | Contract value |
+|---|---|
+| `version` | `1` |
+| `required_root_keys` | `version,active_setup_id,setups` |
+| `record_container` | `setups[]` |
+| `active_selector` | `active_setup_id` |
+| `record_identity` | `setup_id` |
+| `identity_format` | `setup-{uuid_v4_lowercase}` |
+| `timestamp_scope` | `per_setup_record` |
+| `unobserved_timestamps` | `omitted` |
+<!-- /lifecycle-contract:metric-document -->
+
+```jsonc
+{
+  "version": 1,
+  "active_setup_id": "setup-7f946a4d-e19f-4e3d-8a86-3f9a0ce31171",
+  "setups": [
+    {
+      "setup_id": "setup-7f946a4d-e19f-4e3d-8a86-3f9a0ce31171",
+      "onboarding_started_at": "2026-07-16T14:20:00Z"
+    }
+  ]
+}
+```
+
+`setup_id` is generated locally as `setup-` plus a fresh canonical lowercase UUIDv4. It must match
+`setup-[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}`; it contains no user,
+workspace, posting, run, or external-service identifier. The front door creates a new attempt by appending
+one record containing a fresh `setup_id` and `onboarding_started_at`, then changing `active_setup_id` to
+that identity in the same atomic write. It never reuses an identity, replaces a prior record, or deletes
+history. All later owners target the one record whose `setup_id` equals `active_setup_id`; if that selector
+is absent or invalid, they do not invent an attempt or backfill a timestamp.
+
+Timestamp write ownership is closed:
+
+<!-- lifecycle-contract:metric-owners -->
+| Timestamp | Owner |
+|---|---|
+| `onboarding_started_at` | `front_door` |
+| `agent_data_ready_at` | `front_door` |
+| `first_live_call_at` | `runner` |
+| `first_relevant_match_ready_at` | `runner` |
+| `early_results_shown_at` | `runner` |
+| `run_completed_at` | `runner` |
+| `schedule_verified_at` | `schedule_setup` |
+<!-- /lifecycle-contract:metric-owners -->
+
+- The front door writes `onboarding_started_at` when it creates the attempt and writes
+  `agent_data_ready_at` when it first verifies agent-data is ready for that attempt.
+- The runner writes `first_live_call_at` when the first live job request begins,
+  `first_relevant_match_ready_at` when a fully evaluated relevant posting first has nonempty reasoning,
+  `early_results_shown_at` only when interactive early results are actually shown, and `run_completed_at`
+  only when the first live run reaches a valid complete close. Skipping an inapplicable presentation phase
+  does not establish the shown timestamp; a blocked or interrupted close does not establish completion.
+- Schedule setup writes `schedule_verified_at` only after its real scheduled-path canary has passed. Merely
+  registering a schedule does not establish verification.
+
+Every owner follows these write rules:
+
+<!-- lifecycle-contract:metric-write-rules -->
+| Rule | Contract value |
+|---|---|
+| `timestamp_writer` | `owner_only` |
+| `first_observation` | `write_once` |
+| `existing_timestamp` | `preserve_exactly` |
+| `setup_id` | `immutable` |
+| `new_onboarding_attempt` | `append_new_setup_record` |
+| `historical_setup_records` | `never_overwrite_or_delete` |
+<!-- /lifecycle-contract:metric-write-rules -->
+
+For the selected setup record, a timestamp owner writes its field only when the field is absent. A retry,
+replay, later run, or later schedule verification preserves an existing value exactly. A genuinely new
+onboarding attempt is the only reset boundary: it appends a new record and makes that record active instead
+of clearing or overwriting the previous attempt. Each update reads the current JSON object, merges only the
+owner's absent field, preserves unknown root keys, unknown record keys, other owners' fields, and every
+historical record, then atomically replaces the whole file. Never stream or append a partial JSON update.
+
+Activation is a view over durable run evidence, not a metric field:
+
+<!-- lifecycle-contract:activation -->
+| Clause | Contract value |
+|---|---|
+| `persisted` | `false` |
+| `run_health` | `not_blocked` |
+| `fully_evaluated_postings` | `at_least_one` |
+| `relevant_matches_shown_with_reasoning` | `at_least_one` |
+<!-- /lifecycle-contract:activation -->
+
+Derive activation only when one run satisfies all three evidence clauses. Its final run record has
+`run_health` other than `blocked`; its folded lifecycle ledger has at least one evaluated posting
+(`presented` still counts as evaluated); and at least one posting whose latest ledger state is `presented`
+has a corresponding `jobs.jsonl` evaluated event with `relevant:true` and a nonempty `reasoning` field.
+This proves that a relevant match was actually shown with reasoning rather than merely found. A blocked run,
+a run with no fully evaluated posting, a zero-relevant run, or a relevant match that has not been presented
+does not activate setup. Do not persist an activation boolean, activation timestamp, matching posting
+identity, or reasoning in metrics.
+
+The only named durations are derived per setup record:
+
+<!-- lifecycle-contract:derived-durations -->
+| Duration | Endpoint order |
+|---|---|
+| `time_to_help` | `onboarding_started_at->early_results_shown_at` |
+| `first_match_review_latency` | `first_live_call_at->first_relevant_match_ready_at` |
+| `total_run_time` | `first_live_call_at->run_completed_at` |
+<!-- /lifecycle-contract:derived-durations -->
+
+For each row, parse both timestamps as instants and subtract the start from the end. Report the duration as
+unavailable when either endpoint is absent or the end precedes the start. Never write these duration names
+or values into `metrics.json`.
+
 Metrics are local-only, no-PII product evidence, not telemetry. Never transmit them automatically or store
 preferences, resumes, job or posting text, match content, credentials, auth material, environment dumps,
-cursors, or other opaque continuation tokens in this file. Update metrics with an atomic whole-file write:
-read the current JSON object, merge the owned timestamp, preserve fields owned by other flows, and atomically
-replace the file. Never stream or append a partial JSON update.
+cursors, or other opaque continuation tokens in this file.
