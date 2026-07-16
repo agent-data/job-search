@@ -1,9 +1,9 @@
 ---
 type: design-doc
 title: "Verify-don't-encode: adapter-free portability, unattended scheduling, and config-time run verification"
-status: current
+status: superseded
 verified: partial
-last_reviewed: 2026-07-13
+last_reviewed: 2026-07-16
 code_refs: [shared/references/internals.md, shared/references/conventions.md, shared/references/parallelism.md, shared/references/errors.md, shared/references/agent-data-contract.md, shared/references/voice.md, skills/job-search-agent/references/scheduling-and-consent.md, skills/job-search/references/onboarding.md, skills/job-search-run/SKILL.md, docs/design-docs/core-beliefs.md, scripts/doc_lint.py, .github/workflows/ci.yml]
 claimed_paths: [skills, shared/references, scripts]
 owner_area: Skills & references
@@ -11,6 +11,10 @@ repos: [job-search-os]
 ---
 
 # Verify-don't-encode: adapter-free portability, unattended scheduling, and config-time run verification
+
+> **Superseded:** [Cost-aware decisions, explicit models, and canary-verified recurring jobs](2026-07-16-cost-aware-verified-recurring-jobs-design.md)
+> retains the runtime-verification thesis while replacing the recurring-mechanism eligibility,
+> primary/detail model ownership, cost-context scope, and migration design.
 
 This design builds on the plugin **as it ships on this branch** — the running skills, references, and the
 minimized-but-present per-host adapter layer — and takes it one increment further. It is self-contained:
