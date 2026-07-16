@@ -23,8 +23,20 @@ procedure in `internals.md` (registry → `~/.job-search/` → legacy `~/job-sea
 and the discovery/first-run/scheduling rules live in `internals.md`.
 
 ## config.yaml
+
+An actual newly created workspace uses version 2 and is valid only after interactive setup has written one
+nonempty exact live model identifier to `search.detail_model`. An exact identifier is a model the current
+host can execute by that identifier; it is not a capability tier, an inheritance token, or a placeholder.
+
+<!-- exact-model-contract:config-v2-fields -->
+| Field | Owner | Presence | Value |
+|---|---|---|---|
+| `version` | `workspace_config` | `required` | `2` |
+| `search.detail_model` | `workspace_config` | `required` | `nonempty_exact_live_model_identifier` |
+<!-- /exact-model-contract:config-v2-fields -->
+
 ```yaml
-version: 1
+version: 2
 workspace:
   preferences_path: "preferences.md"
   master_resume_path: "resumes/master.md"
@@ -33,7 +45,7 @@ queries:
 search:
   sources: ["linkedin", "ashby"]  # ordered job sources every query runs against (the source enum is defined in agent-data-contract.md) — omit the key for this default; greenhouse/lever widen coverage across more company boards
   freshness: "past-2-weeks"  # any | past-week | past-2-weeks | past-month — recency window; resolves to a server-side published_on_or_after cutoff (client-side fallback if the echo is absent); default past-2-weeks
-  detail_model: "balanced"   # tier the per-posting fit VERDICT runs at — the mid-tier reviewer floor (default): fast | balanced | high | inherit (the agent binds each tier to a concrete model from its own roster — the least-powerful that does the task well; the verdict is a judgment, so never the cheapest)
+  # Setup inserts the required exact search.detail_model before writing a valid new workspace.
   # max_new_postings_per_run: 50  # optional: positive integer or "all"; omit for first-page coverage
   # parallel_detail_reads: true  # optional: approved use of parallel subagents for detail reads where the host supports them
 schedule:
@@ -58,19 +70,39 @@ recency the user names for a single run ("only postings published in the past da
 resolves to its own cutoff and overrides the saved default for that run, with no new enum value. The
 runner sends the cutoff and echo-verifies `data.query.published_on_or_after`; where a deployment omits
 the echo it filters client-side by the same effective date. Under an active window a row with no
-effective date is dropped (server parity); with `any` nothing is dropped. `detail_model` is a portable tier token for the per-posting **fit verdict** — the
-judgment the detail read produces. Because that verdict is a judgment, not a mechanical step, it runs at the
-**mid-tier reviewer floor**: `balanced` is the default, scaled up to `high` for a higher-risk or ambiguous
-posting, never dispatched on the cheapest tier by default and never reflexively on the most capable. The
-genuinely mechanical bulk — dedup, the summary prefilter, provenance — runs cheap in the runner's primary
-context and the shared scripts, independent of this knob. The tiers: `fast` (the cheapest tier — an explicit
-opt-down: faster, a touch looser on subtle qualitative calls), `balanced` (the mid-tier reviewer floor; the
-default), `high` (highest fidelity), `inherit` (the run's own model — the one value that maps to no explicit
-override, and only by the user's choice; the runner otherwise always dispatches an explicit model). A legacy
-`haiku` / `sonnet` / `opus` value — some `config.yaml` files from earlier versions carry the pre-tier form —
-is accepted as an alias for `fast` / `balanced` / `high` respectively. The agent
-binds each tier to a concrete model from its own roster — the least-powerful model that does the task well;
-the fit verdict is a judgment, so never the cheapest.
+effective date is dropped (server parity); with `any` nothing is dropped. `detail_model` is the exact model
+identifier for the per-posting **fit verdict** — the judgment the detail read produces. In version 2,
+setup resolves that model once and writes its exact live
+identifier; every later posting-detail judgment obeys that stored value without tier interpretation or a
+new selection decision. Workspace config owns this exact detail-model binding only: it never stores the
+recurring primary model or either model's provenance field.
+
+<!-- exact-model-contract:legacy-v1-selectors -->
+Historical version-1 workspaces may contain the selectors `fast`, `balanced`, `high`, or `inherit`.
+Those tokens, plus the older `haiku` / `sonnet` / `opus` aliases, are legacy version-1 inputs only; none is a
+valid version-2 `search.detail_model` value. This compatibility boundary does not authorize a headless run
+to rewrite or migrate the workspace.
+<!-- /exact-model-contract:legacy-v1-selectors -->
+
+A version-1 headless run recognizes that saved selector and uses the canonical resolver below. Resolve the
+selector once for the run from the host's current roster; this is a bounded compatibility resolution, not a
+new per-posting selection decision. Preserve the config bytes, never migrate in the runner, and record the
+exact resolved model with `detail_model_origin:legacy_v1_selector`.
+
+<!-- exact-model-contract:legacy-v1-runtime -->
+| Policy | Decision |
+|---|---|
+| `selector_source` | `version_1.search.detail_model` |
+| `fast` | `host_fast_tier_model` |
+| `balanced` | `host_balanced_reviewer_floor_model` |
+| `high` | `host_most_capable_tier_model` |
+| `inherit` | `exact_primary_model` |
+| `legacy_aliases` | `haiku=fast,sonnet=balanced,opus=high` |
+| `config_effect` | `preserve_bytes_no_write_no_migration` |
+| `run_model` | `exact_resolved_model` |
+| `run_origin` | `legacy_v1_selector` |
+<!-- /exact-model-contract:legacy-v1-runtime -->
+
 `parallel_detail_reads` is optional and records whether the user approved parallel subagents for detail
 reads on hosts that require explicit authorization. Unset means interactive front-door flows may ask; `true`
 means use parallel subagents where available; `false` means read details sequentially. The runner reads this
@@ -90,7 +122,8 @@ Omission is the backward-compatible default; it does not prompt, write config, o
 The finite target bounds unique roles judged after known-id dedup and same-role merging, not page calls:
 known and duplicate rows can require additional pages before the target settles. `queries[].limit` (1–100;
 the API default is 20 when omitted and this template sets 25) remains the per-call page size for one
-query/source request. The additive setting keeps `version: 1`; there is no migration. Conversational one-off
+query/source request. This additive review-depth setting does not itself change a workspace's config major
+or authorize migration. Conversational one-off
 and saved-change recipes use the canonical action classes, call preview, and confirmation rules in
 [Agent-data usage decisions](internals.md#agent-data-usage-decisions); this file owns only the stored values
 and resolved review-scope behavior.
@@ -149,6 +182,8 @@ are the skills' own POSIX shell, no third-party dependency):
 { "run_id":"…", "started_at":"…", "completed_at":"…",
   "build": { "version":"0.4.0", "content_hash":"sha256:abcdef123456", "git_sha":"<short sha|unknown>" },
   "status_probe":"ok|degraded|unreachable",
+  "detail_model":"<exact model used for posting-detail judgment>",
+  "detail_model_origin":"configured_auto|configured_user|legacy_v1_selector|repair",
   "queries":[ {
     "query_id":"…", "source":"<source>", "keywords":"…", "results_returned":25, "new":6,
     "pages_fetched":3, "rows_scanned":75, "unique_candidates":31, "selected_for_review":25,
@@ -185,6 +220,37 @@ are the skills' own POSIX shell, no third-party dependency):
                "retryable":true, "attempts":3, "final":"gave_up", "request_id":"…" } ],
   "run_health":"healthy|partial|degraded|blocked" }
 ```
+
+<!-- exact-model-contract:run-record-fields -->
+| Field | Owner | Presence | Value |
+|---|---|---|---|
+| `detail_model` | `run_record` | `required` | `exact_model_used_for_posting_detail_judgment` |
+| `detail_model_origin` | `run_record` | `required_observed_provenance` | `detail_model_origin_enum` |
+<!-- /exact-model-contract:run-record-fields -->
+
+<!-- exact-model-contract:detail-origins -->
+| Origin | Meaning |
+|---|---|
+| `configured_auto` | `setup_selected_exact_model` |
+| `configured_user` | `user_selected_exact_model` |
+| `legacy_v1_selector` | `legacy_version_1_resolution` |
+| `repair` | `repaired_exact_model` |
+<!-- /exact-model-contract:detail-origins -->
+
+`detail_model_origin` is observed provenance, not a guess and not another workspace or registry field.
+Setup, migration, or repair context can supply it to the first run. A later producer may carry it forward
+only from trustworthy prior run evidence bound to the same exact `detail_model`; without such evidence, it
+must block or route to repair rather than invent an origin. This pins evidence ownership without prescribing
+the later producer algorithm.
+
+<!-- exact-model-contract:detail-origin-evidence -->
+| Policy | Decision |
+|---|---|
+| `writer` | `run_record_producer` |
+| `accepted_evidence` | `setup_migration_repair_context_or_trustworthy_same_exact_model_prior_run_binding` |
+| `missing_evidence` | `never_guess_origin_block_or_repair` |
+<!-- /exact-model-contract:detail-origin-evidence -->
+
 `build.version` and `build.content_hash` are copied from the bundled `references/build-stamp.md`.
 `build.git_sha` is best-effort: use `git -C <job-search root> rev-parse --short HEAD` only when the
 executing Job Search plugin/source root is reliably known and that root has a `.git` context; otherwise

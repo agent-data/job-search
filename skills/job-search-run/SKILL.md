@@ -268,25 +268,20 @@ fallback, and wording rules in `errors.md` rather than restating them here.
    | `false` | sequential reads (an explicit user opt-out) |
    | unset   | your host's default — a host that gates subagents behind user approval reads sequentially until approved; every other host uses the parallel fan-out |
 
-   Dispatch every subtask
-   with an **explicitly specified** model (a required slot — never omit it, or it silently inherits the wrong
-   tier). Use the **least powerful model that can handle the task well, to conserve cost and increase speed**:
-   the mechanical steps (dedup, prefilter, extraction, provenance) on your **cheapest** model; the per-posting
-   fit **verdict is a judgment, so never your cheapest** — the least-powerful model that does *that judgment*
-   well, scaled up for a higher-risk or ambiguous posting (one whose scan left a must-have/dealbreaker
-   unconfirmed or surfaced conflicting signals). **Bind the tier to a concrete model from your own roster.**
+   For version 2, apply the posting-detail model binding in `../../shared/references/parallelism.md`, including
+   its one-line runtime authority and no-substitution rule. Configuration time already made the model
+   decision; this headless run does not choose, tier-resolve, scale, or replace it. A version 1 selector is
+   legacy compatibility input, not an exact model identifier: resolve it once per run with the canonical
+   version-1 resolver in `../../shared/references/conventions.md`, preserve the config bytes, and record
+   `detail_model_origin:legacy_v1_selector`; do not apply the version-2 exact-value rule to that selector.
    For the parallel fan-out, dispatch queued postings as one concurrent batch where capacity allows, one
-   subagent per posting, each given that explicit model. `search.detail_model` carries the intent as the
-   portable tier token: default `balanced`, the mid-tier reviewer floor (see
-   `../../shared/references/conventions.md`); `high` for that higher-risk or ambiguous case; never down to the
-   cheapest `fast` and never reflexively the most capable. **Never omit the model** — an omitted model
-   silently inherits the session's, defaulting the judgment to whatever is cheapest to hand; `inherit` is the
-   one value that binds to this run's own model, and only because the user set it. The genuinely mechanical
-   bulk here — dedup, the summary prefilter (step 3), provenance — runs cheap in this primary context and the
-   shared scripts, independent of the `search.detail_model` knob. If the host applies a subagent/thread limit,
-   continue in rolling batches; if it refuses subagent spawning or no slot is available, fall back to
-   sequential reads (the verdict then runs on this run's own model). Capacity or authorization fallback is not
-   a run-health error, and no posting is dropped.
+   subagent per posting. The genuinely mechanical
+   bulk here — dedup, the summary prefilter (step 3), provenance — remains in this primary context and the
+   shared scripts, independent of the configured detail-model binding. If the host applies a subagent/thread
+   limit, continue in rolling batches. Authorization or capacity can change parallelism. A version-2
+   sequential fallback must execute the exact configured model; a version-1 sequential fallback must execute
+   the exact resolved model from the canonical legacy resolver. Never substitute another model after either
+   binding resolves. No posting is dropped merely because batching is required.
 
    In a rolling parallel fan-out, a returned quota-rejection attempt stops dispatch of every not-yet-started
    worker. Let all workers already started in that batch finish and return their attempt envelopes before the

@@ -496,7 +496,7 @@ Rules: AAS-AUTO-01/02/04/07; AAS-FORM-07; PSG-TOOL-04/05/14; PSG-COMM-01/09/10/1
 
 Rules: AAS-AUTO-02/07/11; AAS-LANG-03/04/08; PSG-SUB-02/03/04/09/13; PSG-COMM-09/10/20.
 
-- [ ] **T3.1 [BLOCKS, M] Pin version-2 config and exact model schemas.**
+- [x] **T3.1 [BLOCKS, M] Pin version-2 config and exact model schemas.**
 
   **Modify:**
   - shared/references/conventions.md
@@ -1318,6 +1318,21 @@ AAS-DIST-03/05/06.
   the broad scan with semantic coverage of config templates/schemas and fenced persisted-config examples;
   non-config API/artifact/prose `cost` is explicitly allowed. Philosophy guard and doc lint were clean, the
   combined focused suites reported `17 passed`, and full pytest reported `263 passed`.
+- 2026-07-16 — T3.1 RED reported `5 failed, 49 passed` for the missing marked version-2, run-record,
+  scheduler, setup-policy, and runtime-dispatch contracts plus the version-1 static template. GREEN reported
+  `54 passed` after pinning exact model ownership and origin enums, observed-only detail-origin evidence,
+  setup-time least-powerful-adequate selection, exact-primary sequential fallback, and the one-line runtime
+  authority. The version-2 examples omit `search.detail_model` until setup inserts a live exact identifier;
+  legacy selectors remain explicitly separate version-1 inputs whose full migration mechanics belong to
+  T3.2. The eval validator and doc lint were clean,
+  full pytest reported `276 passed`, and a deterministic rebuild updated the content hash.
+- 2026-07-16 — T3.1 documentation-review fixes added RED coverage for a placeholder in the canonical
+  config example, an unscoped version-2 dispatch rule, the bounded version-1 resolver, and versioned
+  sequential fallback. The canonical example now omits the model key; version 1 resolves its saved selector
+  once through the pinned adapter-free tier mapping, preserves config bytes, and records the exact result
+  with `legacy_v1_selector`, while version 2 performs no runtime model selection. Final GREEN reported
+  `55 passed` focused and `277 passed` full; eval validation, doc lint, philosophy guard, deterministic
+  rebuild, and diff whitespace were clean.
 
 ## Decision log
 

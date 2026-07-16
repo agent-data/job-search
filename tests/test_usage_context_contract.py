@@ -10,6 +10,9 @@ SHARED = ROOT / "shared" / "references"
 INTERNALS = SHARED / "internals.md"
 AGENT_DATA = SHARED / "agent-data-contract.md"
 VOICE = SHARED / "voice.md"
+CONVENTIONS = SHARED / "conventions.md"
+PARALLELISM = SHARED / "parallelism.md"
+CONFIG_TEMPLATE = ROOT / "templates" / "config.example.yaml"
 ONBOARDING = ROOT / "skills" / "job-search" / "references" / "onboarding.md"
 CUSTOMIZATION = ROOT / "skills" / "job-search-agent" / "references" / "customization.md"
 RUNNER = ROOT / "skills" / "job-search-run" / "SKILL.md"
@@ -124,6 +127,91 @@ POLICY_DECISIONS = {
     "uncertain_additions": "not_a_ceiling",
 }
 
+CONFIG_V2_MODEL_FIELDS = {
+    "version": ("workspace_config", "required", "2"),
+    "search.detail_model": (
+        "workspace_config",
+        "required",
+        "nonempty_exact_live_model_identifier",
+    ),
+}
+
+RUN_RECORD_MODEL_FIELDS = {
+    "detail_model": (
+        "run_record",
+        "required",
+        "exact_model_used_for_posting_detail_judgment",
+    ),
+    "detail_model_origin": (
+        "run_record",
+        "required_observed_provenance",
+        "detail_model_origin_enum",
+    ),
+}
+
+DETAIL_MODEL_ORIGINS = {
+    "configured_auto": ("setup_selected_exact_model",),
+    "configured_user": ("user_selected_exact_model",),
+    "legacy_v1_selector": ("legacy_version_1_resolution",),
+    "repair": ("repaired_exact_model",),
+}
+
+DETAIL_MODEL_ORIGIN_EVIDENCE = {
+    "writer": ("run_record_producer",),
+    "accepted_evidence": (
+        "setup_migration_repair_context_or_trustworthy_same_exact_model_prior_run_binding",
+    ),
+    "missing_evidence": ("never_guess_origin_block_or_repair",),
+}
+
+LEGACY_V1_RUNTIME = {
+    "selector_source": ("version_1.search.detail_model",),
+    "fast": ("host_fast_tier_model",),
+    "balanced": ("host_balanced_reviewer_floor_model",),
+    "high": ("host_most_capable_tier_model",),
+    "inherit": ("exact_primary_model",),
+    "legacy_aliases": ("haiku=fast,sonnet=balanced,opus=high",),
+    "config_effect": ("preserve_bytes_no_write_no_migration",),
+    "run_model": ("exact_resolved_model",),
+    "run_origin": ("legacy_v1_selector",),
+}
+
+SCHEDULER_MODEL_FIELDS = {
+    "primary_model": (
+        "scheduler_registry",
+        "required_for_installed_schedule",
+        "nonempty_exact_live_model_identifier",
+    ),
+    "primary_model_origin": (
+        "scheduler_registry",
+        "required_for_installed_schedule",
+        "primary_model_origin_enum",
+    ),
+}
+
+PRIMARY_MODEL_ORIGINS = {
+    "session_inheritance": ("creating_session_exact_model",),
+    "user_override": ("user_selected_exact_available_model",),
+    "repair_session": ("repair_session_exact_model",),
+}
+
+MODEL_SETUP_POLICIES = {
+    "detail_model_default": (
+        "least_powerful_available_model_that_performs_fit_judgment_well",
+    ),
+    "detail_model_user_preference": ("exact_user_selected_available_model",),
+    "separate_worker_model_unavailable": (
+        "detail_model_equals_exact_primary_model_and_runs_sequentially",
+    ),
+    "creating_session_primary_unknown": (
+        "block_verified_schedule_until_user_selects_exact_available_model",
+    ),
+}
+
+RUNTIME_DETAIL_MODEL_AUTHORITY = (
+    "For each posting-detail judgment, use the exact `search.detail_model`."
+)
+
 
 def _marked_block(text, namespace, name):
     pattern = (
@@ -208,6 +296,124 @@ def _normalized_prose(path):
 def _eval(skill):
     path = ROOT / "skills" / skill / "evals" / "evals.json"
     return json.loads(path.read_text(encoding="utf-8"))
+
+
+def _runner_detail_section():
+    text = RUNNER.read_text(encoding="utf-8")
+    match = re.search(
+        r"(?ms)^4\. \*\*Read the details.*?(?=^5\. \*\*Consolidate)",
+        text,
+    )
+    assert match, "job-search-run is missing its posting-detail section"
+    return match.group(0)
+
+
+def test_config_v2_requires_one_exact_live_detail_model_and_isolates_legacy_selectors():
+    text = CONVENTIONS.read_text(encoding="utf-8")
+    assert _code_table(text, "exact-model-contract", "config-v2-fields", 4) == {
+        key: value for key, value in CONFIG_V2_MODEL_FIELDS.items()
+    }
+
+    v2 = _marked_block(text, "exact-model-contract", "config-v2-fields").lower()
+    legacy = _marked_block(text, "exact-model-contract", "legacy-v1-selectors").lower()
+    for selector in ("fast", "balanced", "high", "inherit"):
+        assert not re.search(rf"`{selector}`", v2), (
+            f"version 2 must not accept the legacy tier selector {selector!r}"
+        )
+        assert re.search(rf"`{selector}`", legacy), (
+            f"legacy version-1 compatibility must keep naming {selector!r}"
+        )
+    assert _code_table(text, "exact-model-contract", "legacy-v1-runtime", 2) == {
+        key: value for key, value in LEGACY_V1_RUNTIME.items()
+    }
+
+
+def test_static_config_template_is_v2_but_never_invents_a_model_identifier():
+    template = CONFIG_TEMPLATE.read_text(encoding="utf-8")
+    assert re.search(r"(?m)^version:\s*2\s*$", template)
+    assert not re.search(r"(?m)^\s*detail_model\s*:", template)
+    assert "setup inserts" in template.lower()
+    assert "before writing a valid new workspace" in template.lower()
+    for selector in ("fast", "balanced", "high", "inherit"):
+        assert not re.search(rf"\b{selector}\b", template.lower())
+
+
+def test_canonical_v2_config_example_also_leaves_live_model_insertion_to_setup():
+    text = CONVENTIONS.read_text(encoding="utf-8")
+    match = re.search(r"(?ms)^## config\.yaml\s+.*?^```yaml\n(?P<body>.*?)^```", text)
+    assert match, "conventions.md is missing its canonical config.yaml example"
+    example = match.group("body")
+    assert re.search(r"(?m)^version:\s*2\s*$", example)
+    assert not re.search(r"(?m)^\s*detail_model\s*:", example)
+    assert "setup inserts" in example.lower()
+
+
+def test_exact_model_ownership_and_origin_enums_are_pinned_to_their_canonical_owners():
+    conventions = CONVENTIONS.read_text(encoding="utf-8")
+    internals = INTERNALS.read_text(encoding="utf-8")
+
+    assert _code_table(conventions, "exact-model-contract", "run-record-fields", 4) == {
+        key: value for key, value in RUN_RECORD_MODEL_FIELDS.items()
+    }
+    assert _code_table(conventions, "exact-model-contract", "detail-origins", 2) == {
+        key: value for key, value in DETAIL_MODEL_ORIGINS.items()
+    }
+    assert _code_table(
+        conventions, "exact-model-contract", "detail-origin-evidence", 2
+    ) == {key: value for key, value in DETAIL_MODEL_ORIGIN_EVIDENCE.items()}
+    assert _code_table(internals, "exact-model-contract", "scheduler-fields", 4) == {
+        key: value for key, value in SCHEDULER_MODEL_FIELDS.items()
+    }
+    assert _code_table(internals, "exact-model-contract", "primary-origins", 2) == {
+        key: value for key, value in PRIMARY_MODEL_ORIGINS.items()
+    }
+
+    assert "primary_model" not in _marked_block(
+        conventions, "exact-model-contract", "config-v2-fields"
+    )
+    assert "detail_model_origin" not in _marked_block(
+        conventions, "exact-model-contract", "config-v2-fields"
+    )
+    assert "detail_model" not in _marked_block(
+        internals, "exact-model-contract", "scheduler-fields"
+    )
+    assert "detail_model_origin" not in _marked_block(
+        internals, "exact-model-contract", "scheduler-fields"
+    )
+
+
+def test_model_setup_is_one_time_and_unknown_primary_blocks_verified_scheduling():
+    internals = INTERNALS.read_text(encoding="utf-8")
+    assert _code_table(internals, "exact-model-contract", "setup-policy", 2) == {
+        key: value for key, value in MODEL_SETUP_POLICIES.items()
+    }
+
+
+def test_headless_runner_uses_the_one_line_exact_model_authority_without_reselection():
+    parallelism = PARALLELISM.read_text(encoding="utf-8")
+    authority = _marked_block(
+        parallelism, "exact-model-contract", "runtime-detail-dispatch"
+    ).strip()
+    assert authority == RUNTIME_DETAIL_MODEL_AUTHORITY
+
+    runner = " ".join(_runner_detail_section().lower().split())
+    assert "../../shared/references/parallelism.md" in runner
+    assert "version 2" in runner
+    assert "version 1" in runner
+    assert "not an exact model identifier" in runner
+    assert "canonical version-1 resolver" in runner
+    assert "version-2 sequential fallback must execute the exact configured model" in runner
+    assert "version-1 sequential fallback must execute the exact resolved model" in runner
+    for forbidden in (
+        "least powerful model",
+        "bind the tier",
+        "portable tier token",
+        "own roster",
+        "scaled up for",
+    ):
+        assert forbidden not in runner, (
+            f"the headless runtime must not choose or tier-resolve the detail model: {forbidden!r}"
+        )
 
 
 def test_usage_decision_table_covers_exact_action_families_and_rules():

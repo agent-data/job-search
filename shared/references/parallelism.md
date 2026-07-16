@@ -4,10 +4,9 @@ Independent work runs concurrently, not in sequence. When subtasks don't depend 
 different documents, judging ten postings, running several searches — dispatch them **at once, in a single
 batch** of subagents, never a one-at-a-time loop. Time-to-value is a product feature, and parallelism is how
 you cut wall-clock when the work is genuinely independent. Isolating each subtask in its own subagent also
-keeps the primary context clean and lets each isolated subtask run on the least powerful model that can do it
-*well* — the genuinely mechanical bulk on the cheapest tier, a delegated judgment (e.g. a per-posting fit
-verdict) at its reviewer floor, a mid-tier model scaled up to risk, with the dispatching model always set
-explicitly (the detail-read tier is configured in `conventions.md`).
+keeps the primary context clean. For posting-detail judgments, interactive setup has already selected and
+persisted the exact model binding described in `internals.md`; runtime dispatch does not select a tier or
+reinterpret that decision.
 
 The bar is *mutual independence*: if subtask B needs subtask A's result, they're sequential — don't force them
 parallel. If they don't, running them serially is wasted wall-clock.
@@ -23,6 +22,21 @@ preference resolves depends on your host: one that gates subagents behind approv
 user approves, but one that needs no approval keeps the parallel-by-default fan-out above. An explicit `false`
 is always a user opt-out to sequential reads; `true` is always the parallel fan-out where the primitive
 exists.
+
+## Posting-detail model binding
+
+Configuration time owns selection. Setup chooses the least-powerful available model that can perform fit
+judgment well unless the user selects another exact available model. If the host cannot assign a separate
+worker model, setup persists the exact primary model as `search.detail_model` and configures sequential
+judgments. Those are setup decisions, never headless runtime heuristics.
+
+<!-- exact-model-contract:runtime-detail-dispatch -->
+For each posting-detail judgment, use the exact `search.detail_model`.
+<!-- /exact-model-contract:runtime-detail-dispatch -->
+
+The exact value is required at dispatch. Never omit it, reinterpret it as a tier, or silently substitute
+another model. A sequential fallback is valid only when it still executes that exact configured model; setup
+uses the exact primary binding when the host has no separate-worker-model capability.
 
 If the host has a concurrent primitive but refuses more subagents because its thread/slot limit is reached,
 that is **backpressure**, not a run-health error. Keep the already-dispatched work, wait for a completed subagent,

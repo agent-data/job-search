@@ -16,7 +16,11 @@ i.e. `~/.config/job-search/config.json` by default. Schema:
 ```json
 { "version": 1,
   "active_workspace": "/Users/<u>/.job-search",
-  "scheduling": { "installed": true, "mechanism": "loop", "set_at": "<iso>" },
+  "scheduling": {
+    "installed": true, "mechanism": "loop", "set_at": "<iso>",
+    "primary_model": "<exact live model identifier>",
+    "primary_model_origin": "session_inheritance"
+  },
   "deeper_coverage_nudges": {
     "/Users/<u>/.job-search": {
       "workspace": "/Users/<u>/.job-search",
@@ -26,6 +30,24 @@ i.e. `~/.config/job-search/config.json` by default. Schema:
   } }
 ```
 The registry is machine state; the workspace's `config.yaml` stays the user-facing config.
+
+The scheduling metadata owns the recurring primary-model binding. It never stores the posting-detail model
+or its origin; those belong to workspace config and run records respectively.
+
+<!-- exact-model-contract:scheduler-fields -->
+| Field | Owner | Presence | Value |
+|---|---|---|---|
+| `primary_model` | `scheduler_registry` | `required_for_installed_schedule` | `nonempty_exact_live_model_identifier` |
+| `primary_model_origin` | `scheduler_registry` | `required_for_installed_schedule` | `primary_model_origin_enum` |
+<!-- /exact-model-contract:scheduler-fields -->
+
+<!-- exact-model-contract:primary-origins -->
+| Origin | Meaning |
+|---|---|
+| `session_inheritance` | `creating_session_exact_model` |
+| `user_override` | `user_selected_exact_available_model` |
+| `repair_session` | `repair_session_exact_model` |
+<!-- /exact-model-contract:primary-origins -->
 
 The resolved `$REG` is **the one and only registry**: evaluate the expression in Bash and use the path it
 prints for every read and write. Never consult or touch any other location — in particular, when
@@ -50,14 +72,16 @@ does.
   `{"version": 1, "active_workspace": "<abs path>"}` per the write rules. This writes ONLY the registry; it
   never touches workspace files.
 - **Read the scheduling marker:** the registry's `scheduling` object, defaulting to
-  `{"installed": false, "mechanism": null, "set_at": null}` when absent.
+  `{"installed": false, "mechanism": null, "set_at": null, "primary_model": null, "primary_model_origin": null}`
+  when absent. Null model fields are valid only for an uninstalled marker.
 - **Set the scheduling marker** (a recurring run was started): merge
-  `"scheduling": {"installed": true, "mechanism": "<active mechanism>", "set_at": "<UTC ISO>"}` — record the
+  `"scheduling": {"installed": true, "mechanism": "<active mechanism>", "set_at": "<UTC ISO>", "primary_model": "<exact live model identifier>", "primary_model_origin": "<primary-model origin>"}` — record the
   mechanism actually used: a short token for the scheduler the agent bound the run to (an unattended
-  `cron`/`launchd` schedule, or `loop` for the in-session fallback). Take the timestamp
+  `cron`/`launchd` schedule, or `loop` for the in-session fallback), plus the exact recurring primary model
+  and one origin from the table above. Take the timestamp
   from `date -u +%Y-%m-%dT%H:%M:%S+00:00`.
 - **Clear the scheduling marker** (turn-off): merge
-  `"scheduling": {"installed": false, "mechanism": null, "set_at": null}`.
+  `"scheduling": {"installed": false, "mechanism": null, "set_at": null, "primary_model": null, "primary_model_origin": null}`.
 - **Read the deeper-coverage nudge marker for workspace W:** expand W to its absolute path and look up that
   exact path in `deeper_coverage_nudges`; absence means no marker. The map is per absolute workspace, not
   global, and each marker's `workspace` value must equal its map key.
@@ -196,6 +220,23 @@ in config—never introduce monetary-control fields.
 ## Config read/update recipes (conversational-first; config.yaml is YAML)
 The user changes config by **chatting**; manual editing is an escape hatch. To apply a change, read
 `<workspace>/config.yaml`, edit it minimally (preserve comments/structure), and write it back.
+
+For a new version-2 workspace, setup resolves model bindings once before writing a valid config or creating
+a verified schedule. Posting-fit evaluation is judgment, so the automatic choice is the least-powerful
+available model that can perform that judgment well; an exact available model the user requests overrides
+that default. If the host cannot assign a separate worker model, write the exact primary model as
+`search.detail_model` and configure sequential detail judgments. The static template intentionally omits
+the required key because it cannot know the live roster.
+
+<!-- exact-model-contract:setup-policy -->
+| Situation | Decision |
+|---|---|
+| `detail_model_default` | `least_powerful_available_model_that_performs_fit_judgment_well` |
+| `detail_model_user_preference` | `exact_user_selected_available_model` |
+| `separate_worker_model_unavailable` | `detail_model_equals_exact_primary_model_and_runs_sequentially` |
+| `creating_session_primary_unknown` | `block_verified_schedule_until_user_selects_exact_available_model` |
+<!-- /exact-model-contract:setup-policy -->
+
 - **Add a query:** append to `queries:` an item like
   `  - { id: "ml-platform-sf", keywords: "ML platform engineer", location: "San Francisco Bay Area", limit: 25, enabled: true }`
   When the user hasn't named keywords (onboarding, or a vague "add another search"), **derive** them from
@@ -203,10 +244,8 @@ The user changes config by **chatting**; manual editing is an escape hatch. To a
   `location` — then **acknowledge** what you saved rather than asking them to pick.
 - **Tune the feed (`search` block):** `search.freshness` narrows or widens the recency filter on
   `posted_at`/`published_at` (server-side via `published_on_or_after`, with a client-side fallback);
-  `search.detail_model` picks the portable tier the runner's
-  per-posting detail reads use — the allowed values for each (the freshness windows and the detail tiers) live
-  in `conventions.md`; the agent binds each tier to a concrete model from its own roster — the least-powerful
-  model that does the task well; the fit verdict is a judgment, so never the cheapest.
+  version-2 `search.detail_model` is the nonempty exact live model identifier selected once by the setup
+  policy above; the exact config schema and legacy version-1 boundary live in `conventions.md`.
   `search.parallel_detail_reads` is optional: unset
   means an interactive front-door flow may ask whether to use parallel subagents where the host requires
   explicit approval; `true` means the user approved; `false` means use sequential detail reads. Only
@@ -254,7 +293,8 @@ The user changes config by **chatting**; manual editing is an escape hatch. To a
   A saved value is durable consent, so scheduled/headless runs use it without prompting. A one-off override
   records `review_scope.origin:one_off` in the run but never mutates config. Decreasing a finite target,
   changing `all → finite`, removing the key, or choosing a one-off first-page override is reversible and
-  immediate; make that reduction without confirmation. Always keep config `version: 1`.
+  immediate; make that reduction without confirmation. Preserve the existing config major; this setting
+  never performs a version-1 migration.
 - **Explain my agent-data usage (read-only):** read the workspace's `runs/*.json` records and explain actual
   `agent_data_usage` call totals, the recorded pay-as-you-go equivalent when present, the operation breakdown,
   and the configured outcome drivers (frequency, enabled sources/queries, and review mode). Use the decimal
@@ -264,7 +304,8 @@ The user changes config by **chatting**; manual editing is an escape hatch. To a
 - **Change frequency:** set `schedule.frequency` to one of `hourly | every-2-hours | every-6-hours | daily | weekly`
   (the cadence→cron mapping the active scheduler uses is composed in → Scheduling setup below).
 - **Change run time:** set `schedule.time` (HH:MM, used for daily/weekly).
-- Always keep `version: 1`. NEVER add a score or weight field (philosophy).
+- New workspaces are `version: 2`. Never change an existing version-1 workspace as an incidental edit;
+  migration is a separate explicit flow. NEVER add a score or weight field (philosophy).
 
 ## Scheduling setup
 **Advocate an unattended schedule** for the recurring run — one that keeps firing with **no interactive
@@ -296,6 +337,14 @@ the user the exact machine change — the scoped consent covers that change and 
 canary. Start the **unattended schedule** (the in-session loop only as the fallback above). ALWAYS also **compose the
 recurring-run recipe and the one-off-run recipe for the host** and show both to the user verbatim, so they
 can re-run the search on demand and stop or restart the schedule themselves.
+
+Before creating the recurring job, resolve the creating session's exact primary model. The default binding
+captures that exact value with origin `session_inheritance`; an explicit exact available model selected by
+the user uses `user_override`; repair uses `repair_session`. “Inherit” never means an omitted or mutable
+scheduler model. If the creating session's exact model cannot be determined, do not create or describe a
+verified schedule until the user selects an exact available primary model. The scheduler registration and
+the local scheduling metadata both carry the same exact primary-model binding; workspace config continues
+to own only the exact posting-detail model.
 
 **Verify before recording — the canary (mandatory).** Before recording the scheduling marker, verify the
 schedule works. For the **unattended schedule**, use the **config-time canary**: **registration** (it appears
