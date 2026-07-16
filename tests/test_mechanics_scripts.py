@@ -751,6 +751,52 @@ def test_lifecycle_blocked_close_accepts_canonical_operator_code(tmp_path):
     assert state["can_complete"] == "false"
 
 
+@pytest.mark.parametrize("operation", ["job_description_read", "authorization_check"])
+def test_lifecycle_operation_accepts_safe_semantic_identifier_words(tmp_path, operation):
+    append_workspace = tmp_path / "append" / operation
+    ledger = start_lifecycle(append_workspace)
+    appended = lifecycle_append(ledger, "attempt-started", "attempt-1", operation)
+    assert appended.returncode == 0, appended.stderr
+    folded, state = lifecycle_fold(ledger, append_workspace)
+    assert folded.returncode == 0, folded.stderr
+    assert state["attempts_started"] == "1"
+
+    fold_workspace = tmp_path / "fold" / operation
+    ledger = write_lifecycle_rows(
+        fold_workspace,
+        started_row(),
+        ('{"event":"attempt_started","run_id":"%s","ts":"%s",'
+         '"attempt_id":"attempt-1","operation":"%s"}')
+        % (RUN_ID, RUN_STARTED, operation),
+    )
+    folded, state = lifecycle_fold(ledger, fold_workspace)
+    assert folded.returncode == 0, folded.stderr
+    assert state["attempts_started"] == "1"
+
+
+@pytest.mark.parametrize(
+    "operation",
+    ["ghp_abcdefghijklmnopqrstuvwxyz1234567890", "full%20job%20description"],
+)
+def test_lifecycle_operation_still_rejects_key_or_encoded_payload(tmp_path, operation):
+    append_workspace = tmp_path / "append" / operation
+    ledger = start_lifecycle(append_workspace)
+    assert lifecycle_append(
+        ledger, "attempt-started", "attempt-1", operation
+    ).returncode != 0
+
+    fold_workspace = tmp_path / "fold" / operation
+    ledger = write_lifecycle_rows(
+        fold_workspace,
+        started_row(),
+        ('{"event":"attempt_started","run_id":"%s","ts":"%s",'
+         '"attempt_id":"attempt-1","operation":"%s"}')
+        % (RUN_ID, RUN_STARTED, operation),
+    )
+    folded, _ = lifecycle_fold(ledger, fold_workspace)
+    assert folded.returncode != 0
+
+
 def test_lifecycle_fold_accepts_null_nullable_fields(tmp_path):
     workspace = tmp_path / "workspace"
     ledger = write_lifecycle_rows(
@@ -938,6 +984,7 @@ def test_lifecycle_reference_pins_complete_no_shell_fallback():
         "empty JSON string",
         "`next_page_token`",
         "`ghp_...`",
+        "`OPERATION` is a controlled semantic label",
         "non-symlink",
         "host-specific date",
         "ready_to_close",

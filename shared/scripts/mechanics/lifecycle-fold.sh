@@ -72,10 +72,10 @@ function has_long_token(lower, prefix, minimum, start, position, absolute, befor
   }
   return 0
 }
-function unsafe_identifier(value, lower) {
+function unsafe_identifier(field, value, lower) {
   lower = tolower(value)
   return lower ~ /%[0-9a-f][0-9a-f]/ \
-      || lower ~ /(^|[-._:@\/+%~])(api[_-]?keys?|authorization|auth[_-]?headers?|bearer|environment[_-]?dumps?|pagination[_-]?cursors?|cursors?|next[_-]?page[_-]?tokens?|page[_-]?tokens?|opaque[_-]?api[_-]?continuation[_-]?tokens?|continuation[_-]?tokens?|full[_-]?job[_-]?descriptions?|job[_-]?descriptions?|preferences?[_-]?text|match[_-]?prose)([-._:@\/+%~]|$)/ \
+      || (field != "operation" && lower ~ /(^|[-._:@\/+%~])(api[_-]?keys?|authorization|auth[_-]?headers?|bearer|environment[_-]?dumps?|pagination[_-]?cursors?|cursors?|next[_-]?page[_-]?tokens?|page[_-]?tokens?|opaque[_-]?api[_-]?continuation[_-]?tokens?|continuation[_-]?tokens?|full[_-]?job[_-]?descriptions?|job[_-]?descriptions?|preferences?[_-]?text|match[_-]?prose)([-._:@\/+%~]|$)/) \
       || has_long_token(lower, "sk-", 8) \
       || has_long_token(lower, "ghp_", 20) \
       || has_long_token(lower, "gho_", 20) \
@@ -182,7 +182,7 @@ BEGIN {
     if (row != canonical) fail("noncanonical posting_state row")
     if (source !~ /^(linkedin|ashby|greenhouse|lever)$/ || !restricted(source_id) || !restricted(revision)) fail("invalid posting identifier")
     if (state !~ /^(queued|evaluating|evaluated|presented|terminally_skipped)$/) fail("invalid posting state")
-    if (unsafe_identifier(source_id) || unsafe_identifier(revision)) fail("prohibited posting value")
+    if (unsafe_identifier("source_id", source_id) || unsafe_identifier("brief_revision", revision)) fail("prohibited posting value")
     posting[source SUBSEP source_id] = state
     next
   }
@@ -192,7 +192,7 @@ BEGIN {
     operation = string_value(row, "operation")
     canonical = "{\"event\":\"attempt_started\",\"run_id\":\"" rid "\",\"ts\":\"" timestamp "\",\"attempt_id\":\"" attempt_id "\",\"operation\":\"" operation "\"}"
     if (row != canonical || !restricted(attempt_id) || !restricted(operation)) fail("invalid attempt_started row")
-    if (unsafe_identifier(attempt_id) || unsafe_identifier(operation)) fail("prohibited attempt value")
+    if (unsafe_identifier("attempt_id", attempt_id) || unsafe_identifier("operation", operation)) fail("prohibited attempt value")
     if (attempt_id in attempts_started) fail("duplicate attempt_started")
     attempts_started[attempt_id] = 1
     next
@@ -225,7 +225,7 @@ BEGIN {
     canonical = "{\"event\":\"attempt_accounted\",\"run_id\":\"" rid "\",\"ts\":\"" timestamp "\",\"attempt_id\":\"" attempt_id "\",\"metered\":" metered ",\"outcome\":\"" outcome "\",\"request_id\":" request_json "}"
     if (row != canonical || !restricted(attempt_id) || !restricted(outcome)) fail("invalid attempt_accounted row")
     if (!request_is_null && !restricted(request_id)) fail("invalid request_id")
-    if (unsafe_identifier(attempt_id) || unsafe_identifier(outcome) || (!request_is_null && unsafe_identifier(request_id))) fail("prohibited accounting value")
+    if (unsafe_identifier("attempt_id", attempt_id) || unsafe_identifier("outcome", outcome) || (!request_is_null && unsafe_identifier("request_id", request_id))) fail("prohibited accounting value")
     if (!(attempt_id in attempts_started)) fail("attempt_accounted has no prior start")
     if (attempt_id in attempts_accounted) fail("duplicate attempt_accounted")
     attempts_accounted[attempt_id] = 1
@@ -235,7 +235,7 @@ BEGIN {
   if (event == "brief_revision") {
     revision = string_value(row, "brief_revision")
     canonical = "{\"event\":\"brief_revision\",\"run_id\":\"" rid "\",\"ts\":\"" timestamp "\",\"brief_revision\":\"" revision "\"}"
-    if (row != canonical || !restricted(revision) || unsafe_identifier(revision)) fail("invalid brief_revision row")
+    if (row != canonical || !restricted(revision) || unsafe_identifier("brief_revision", revision)) fail("invalid brief_revision row")
     next
   }
 

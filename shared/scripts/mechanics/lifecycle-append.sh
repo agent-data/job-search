@@ -36,8 +36,10 @@ payload_identifier() {
   if printf '%s\n' "$_lower" | LC_ALL=C grep -Eq '%[0-9a-f]{2}'; then
     reject "$_field contains a prohibited percent-encoded octet"
   fi
-  if printf '%s\n' "$_lower" | LC_ALL=C grep -Eq '(^|[._:@/+%~-])(api[_-]?keys?|authorization|auth[_-]?headers?|bearer|environment[_-]?dumps?|pagination[_-]?cursors?|cursors?|next[_-]?page[_-]?tokens?|page[_-]?tokens?|opaque[_-]?api[_-]?continuation[_-]?tokens?|continuation[_-]?tokens?|full[_-]?job[_-]?descriptions?|job[_-]?descriptions?|preferences?[_-]?text|match[_-]?prose)([._:@/+%~-]|$)'; then
-    reject "$_field contains a prohibited field or opaque-token signature"
+  if [ "$_field" != operation ]; then
+    if printf '%s\n' "$_lower" | LC_ALL=C grep -Eq '(^|[._:@/+%~-])(api[_-]?keys?|authorization|auth[_-]?headers?|bearer|environment[_-]?dumps?|pagination[_-]?cursors?|cursors?|next[_-]?page[_-]?tokens?|page[_-]?tokens?|opaque[_-]?api[_-]?continuation[_-]?tokens?|continuation[_-]?tokens?|full[_-]?job[_-]?descriptions?|job[_-]?descriptions?|preferences?[_-]?text|match[_-]?prose)([._:@/+%~-]|$)'; then
+      reject "$_field contains a prohibited field or opaque-token signature"
+    fi
   fi
   if printf '%s\n' "$_lower" | LC_ALL=C grep -Eq '(^|[^a-z0-9])(sk-[a-z0-9_-]{8,}|gh[pousr]_[a-z0-9_-]{20,}|github_pat_[a-z0-9_-]{20,}|akia[a-z0-9_-]{16,})([^a-z0-9]|$)'; then
     reject "$_field contains an API-key-shaped value"

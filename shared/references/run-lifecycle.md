@@ -197,8 +197,14 @@ authorization/auth headers, bearer material, environment dumps, pagination curso
 such as `next_page_token`, opaque continuation tokens, full job descriptions, preferences text, match prose,
 and percent-encoded octets that could conceal those payloads. Internal operator codes use their dedicated
 allowlist instead of secret-word filtering, so a canonical code such as `E-NO-AUTH` is not rejected merely
-for containing `AUTH`. These checks are defense in depth in addition to the privacy boundary above; the
-fixed row shapes allow no extra fields.
+for containing `AUTH`. `OPERATION` is a controlled semantic label, not a payload-bearing provenance value;
+it may therefore contain terms such as `job_description` or `authorization` when naming the coordinator
+action, because those words persist no description prose, header contents, or authorization value. It still
+uses the restricted identifier grammar and rejects percent-encoded octets and key-shaped values. The
+semantic prohibited-term scan remains active for `SOURCE_ID`, `BRIEF_REVISION`, `ATTEMPT_ID`, `OUTCOME`, and
+non-null `REQUEST_ID`, which can carry external identity, revision, result, or provenance values. Append and
+fold apply these same per-field rules. These checks are defense in depth in addition to the privacy boundary
+above; the fixed row shapes allow no extra fields.
 
 ### Append fallback
 
@@ -322,7 +328,9 @@ Do not place a secret or free-form user/job payload into an identifier field. Re
 page-token/cursor field names such as `next_page_token`, and recognized key-shaped values such as `sk-...`,
 `ghp_...`, `github_pat_...`, and `AKIA...`. A request identifier may be stored only as restricted, nonsecret
 attempt provenance; it is not a continuation token. Internal operator codes are validated by their closed
-`E-...` grammar rather than by scanning for broad substrings such as `AUTH`.
+`E-...` grammar rather than by scanning for broad substrings such as `AUTH`. Controlled `OPERATION` labels
+likewise may name an action with semantic terms such as `authorization` or `job_description`; they remain
+subject to restricted grammar plus encoded-octet and key-shape rejection.
 
 The hidden filename is an organization detail, not an access-control boundary. The ledger stays inside the
 private workspace protected by the workspace's deny-all source-control rules.
