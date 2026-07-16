@@ -22,8 +22,14 @@ DEDUP = MECH / "dedup.sh"
 APPEND = MECH / "event-log-append.sh"
 SCHEDULE = MECH / "schedule-line.sh"
 DISCOVERY = MECH / "workspace-discovery.sh"
+LIFECYCLE_APPEND = MECH / "lifecycle-append.sh"
+LIFECYCLE_FOLD = MECH / "lifecycle-fold.sh"
+LIFECYCLE_REFERENCE = ROOT / "shared" / "references" / "run-lifecycle.md"
 
-ALL_SCRIPTS = [DEDUP, APPEND, SCHEDULE, DISCOVERY]
+ALL_SCRIPTS = [DEDUP, APPEND, SCHEDULE, DISCOVERY, LIFECYCLE_APPEND, LIFECYCLE_FOLD]
+
+RUN_ID = "2026-07-16T14-30-00Z"
+RUN_STARTED = "2026-07-16T10:30:00-04:00"
 
 # A contract-valid single-line `evaluated` event (conventions.md §jobs.jsonl event-line contract).
 def evaluated(source, source_id, ts="2026-07-11T00:00:00Z", extra=""):
@@ -55,6 +61,76 @@ def base_env(home):
         "PATH": "/usr/bin:/bin:/usr/sbin:/sbin",
         "JOBSEARCH_OS_HOME": str(home),
     }
+
+
+def lifecycle_append(ledger, command, *args, run_id=RUN_ID, ts=RUN_STARTED, shell="sh"):
+    """Append one lifecycle event through the fixed coordinator interface."""
+    return subprocess.run(
+        [shell, str(LIFECYCLE_APPEND), str(ledger), command, run_id, ts, *args],
+        capture_output=True,
+        text=True,
+    )
+
+
+def lifecycle_fold(ledger, workspace, shell="sh"):
+    """Fold a ledger and parse its normalized key=value output."""
+    r = subprocess.run(
+        [shell, str(LIFECYCLE_FOLD), str(ledger), str(workspace)],
+        capture_output=True,
+        text=True,
+    )
+    values = {}
+    for line in r.stdout.splitlines():
+        if "=" in line:
+            key, value = line.split("=", 1)
+            values[key] = value
+    return r, values
+
+
+def start_lifecycle(workspace, run_id=RUN_ID, ts=RUN_STARTED):
+    ledger = workspace / "runs" / (".lifecycle-%s.jsonl" % run_id)
+    r = lifecycle_append(ledger, "start", run_id=run_id, ts=ts)
+    assert r.returncode == 0, r.stderr
+    return ledger
+
+
+def append_ok(ledger, command, *args, run_id=RUN_ID, ts=RUN_STARTED):
+    r = lifecycle_append(ledger, command, *args, run_id=run_id, ts=ts)
+    assert r.returncode == 0, r.stderr
+
+
+def advance_to_finalizing(ledger, with_posting=True, with_attempt=True):
+    append_ok(ledger, "phase", "searching")
+    if with_attempt:
+        append_ok(ledger, "attempt-started", "attempt-1", "initial_search")
+        append_ok(ledger, "attempt-accounted", "attempt-1", "true", "success", "req-1")
+    append_ok(ledger, "phase", "selection_settled")
+    if with_posting:
+        append_ok(ledger, "posting", "linkedin", "posting-1", "queued", "revision-1")
+        append_ok(ledger, "phase", "reviewing_initial_batch")
+        append_ok(ledger, "posting", "linkedin", "posting-1", "evaluating", "revision-1")
+        append_ok(ledger, "posting", "linkedin", "posting-1", "evaluated", "revision-1")
+        append_ok(ledger, "posting", "linkedin", "posting-1", "presented", "revision-1")
+    else:
+        append_ok(ledger, "phase", "reviewing_initial_batch")
+    append_ok(ledger, "phase", "early_results_shown")
+    append_ok(ledger, "milestone", "early_results_shown")
+    append_ok(ledger, "phase", "reviewing_remaining")
+    append_ok(ledger, "phase", "finalizing")
+
+
+def write_final_artifacts(workspace, run_id=RUN_ID, digest_date="2026-07-16"):
+    runs = workspace / "runs"
+    reports = workspace / "reports"
+    runs.mkdir(parents=True, exist_ok=True)
+    reports.mkdir(parents=True, exist_ok=True)
+    (runs / ("%s.json" % run_id)).write_text('{"run_id":"%s"}\n' % run_id)
+    (reports / ("%s-digest.md" % digest_date)).write_text("# Digest\n")
+
+
+def record_final_artifact_milestones(ledger):
+    append_ok(ledger, "milestone", "final_run_record_written")
+    append_ok(ledger, "milestone", "final_digest_written")
 
 
 # --------------------------------------------------------------------------- dedup
@@ -292,6 +368,377 @@ def test_workspace_discovery_registry_wins_unconditionally(tmp_path):
     assert d["workspace"] == str(custom)
     assert d["source"] == "registry"
     assert d["first_run"] == "true"  # its config.yaml does not exist yet
+
+
+# --------------------------------------------------------------- lifecycle ledger
+
+def test_lifecycle_append_emits_canonical_rows_for_every_command(tmp_path):
+    workspace = tmp_path / "workspace"
+    ledger = start_lifecycle(workspace)
+    append_ok(ledger, "phase", "searching")
+    append_ok(ledger, "posting", "linkedin", "posting-1", "queued", "revision-1")
+    append_ok(ledger, "attempt-started", "attempt-1", "detail_read")
+    append_ok(ledger, "attempt-accounted", "attempt-1", "true", "success", "req-1")
+    append_ok(ledger, "revision", "revision-2")
+    append_ok(ledger, "milestone", "early_results_shown")
+    append_ok(ledger, "close", "blocked", "E-TEST-BLOCK")
+
+    assert ledger.read_text().splitlines() == [
+        '{"event":"run_started","run_id":"%s","ts":"%s","phase":"preflight"}'
+        % (RUN_ID, RUN_STARTED),
+        '{"event":"phase_changed","run_id":"%s","ts":"%s","phase":"searching"}'
+        % (RUN_ID, RUN_STARTED),
+        ('{"event":"posting_state","run_id":"%s","ts":"%s","source":"linkedin",'
+         '"source_id":"posting-1","state":"queued","brief_revision":"revision-1"}')
+        % (RUN_ID, RUN_STARTED),
+        ('{"event":"attempt_started","run_id":"%s","ts":"%s","attempt_id":"attempt-1",'
+         '"operation":"detail_read"}') % (RUN_ID, RUN_STARTED),
+        ('{"event":"attempt_accounted","run_id":"%s","ts":"%s","attempt_id":"attempt-1",'
+         '"metered":true,"outcome":"success","request_id":"req-1"}')
+        % (RUN_ID, RUN_STARTED),
+        '{"event":"brief_revision","run_id":"%s","ts":"%s","brief_revision":"revision-2"}'
+        % (RUN_ID, RUN_STARTED),
+        '{"event":"milestone","run_id":"%s","ts":"%s","milestone":"early_results_shown"}'
+        % (RUN_ID, RUN_STARTED),
+        ('{"event":"run_closed","run_id":"%s","ts":"%s","close_state":"blocked",'
+         '"internal_code":"E-TEST-BLOCK"}') % (RUN_ID, RUN_STARTED),
+    ]
+
+
+def test_lifecycle_happy_path_needs_artifacts_milestones_and_complete_close(tmp_path):
+    workspace = tmp_path / "workspace"
+    ledger = start_lifecycle(workspace)
+    advance_to_finalizing(ledger)
+    write_final_artifacts(workspace)
+    record_final_artifact_milestones(ledger)
+
+    before_close, state = lifecycle_fold(ledger, workspace)
+    assert before_close.returncode == 0, before_close.stderr
+    assert state == {
+        "run_id": RUN_ID,
+        "phase": "finalizing",
+        "selected": "1",
+        "evaluated": "1",
+        "terminally_skipped": "0",
+        "presented": "1",
+        "remaining": "0",
+        "in_flight": "0",
+        "attempts_started": "1",
+        "attempts_accounted": "1",
+        "final_run_record_written": "true",
+        "final_digest_written": "true",
+        "closed": "false",
+        "close_state": "open",
+        "ready_to_close": "true",
+        "can_complete": "false",
+    }
+
+    closed = lifecycle_append(ledger, "close", "complete", "-")
+    assert closed.returncode == 0, closed.stderr
+    after_close, state = lifecycle_fold(ledger, workspace)
+    assert after_close.returncode == 0, after_close.stderr
+    assert state["phase"] == "complete"
+    assert state["closed"] == "true"
+    assert state["close_state"] == "complete"
+    assert state["ready_to_close"] == "true"
+    assert state["can_complete"] == "true"
+
+
+def test_lifecycle_complete_close_fails_closed_without_artifact_milestones(tmp_path):
+    workspace = tmp_path / "workspace"
+    ledger = start_lifecycle(workspace)
+    advance_to_finalizing(ledger, with_posting=False, with_attempt=False)
+    write_final_artifacts(workspace)
+
+    folded, state = lifecycle_fold(ledger, workspace)
+    assert folded.returncode == 0, folded.stderr
+    assert state["final_run_record_written"] == "true"
+    assert state["final_digest_written"] == "true"
+    assert state["ready_to_close"] == "false"
+    closed = lifecycle_append(ledger, "close", "complete", "-")
+    assert closed.returncode != 0
+
+
+def test_lifecycle_complete_close_fails_closed_without_concrete_artifacts(tmp_path):
+    workspace = tmp_path / "workspace"
+    ledger = start_lifecycle(workspace)
+    advance_to_finalizing(ledger, with_posting=False, with_attempt=False)
+    record_final_artifact_milestones(ledger)
+
+    folded, state = lifecycle_fold(ledger, workspace)
+    assert folded.returncode == 0, folded.stderr
+    assert state["final_run_record_written"] == "false"
+    assert state["final_digest_written"] == "false"
+    assert state["ready_to_close"] == "false"
+    closed = lifecycle_append(ledger, "close", "complete", "-")
+    assert closed.returncode != 0
+
+
+def test_lifecycle_digest_path_uses_run_started_calendar_date_exactly(tmp_path):
+    """Never accept the run-id date, an arbitrary digest, or the newest digest in reports/."""
+    workspace = tmp_path / "workspace"
+    started = "2026-07-15T23:30:00-04:00"
+    ledger = start_lifecycle(workspace, ts=started)
+    advance_to_finalizing(ledger, with_posting=False, with_attempt=False)
+    write_final_artifacts(workspace, digest_date="2026-07-16")  # wrong: this is the UTC run-id date
+    record_final_artifact_milestones(ledger)
+
+    wrong_digest, state = lifecycle_fold(ledger, workspace)
+    assert wrong_digest.returncode == 0, wrong_digest.stderr
+    assert state["final_digest_written"] == "false"
+    assert state["ready_to_close"] == "false"
+    assert lifecycle_append(ledger, "close", "complete", "-").returncode != 0
+
+    (workspace / "reports" / "2026-07-15-digest.md").write_text("# Exact digest\n")
+    exact_digest, state = lifecycle_fold(ledger, workspace)
+    assert exact_digest.returncode == 0, exact_digest.stderr
+    assert state["final_digest_written"] == "true"
+    assert state["ready_to_close"] == "true"
+
+
+def test_lifecycle_fold_rejects_ledger_from_a_different_workspace(tmp_path):
+    """Artifacts from WORKSPACE B can never close a ledger supplied from WORKSPACE A."""
+    ledger_workspace = tmp_path / "ledger-workspace"
+    artifact_workspace = tmp_path / "artifact-workspace"
+    ledger = start_lifecycle(ledger_workspace)
+    advance_to_finalizing(ledger, with_posting=False, with_attempt=False)
+    record_final_artifact_milestones(ledger)
+    write_final_artifacts(artifact_workspace)
+
+    folded, _ = lifecycle_fold(ledger, artifact_workspace)
+    assert folded.returncode != 0
+
+
+def test_lifecycle_early_results_with_remaining_work_is_not_complete(tmp_path):
+    workspace = tmp_path / "workspace"
+    ledger = start_lifecycle(workspace)
+    append_ok(ledger, "phase", "searching")
+    append_ok(ledger, "phase", "selection_settled")
+    append_ok(ledger, "posting", "linkedin", "ready", "queued", "revision-1")
+    append_ok(ledger, "posting", "ashby", "waiting", "queued", "revision-1")
+    append_ok(ledger, "phase", "reviewing_initial_batch")
+    append_ok(ledger, "posting", "linkedin", "ready", "evaluated", "revision-1")
+    append_ok(ledger, "posting", "linkedin", "ready", "presented", "revision-1")
+    append_ok(ledger, "phase", "early_results_shown")
+    append_ok(ledger, "milestone", "early_results_shown")
+
+    folded, state = lifecycle_fold(ledger, workspace)
+    assert folded.returncode == 0, folded.stderr
+    assert state["phase"] == "early_results_shown"
+    assert state["selected"] == "2"
+    assert state["evaluated"] == "1"
+    assert state["presented"] == "1"
+    assert state["remaining"] == "1"
+    assert state["ready_to_close"] == "false"
+    assert state["can_complete"] == "false"
+
+
+def test_lifecycle_evaluating_posting_counts_as_in_flight(tmp_path):
+    workspace = tmp_path / "workspace"
+    ledger = start_lifecycle(workspace)
+    append_ok(ledger, "phase", "selection_settled")
+    append_ok(ledger, "posting", "greenhouse", "acme:7310605", "queued", "revision-1")
+    append_ok(ledger, "phase", "reviewing_initial_batch")
+    append_ok(ledger, "posting", "greenhouse", "acme:7310605", "evaluating", "revision-1")
+
+    folded, state = lifecycle_fold(ledger, workspace)
+    assert folded.returncode == 0, folded.stderr
+    assert state["selected"] == "1"
+    assert state["remaining"] == "0"
+    assert state["in_flight"] == "1"
+    assert state["evaluated"] == "0"
+    assert state["can_complete"] == "false"
+
+
+def test_lifecycle_unaccounted_retry_attempt_prevents_completion(tmp_path):
+    workspace = tmp_path / "workspace"
+    ledger = start_lifecycle(workspace)
+    append_ok(ledger, "phase", "searching")
+    append_ok(ledger, "attempt-started", "attempt-1", "initial_search")
+    append_ok(ledger, "attempt-accounted", "attempt-1", "true", "retryable_failure", "req-1")
+    append_ok(ledger, "attempt-started", "attempt-2", "initial_search")
+    append_ok(ledger, "phase", "selection_settled")
+    append_ok(ledger, "phase", "reviewing_initial_batch")
+    append_ok(ledger, "phase", "early_results_shown")
+    append_ok(ledger, "milestone", "early_results_shown")
+    append_ok(ledger, "phase", "reviewing_remaining")
+    append_ok(ledger, "phase", "finalizing")
+    write_final_artifacts(workspace)
+    record_final_artifact_milestones(ledger)
+
+    folded, state = lifecycle_fold(ledger, workspace)
+    assert folded.returncode == 0, folded.stderr
+    assert state["attempts_started"] == "2"
+    assert state["attempts_accounted"] == "1"
+    assert state["ready_to_close"] == "false"
+    assert lifecycle_append(ledger, "close", "complete", "-").returncode != 0
+
+
+def test_lifecycle_posting_updates_are_last_write_wins_without_double_counting(tmp_path):
+    workspace = tmp_path / "workspace"
+    ledger = start_lifecycle(workspace)
+    append_ok(ledger, "posting", "lever", "acme/123", "queued", "revision-1")
+    append_ok(ledger, "posting", "lever", "acme/123", "evaluating", "revision-1")
+    append_ok(ledger, "posting", "lever", "acme/123", "evaluated", "revision-1")
+    append_ok(ledger, "posting", "lever", "acme/123", "presented", "revision-1")
+    append_ok(ledger, "posting", "ashby", "other", "queued", "revision-1")
+    append_ok(ledger, "posting", "ashby", "other", "terminally_skipped", "revision-1")
+
+    folded, state = lifecycle_fold(ledger, workspace)
+    assert folded.returncode == 0, folded.stderr
+    assert state["selected"] == "2"
+    assert state["evaluated"] == "1"  # presented remains evaluated
+    assert state["presented"] == "1"
+    assert state["terminally_skipped"] == "1"
+    assert state["remaining"] == "0"
+    assert state["in_flight"] == "0"
+
+
+@pytest.mark.parametrize("close_state", ["blocked", "interrupted"])
+def test_lifecycle_noncomplete_close_states_preserve_phase_and_never_complete(tmp_path, close_state):
+    workspace = tmp_path / "workspace"
+    ledger = start_lifecycle(workspace)
+    append_ok(ledger, "phase", "searching")
+    append_ok(ledger, "close", close_state, "E-TEST")
+
+    folded, state = lifecycle_fold(ledger, workspace)
+    assert folded.returncode == 0, folded.stderr
+    assert state["phase"] == "searching"
+    assert state["closed"] == "true"
+    assert state["close_state"] == close_state
+    assert state["ready_to_close"] == "false"
+    assert state["can_complete"] == "false"
+    assert lifecycle_append(ledger, "phase", "selection_settled").returncode != 0
+
+
+def test_lifecycle_phase_rejects_complete_and_backward_transitions(tmp_path):
+    workspace = tmp_path / "workspace"
+    ledger = start_lifecycle(workspace)
+    append_ok(ledger, "phase", "searching")
+
+    assert lifecycle_append(ledger, "phase", "preflight").returncode != 0
+    assert lifecycle_append(ledger, "phase", "complete").returncode != 0
+    folded, state = lifecycle_fold(ledger, workspace)
+    assert folded.returncode == 0, folded.stderr
+    assert state["phase"] == "searching"
+
+
+def test_lifecycle_fold_rejects_handwritten_noncanonical_or_contradictory_rows(tmp_path):
+    workspace = tmp_path / "workspace"
+    ledger = workspace / "runs" / (".lifecycle-%s.jsonl" % RUN_ID)
+    ledger.parent.mkdir(parents=True)
+    ledger.write_text(
+        '{ "event": "run_started", "run_id": "%s", "ts": "%s", "phase": "preflight" }\n'
+        % (RUN_ID, RUN_STARTED)
+    )
+    malformed, _ = lifecycle_fold(ledger, workspace)
+    assert malformed.returncode != 0
+
+    ledger.write_text(
+        '{"event":"run_started","run_id":"%s","ts":"%s","phase":"preflight"}\n'
+        '{"event":"phase_changed","run_id":"%s","ts":"%s","phase":"searching"}\n'
+        '{"event":"phase_changed","run_id":"%s","ts":"%s","phase":"preflight"}\n'
+        % (RUN_ID, RUN_STARTED, RUN_ID, RUN_STARTED, RUN_ID, RUN_STARTED)
+    )
+    contradictory, _ = lifecycle_fold(ledger, workspace)
+    assert contradictory.returncode != 0
+
+
+def test_lifecycle_fold_rejects_api_key_shaped_value_in_canonical_row(tmp_path):
+    """Canonical field order cannot bypass the privacy denylist with a secret-shaped identifier."""
+    workspace = tmp_path / "workspace"
+    ledger = workspace / "runs" / (".lifecycle-%s.jsonl" % RUN_ID)
+    ledger.parent.mkdir(parents=True)
+    ledger.write_text(
+        ('{"event":"run_started","run_id":"%s","ts":"%s","phase":"preflight"}\n'
+         '{"event":"posting_state","run_id":"%s","ts":"%s","source":"linkedin",'
+         '"source_id":"sk-secretvalue","state":"queued","brief_revision":"revision-1"}\n')
+        % (RUN_ID, RUN_STARTED, RUN_ID, RUN_STARTED)
+    )
+    folded, _ = lifecycle_fold(ledger, workspace)
+    assert folded.returncode != 0
+
+
+@pytest.mark.parametrize(
+    "prohibited",
+    [
+        "cursor=opaque-token",
+        "api_key=sk-secretvalue",
+        "full_job_description",
+        "preferences_text",
+        "match_prose",
+        "revision-1\nrevision-2",
+    ],
+)
+def test_lifecycle_append_rejects_prohibited_or_multiline_values(tmp_path, prohibited):
+    workspace = tmp_path / "workspace"
+    ledger = start_lifecycle(workspace)
+    rejected = lifecycle_append(
+        ledger,
+        "posting",
+        "linkedin",
+        "posting-1",
+        "queued",
+        prohibited,
+    )
+    assert rejected.returncode != 0
+    assert len(ledger.read_text().splitlines()) == 1
+
+
+def test_lifecycle_attempt_accounting_requires_one_prior_start(tmp_path):
+    workspace = tmp_path / "workspace"
+    ledger = start_lifecycle(workspace)
+    no_start = lifecycle_append(
+        ledger, "attempt-accounted", "attempt-1", "false", "quota_rejected", "-"
+    )
+    assert no_start.returncode != 0
+
+    append_ok(ledger, "attempt-started", "attempt-1", "initial_search")
+    append_ok(ledger, "attempt-accounted", "attempt-1", "false", "quota_rejected", "-")
+    duplicate = lifecycle_append(
+        ledger, "attempt-accounted", "attempt-1", "false", "quota_rejected", "-"
+    )
+    assert duplicate.returncode != 0
+
+
+@pytest.mark.parametrize("shell", ["sh"] + (["dash"] if shutil.which("dash") else []))
+def test_lifecycle_scripts_execute_under_posix_shells(tmp_path, shell):
+    workspace = tmp_path / shell
+    ledger = workspace / "runs" / (".lifecycle-%s.jsonl" % RUN_ID)
+    started = lifecycle_append(ledger, "start", shell=shell)
+    assert started.returncode == 0, started.stderr
+    folded, state = lifecycle_fold(ledger, workspace, shell=shell)
+    assert folded.returncode == 0, folded.stderr
+    assert state["phase"] == "preflight"
+    assert state["can_complete"] == "false"
+
+
+def test_lifecycle_reference_pins_complete_no_shell_fallback():
+    """The script interface and its no-runtime fallback stay single-homed in run-lifecycle.md."""
+    text = LIFECYCLE_REFERENCE.read_text()
+    required = [
+        "lifecycle-append.sh LEDGER start RUN_ID ISO_TIMESTAMP",
+        "lifecycle-append.sh LEDGER phase RUN_ID ISO_TIMESTAMP PHASE",
+        "lifecycle-append.sh LEDGER posting RUN_ID ISO_TIMESTAMP SOURCE SOURCE_ID STATE BRIEF_REVISION",
+        "lifecycle-append.sh LEDGER attempt-started RUN_ID ISO_TIMESTAMP ATTEMPT_ID OPERATION",
+        ("lifecycle-append.sh LEDGER attempt-accounted RUN_ID ISO_TIMESTAMP ATTEMPT_ID "
+         "METERED OUTCOME REQUEST_ID_OR_DASH"),
+        "lifecycle-append.sh LEDGER revision RUN_ID ISO_TIMESTAMP BRIEF_REVISION",
+        "lifecycle-append.sh LEDGER milestone RUN_ID ISO_TIMESTAMP MILESTONE",
+        ("lifecycle-append.sh LEDGER close RUN_ID ISO_TIMESTAMP "
+         "COMPLETE_OR_BLOCKED_OR_INTERRUPTED INTERNAL_CODE_OR_DASH"),
+        "lifecycle-fold.sh LEDGER WORKSPACE",
+        "final_run_record_written",
+        "final_digest_written",
+        "run_started timestamp",
+        "local calendar date used for this run's digest",
+        "later event timestamps remain ordinary ISO timestamps",
+        "never an arbitrary or newest digest",
+        "ready_to_close",
+        "can_complete",
+    ]
+    for fragment in required:
+        assert fragment in text, "run-lifecycle.md fallback is missing: %s" % fragment
 
 
 # ------------------------------------------------------------------- POSIX portability

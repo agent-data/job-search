@@ -130,7 +130,9 @@ The first six clauses make a run ready to close. Only then may the coordinator a
 close state `complete`, which establishes the seventh clause. If any clause is unproved, completion is
 unproved; do not close complete or claim success. In `selected_settled`, evaluated includes presented
 postings. In `all_started_attempts_accounted`, every `attempt_started` has exactly one matching
-`attempt_accounted`. The two final-artifact clauses require the named files to have been written.
+`attempt_accounted`. The two final-artifact clauses require both a concrete regular file at the exact path
+and its matching lifecycle milestone. The digest path's ISO date is derived from `run_started` as specified
+by the fold/check operation below.
 
 The close-state vocabulary is closed:
 
@@ -147,6 +149,106 @@ The close-state vocabulary is closed:
 `blocked` and `interrupted` are honest terminal closing states, but neither is equivalent to `complete`.
 They preserve the last reached working phase and any durable evaluated work. A closed ledger is never
 reopened, regardless of close state.
+
+## Scripted append and fold/check operations
+
+Run the shared script where a POSIX shell runtime exists; otherwise execute the prose fallback in this
+section exactly. The script and fallback accept the same fixed interfaces:
+
+```text
+lifecycle-append.sh LEDGER start RUN_ID ISO_TIMESTAMP
+lifecycle-append.sh LEDGER phase RUN_ID ISO_TIMESTAMP PHASE
+lifecycle-append.sh LEDGER posting RUN_ID ISO_TIMESTAMP SOURCE SOURCE_ID STATE BRIEF_REVISION
+lifecycle-append.sh LEDGER attempt-started RUN_ID ISO_TIMESTAMP ATTEMPT_ID OPERATION
+lifecycle-append.sh LEDGER attempt-accounted RUN_ID ISO_TIMESTAMP ATTEMPT_ID METERED OUTCOME REQUEST_ID_OR_DASH
+lifecycle-append.sh LEDGER revision RUN_ID ISO_TIMESTAMP BRIEF_REVISION
+lifecycle-append.sh LEDGER milestone RUN_ID ISO_TIMESTAMP MILESTONE
+lifecycle-append.sh LEDGER close RUN_ID ISO_TIMESTAMP COMPLETE_OR_BLOCKED_OR_INTERRUPTED INTERNAL_CODE_OR_DASH
+
+lifecycle-fold.sh LEDGER WORKSPACE
+```
+
+`LEDGER` must be exactly `WORKSPACE/runs/.lifecycle-RUN_ID.jsonl`, and `RUN_ID` has the filename-safe format
+defined in [conventions.md](conventions.md). An ISO timestamp includes seconds and either `Z` or a numeric
+offset. The coordinator supplies the run_started timestamp and uses the
+local calendar date used for this run's digest; later event timestamps remain ordinary ISO timestamps. This
+makes the exact digest path derivable through the fixed interface without accepting a caller-supplied path.
+
+Every non-path, non-enum argument is a restricted, nonsecret identifier: 1–256 characters, beginning with an
+ASCII letter or digit and continuing only with ASCII letters, digits, `.`, `_`, `:`, `@`, `/`, `+`, `%`,
+`~`, or `-`. A dash in either `REQUEST_ID_OR_DASH` or `INTERNAL_CODE_OR_DASH` serializes as JSON `null`. `METERED`
+is exactly `true` or `false`. `SOURCE` is one of `linkedin`, `ashby`, `greenhouse`, or `lever`; phase,
+posting-state, and close-state values use the closed vocabularies above. The milestone vocabulary is exactly
+`early_results_shown`, `final_run_record_written`, and `final_digest_written`.
+
+Before appending, reject wrong arity, multiline values, a ledger/run identity mismatch, an unknown enum, an
+identifier outside that restricted grammar, or a value shaped as any prohibited persistence field. The
+denylist covers API keys and key-shaped values, authorization/auth headers, bearer material, environment
+dumps, pagination cursors, opaque continuation tokens, full job descriptions, preferences text, and match
+prose. These checks are defense in depth in addition to the privacy boundary above; the fixed row shapes
+allow no extra fields.
+
+### Append fallback
+
+Validate the complete existing ledger with the fold fallback before every append. Only `start` may create a
+ledger, and it fails if the path already exists. Every later command requires exactly one prior
+`run_started` carrying the same run ID. A closed ledger rejects every command. `phase` rejects `complete` and
+requires a phase strictly later than the folded working phase. An attempt ID may have one
+`attempt_started` and then exactly one `attempt_accounted`; accounting without its prior start, or either
+duplicate, is invalid. Posting rows use last-write-wins identity `(source, source_id)`. A `close complete`
+command requires the open fold to report `ready_to_close=true`; it writes the single terminal row that
+atomically establishes both `phase=complete` and `closed=true`. Other close states preserve the last working
+phase. After validation, append exactly one of these canonical, no-whitespace JSON lines in the shown field
+order, replacing placeholders with the validated arguments:
+
+```jsonc
+{"event":"run_started","run_id":"RUN_ID","ts":"ISO_TIMESTAMP","phase":"preflight"}
+{"event":"phase_changed","run_id":"RUN_ID","ts":"ISO_TIMESTAMP","phase":"PHASE"}
+{"event":"posting_state","run_id":"RUN_ID","ts":"ISO_TIMESTAMP","source":"SOURCE","source_id":"SOURCE_ID","state":"STATE","brief_revision":"BRIEF_REVISION"}
+{"event":"attempt_started","run_id":"RUN_ID","ts":"ISO_TIMESTAMP","attempt_id":"ATTEMPT_ID","operation":"OPERATION"}
+{"event":"attempt_accounted","run_id":"RUN_ID","ts":"ISO_TIMESTAMP","attempt_id":"ATTEMPT_ID","metered":true,"outcome":"OUTCOME","request_id":"REQUEST_ID"}
+{"event":"brief_revision","run_id":"RUN_ID","ts":"ISO_TIMESTAMP","brief_revision":"BRIEF_REVISION"}
+{"event":"milestone","run_id":"RUN_ID","ts":"ISO_TIMESTAMP","milestone":"MILESTONE"}
+{"event":"run_closed","run_id":"RUN_ID","ts":"ISO_TIMESTAMP","close_state":"CLOSE_STATE","internal_code":"INTERNAL_CODE"}
+```
+
+The two nullable fields use the raw JSON value `null`, not the string `"null"`, when their command argument
+is a dash. A complete close always uses a null internal code. The append is the sanctioned append-only ledger
+write; never rewrite or reorder existing lines.
+
+### Fold/check fallback
+
+Read only canonical rows matching the shapes, field order, restricted values, and invariants above. Treat a
+missing/empty ledger, noncanonical row, changed run ID, duplicate start, event after closure, non-forward
+phase, accounting without a prior attempt start, a duplicate attempt event, or complete close outside
+`finalizing` as a malformed or contradictory ledger; stop without reporting completion. An outstanding
+started attempt is valid open state, but it prevents readiness until exactly one accounting event follows.
+
+Fold valid rows in order:
+
+1. Start at `preflight`; apply strictly forward `phase_changed` rows. Preserve that working phase for
+   `blocked` or `interrupted`; use `complete` only for a valid complete close.
+2. Fold `posting_state` last-write-wins by `(source, source_id)`. Derive `selected`, `evaluated`,
+   `terminally_skipped`, `presented`, `remaining`, and `in_flight` with the counter rules above.
+3. Count unique attempt starts and their exactly-once accounting rows as `attempts_started` and
+   `attempts_accounted`.
+4. From the first 10 characters of the validated `run_started` timestamp, derive exactly
+   `WORKSPACE/reports/YYYY-MM-DD-digest.md`; derive the run record as `WORKSPACE/runs/RUN_ID.json`. Require
+   each concrete regular file and its respective `final_digest_written` or `final_run_record_written`
+   milestone. Accept never an arbitrary or newest digest.
+5. Set `ready_to_close=true` only when the working phase is `finalizing`, `remaining=0`, `in_flight=0`,
+   `selected=evaluated+terminally_skipped`, all started attempts are accounted, and both final artifact
+   file-plus-milestone checks pass. A closed `blocked` or `interrupted` ledger always reports
+   `ready_to_close=false`.
+6. Set `can_complete=true` only when `ready_to_close=true` and the final canonical row closes the run
+   `complete`. An open ready ledger has `can_complete=false`; blocked and interrupted ledgers always have
+   `can_complete=false`. A complete close whose predicate does not pass is contradictory and fails closed.
+
+Emit normalized `key=value` state in this order: `run_id`, `phase`, `selected`, `evaluated`,
+`terminally_skipped`, `presented`, `remaining`, `in_flight`, `attempts_started`, `attempts_accounted`,
+`final_run_record_written`, `final_digest_written`, `closed`, `close_state`, `ready_to_close`, and
+`can_complete`. The two final-artifact output values report exact file existence; their milestone evidence
+is additionally required by `ready_to_close`.
 
 ## Safe recovery and non-resumable search state
 

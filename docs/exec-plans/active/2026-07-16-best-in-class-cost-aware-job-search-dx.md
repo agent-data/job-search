@@ -337,7 +337,7 @@ Rules: AAS-PROC-03/04; AAS-FORM-08/09/14; AAS-LANG-08; PSG-INJ-03/04/05/11/14.
       python3 -m pytest -q tests/test_reference_resolution.py
       python3 scripts/doc_lint.py --root .
 
-- [ ] **T1.2 [BLOCKS, L] Add deterministic append and fold/check mechanics.**
+- [x] **T1.2 [BLOCKS, L] Add deterministic append and fold/check mechanics.**
 
   **Create:**
   - shared/scripts/mechanics/lifecycle-append.sh
@@ -1283,6 +1283,15 @@ AAS-DIST-03/05/06.
   marked search-state table. GREEN reported `33 passed` after fail-closed unique/cardinality parsing, bounded
   consumer structure detection, and exact cursor persist/reconstruct/reuse, clean-restart, and separate
   non-resumable-scratch semantics. Doc lint was clean and full pytest reported `191 passed`.
+- 2026-07-16 — T1.2 RED mechanics reported `22 failed, 28 passed` with the expected missing lifecycle-script
+  errors under `sh` and `dash`; the no-shell-fallback RED separately reported its missing interface prose.
+  GREEN added canonical coordinator-only append plus fail-closed fold/check scripts, exact digest derivation
+  from the run-started local calendar date, file-plus-milestone artifact proof, last-write-wins posting state,
+  attempt accounting, privacy denials, and honest complete/blocked/interrupted closure. Independent review
+  found a cross-workspace artifact-binding gap; its regression first reproduced false readiness, then passed
+  after the fold bound the exact ledger filename and physical runs directory to the supplied workspace. Final
+  mechanics reported `53 passed` under POSIX shells, reference tests reported `33 passed`, doc lint was clean,
+  and full pytest reported `216 passed`.
 
 ## Decision log
 
