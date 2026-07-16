@@ -21,19 +21,114 @@ restricted() {
   [ -n "$value" ] && [ "${#value}" -le 256 ] \
     && printf '%s\n' "$value" | LC_ALL=C grep -Eq '^[A-Za-z0-9][A-Za-z0-9._:@/+%~-]*$'
 }
-check_payload_value() {
-  value=$1
-  case $value in
+single_line() {
+  _line_value=$1
+  case $_line_value in
     *'
 '*) reject 'multiline values are prohibited' ;;
   esac
-  lower=$(printf '%s\n' "$value" | LC_ALL=C tr '[:upper:]' '[:lower:]')
-  if printf '%s\n' "$lower" | LC_ALL=C grep -Eq '(^|[^a-z0-9])(api[_-]?keys?|auth([_-]?headers?|orization)|bearer|environment[_-]?dumps?|pagination[_-]?cursors?|cursors?|opaque[_-]?api[_-]?continuation[_-]?tokens?|continuation[_-]?tokens?|full[_-]?job[_-]?descriptions?|job[_-]?descriptions?|preferences?[_-]?text|match[_-]?prose)([^a-z0-9]|$)'; then
-    reject 'prohibited secret, cursor, environment, description, preference, or match field'
+}
+payload_identifier() {
+  _field=$1
+  _field_value=$2
+  restricted "$_field_value" || reject "invalid $_field"
+  _lower=$(printf '%s\n' "$_field_value" | LC_ALL=C tr '[:upper:]' '[:lower:]')
+  if printf '%s\n' "$_lower" | LC_ALL=C grep -Eq '%[0-9a-f]{2}'; then
+    reject "$_field contains a prohibited percent-encoded octet"
   fi
-  if printf '%s\n' "$lower" | LC_ALL=C grep -Eq '(^|[^a-z0-9])sk-[a-z0-9_-]{8,}([^a-z0-9]|$)'; then
-    reject 'API-key-shaped values are prohibited'
+  if printf '%s\n' "$_lower" | LC_ALL=C grep -Eq '(^|[._:@/+%~-])(api[_-]?keys?|authorization|auth[_-]?headers?|bearer|environment[_-]?dumps?|pagination[_-]?cursors?|cursors?|next[_-]?page[_-]?tokens?|page[_-]?tokens?|opaque[_-]?api[_-]?continuation[_-]?tokens?|continuation[_-]?tokens?|full[_-]?job[_-]?descriptions?|job[_-]?descriptions?|preferences?[_-]?text|match[_-]?prose)([._:@/+%~-]|$)'; then
+    reject "$_field contains a prohibited field or opaque-token signature"
   fi
+  if printf '%s\n' "$_lower" | LC_ALL=C grep -Eq '(^|[^a-z0-9])(sk-[a-z0-9_-]{8,}|gh[pousr]_[a-z0-9_-]{20,}|github_pat_[a-z0-9_-]{20,}|akia[a-z0-9_-]{16,})([^a-z0-9]|$)'; then
+    reject "$_field contains an API-key-shaped value"
+  fi
+}
+operator_code() {
+  _operator_code=$1
+  [ "${#_operator_code}" -le 256 ] \
+    && printf '%s\n' "$_operator_code" | LC_ALL=C grep -Eq '^E-[A-Z0-9]+(-[A-Z0-9]+)*$'
+}
+decimal() {
+  _decimal=$1
+  while [ "${_decimal#0}" != "$_decimal" ]; do
+    _decimal=${_decimal#0}
+  done
+  [ -n "$_decimal" ] || _decimal=0
+  printf '%s\n' "$_decimal"
+}
+valid_calendar_date() {
+  _date=$1
+  _year_text=${_date%%-*}
+  _date_rest=${_date#*-}
+  _month_text=${_date_rest%%-*}
+  _day_text=${_date_rest##*-}
+  _year=$(decimal "$_year_text")
+  _month=$(decimal "$_month_text")
+  _day=$(decimal "$_day_text")
+  [ "$_year" -ge 1 ] && [ "$_month" -ge 1 ] && [ "$_month" -le 12 ] \
+    && [ "$_day" -ge 1 ] || return 1
+  case $_month in
+    1|3|5|7|8|10|12) _max_day=31 ;;
+    4|6|9|11) _max_day=30 ;;
+    2)
+      _max_day=28
+      if [ $((_year % 400)) -eq 0 ] \
+         || { [ $((_year % 4)) -eq 0 ] && [ $((_year % 100)) -ne 0 ]; }; then
+        _max_day=29
+      fi
+      ;;
+  esac
+  [ "$_day" -le "$_max_day" ]
+}
+valid_clock() {
+  _clock=$1
+  _clock_separator=$2
+  if [ "$_clock_separator" = : ]; then
+    _hour_text=${_clock%%:*}
+    _clock_rest=${_clock#*:}
+    _minute_text=${_clock_rest%%:*}
+    _second_text=${_clock_rest##*:}
+  else
+    _hour_text=${_clock%%-*}
+    _clock_rest=${_clock#*-}
+    _minute_text=${_clock_rest%%-*}
+    _second_text=${_clock_rest##*-}
+  fi
+  _hour=$(decimal "$_hour_text")
+  _minute=$(decimal "$_minute_text")
+  _second=$(decimal "$_second_text")
+  [ "$_hour" -le 23 ] && [ "$_minute" -le 59 ] && [ "$_second" -le 59 ]
+}
+valid_offset() {
+  _timestamp=$1
+  case $_timestamp in
+    *Z) return 0 ;;
+  esac
+  _offset=$(printf '%s\n' "$_timestamp" | awk '{ print substr($0, length($0) - 5) }')
+  _offset_hour_text=$(printf '%s\n' "$_offset" | cut -c2-3)
+  _offset_minute_text=$(printf '%s\n' "$_offset" | cut -c5-6)
+  _offset_hour=$(decimal "$_offset_hour_text")
+  _offset_minute=$(decimal "$_offset_minute_text")
+  [ "$_offset_hour" -le 14 ] && [ "$_offset_minute" -le 59 ] \
+    && { [ "$_offset_hour" -lt 14 ] || [ "$_offset_minute" -eq 0 ]; }
+}
+valid_run_id_value() {
+  _run_id=$1
+  printf '%s\n' "$_run_id" | LC_ALL=C grep -Eq \
+    '^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}-[0-9]{2}-[0-9]{2}Z$' || return 1
+  _run_date=${_run_id%%T*}
+  _run_clock=${_run_id#*T}
+  _run_clock=${_run_clock%Z}
+  valid_calendar_date "$_run_date" && valid_clock "$_run_clock" -
+}
+valid_timestamp_value() {
+  _iso_timestamp=$1
+  printf '%s\n' "$_iso_timestamp" | LC_ALL=C grep -Eq \
+    '^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\.[0-9]+)?(Z|[+-][0-9]{2}:[0-9]{2})$' || return 1
+  _iso_date=${_iso_timestamp%%T*}
+  _iso_time_zone=${_iso_timestamp#*T}
+  _iso_clock=$(printf '%s\n' "$_iso_time_zone" | cut -c1-8)
+  valid_calendar_date "$_iso_date" && valid_clock "$_iso_clock" : && valid_offset "$_iso_timestamp"
 }
 phase_rank() {
   case $1 in
@@ -67,15 +162,11 @@ case $ledger in
 '*) reject 'multiline ledger paths are prohibited' ;;
 esac
 for value in "$run_id" "$timestamp" "$@"; do
-  check_payload_value "$value"
+  single_line "$value"
 done
 
-printf '%s\n' "$run_id" | LC_ALL=C grep -Eq \
-  '^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}-[0-9]{2}-[0-9]{2}Z$' \
-  || reject 'invalid run_id'
-printf '%s\n' "$timestamp" | LC_ALL=C grep -Eq \
-  '^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\.[0-9]+)?(Z|[+-][0-9]{2}:[0-9]{2})$' \
-  || reject 'invalid ISO timestamp'
+valid_run_id_value "$run_id" || reject 'invalid run_id'
+valid_timestamp_value "$timestamp" || reject 'invalid ISO timestamp'
 
 runs_dir=$(dirname "$ledger")
 [ "$(basename "$runs_dir")" = runs ] || reject 'ledger must be under WORKSPACE/runs'
@@ -121,8 +212,8 @@ case $command in
       queued|evaluating|evaluated|presented|terminally_skipped) : ;;
       *) reject 'unknown posting state' ;;
     esac
-    restricted "$source_id" || reject 'invalid source_id'
-    restricted "$brief_revision" || reject 'invalid brief revision'
+    payload_identifier source_id "$source_id"
+    payload_identifier brief_revision "$brief_revision"
     append_line "{\"event\":\"posting_state\",\"run_id\":\"$run_id\",\"ts\":\"$timestamp\",\"source\":\"$source\",\"source_id\":\"$source_id\",\"state\":\"$posting_state\",\"brief_revision\":\"$brief_revision\"}"
     ;;
 
@@ -130,8 +221,8 @@ case $command in
     [ "$#" -eq 2 ] || usage
     attempt_id=$1
     operation=$2
-    restricted "$attempt_id" || reject 'invalid attempt_id'
-    restricted "$operation" || reject 'invalid operation'
+    payload_identifier attempt_id "$attempt_id"
+    payload_identifier operation "$operation"
     if grep -F '"event":"attempt_started"' "$ledger" \
        | grep -Fq "\"attempt_id\":\"$attempt_id\""; then
       reject 'attempt_id was already started'
@@ -145,9 +236,9 @@ case $command in
     metered=$2
     outcome=$3
     request_id=$4
-    restricted "$attempt_id" || reject 'invalid attempt_id'
+    payload_identifier attempt_id "$attempt_id"
     case $metered in true|false) : ;; *) reject 'metered must be true or false' ;; esac
-    restricted "$outcome" || reject 'invalid outcome'
+    payload_identifier outcome "$outcome"
     if ! grep -F '"event":"attempt_started"' "$ledger" \
          | grep -Fq "\"attempt_id\":\"$attempt_id\""; then
       reject 'attempt_accounted requires one prior attempt_started'
@@ -159,7 +250,7 @@ case $command in
     if [ "$request_id" = - ]; then
       request_json=null
     else
-      restricted "$request_id" || reject 'invalid request_id'
+      payload_identifier request_id "$request_id"
       request_json="\"$request_id\""
     fi
     append_line "{\"event\":\"attempt_accounted\",\"run_id\":\"$run_id\",\"ts\":\"$timestamp\",\"attempt_id\":\"$attempt_id\",\"metered\":$metered,\"outcome\":\"$outcome\",\"request_id\":$request_json}"
@@ -168,7 +259,7 @@ case $command in
   revision)
     [ "$#" -eq 1 ] || usage
     brief_revision=$1
-    restricted "$brief_revision" || reject 'invalid brief revision'
+    payload_identifier brief_revision "$brief_revision"
     append_line "{\"event\":\"brief_revision\",\"run_id\":\"$run_id\",\"ts\":\"$timestamp\",\"brief_revision\":\"$brief_revision\"}"
     ;;
 
@@ -190,7 +281,7 @@ case $command in
     if [ "$internal_code" = - ]; then
       code_json=null
     else
-      restricted "$internal_code" || reject 'invalid internal code'
+      operator_code "$internal_code" || reject 'invalid internal code'
       code_json="\"$internal_code\""
     fi
     if [ "$close_state" = complete ]; then

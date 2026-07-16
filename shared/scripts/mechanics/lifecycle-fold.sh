@@ -50,22 +50,79 @@ function string_value(row, key, marker, start, rest, finish) {
 function restricted(value) {
   return value ~ /^[A-Za-z0-9][A-Za-z0-9._:@\/+%~-]*$/ && length(value) <= 256
 }
-function prohibited(value, lower) {
+function operator_code(value) {
+  return length(value) <= 256 && value ~ /^E-[A-Z0-9]+(-[A-Z0-9]+)*$/
+}
+function has_long_token(lower, prefix, minimum, start, position, absolute, before, rest, i, character, count) {
+  start = 1
+  while ((position = index(substr(lower, start), prefix)) > 0) {
+    absolute = start + position - 1
+    before = absolute == 1 ? "" : substr(lower, absolute - 1, 1)
+    if (before == "" || before !~ /[a-z0-9]/) {
+      rest = substr(lower, absolute + length(prefix))
+      count = 0
+      for (i = 1; i <= length(rest); i++) {
+        character = substr(rest, i, 1)
+        if (character !~ /[a-z0-9_-]/) break
+        count++
+      }
+      if (count >= minimum) return 1
+    }
+    start = absolute + 1
+  }
+  return 0
+}
+function unsafe_identifier(value, lower) {
   lower = tolower(value)
-  return lower ~ /(^|[^a-z0-9])(api[_-]?keys?|auth([_-]?headers?|orization)|bearer|environment[_-]?dumps?|pagination[_-]?cursors?|cursors?|opaque[_-]?api[_-]?continuation[_-]?tokens?|continuation[_-]?tokens?|full[_-]?job[_-]?descriptions?|job[_-]?descriptions?|preferences?[_-]?text|match[_-]?prose)([^a-z0-9]|$)/ \
-      || lower ~ /(^|[^a-z0-9])sk-[a-z0-9_-][a-z0-9_-][a-z0-9_-][a-z0-9_-][a-z0-9_-][a-z0-9_-][a-z0-9_-][a-z0-9_-]/
+  return lower ~ /%[0-9a-f][0-9a-f]/ \
+      || lower ~ /(^|[-._:@\/+%~])(api[_-]?keys?|authorization|auth[_-]?headers?|bearer|environment[_-]?dumps?|pagination[_-]?cursors?|cursors?|next[_-]?page[_-]?tokens?|page[_-]?tokens?|opaque[_-]?api[_-]?continuation[_-]?tokens?|continuation[_-]?tokens?|full[_-]?job[_-]?descriptions?|job[_-]?descriptions?|preferences?[_-]?text|match[_-]?prose)([-._:@\/+%~]|$)/ \
+      || has_long_token(lower, "sk-", 8) \
+      || has_long_token(lower, "ghp_", 20) \
+      || has_long_token(lower, "gho_", 20) \
+      || has_long_token(lower, "ghu_", 20) \
+      || has_long_token(lower, "ghs_", 20) \
+      || has_long_token(lower, "ghr_", 20) \
+      || has_long_token(lower, "github_pat_", 20) \
+      || has_long_token(lower, "akia", 16)
+}
+function valid_calendar_date(value, year, month, day, maximum) {
+  year = substr(value, 1, 4) + 0
+  month = substr(value, 6, 2) + 0
+  day = substr(value, 9, 2) + 0
+  if (year < 1 || month < 1 || month > 12 || day < 1) return 0
+  if (month == 2) {
+    maximum = 28
+    if (year % 400 == 0 || (year % 4 == 0 && year % 100 != 0)) maximum = 29
+  } else if (month == 4 || month == 6 || month == 9 || month == 11) maximum = 30
+  else maximum = 31
+  return day <= maximum
+}
+function valid_clock(value, hour, minute, second) {
+  hour = substr(value, 12, 2) + 0
+  minute = substr(value, 15, 2) + 0
+  second = substr(value, 18, 2) + 0
+  return hour <= 23 && minute <= 59 && second <= 59
+}
+function valid_offset(value, zone, hour, minute) {
+  zone = substr(value, length(value), 1)
+  if (zone == "Z") return 1
+  zone = substr(value, length(value) - 5)
+  hour = substr(zone, 2, 2) + 0
+  minute = substr(zone, 5, 2) + 0
+  return hour <= 14 && minute <= 59 && (hour < 14 || minute == 0)
 }
 function valid_run_id(value) {
-  return value ~ /^[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]-[0-9][0-9]-[0-9][0-9]Z$/
+  return value ~ /^[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]-[0-9][0-9]-[0-9][0-9]Z$/ \
+      && valid_calendar_date(value) && valid_clock(value)
 }
 function valid_timestamp(value) {
-  return value ~ /^[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9](\.[0-9][0-9]*)?(Z|[+-][0-9][0-9]:[0-9][0-9])$/
+  return value ~ /^[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9](\.[0-9][0-9]*)?(Z|[+-][0-9][0-9]:[0-9][0-9])$/ \
+      && valid_calendar_date(value) && valid_clock(value) && valid_offset(value)
 }
 function common_fields(row, expected_event, rid, timestamp) {
   rid = string_value(row, "run_id")
   timestamp = string_value(row, "ts")
   if (!valid_run_id(rid) || !valid_timestamp(timestamp)) fail("invalid run identity or timestamp")
-  if (prohibited(rid) || prohibited(timestamp)) fail("prohibited value")
   if (started && rid != run_id) fail("run_id changed")
   event_run_id = rid
   event_timestamp = timestamp
@@ -125,7 +182,7 @@ BEGIN {
     if (row != canonical) fail("noncanonical posting_state row")
     if (source !~ /^(linkedin|ashby|greenhouse|lever)$/ || !restricted(source_id) || !restricted(revision)) fail("invalid posting identifier")
     if (state !~ /^(queued|evaluating|evaluated|presented|terminally_skipped)$/) fail("invalid posting state")
-    if (prohibited(source_id) || prohibited(revision)) fail("prohibited posting value")
+    if (unsafe_identifier(source_id) || unsafe_identifier(revision)) fail("prohibited posting value")
     posting[source SUBSEP source_id] = state
     next
   }
@@ -135,7 +192,7 @@ BEGIN {
     operation = string_value(row, "operation")
     canonical = "{\"event\":\"attempt_started\",\"run_id\":\"" rid "\",\"ts\":\"" timestamp "\",\"attempt_id\":\"" attempt_id "\",\"operation\":\"" operation "\"}"
     if (row != canonical || !restricted(attempt_id) || !restricted(operation)) fail("invalid attempt_started row")
-    if (prohibited(attempt_id) || prohibited(operation)) fail("prohibited attempt value")
+    if (unsafe_identifier(attempt_id) || unsafe_identifier(operation)) fail("prohibited attempt value")
     if (attempt_id in attempts_started) fail("duplicate attempt_started")
     attempts_started[attempt_id] = 1
     next
@@ -158,14 +215,17 @@ BEGIN {
     request_tail = substr(row, request_start + length(request_marker))
     if (request_tail == "null}") {
       request_json = "null"
+      request_is_null = 1
       request_id = ""
     } else {
+      request_is_null = 0
+      if (request_id == "") fail("request_id must be null or nonempty")
       request_json = "\"" request_id "\""
     }
     canonical = "{\"event\":\"attempt_accounted\",\"run_id\":\"" rid "\",\"ts\":\"" timestamp "\",\"attempt_id\":\"" attempt_id "\",\"metered\":" metered ",\"outcome\":\"" outcome "\",\"request_id\":" request_json "}"
     if (row != canonical || !restricted(attempt_id) || !restricted(outcome)) fail("invalid attempt_accounted row")
-    if (request_id != "" && !restricted(request_id)) fail("invalid request_id")
-    if (prohibited(attempt_id) || prohibited(outcome) || prohibited(request_id)) fail("prohibited accounting value")
+    if (!request_is_null && !restricted(request_id)) fail("invalid request_id")
+    if (unsafe_identifier(attempt_id) || unsafe_identifier(outcome) || (!request_is_null && unsafe_identifier(request_id))) fail("prohibited accounting value")
     if (!(attempt_id in attempts_started)) fail("attempt_accounted has no prior start")
     if (attempt_id in attempts_accounted) fail("duplicate attempt_accounted")
     attempts_accounted[attempt_id] = 1
@@ -175,7 +235,7 @@ BEGIN {
   if (event == "brief_revision") {
     revision = string_value(row, "brief_revision")
     canonical = "{\"event\":\"brief_revision\",\"run_id\":\"" rid "\",\"ts\":\"" timestamp "\",\"brief_revision\":\"" revision "\"}"
-    if (row != canonical || !restricted(revision) || prohibited(revision)) fail("invalid brief_revision row")
+    if (row != canonical || !restricted(revision) || unsafe_identifier(revision)) fail("invalid brief_revision row")
     next
   }
 
@@ -196,14 +256,17 @@ BEGIN {
     code_tail = substr(row, code_start + length(code_marker))
     if (code_tail == "null}") {
       code_json = "null"
+      code_is_null = 1
       code = ""
     } else {
+      code_is_null = 0
+      if (code == "") fail("internal_code must be null or nonempty")
       code_json = "\"" code "\""
     }
     canonical = "{\"event\":\"run_closed\",\"run_id\":\"" rid "\",\"ts\":\"" timestamp "\",\"close_state\":\"" state "\",\"internal_code\":" code_json "}"
     if (row != canonical || state !~ /^(complete|blocked|interrupted)$/) fail("invalid run_closed row")
-    if (code != "" && (!restricted(code) || prohibited(code))) fail("invalid internal_code")
-    if (state == "complete" && code != "") fail("complete close cannot carry an internal code")
+    if (!code_is_null && !operator_code(code)) fail("invalid internal_code")
+    if (state == "complete" && !code_is_null) fail("complete close cannot carry an internal code")
     if (state == "complete" && working_phase != "finalizing") fail("complete close requires finalizing")
     closed = 1
     close_state = state
@@ -304,8 +367,14 @@ workspace_runs=$(CDPATH= cd -P "$workspace/runs" && pwd -P) || {
 
 final_run_record_written=false
 final_digest_written=false
-[ -f "$workspace/runs/$run_id.json" ] && final_run_record_written=true
-[ -f "$workspace/reports/$started_date-digest.md" ] && final_digest_written=true
+run_record=$workspace/runs/$run_id.json
+reports_directory=$workspace/reports
+digest=$reports_directory/$started_date-digest.md
+[ -f "$run_record" ] && [ ! -L "$run_record" ] && final_run_record_written=true
+if [ -d "$reports_directory" ] && [ ! -L "$reports_directory" ] \
+   && [ -f "$digest" ] && [ ! -L "$digest" ]; then
+  final_digest_written=true
+fi
 
 settled=$((evaluated + terminally_skipped))
 ready_to_close=false

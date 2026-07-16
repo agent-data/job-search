@@ -1292,6 +1292,16 @@ AAS-DIST-03/05/06.
   after the fold bound the exact ledger filename and physical runs directory to the supplied workspace. Final
   mechanics reported `53 passed` under POSIX shells, reference tests reported `33 passed`, doc lint was clean,
   and full pytest reported `216 passed`.
+- 2026-07-16 — T1.2 formal review-fix RED reported `28 failed, 55 passed` for empty JSON strings in nullable
+  fields, malformed operator-code grammar, append/fold privacy bypasses, impossible calendar/time/offset
+  values, and symlinked final artifacts. The review subclaim that `E-NO-AUTH` was rejected was disproved by
+  a pre-fix characterization (`1 passed, 82 deselected`); the safe canonical code remains valid while the
+  dedicated grammar now rejects malformed codes. A pre-commit portability RED also caught leading-zero
+  Gregorian years being interpreted as shell octal; decimal normalization now accepts valid `0008-02-29`
+  under both `sh` and `dash`. GREEN reported `87 passed` for mechanics and `33 passed`
+  for reference resolution after matching append/fold field-aware privacy checks, portable Gregorian and
+  ISO-bound validation, raw-null-or-nonempty enforcement, and non-symlink artifact proof. POSIX `sh`/`dash`
+  syntax and diff checks passed, doc lint was clean, and full pytest reported `250 passed`.
 
 ## Decision log
 

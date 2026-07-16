@@ -133,6 +133,20 @@ def record_final_artifact_milestones(ledger):
     append_ok(ledger, "milestone", "final_digest_written")
 
 
+def write_lifecycle_rows(workspace, *rows, run_id=RUN_ID):
+    ledger = workspace / "runs" / (".lifecycle-%s.jsonl" % run_id)
+    ledger.parent.mkdir(parents=True, exist_ok=True)
+    ledger.write_text("\n".join(rows) + "\n")
+    return ledger
+
+
+def started_row(run_id=RUN_ID, ts=RUN_STARTED):
+    return '{"event":"run_started","run_id":"%s","ts":"%s","phase":"preflight"}' % (
+        run_id,
+        ts,
+    )
+
+
 # --------------------------------------------------------------------------- dedup
 
 def test_dedup_emits_only_new_ids(tmp_path):
@@ -701,6 +715,192 @@ def test_lifecycle_attempt_accounting_requires_one_prior_start(tmp_path):
     assert duplicate.returncode != 0
 
 
+@pytest.mark.parametrize("field", ["request_id", "internal_code"])
+def test_lifecycle_fold_rejects_empty_string_for_nullable_fields(tmp_path, field):
+    workspace = tmp_path / field
+    if field == "request_id":
+        rows = [
+            started_row(),
+            ('{"event":"attempt_started","run_id":"%s","ts":"%s",'
+             '"attempt_id":"attempt-1","operation":"initial_search"}')
+            % (RUN_ID, RUN_STARTED),
+            ('{"event":"attempt_accounted","run_id":"%s","ts":"%s",'
+             '"attempt_id":"attempt-1","metered":false,"outcome":"quota_rejected",'
+             '"request_id":""}') % (RUN_ID, RUN_STARTED),
+        ]
+    else:
+        rows = [
+            started_row(),
+            ('{"event":"run_closed","run_id":"%s","ts":"%s",'
+             '"close_state":"blocked","internal_code":""}') % (RUN_ID, RUN_STARTED),
+        ]
+    ledger = write_lifecycle_rows(workspace, *rows)
+    folded, _ = lifecycle_fold(ledger, workspace)
+    assert folded.returncode != 0
+
+
+def test_lifecycle_blocked_close_accepts_canonical_operator_code(tmp_path):
+    workspace = tmp_path / "workspace"
+    ledger = start_lifecycle(workspace)
+    closed = lifecycle_append(ledger, "close", "blocked", "E-NO-AUTH")
+    assert closed.returncode == 0, closed.stderr
+    folded, state = lifecycle_fold(ledger, workspace)
+    assert folded.returncode == 0, folded.stderr
+    assert state["closed"] == "true"
+    assert state["close_state"] == "blocked"
+    assert state["can_complete"] == "false"
+
+
+def test_lifecycle_fold_accepts_null_nullable_fields(tmp_path):
+    workspace = tmp_path / "workspace"
+    ledger = write_lifecycle_rows(
+        workspace,
+        started_row(),
+        ('{"event":"attempt_started","run_id":"%s","ts":"%s",'
+         '"attempt_id":"attempt-1","operation":"initial_search"}') % (RUN_ID, RUN_STARTED),
+        ('{"event":"attempt_accounted","run_id":"%s","ts":"%s",'
+         '"attempt_id":"attempt-1","metered":false,"outcome":"quota_rejected",'
+         '"request_id":null}') % (RUN_ID, RUN_STARTED),
+        ('{"event":"run_closed","run_id":"%s","ts":"%s",'
+         '"close_state":"interrupted","internal_code":null}') % (RUN_ID, RUN_STARTED),
+    )
+    folded, state = lifecycle_fold(ledger, workspace)
+    assert folded.returncode == 0, folded.stderr
+    assert state["close_state"] == "interrupted"
+
+
+@pytest.mark.parametrize("internal_code", ["NO-AUTH", "e-no-auth", "E--NO-AUTH", "E-NO-AUTH-"])
+def test_lifecycle_internal_code_requires_canonical_operator_grammar(tmp_path, internal_code):
+    append_workspace = tmp_path / "append" / internal_code
+    ledger = start_lifecycle(append_workspace)
+    assert lifecycle_append(ledger, "close", "blocked", internal_code).returncode != 0
+
+    fold_workspace = tmp_path / "fold" / internal_code
+    ledger = write_lifecycle_rows(
+        fold_workspace,
+        started_row(),
+        ('{"event":"run_closed","run_id":"%s","ts":"%s",'
+         '"close_state":"blocked","internal_code":"%s"}')
+        % (RUN_ID, RUN_STARTED, internal_code),
+    )
+    folded, _ = lifecycle_fold(ledger, fold_workspace)
+    assert folded.returncode != 0
+
+
+@pytest.mark.parametrize(
+    "bypass",
+    [
+        "next_page_token",
+        "ghp_abcdefghijklmnopqrstuvwxyz1234567890",
+        "full%20job%20description",
+    ],
+)
+def test_lifecycle_append_and_fold_reject_grammar_valid_privacy_bypasses(tmp_path, bypass):
+    append_workspace = tmp_path / "append" / bypass
+    ledger = start_lifecycle(append_workspace)
+    appended = lifecycle_append(
+        ledger, "posting", "linkedin", "posting-1", "queued", bypass
+    )
+    assert appended.returncode != 0
+    assert len(ledger.read_text().splitlines()) == 1
+
+    fold_workspace = tmp_path / "fold" / bypass
+    ledger = write_lifecycle_rows(
+        fold_workspace,
+        started_row(),
+        ('{"event":"posting_state","run_id":"%s","ts":"%s","source":"linkedin",'
+         '"source_id":"posting-1","state":"queued","brief_revision":"%s"}')
+        % (RUN_ID, RUN_STARTED, bypass),
+    )
+    folded, _ = lifecycle_fold(ledger, fold_workspace)
+    assert folded.returncode != 0
+
+
+INVALID_LIFECYCLE_TIMES = [
+    ("2026-02-30T14-30-00Z", RUN_STARTED),
+    ("2026-07-16T24-00-00Z", RUN_STARTED),
+    (RUN_ID, "2025-02-29T10:30:00Z"),
+    (RUN_ID, "2026-07-16T24:00:00Z"),
+    (RUN_ID, "2026-07-16T23:60:00Z"),
+    (RUN_ID, "2026-07-16T23:59:60Z"),
+    (RUN_ID, "2026-07-16T10:30:00+15:00"),
+    (RUN_ID, "2026-07-16T10:30:00-14:01"),
+]
+
+
+@pytest.mark.parametrize(
+    "run_id,ts",
+    [
+        ("2024-02-29T23-59-59Z", "2024-02-29T23:59:59+14:00"),
+        ("2000-02-29T00-00-00Z", "2000-02-29T00:00:00-14:00"),
+        ("2100-02-28T00-00-00Z", "2100-02-28T00:00:00Z"),
+        ("0008-02-29T00-00-00Z", "0008-02-29T00:00:00Z"),
+    ],
+)
+def test_lifecycle_append_and_fold_accept_valid_calendar_and_offset_boundaries(
+    tmp_path, run_id, ts
+):
+    workspace = tmp_path / run_id
+    ledger = start_lifecycle(workspace, run_id=run_id, ts=ts)
+    folded, state = lifecycle_fold(ledger, workspace)
+    assert folded.returncode == 0, folded.stderr
+    assert state["run_id"] == run_id
+
+
+@pytest.mark.parametrize("run_id,ts", INVALID_LIFECYCLE_TIMES)
+def test_lifecycle_append_rejects_impossible_calendar_time_or_offset(tmp_path, run_id, ts):
+    workspace = tmp_path / "workspace"
+    ledger = workspace / "runs" / (".lifecycle-%s.jsonl" % run_id)
+    appended = lifecycle_append(ledger, "start", run_id=run_id, ts=ts)
+    assert appended.returncode != 0
+    assert not ledger.exists()
+
+
+@pytest.mark.parametrize("run_id,ts", INVALID_LIFECYCLE_TIMES)
+def test_lifecycle_fold_rejects_impossible_calendar_time_or_offset(tmp_path, run_id, ts):
+    workspace = tmp_path / "workspace"
+    ledger = write_lifecycle_rows(workspace, started_row(run_id=run_id, ts=ts), run_id=run_id)
+    folded, _ = lifecycle_fold(ledger, workspace)
+    assert folded.returncode != 0
+
+
+@pytest.mark.parametrize("linked_artifact", ["run_record", "digest", "reports_directory"])
+def test_lifecycle_symlinked_final_artifact_never_satisfies_readiness(tmp_path, linked_artifact):
+    workspace = tmp_path / "workspace"
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    ledger = start_lifecycle(workspace)
+    advance_to_finalizing(ledger, with_posting=False, with_attempt=False)
+    record_final_artifact_milestones(ledger)
+    runs = workspace / "runs"
+    reports = workspace / "reports"
+
+    if linked_artifact == "run_record":
+        outside_run = outside / "run.json"
+        outside_run.write_text('{"run_id":"%s"}\n' % RUN_ID)
+        (runs / ("%s.json" % RUN_ID)).symlink_to(outside_run)
+        reports.mkdir()
+        (reports / "2026-07-16-digest.md").write_text("# Digest\n")
+    elif linked_artifact == "digest":
+        (runs / ("%s.json" % RUN_ID)).write_text('{"run_id":"%s"}\n' % RUN_ID)
+        reports.mkdir()
+        outside_digest = outside / "digest.md"
+        outside_digest.write_text("# Digest\n")
+        (reports / "2026-07-16-digest.md").symlink_to(outside_digest)
+    else:
+        (runs / ("%s.json" % RUN_ID)).write_text('{"run_id":"%s"}\n' % RUN_ID)
+        outside_reports = outside / "reports"
+        outside_reports.mkdir()
+        (outside_reports / "2026-07-16-digest.md").write_text("# Digest\n")
+        reports.symlink_to(outside_reports, target_is_directory=True)
+
+    folded, state = lifecycle_fold(ledger, workspace)
+    assert folded.returncode == 0, folded.stderr
+    assert state["ready_to_close"] == "false"
+    assert state["can_complete"] == "false"
+    assert lifecycle_append(ledger, "close", "complete", "-").returncode != 0
+
+
 @pytest.mark.parametrize("shell", ["sh"] + (["dash"] if shutil.which("dash") else []))
 def test_lifecycle_scripts_execute_under_posix_shells(tmp_path, shell):
     workspace = tmp_path / shell
@@ -734,6 +934,12 @@ def test_lifecycle_reference_pins_complete_no_shell_fallback():
         "local calendar date used for this run's digest",
         "later event timestamps remain ordinary ISO timestamps",
         "never an arbitrary or newest digest",
+        "`E-[A-Z0-9]+(-[A-Z0-9]+)*`",
+        "empty JSON string",
+        "`next_page_token`",
+        "`ghp_...`",
+        "non-symlink",
+        "host-specific date",
         "ready_to_close",
         "can_complete",
     ]

@@ -130,9 +130,10 @@ The first six clauses make a run ready to close. Only then may the coordinator a
 close state `complete`, which establishes the seventh clause. If any clause is unproved, completion is
 unproved; do not close complete or claim success. In `selected_settled`, evaluated includes presented
 postings. In `all_started_attempts_accounted`, every `attempt_started` has exactly one matching
-`attempt_accounted`. The two final-artifact clauses require both a concrete regular file at the exact path
-and its matching lifecycle milestone. The digest path's ISO date is derived from `run_started` as specified
-by the fold/check operation below.
+`attempt_accounted`. The two final-artifact clauses require both a concrete, non-symlink regular file at the
+exact path and its matching lifecycle milestone; the digest's `reports/` directory must also be a real
+directory, not a symlink. The digest path's ISO date is derived from `run_started` as specified by the
+fold/check operation below.
 
 The close-state vocabulary is closed:
 
@@ -169,24 +170,35 @@ lifecycle-fold.sh LEDGER WORKSPACE
 ```
 
 `LEDGER` must be exactly `WORKSPACE/runs/.lifecycle-RUN_ID.jsonl`, and `RUN_ID` has the filename-safe format
-defined in [conventions.md](conventions.md). An ISO timestamp includes seconds and either `Z` or a numeric
-offset. The coordinator supplies the run_started timestamp and uses the
-local calendar date used for this run's digest; later event timestamps remain ordinary ISO timestamps. This
-makes the exact digest path derivable through the fixed interface without accepting a caller-supplied path.
+defined in [conventions.md](conventions.md). Its date and time, and those in each ISO timestamp, must be
+numerically valid Gregorian calendar and clock values: valid month/day combinations (including Gregorian
+leap years), hours `00`–`23`, minutes and seconds `00`–`59`, and a numeric ISO offset no greater than
+`14:00`; an ISO timestamp may instead end in `Z`. The coordinator supplies the run_started timestamp and
+uses the local calendar date used for this run's digest; later event timestamps remain ordinary ISO timestamps.
+This makes the exact digest path derivable through the fixed interface without accepting a
+caller-supplied path. Validation is arithmetic and portable; it does not depend on a host-specific date
+utility.
 
-Every non-path, non-enum argument is a restricted, nonsecret identifier: 1–256 characters, beginning with an
-ASCII letter or digit and continuing only with ASCII letters, digits, `.`, `_`, `:`, `@`, `/`, `+`, `%`,
-`~`, or `-`. A dash in either `REQUEST_ID_OR_DASH` or `INTERNAL_CODE_OR_DASH` serializes as JSON `null`. `METERED`
-is exactly `true` or `false`. `SOURCE` is one of `linkedin`, `ashby`, `greenhouse`, or `lever`; phase,
-posting-state, and close-state values use the closed vocabularies above. The milestone vocabulary is exactly
-`early_results_shown`, `final_run_record_written`, and `final_digest_written`.
+Every non-path, non-enum argument except an internal operator code is a restricted, nonsecret identifier:
+1–256 characters, beginning with an ASCII letter or digit and continuing only with ASCII letters, digits,
+`.`, `_`, `:`, `@`, `/`, `+`, `%`, `~`, or `-`. A non-null internal operator code is 1–256 characters and
+must match `E-[A-Z0-9]+(-[A-Z0-9]+)*`; for example, `E-NO-AUTH` is safe and canonical. A dash in either
+`REQUEST_ID_OR_DASH` or `INTERNAL_CODE_OR_DASH` serializes as JSON `null`. Otherwise each nullable argument
+must be nonempty; the fold accepts only raw JSON `null` or a nonempty value matching its field grammar, never
+an empty JSON string. `METERED` is exactly `true` or `false`. `SOURCE` is one of `linkedin`, `ashby`,
+`greenhouse`, or `lever`; phase, posting-state, and close-state values use the closed vocabularies above. The
+milestone vocabulary is exactly `early_results_shown`, `final_run_record_written`, and
+`final_digest_written`.
 
 Before appending, reject wrong arity, multiline values, a ledger/run identity mismatch, an unknown enum, an
-identifier outside that restricted grammar, or a value shaped as any prohibited persistence field. The
-denylist covers API keys and key-shaped values, authorization/auth headers, bearer material, environment
-dumps, pagination cursors, opaque continuation tokens, full job descriptions, preferences text, and match
-prose. These checks are defense in depth in addition to the privacy boundary above; the fixed row shapes
-allow no extra fields.
+identifier outside that field's grammar, or a value shaped as any prohibited persistence field. The
+field-aware denylist covers API keys and key-shaped values (including non-`sk-` forms such as `ghp_...`),
+authorization/auth headers, bearer material, environment dumps, pagination cursors and page-token names
+such as `next_page_token`, opaque continuation tokens, full job descriptions, preferences text, match prose,
+and percent-encoded octets that could conceal those payloads. Internal operator codes use their dedicated
+allowlist instead of secret-word filtering, so a canonical code such as `E-NO-AUTH` is not rejected merely
+for containing `AUTH`. These checks are defense in depth in addition to the privacy boundary above; the
+fixed row shapes allow no extra fields.
 
 ### Append fallback
 
@@ -213,8 +225,9 @@ order, replacing placeholders with the validated arguments:
 ```
 
 The two nullable fields use the raw JSON value `null`, not the string `"null"`, when their command argument
-is a dash. A complete close always uses a null internal code. The append is the sanctioned append-only ledger
-write; never rewrite or reorder existing lines.
+is a dash. Otherwise they use a nonempty JSON string; an empty string is never canonical. A complete close
+always uses a null internal code. The append is the sanctioned append-only ledger write; never rewrite or
+reorder existing lines.
 
 ### Fold/check fallback
 
@@ -234,8 +247,9 @@ Fold valid rows in order:
    `attempts_accounted`.
 4. From the first 10 characters of the validated `run_started` timestamp, derive exactly
    `WORKSPACE/reports/YYYY-MM-DD-digest.md`; derive the run record as `WORKSPACE/runs/RUN_ID.json`. Require
-   each concrete regular file and its respective `final_digest_written` or `final_run_record_written`
-   milestone. Accept never an arbitrary or newest digest.
+   each concrete regular file to be non-symlink and its respective `final_digest_written` or
+   `final_run_record_written` milestone; require the `reports/` directory itself to be non-symlink. Accept
+   never an arbitrary or newest digest.
 5. Set `ready_to_close=true` only when the working phase is `finalizing`, `remaining=0`, `in_flight=0`,
    `selected=evaluated+terminally_skipped`, all started attempts are accounted, and both final artifact
    file-plus-milestone checks pass. A closed `blocked` or `interrupted` ledger always reports
@@ -247,8 +261,8 @@ Fold valid rows in order:
 Emit normalized `key=value` state in this order: `run_id`, `phase`, `selected`, `evaluated`,
 `terminally_skipped`, `presented`, `remaining`, `in_flight`, `attempts_started`, `attempts_accounted`,
 `final_run_record_written`, `final_digest_written`, `closed`, `close_state`, `ready_to_close`, and
-`can_complete`. The two final-artifact output values report exact file existence; their milestone evidence
-is additionally required by `ready_to_close`.
+`can_complete`. The two final-artifact output values report exact eligible non-symlink file existence; their
+milestone evidence is additionally required by `ready_to_close`.
 
 ## Safe recovery and non-resumable search state
 
@@ -304,8 +318,11 @@ The lifecycle ledger must exclude these content classes:
 - `match_prose` — match prose.
 <!-- /lifecycle-contract:persistence-prohibitions -->
 
-Do not place a secret or free-form user/job payload into an identifier field. A request identifier may be
-stored only as restricted, nonsecret attempt provenance; it is not a continuation token.
+Do not place a secret or free-form user/job payload into an identifier field. Reject percent-encoded octets,
+page-token/cursor field names such as `next_page_token`, and recognized key-shaped values such as `sk-...`,
+`ghp_...`, `github_pat_...`, and `AKIA...`. A request identifier may be stored only as restricted, nonsecret
+attempt provenance; it is not a continuation token. Internal operator codes are validated by their closed
+`E-...` grammar rather than by scanning for broad substrings such as `AUTH`.
 
 The hidden filename is an organization detail, not an access-control boundary. The ledger stays inside the
 private workspace protected by the workspace's deny-all source-control rules.
