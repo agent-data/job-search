@@ -169,6 +169,18 @@ After compaction or process loss, read and fold the ledger before applying this 
   append, then start a fresh search with fresh call context. Do not infer a selected set from conversation
   memory or incomplete scratch.
 
+Opaque search state follows this contract:
+
+<!-- lifecycle-contract:search-state -->
+| Search-state rule | Required value |
+|---|---|
+| `cursor_persistence` | `prohibited` |
+| `cursor_reconstruction` | `prohibited` |
+| `cursor_reuse` | `prohibited` |
+| `search_restart` | `clean_required` |
+| `pagination_scratch` | `separate_non_resumable` |
+<!-- /lifecycle-contract:search-state -->
+
 Pagination cursors and other opaque API continuation tokens are non-resumable. Never persist, reconstruct,
 or reuse them from the lifecycle ledger, final run record, digest, registry, jobs log, metrics, or pagination
 scratch. A search that would require such a token restarts cleanly. The pagination scratch remains a separate,

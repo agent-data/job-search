@@ -153,6 +153,14 @@ LIFECYCLE_RECOVERY = {
     "open_before_selection_settled": "close_interrupted_and_restart_with_fresh_call_context",
 }
 
+LIFECYCLE_SEARCH_STATE = {
+    "cursor_persistence": "prohibited",
+    "cursor_reconstruction": "prohibited",
+    "cursor_reuse": "prohibited",
+    "search_restart": "clean_required",
+    "pagination_scratch": "separate_non_resumable",
+}
+
 LIFECYCLE_PROHIBITED_FIELDS = {
     "api_keys",
     "auth_headers",
@@ -172,22 +180,28 @@ LIFECYCLE_METRIC_PROPERTIES = {
     "write_mode": "atomic_whole_file",
 }
 
-LIFECYCLE_COMPLETION_IDENTIFIERS = {
-    "remaining",
-    "in_flight",
-    "selected",
-    "evaluated",
-    "terminally_skipped",
+LIFECYCLE_COMPLETION_SIGNATURE = {
+    "remaining=0",
+    "in_flight=0",
+    "selected=evaluated+terminally_skipped",
     "attempt_started",
     "attempt_accounted",
+    "runs/{run_id}.json",
+    "reports/{ISO-date}-digest.md",
 }
 
-LIFECYCLE_OWNER_IDENTIFIER_SETS = (
+LIFECYCLE_COMPLETION_MARKED_TOKENS = (
+    set(LIFECYCLE_COMPLETION_CLAUSES) | set(LIFECYCLE_COMPLETION_CLAUSES.values())
+)
+
+LIFECYCLE_OWNER_CONTRACT_GROUPS = (
     set(LIFECYCLE_PHASES),
     set(LIFECYCLE_EVENTS),
     set(LIFECYCLE_POSTING_STATES),
     set(LIFECYCLE_CLOSE_STATES),
     set(LIFECYCLE_METRICS),
+    LIFECYCLE_COMPLETION_SIGNATURE,
+    LIFECYCLE_COMPLETION_MARKED_TOKENS,
 )
 
 
@@ -205,14 +219,48 @@ def _contract_block(text, name):
 def _contract_list(text, name):
     """Normalized first code token from each list row in a marked contract block."""
     block = _contract_block(text, name)
-    return tuple(re.findall(r"^\s*(?:\d+\.|-)\s+`([^`]+)`(?:\s|$)", block, re.MULTILINE))
+    lines = [line.strip() for line in block.splitlines() if line.strip()]
+    assert lines, f"the {name!r} semantic contract list is empty"
+    tokens = []
+    for line in lines:
+        match = re.fullmatch(r"(?:\d+\.|-)\s+`([^`]+)`(?:\s+.*)?", line)
+        assert match, f"the {name!r} semantic contract has a malformed list row: {line!r}"
+        tokens.append(match.group(1))
+    assert len(tokens) == len(set(tokens)), (
+        f"the {name!r} semantic contract has a duplicate list token: {tokens}")
+    return tuple(tokens)
 
 
 def _contract_table(text, name):
     """Normalized key/value code cells from a marked Markdown table."""
     block = _contract_block(text, name)
-    rows = re.findall(r"^\s*\|\s*`([^`]+)`\s*\|\s*`([^`]+)`\s*\|\s*$", block, re.MULTILINE)
+    lines = [line.strip() for line in block.splitlines() if line.strip()]
+    assert len(lines) >= 3, f"the {name!r} semantic contract table has no data rows"
+    assert re.fullmatch(r"\|[^|]+\|[^|]+\|", lines[0]), (
+        f"the {name!r} semantic contract has a malformed table header")
+    assert re.fullmatch(r"\|\s*:?-+:?\s*\|\s*:?-+:?\s*\|", lines[1]), (
+        f"the {name!r} semantic contract has a malformed table separator")
+    rows = []
+    for line in lines[2:]:
+        match = re.fullmatch(r"\|\s*`([^`]+)`\s*\|\s*`([^`]+)`\s*\|", line)
+        assert match, f"the {name!r} semantic contract has a malformed table row: {line!r}"
+        rows.append(match.groups())
+    keys = [key for key, _ in rows]
+    assert len(keys) == len(set(keys)), (
+        f"the {name!r} semantic contract has a duplicate table key: {keys}")
     return dict(rows)
+
+
+def _contract_token_groups(text):
+    """Normalized code tokens from bounded contract-like Markdown blocks, never the whole file."""
+    groups = []
+    for block in re.split(r"\n\s*\n", text):
+        code_tokens = re.findall(r"`([^`]+)`", block)
+        structural = any(re.match(r"^\s*(?:\d+\.|-|\|)", line)
+                         for line in block.splitlines())
+        if code_tokens and (structural or len(code_tokens) >= 2):
+            groups.append({re.sub(r"\s+", "", token) for token in code_tokens})
+    return groups
 
 
 def _pointer_files():
@@ -328,17 +376,41 @@ def test_run_lifecycle_contract_is_single_homed_and_consumed():
             f"{consumer.relative_to(ROOT)} duplicates the lifecycle ledger path")
         assert LIFECYCLE_METRICS_PATH not in consumer_text, (
             f"{consumer.relative_to(ROOT)} duplicates the lifecycle metrics path")
-        consumer_identifiers = set(re.findall(r"\b[A-Za-z][A-Za-z0-9]*(?:[_-][A-Za-z0-9]+)*\b",
-                                              consumer_text))
-        duplicated = [tokens for tokens in LIFECYCLE_OWNER_IDENTIFIER_SETS
-                      if tokens <= consumer_identifiers]
+        consumer_groups = _contract_token_groups(consumer_text)
+        duplicated = [tokens for tokens in LIFECYCLE_OWNER_CONTRACT_GROUPS
+                      if any(tokens <= group for group in consumer_groups)]
         assert not duplicated, (
             f"{consumer.relative_to(ROOT)} duplicates lifecycle contract structure: {duplicated}")
-        completion_structure = LIFECYCLE_COMPLETION_IDENTIFIERS <= consumer_identifiers
-        completion_structure &= all(path in consumer_text for path in (
-            "runs/{run_id}.json", "reports/{ISO-date}-digest.md"))
-        assert not completion_structure, (
-            f"{consumer.relative_to(ROOT)} duplicates the lifecycle completion predicate")
+
+
+def test_lifecycle_consumer_contract_detection_is_bounded():
+    expected = set(LIFECYCLE_EVENTS)
+    scattered = "\n\n".join(f"Mentions `{token}` independently." for token in LIFECYCLE_EVENTS)
+    assert not any(expected <= group for group in _contract_token_groups(scattered))
+
+    grouped = "Closed vocabulary: " + ", ".join(f"`{token}`" for token in LIFECYCLE_EVENTS)
+    assert any(expected <= group for group in _contract_token_groups(grouped))
+
+
+def test_lifecycle_contract_list_parser_rejects_duplicate_rows():
+    duplicate = """<!-- lifecycle-contract:duplicate-list -->
+- `same`
+- `same`
+<!-- /lifecycle-contract:duplicate-list -->"""
+    with pytest.raises(AssertionError, match="duplicate"):
+        _contract_list(duplicate, "duplicate-list")
+
+
+@pytest.mark.parametrize("second_value", ("same", "conflict"))
+def test_lifecycle_contract_table_parser_rejects_duplicate_keys(second_value):
+    duplicate = f"""<!-- lifecycle-contract:duplicate-table -->
+| Key | Value |
+|---|---|
+| `same` | `same` |
+| `same` | `{second_value}` |
+<!-- /lifecycle-contract:duplicate-table -->"""
+    with pytest.raises(AssertionError, match="duplicate"):
+        _contract_table(duplicate, "duplicate-table")
 
 
 def test_run_lifecycle_contract_has_stable_vocabulary():
@@ -358,6 +430,7 @@ def test_run_lifecycle_contract_pins_completion_recovery_and_privacy():
     assert _contract_table(text, "invariants") == LIFECYCLE_INVARIANTS
     assert _contract_table(text, "completion") == LIFECYCLE_COMPLETION_CLAUSES
     assert _contract_table(text, "recovery") == LIFECYCLE_RECOVERY
+    assert _contract_table(text, "search-state") == LIFECYCLE_SEARCH_STATE
     assert set(_contract_list(text, "persistence-prohibitions")) == LIFECYCLE_PROHIBITED_FIELDS
     assert _contract_table(text, "metric-properties") == LIFECYCLE_METRIC_PROPERTIES
 

@@ -1278,6 +1278,11 @@ AAS-DIST-03/05/06.
   structures outside that file. Self-review kept the content denylist ledger-scoped while cursor and opaque
   continuation-token exclusion remains durable-artifact-wide. Doc lint was clean and full pytest reported
   `187 passed`.
+- 2026-07-16 — T1.1 second review-fix RED against `ae63207` reported `4 failed, 29 passed`: duplicate list
+  tokens and identical/conflicting table keys were silently accepted, and the canonical owner lacked a
+  marked search-state table. GREEN reported `33 passed` after fail-closed unique/cardinality parsing, bounded
+  consumer structure detection, and exact cursor persist/reconstruct/reuse, clean-restart, and separate
+  non-resumable-scratch semantics. Doc lint was clean and full pytest reported `191 passed`.
 
 ## Decision log
 
