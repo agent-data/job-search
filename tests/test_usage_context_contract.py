@@ -293,6 +293,42 @@ def test_t2_2_guidance_covers_preview_consent_quiet_and_actual_attempt_effects()
     assert "producer-authoritative" in runner and "completed attempt" in runner
 
 
+def test_operator_states_the_optional_equivalent_invariant_unconditionally():
+    operator = _normalized_prose(OPERATOR).lower()
+    assert (
+        "an optional dollar equivalent follows calls, is labeled a pay-as-you-go equivalent, "
+        "and is never described as an actual charge"
+    ) in operator
+
+
+def test_touched_guidance_has_no_equivalent_to_actual_charge_escape_hatch():
+    touched_guidance = [VOICE, ONBOARDING, CUSTOMIZATION, RUNNER, OPERATOR]
+    forbidden_escape_hatches = (
+        re.compile(r"unless live account data says otherwise"),
+        re.compile(
+            r"(?:pay-as-you-go|computed|dollar) equivalent.{0,160}"
+            r"\b(?:unless|except(?: when)?|but if)\b.{0,160}\b(?:account|charge)\b"
+        ),
+        re.compile(
+            r"\b(?:unless|except(?: when)?|but if)\b.{0,160}\b(?:account|billing)\b"
+            r".{0,160}\b(?:pay-as-you-go|computed|dollar) equivalent\b"
+        ),
+        re.compile(
+            r"if live account(?:-plan)? metadata is absent,?\s+say the equivalent is not an actual charge"
+        ),
+    )
+    violations = []
+    for path in touched_guidance:
+        text = _normalized_prose(path).lower()
+        for pattern in forbidden_escape_hatches:
+            if pattern.search(text):
+                violations.append((path.relative_to(ROOT).as_posix(), pattern.pattern))
+    assert not violations, (
+        "computed pay-as-you-go equivalents can become actual charges when account data changes: "
+        f"{violations}"
+    )
+
+
 def test_t2_2_effect_evals_cover_all_six_fake_only_red_cases():
     search = _eval("job-search")
     agent = _eval("job-search-agent")

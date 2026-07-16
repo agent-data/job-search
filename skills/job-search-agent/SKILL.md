@@ -16,9 +16,9 @@ Hold these stances in every change you make — each exists for a reason, and se
   gets the applicable decision-time context from the canonical
   [Agent-data usage decisions](../../shared/references/internals.md#agent-data-usage-decisions) plus
   calls-first actual usage afterward. Actual usage comes from completed, producer-authoritative attempt
-  metering, including failures/retries under the dated contract without double counting diagnostics. A
-  dollar figure follows calls and is only a labeled pay-as-you-go equivalent unless live account data says
-  otherwise. User-facing rendering lives in `../../shared/references/voice.md`.
+  metering, including failures/retries under the dated contract without double counting diagnostics. An
+  optional dollar equivalent follows calls, is labeled a pay-as-you-go equivalent, and is never described
+  as an actual charge. User-facing rendering lives in `../../shared/references/voice.md`.
 - **Private-local.** All data lives under `~/.job-search/` (hidden, deny-all `.gitignore`). Nothing is ever committed to a public repo by the agent.
 - **Every blocked path is a named error.** If anything can't proceed, the agent names the exact `E-*` with its cause and fix, then stops. No silent failures.
 - **Conversational-first config.** You change anything — a query, the frequency, your preferences — by chatting. The agent edits `config.yaml` minimally and writes it back. Hand-editing files is an escape hatch you can always use, not a required step.

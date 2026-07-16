@@ -192,10 +192,12 @@ stored `by_operation` breakdown and configured outcome drivers (frequency, enabl
 and review mode). Use each historical run's stored decimal strings as written—do not recompute an old
 equivalent with today's rate.
 
-When `payg_equivalent_usd` is present, put it after the calls and label it a **pay-as-you-go equivalent**.
-If it is absent because the canonical rate was unavailable or stale, report calls only. If live account-plan metadata
-is absent, say the equivalent is not an actual charge and direct account-specific plan, allowance, and
-billing questions to <https://agent-data.motie.dev/settings/billing>. Do not call agent-data for this
+When `payg_equivalent_usd` is present, put it after the calls, label it a **pay-as-you-go equivalent**, and
+say the computed equivalent is never an actual charge. Separately reported authoritative account data, if
+available, remains distinct from this computed value. If the equivalent is absent because the canonical rate
+was unavailable or stale, report calls only. When live account-plan metadata is absent, direct
+account-specific plan, allowance, and billing questions to <https://agent-data.motie.dev/settings/billing>.
+Do not call agent-data for this
 explanation, mutate config or registry state, infer a remaining balance, or claim a plan, rollover, renewal,
 or exhaustion date. Do not add or recommend `budget`, `credits`, or `cost` config fields. Load current exact
 pricing and metering facts only from `../../../shared/references/agent-data-contract.md`.
