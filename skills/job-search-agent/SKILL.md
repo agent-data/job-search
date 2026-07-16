@@ -13,8 +13,12 @@ Hold these stances in every change you make — each exists for a reason, and se
 
 - **Qualitative-by-default.** Relevance is expressed as relevant or not, and if relevant as weak / moderate / strong with plain-language reasoning. No score is computed or stored unless you explicitly ask — and even then a numeric score is never written into your saved digests, `jobs.jsonl`, or preferences brief.
 - **Usage context, not budget controls.** The user controls outcomes—frequency, sources, and review depth—and
-  gets a call-impact preview before deeper work plus calls-first actual usage afterward. A dollar figure is
-  only a labeled pay-as-you-go equivalent unless live account data says otherwise.
+  gets the applicable decision-time context from the canonical
+  [Agent-data usage decisions](../../shared/references/internals.md#agent-data-usage-decisions) plus
+  calls-first actual usage afterward. Actual usage comes from completed, producer-authoritative attempt
+  metering, including failures/retries under the dated contract without double counting diagnostics. A
+  dollar figure follows calls and is only a labeled pay-as-you-go equivalent unless live account data says
+  otherwise. User-facing rendering lives in `../../shared/references/voice.md`.
 - **Private-local.** All data lives under `~/.job-search/` (hidden, deny-all `.gitignore`). Nothing is ever committed to a public repo by the agent.
 - **Every blocked path is a named error.** If anything can't proceed, the agent names the exact `E-*` with its cause and fix, then stops. No silent failures.
 - **Conversational-first config.** You change anything — a query, the frequency, your preferences — by chatting. The agent edits `config.yaml` minimally and writes it back. Hand-editing files is an escape hatch you can always use, not a required step.
@@ -60,10 +64,15 @@ For every supported edit — adding, editing, or pausing a query (`enabled: fals
 (`sources`, `freshness`, `detail_model`, `parallel_detail_reads`, `max_new_postings_per_run`, and
 `queries[].limit`); `schedule.frequency`/`time`; the never-clobber adoption rule; and exact field schemas —
 see `../../shared/references/internals.md` → "Config read/update recipes". Review-depth increases require
-the decision-time preview and exact one-off/saved confirmation in `references/customization.md`; decreases
-and removal take effect immediately. “Explain my agent-data usage” is read-only: follow the same reference
-and leave config and registry state untouched. Marking a job status (`new | interested | applied | rejected |
-archived`) is a `status_changed` event appended to `jobs.jsonl` (the append operation in
+the action classification in
+[Agent-data usage decisions](../../shared/references/internals.md#agent-data-usage-decisions) and the shared
+rendering in `../../shared/references/voice.md`; `references/customization.md` applies both to every outcome
+lever. Persistent increases get the structured before/after preview and one scoped confirmation before the
+write. A one-off request is scoped consent after context. Neutral/decreasing edits apply immediately and
+quietly; scheduled/headless runs consume durable saved consent without prompting. “Explain my agent-data
+usage” is read-only: follow the same reference and leave config and registry state untouched. Marking a job
+status (`new | interested | applied | rejected | archived`) is a `status_changed` event appended to
+`jobs.jsonl` (the append operation in
 `../../shared/references/conventions.md` → §jobs.jsonl), not a `config.yaml` edit. To update the brief itself,
 run `job-preference-interview` or edit `preferences.md` directly.
 
@@ -116,7 +125,16 @@ The recurring run schedules on the **host's or the OS's own scheduler**; the act
 - **In-session loop (the fallback).** When the host has no unattended scheduler, or the user declines the machine change, offer an in-session loop — installs nothing but runs **only while a session is open**. The named fallback, not the recommendation.
 - **Cloud schedulers do not qualify** — a cloud runner can't see the local `~/.job-search` workspace or the local agent-data auth, so a run there reaches neither the user's data nor their credentials and produces nothing.
 
-To start scheduling: offer it as a yes/no (check the scheduling marker first — never re-ask if already set); compose the run recipe for the host; start the unattended schedule on an affirmative answer; **prove it with the canary before recording** — never call it scheduled until the exact unattended invocation has been observed to succeed end to end — then set the scheduling marker. To turn scheduling off: stop the active schedule, then clear the scheduling marker. Always show the user the verbatim run recipe composed for the host — copy it exactly as written; do not reconstruct those tokens.
+To start scheduling: offer it as a yes/no (check the scheduling marker first — never re-ask if already set),
+compose the run recipe, then apply the `schedule_enable_with_canary` row in
+[Agent-data usage decisions](../../shared/references/internals.md#agent-data-usage-decisions). The structured
+preview and exact machine change precede one scoped confirmation; that yes covers the machine change and
+exactly one real scheduled-path canary. **Prove it with the canary before recording** — never call it
+scheduled until the exact unattended invocation has been observed to succeed end to end. If a metered canary
+fails, every repair or retry attempt gets fresh calls-first context and a fresh scoped confirmation;
+the first approval is not standing authority. Only after a green canary set the scheduling marker. To turn
+scheduling off: stop the active schedule, then clear the scheduling marker. Always show the user the
+verbatim run recipe composed for the host — copy it exactly as written; do not reconstruct those tokens.
 
 For the full flow — unattended-first advocacy, the consent line, and the mandatory canary (including what to do when the user explicitly asks for cron or launchd) — see `references/scheduling-and-consent.md`.
 

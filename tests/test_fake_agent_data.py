@@ -260,3 +260,23 @@ def test_call_log_marks_free_success_failure_and_quota_rejection(tmp_path):
         ("search-jobs", "failure", True),
         ("search-jobs", "quota_rejected", False),
     ]
+
+
+def test_completed_retry_and_failure_rows_are_authoritative_metering_evidence(tmp_path):
+    log = tmp_path / "calls.jsonl"
+    env = {"JOBSEARCH_TEST_CALL_LOG": str(log)}
+    args = ["call", LISTING, "search-jobs", "--keywords", "same immutable request",
+            "--source", "ashby"]
+
+    first = shim(args, scenario="stretch", extra_env=env)
+    retry = shim(args, scenario="stretch", extra_env=env)
+    assert first.returncode != 0 and retry.returncode != 0
+
+    calls = read_calls(log)
+    assert len(calls) == 2
+    assert calls[0]["request"] == calls[1]["request"]
+    assert [(call["outcome"], call["metered"]) for call in calls] == [
+        ("failure", True),
+        ("failure", True),
+    ]
+    assert sum(call["metered"] is True for call in calls) == 2

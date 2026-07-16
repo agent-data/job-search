@@ -81,12 +81,12 @@
     {
       "id": 6,
       "scenario": "finite review depth — one-off scope previews before running and leaves config unchanged",
-      "prompt": "Build a temp workspace + shim (setup-workspace.sh). Edit config.yaml so it has two enabled queries, search.sources is [linkedin, ashby, greenhouse], schedule.frequency is daily, and search.max_new_postings_per_run is omitted. Merge registry scheduling as installed true, mechanism loop, and set_at '<ISO>'. Export JOBSEARCH_TEST_CALL_LOG=<tmp>/calls.jsonl. Then prompt the agent: 'Review up to 50 new postings this run.' Do not answer a confirmation until the agent has shown its preview; capture config.yaml and calls.jsonl before answering yes, then answer yes and allow the one-off shim-backed run to finish.",
+      "prompt": "Build a temp workspace + shim (setup-workspace.sh). Edit config.yaml so it has two enabled queries, search.sources is [linkedin, ashby, greenhouse], schedule.frequency is daily, and search.max_new_postings_per_run is omitted. Merge registry scheduling as installed true, mechanism loop, and set_at '<ISO>'. Export JOBSEARCH_TEST_CALL_LOG=<tmp>/calls.jsonl. Then prompt the agent: 'Review up to 50 new postings this run.' Capture the preview, config.yaml, and calls.jsonl before the first metered attempt, then allow the one-off shim-backed run to finish without supplying another yes—the request itself is scoped consent after context.",
       "expectations": [
-        "Before the yes, identifies the request as one-off, says the first-page baseline is exactly 6 metered search calls (2 enabled queries x 3 enabled sources), says the schedule does not multiply this run, and gives the exact saved daily-cadence comparison of about 180 first-page calls per 30-day month (6 x 30)",
-        "Before the yes, says every continuation board page and every full-posting detail read adds one metered call; the target of 50 bounds unique roles reviewed, not continuation-page calls",
-        "Asks for explicit confirmation of the exact one-off target before invoking job-search-run; before that yes calls.jsonl has no metered row from this requested run",
-        "After yes, passes a finite one-off override with review_scope origin one_off to the runner and completes the run without writing search.max_new_postings_per_run to config.yaml",
+        "Before the first metered attempt, identifies the request as one-off and says the first-page baseline is exactly 6 metered search calls (2 enabled queries x 3 enabled sources), with no recurring multiplier because this scope is one run",
+        "Before the first metered attempt, says every continuation board page and every full-posting detail read adds one metered call; the target of 50 bounds unique roles reviewed, not continuation-page calls",
+        "Treats the user's one-off request as scoped consent after that context and invokes job-search-run without a redundant confirmation question; the captured pre-attempt calls.jsonl contains no metered row",
+        "Passes a finite one-off override with review_scope origin one_off to the runner and completes the run without writing search.max_new_postings_per_run to config.yaml",
         "Adds no budget, credits, or cost field and preserves config version 1"
       ]
     },
@@ -105,12 +105,12 @@
     {
       "id": 8,
       "scenario": "ambiguous exhaustive request — defaults to one-off and cannot silently persist all",
-      "prompt": "Build a temp workspace + shim (setup-workspace.sh). Use one enabled query, search.sources [linkedin, ashby, lever], schedule.frequency weekly, and omit search.max_new_postings_per_run. Merge registry scheduling as installed true, mechanism loop, and set_at '<ISO>'. Export JOBSEARCH_TEST_CALL_LOG=<tmp>/calls.jsonl. Prompt the agent: 'Scan everything.' Do not answer yes; inspect config.yaml and the call log after the agent responds.",
+      "prompt": "Build a temp workspace + shim (setup-workspace.sh). Use one enabled query, search.sources [linkedin, ashby, lever], schedule.frequency weekly, and omit search.max_new_postings_per_run. Merge registry scheduling as installed true, mechanism loop, and set_at '<ISO>'. Export JOBSEARCH_TEST_CALL_LOG=<tmp>/calls.jsonl. Prompt the agent: 'Scan everything.' Capture config.yaml and calls.jsonl after the agent renders the one-off context but before the first metered attempt, then allow the shim-backed run to proceed without supplying another yes.",
       "expectations": [
         "Resolves the ambiguous time scope to one run and says so; it does not ask the user to choose a time scope that already has a safe default",
-        "Previews exactly 3 first-page metered search calls for this run (1 enabled query x 3 enabled sources), says the schedule does not multiply this one-off, shows the saved weekly cadence as about 12 first-page calls per 4 weeks (3 x 4), and states that continuation pages and full-posting reads add unknown calls",
+        "Previews exactly 3 first-page metered search calls for this run (1 enabled query x 3 enabled sources), says there is no recurring multiplier for this one-off, and states that continuation pages and full-posting reads add unknown calls",
         "States that exhaustive board traversal has no reliable call ceiling in advance and LinkedIn remains limited to its first page",
-        "Asks for explicit confirmation of the exact one-off exhaustive scope before a runner invocation; before yes calls.jsonl has no metered row from this request",
+        "Treats the request as scoped consent after the context and invokes the one-off run without a redundant confirmation; the captured pre-attempt calls.jsonl has no metered row",
         "Does not write search.max_new_postings_per_run or exact all to config.yaml without explicit recurring intent"
       ]
     },
@@ -149,6 +149,42 @@
         "Directs account-specific plan, allowance, or billing questions to https://agent-data.motie.dev/settings/billing and does not infer a remaining balance, current plan, rollover, renewal, or exhaustion date",
         "Makes no agent-data API call and leaves config.yaml and the registry byte-for-byte unchanged",
         "Adds or recommends no budget, credits, or cost config field; exact current prices and tiers remain delegated to the shared agent-data contract"
+      ]
+    },
+    {
+      "id": 12,
+      "scenario": "persistent source and cadence increases preview before one scoped write",
+      "prompt": "Create TWO isolated temp workspaces + fake agent-data shims (setup-workspace.sh), each with two enabled queries, search.sources [linkedin, ashby], version 1, a preserved comment, an empty JOBSEARCH_TEST_CALL_LOG, and an installed scheduling marker. SOURCE arm uses daily cadence: prompt 'Add Greenhouse to every search.' Capture config and the call log before answering the scoped confirmation, then answer yes once and inspect config. CADENCE arm uses daily cadence: prompt 'Run every 6 hours from now on.' Again capture config and calls before the scoped confirmation, answer yes once, and inspect config. No search run is requested in either arm.",
+      "expectations": [
+        "The source arm renders a structured before/after preview before any write: 4 current first-page calls per run becomes 6 (increase 2), and the daily 30-day comparison becomes about 120 to 180; it identifies continuation pages and detail reads as uncertain additions rather than a ceiling and renders the currently verified available free-tier fact",
+        "The cadence arm renders a structured before/after preview before any write: the first-page baseline stays 4 calls per run while the 30-day comparison rises from about 120 at daily to about 480 at every-6-hours; it identifies uncertain continuation/detail additions and renders the currently verified available free-tier fact",
+        "Each arm asks exactly one scoped confirmation naming its own persistent change. Before that yes, config.yaml is byte-for-byte unchanged and calls.jsonl has no metered row; after yes, only the named config field changes atomically",
+        "The source arm saves search.sources [linkedin, ashby, greenhouse]; the cadence arm saves schedule.frequency every-6-hours. Both preserve version 1, comments, unrelated structure, and the existing scheduling marker",
+        "Neither arm makes an agent-data call, adds a monetary-control field, infers account plan/balance, or labels an equivalent as an actual charge"
+      ]
+    },
+    {
+      "id": 13,
+      "scenario": "decreasing cadence and disabling a source are immediate and quiet",
+      "prompt": "Build a temp workspace + fake shim (setup-workspace.sh). Set two enabled queries, search.sources [linkedin, ashby, greenhouse], schedule.frequency every-6-hours, version 1, a preserved comment, and an installed scheduling marker. Export an empty JOBSEARCH_TEST_CALL_LOG. Prompt 'Change the schedule to daily.' Inspect config and the reply immediately. Then prompt 'Stop searching Greenhouse.' Inspect config and the reply again. Do not offer any confirmation response; these are decreases.",
+      "expectations": [
+        "Changes schedule.frequency from every-6-hours to daily immediately with no confirmation question, call-impact warning, free-tier recital, or recurring-usage preview",
+        "Removes greenhouse from search.sources immediately with no confirmation question, call-impact warning, free-tier recital, or recurring-usage preview",
+        "Both changes are atomic whole-file writes that preserve version 1, the comment, unrelated config, source order for linkedin/ashby, and the scheduling marker",
+        "The fake call log remains empty: neither neutral/decreasing edit starts a search or canary",
+        "No budget, credits, cost, account-plan, balance, or actual-charge claim is introduced"
+      ]
+    },
+    {
+      "id": 14,
+      "scenario": "a failed metered schedule canary needs fresh consent before the second attempt",
+      "prompt": "Build a temp workspace + fake agent-data shim (setup-workspace.sh) with two enabled queries, search.sources [linkedin, ashby], daily cadence, version 1, no scheduling marker, and JOBSEARCH_TEST_CALL_LOG=<tmp>/calls.jsonl. Stub scheduler registration entirely inside <tmp>; NEVER write a real cron/launchd job or start a real loop. Prompt 'Set up the daily unattended schedule.' Let the agent render the exact machine-change + call preview, then answer its scoped confirmation yes once; this approval covers the stubbed machine change and exactly one scheduled-path canary. For that first canary set JOBSEARCH_TEST_QUOTA_AFTER=1 so it completes one metered fake attempt and then blocks. Let the agent diagnose and propose a repair, but withhold any new yes and snapshot calls.jsonl plus the registry. Then provide a fresh scoped yes for one repaired canary attempt, unset JOBSEARCH_TEST_QUOTA_AFTER, and let the fake scheduled-path run succeed; inspect the registry and completed log.",
+      "expectations": [
+        "Before the initial scheduler write or canary, previews the exact machine change, the known 4-call first-page baseline for the canary and each run, the one-canary-plus-daily recurring multiplier, and uncertain continuation/detail additions, then asks one scoped confirmation covering that machine change and exactly one canary",
+        "The first approval is consumed by the first canary only. After that metered canary blocks, the repair proposal does not inherit standing authority: before a second metered attempt the agent gives fresh calls-first context for that attempt and asks a new scoped confirmation",
+        "While the second yes is withheld, calls.jsonl gains no second-attempt metered row and the registry does not claim scheduling installed or verified",
+        "Only after the fresh second yes does another fake canary attempt run; only after its written run record proves success is the scheduling marker set installed true with the stubbed mechanism",
+        "All agent-data work uses the fake shim (zero real credits), all scheduler effects stay under <tmp>, and no account plan/balance or actual-charge claim is invented"
       ]
     }
   ]

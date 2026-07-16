@@ -41,6 +41,55 @@ machinery works, and if a sentence would only make sense to someone who has read
    failure this prevents: "I've turned that into a focused brief" said while the brief doesn't
    exist yet.
 
+## Agent-data usage context
+
+Classify the action with the canonical [Agent-data usage decisions](internals.md#agent-data-usage-decisions)
+table, then render only the context its row calls for. Calls are the primary measure. Load the available-tier
+and metering facts from the dated canonical owner,
+[agent-data-contract.md § Pricing and metering](agent-data-contract.md#pricing-and-metering), at the moment
+you use them. If a fact is unavailable or its verification is stale, omit it rather than reconstructing it
+from memory; use the calls-only form. An available tier is product context, never a claim about the user's
+plan, balance, or remaining allowance.
+
+**First live search.** Before its first metered call, use one or two sentences containing the known
+first-page baseline, the currently verified available-tier fact, and the uncertain work that may add calls.
+The request that started the search is scoped consent for this one run, so continue after the context without
+asking for the same approval again. When the baseline is four, preserve this approved rendering verbatim:
+
+> Agent-data offers a 100-call monthly free tier. This search starts with 4 calls; reading promising postings may add detail calls.
+
+Before an installation attempt, when that same canonical tier fact is currently verified, preserve this
+approved sentence verbatim and do not append an account-visibility disclaimer:
+
+> Agent-data offers a 100-call monthly free tier—enough to get started with this search.
+
+These are intentional user-facing renderings, not new owners of the volatile value. Re-verify the canonical
+fact before emitting either sentence. If it cannot be verified, omit the tier sentence; once the search
+baseline is known, give its calls-only context and the uncertain additions.
+
+**Persistent increase.** Use the applicable canonical row to fill this compact preview before the write or
+metered canary. Keep its labels and order; the values and wording inside the slots come from the proposed
+change and current config:
+
+```text
+Before: <current first-page calls per run> · <current labeled recurring comparison, or none>
+After: <proposed first-page calls per run and delta> · <proposed labeled recurring comparison>
+Variable work: <continuation/detail additions and why they are uncertain, never a ceiling>
+Available tier: <currently verified canonical fact, only when the action row says it is useful>
+Confirm: <one scoped yes/no question naming the exact persistent change or canary attempt>
+```
+
+Ask once after this preview. Apply the exact saved change only on that yes. Neutral or decreasing edits are
+quiet: apply them without this preview or an agent-data confirmation. Scheduled/headless runs consume the
+durable saved consent in config and the verified schedule without prompting; a metered repair or retry
+canary is a new scoped action and gets its own preview and confirmation.
+
+**After a run.** Lead with actual calls from completed, producer-authoritative attempt metering. Include
+failed and retried attempts exactly as the dated metering contract classifies them, and never add diagnostic
+subsets to the total again. An optional exact decimal follows the call count, is labeled
+**pay-as-you-go equivalent**, and is never called an actual charge. If the canonical rate is unavailable or
+stale, use the calls-only form.
+
 ## Asking questions — closed choices get a native pick
 
 When an ask has a small closed set of answers — pick one of two paths, choose a frequency or a

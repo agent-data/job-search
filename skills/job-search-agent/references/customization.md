@@ -2,6 +2,11 @@
 
 This reference covers the flexibility and customization workflows — how to honor special requests, narrow results, tune the rubric, and add new capabilities — without breaking the clean defaults.
 
+For any action that can change agent-data calls, classify it with the canonical
+[Agent-data usage decisions](../../../shared/references/internals.md#agent-data-usage-decisions) and render
+its decision-time context with `../../../shared/references/voice.md` → **Agent-data usage context**. This
+reference specializes those rules for each setting; it does not restate the action table.
+
 **Contents:** [1. Honoring an explicit score request](#1-honoring-an-explicit-score-request) · [2. Adding a custom filter](#2-adding-a-custom-filter-or-narrowing-results) · [3. Changing how postings are judged](#3-changing-how-postings-are-judged) · [4. Tuning the search feed & detail reads](#4-tuning-the-search-feed--detail-reads) · [5. Explaining agent-data usage](#5-explaining-agent-data-usage) · [6. Adding a new capability or skill](#6-adding-a-new-capability-or-skill)
 
 ---
@@ -53,6 +58,21 @@ Importance lives in the bucket assignment, never in numeric weights or score mul
 Five settings in `config.yaml` (schema in `../../../shared/references/conventions.md`) control page size,
 review depth, recency, whether detail reads run in parallel, and how carefully the agent reads each posting.
 
+**Metered outcome changes — all settings**
+
+Enabling a query/source, increasing cadence, saving deeper review, or broadening retrieval in a way likely
+to create more detail reads is a persistent increase. Before any write, use the applicable canonical row and
+the shared structured preview: current and proposed first-page baselines, their delta, uncertain
+continuation/detail work, the applicable recurring comparison, and the verified available-tier fact when
+the row calls for it. Ask one scoped confirmation naming the exact saved change, then write it atomically on
+yes. Do not make a metered call merely to prepare this preview.
+
+A one-off request is scoped consent to run once after its concise context; do not ask the user to approve the
+same request again, and do not save it. Neutral or decreasing changes—including disabling a query/source or
+reducing cadence—are quiet and immediate. Scheduled/headless runs consume durable saved consent without
+prompting. Model or concurrency changes alone are quiet unless applying them requires a canary; then the
+canary gets its own classification and consent.
+
 **Recency window — `search.freshness`**
 
 Sets how recent a posting must be. It resolves to a `published_on_or_after` cutoff the search API
@@ -83,47 +103,46 @@ Interpret time scope before taking action:
 |---|---|
 | “now,” “once,” “this run” | one-off override; do not write config |
 | “each run,” “from now on,” “every time” | saved setting; write only after preview and confirmation |
-| ambiguous depth request such as “scan everything” | default to one run and say so before confirmation |
+| ambiguous depth request such as “scan everything” | default to one run and say so before running |
 | “go back to normal,” “use first-page coverage” | reduce or remove the saved setting immediately when the time scope is recurring |
 
-Before any enablement or increase, compute the first-page baseline from the current config:
+Apply the appropriate review-depth row from the canonical
+[Agent-data usage decisions](../../../shared/references/internals.md#agent-data-usage-decisions). Use its
+baseline formula and saved-cadence comparison directly; do not reconstruct either here. The preview explains
+that continuation pages and full-posting reads can add calls, that a finite target bounds roles rather than
+calls, and that `"all"` has no reliable call ceiling in advance.
 
-```text
-first-page search calls per run = enabled queries × enabled sources
-```
-
-Load the exact saved-cadence comparison arithmetic from `../../../shared/references/internals.md` → “Choose
-one-off or saved review depth”; do not substitute another window or run count. Label its result approximate.
-For a one-off, say the schedule does not multiply this run, then give that canonical saved-cadence comparison
-for context. If scheduling is off, say there is no recurring multiplier.
-
-Then state the unknown additions: every continuation page on one company-board stream adds one metered
-search call, and every full-posting read adds one metered detail call. A finite target bounds roles judged,
-not page calls, because known and duplicate rows can require more pages. `"all"` has no reliable call
-ceiling in advance. If a dollar equivalent helps, load the current verified rate from the canonical
-agent-data contract and label the result **pay-as-you-go equivalent**, never an actual charge.
-
-Ask for an explicit yes to the exact one-off or saved scope before invoking a run or atomically writing
-config. A saved value is durable consent, so later scheduled runs do not ask again. A smaller finite target,
-`all` to finite, removal, or a one-off first-page override is a reversible decrease and takes effect without
+For a one-off increase, give the row's concise context before the first metered attempt, state that the scope
+has no recurring multiplier, and proceed: the request itself is scoped consent. For a saved increase, use the
+shared structured before/after preview and ask one scoped confirmation before the atomic write. A saved value
+then becomes durable consent for later scheduled/headless runs. A smaller finite target, `all` to finite,
+removal, or a one-off first-page override is a reversible decrease and takes effect quietly without
 confirmation.
+
+If a dollar equivalent adds useful context, load the currently verified rate from the canonical agent-data
+contract, put the call count first, preserve exact decimal arithmetic, and label the amount
+**pay-as-you-go equivalent**, never an actual charge. Omit the dollar clause when the rate is unavailable or
+stale.
 
 **High-quality scope handling**
 
-- “Review up to 50 new postings this run.” → preview a finite one-off; after yes, run without changing config.
+- “Review up to 50 new postings this run.” → preview a finite one-off; then run without changing config or
+  asking for the same approval again.
 - “Review up to 50 every run.” → preview a recurring finite change; after yes, save `50`.
-- “Scan everything.” → explicitly make it one-off, name the unbounded-in-advance additions, then confirm.
+- “Scan everything.” → explicitly make it one-off, name the unbounded-in-advance additions, then run once.
 - “Scan everything every time.” → preview recurring exhaustive depth; after yes, save `"all"`.
 - “Go back to normal first-page coverage.” → remove the saved setting immediately.
 
 **Low-quality near-misses**
 
 - Treating “scan everything” as recurring and silently saving `"all"`.
-- Writing config or starting metered work before the user confirms the previewed scope.
+- Asking the user to repeat a one-off approval after the context.
+- Writing a persistent config increase before its scoped confirmation, or starting one-off metered work
+  before its context.
 - Describing the review target as a credit allowance or promising that it caps page calls.
 
-Emulate the high-quality examples' time-scope resolution, preview ordering, and exact confirmation; never
-use the low-quality near-misses as alternate implementations.
+Emulate the high-quality examples' time-scope resolution, preview ordering, and action-specific consent;
+never use the low-quality near-misses as alternate implementations.
 
 **Parallel detail reads — `search.parallel_detail_reads`**
 
@@ -166,11 +185,15 @@ The four tiers, what each is for, and which is the default are in the config sch
 ## 5. Explaining agent-data usage
 
 “Explain my agent-data usage” is a read-only local explanation. Read recent `runs/*.json` records and lead
-with actual `agent_data_usage.metered_calls`; then explain the stored `by_operation` breakdown and the
-configured outcome drivers (frequency, enabled queries, enabled sources, and review mode). Use each
-historical run's stored decimal strings as written—do not recompute an old equivalent with today's rate.
+with actual `agent_data_usage.metered_calls` derived from completed, producer-authoritative attempt
+metering. The dated contract determines whether a completed failure or retry is metered; diagnostics such
+as retry attempts and charged failures are subsets and are never added to the total again. Then explain the
+stored `by_operation` breakdown and configured outcome drivers (frequency, enabled queries, enabled sources,
+and review mode). Use each historical run's stored decimal strings as written—do not recompute an old
+equivalent with today's rate.
 
-When `payg_equivalent_usd` is present, label it a **pay-as-you-go equivalent**. If live account-plan metadata
+When `payg_equivalent_usd` is present, put it after the calls and label it a **pay-as-you-go equivalent**.
+If it is absent because the canonical rate was unavailable or stale, report calls only. If live account-plan metadata
 is absent, say the equivalent is not an actual charge and direct account-specific plan, allowance, and
 billing questions to <https://agent-data.motie.dev/settings/billing>. Do not call agent-data for this
 explanation, mutate config or registry state, infer a remaining balance, or claim a plan, rollover, renewal,

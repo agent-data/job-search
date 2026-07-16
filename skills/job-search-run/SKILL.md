@@ -35,6 +35,19 @@ Read these before running, and follow them exactly:
 - `../../shared/references/build-stamp.md` — local build version + content hash to write into run records.
 - `../../shared/references/parallelism.md` — parallel-by-default + how to brief a subagent.
 - `../../shared/references/voice.md` — how any user-facing line is worded (see **Narrating** below).
+- `../../shared/references/internals.md#agent-data-usage-decisions` — classify the invocation or
+  setting effect before deciding whether context or confirmation belongs in the live caller.
+
+## Invocation context and saved consent
+
+Apply the canonical [agent-data usage decisions](../../shared/references/internals.md#agent-data-usage-decisions)
+and render any live context through `../../shared/references/voice.md`; do not restate either contract here.
+This skill is headless and never prompts. A scheduled/headless run consumes durable saved consent, and an
+already-contextualized one-off request—including onboarding's first live run—proceeds without asking the
+user to confirm the same request again. The interactive caller owns any context required before the first
+metered attempt. For a direct live invocation with no separate caller, this skill renders the applicable
+calls-first context itself after preflight establishes the baseline and before dispatching the first metered
+attempt; the invocation itself is the scoped consent.
 
 ## Attempt accounting
 
@@ -49,6 +62,11 @@ retry, error branch, or consolidation**. Determine the operation before dispatch
 `search-jobs` attempt is `initial_search`, a cursor-bearing `search-jobs` attempt is
 `continuation_search`, and `get-posting` is `detail_read`. Track an attempt number per immutable logical
 request, starting at 1; a retry of that same request increments it.
+
+The producer's explicit per-attempt metered/charged fields are **producer-authoritative**. A run total or
+user-facing report is derived only after each already-started **completed attempt** has settled and been
+folded once. Planned calls, expected baseline work, dispatch count, or a missing worker envelope never
+substitute for completed-attempt evidence.
 
 The primary classifies attempts it executes directly. A parallel detail worker classifies its own attempts
 at that same point, transports the records in `agent_data_attempts`, and leaves the primary to fold each
@@ -371,8 +389,10 @@ fallback, and wording rules in `errors.md` rather than restating them here.
 
    Persist the complete `agent_data_usage` object from **Attempt accounting** in the new run record. Render the
    digest usage line immediately after the outcome counts exactly as specified in `conventions.md`, including
-   its calls-only fallback. On E-QUOTA, use the dynamic calls counted after already-started attempts settle and
-   append only the optional local context established by **Attempt accounting**.
+   its calls-only fallback. Report the actual total from completed, producer-authoritative attempt evidence;
+   when the canonical unit rate is verified, an optional exact pay-as-you-go equivalent follows the call count
+   and is never described as an actual charge. On E-QUOTA, use the dynamic calls counted after already-started
+   attempts settle and append only the optional local context established by **Attempt accounting**.
 
    Pricing, metering, quota wording, canonical values, and the `agent_data_usage` schema remain owned by
    `agent-data-contract.md`, `errors.md`, and `conventions.md`; do not copy their rate or top-up literals or

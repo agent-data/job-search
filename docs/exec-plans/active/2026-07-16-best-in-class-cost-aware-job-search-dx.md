@@ -454,7 +454,7 @@ Rules: AAS-AUTO-01/02/04/07; AAS-FORM-07; PSG-TOOL-04/05/14; PSG-COMM-01/09/10/1
       python3 -m pytest -q tests/test_usage_context_contract.py
       python3 scripts/doc_lint.py --root .
 
-- [ ] **T2.2 [BLOCKS, M] Install concise user-facing templates and actual-attempt reporting.**
+- [x] **T2.2 [BLOCKS, M] Install concise user-facing templates and actual-attempt reporting.**
 
   **Modify:**
   - shared/references/voice.md

@@ -1,6 +1,7 @@
 """Structural contract tests for calls-first agent-data usage decisions."""
 
 from pathlib import Path
+import json
 import re
 
 
@@ -8,6 +9,19 @@ ROOT = Path(__file__).resolve().parents[1]
 SHARED = ROOT / "shared" / "references"
 INTERNALS = SHARED / "internals.md"
 AGENT_DATA = SHARED / "agent-data-contract.md"
+VOICE = SHARED / "voice.md"
+ONBOARDING = ROOT / "skills" / "job-search" / "references" / "onboarding.md"
+CUSTOMIZATION = ROOT / "skills" / "job-search-agent" / "references" / "customization.md"
+RUNNER = ROOT / "skills" / "job-search-run" / "SKILL.md"
+OPERATOR = ROOT / "skills" / "job-search-agent" / "SKILL.md"
+
+APPROVED_CONNECTED_BASELINE = (
+    "Agent-data offers a 100-call monthly free tier. This search starts with 4 calls; "
+    "reading promising postings may add detail calls."
+)
+APPROVED_PREINSTALL = (
+    "Agent-data offers a 100-call monthly free tier—enough to get started with this search."
+)
 
 ACTION_DECISIONS = {
     "first_live_run": (
@@ -168,6 +182,15 @@ def _forbidden_monetary_config_key_hits(root):
     return hits
 
 
+def _normalized_prose(path):
+    return " ".join(path.read_text(encoding="utf-8").split())
+
+
+def _eval(skill):
+    path = ROOT / "skills" / skill / "evals" / "evals.json"
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
 def test_usage_decision_table_covers_exact_action_families_and_rules():
     text = INTERNALS.read_text(encoding="utf-8")
     assert _code_table(text, "usage-context-contract", "action-decisions", 7) == ACTION_DECISIONS
@@ -225,6 +248,87 @@ def test_usage_context_is_single_homed_and_every_skill_reaches_it_one_hop():
         assert "../../shared/references/internals.md" in skill.read_text(encoding="utf-8"), (
             f"{skill.relative_to(ROOT)} needs a one-hop pointer to internals.md"
         )
+
+
+def test_voice_single_homes_the_two_approved_user_facing_renderings():
+    voice = _normalized_prose(VOICE)
+    assert APPROVED_CONNECTED_BASELINE in voice
+    assert APPROVED_PREINSTALL in voice
+
+    shipped = [*SHARED.glob("*.md"), *ROOT.glob("skills/**/*.md")]
+    for sentence in (APPROVED_CONNECTED_BASELINE, APPROVED_PREINSTALL):
+        owners = [path.relative_to(ROOT).as_posix() for path in shipped
+                  if sentence in _normalized_prose(path)]
+        assert owners == ["shared/references/voice.md"], (
+            f"approved rendering must stay single-homed in voice.md: {sentence!r} -> {owners}"
+        )
+
+
+def test_t2_2_consumers_point_to_the_canonical_decision_table_and_rendering_owner():
+    consumers = [ONBOARDING, CUSTOMIZATION, RUNNER, OPERATOR]
+    for path in consumers:
+        text = path.read_text(encoding="utf-8")
+        assert "internals.md#agent-data-usage-decisions" in text, (
+            f"{path.relative_to(ROOT)} must point to the T2.1 action table, not restate it"
+        )
+        assert "voice.md" in text, (
+            f"{path.relative_to(ROOT)} must consume the shared user-facing rendering guidance"
+        )
+
+
+def test_t2_2_guidance_covers_preview_consent_quiet_and_actual_attempt_effects():
+    voice = VOICE.read_text(encoding="utf-8").lower()
+    onboarding = ONBOARDING.read_text(encoding="utf-8").lower()
+    customization = CUSTOMIZATION.read_text(encoding="utf-8").lower()
+    operator = OPERATOR.read_text(encoding="utf-8").lower()
+    runner = RUNNER.read_text(encoding="utf-8").lower()
+
+    for slot in ("before:", "after:", "variable work:", "confirm:"):
+        assert slot in voice, f"persistent-change rendering is missing {slot!r}"
+    assert "one or two sentences" in voice and "calls-only" in voice
+    assert "before the first metered" in onboarding and "scoped consent" in onboarding
+    assert "neutral or decreasing" in customization and "quiet" in customization
+    assert "scheduled/headless" in customization and "durable" in customization
+    assert "metered canary" in operator and "fresh scoped confirmation" in operator
+    assert "producer-authoritative" in runner and "completed attempt" in runner
+
+
+def test_t2_2_effect_evals_cover_all_six_fake_only_red_cases():
+    search = _eval("job-search")
+    agent = _eval("job-search-agent")
+    runner = _eval("job-search-run")
+
+    search_by_id = {case["id"]: case for case in search["evals"]}
+    assert "first metered row" in " ".join(search_by_id[1]["expectations"])
+    assert APPROVED_CONNECTED_BASELINE in " ".join(search_by_id[1]["expectations"])
+    assert APPROVED_PREINSTALL in " ".join(search_by_id[6]["expectations"])
+
+    agent_by_scenario = {case["scenario"]: case for case in agent["evals"]}
+    increases = agent_by_scenario[
+        "persistent source and cadence increases preview before one scoped write"
+    ]
+    decreases = agent_by_scenario[
+        "decreasing cadence and disabling a source are immediate and quiet"
+    ]
+    canary = agent_by_scenario[
+        "a failed metered schedule canary needs fresh consent before the second attempt"
+    ]
+    assert "byte-for-byte unchanged" in " ".join(increases["expectations"])
+    assert "no confirmation question" in " ".join(decreases["expectations"])
+    assert "no second-attempt metered row" in " ".join(canary["expectations"])
+    assert all("fake" in case["prompt"].lower() or "shim" in case["prompt"].lower()
+               for case in (increases, decreases, canary))
+
+    actual_attempts = next(case for case in runner["evals"] if case["id"] == 30)
+    joined = " ".join(actual_attempts["expectations"])
+    assert "producer-authoritative metered field" in joined
+    assert "failed original and failed retry" in joined
+
+    # The canonical one-off rule replaces the older redundant-confirmation eval behavior.
+    for case_id in (6, 8):
+        case = next(case for case in agent["evals"] if case["id"] == case_id)
+        joined = " ".join(case["expectations"])
+        assert "without a redundant confirmation" in joined
 
 
 def test_no_budget_credits_or_cost_key_in_persisted_config_surfaces():

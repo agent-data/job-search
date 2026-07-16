@@ -4,8 +4,10 @@ You routed here because the Discovery procedure (`internals.md`) reported `first
 the user from nothing to **real job matches found seconds ago**, in a few minutes, end-to-end. Be warm and
 brisk — this should feel magical, not like filling out a form.
 
-Follow `../../../shared/references/internals.md`, `../../../shared/references/conventions.md`, `../../../shared/references/errors.md`, and `../../../shared/references/voice.md` exactly — don't restate their details
-from memory.
+Follow `../../../shared/references/internals.md`, including its canonical
+[Agent-data usage decisions](../../../shared/references/internals.md#agent-data-usage-decisions),
+`../../../shared/references/conventions.md`, `../../../shared/references/errors.md`, and
+`../../../shared/references/voice.md` exactly — don't restate their details from memory.
 
 **Ground rule — how you behave, not a speech to give:** every step that can't proceed stops with a
 **named error** (an `E-*` from `errors.md`) that tells the user the cause and the exact fix. There are no
@@ -61,7 +63,11 @@ agent-data`, and confirm it's authenticated — `agent-data whoami` should repor
   1. **Install it.** Don't ask the user for anything here — no key yet, no confirmation; the API key
      belongs to the connect step. (And don't narrate that — "this needs nothing from you" is non-event
      noise, `voice.md` rule 5.) Tell them it isn't installed and that you're installing it — they already
-     know what agent-data is from the check, so don't re-define it — and run:
+     know what agent-data is from the check, so don't re-define it. Before the install attempt, load the
+     currently verified available-tier fact from `../../../shared/references/agent-data-contract.md` and use
+     the exact pre-install rendering in `../../../shared/references/voice.md` → **Agent-data usage
+     context**. Do not add an account-plan, balance, allowance, or visibility caveat. If the canonical fact
+     cannot be verified, omit the tier claim rather than guessing. Then run:
 
      ```
      npm install -g agent-data
@@ -232,9 +238,13 @@ the user later asks to change it.
 
 ## 6. First live sample run — the magical moment
 
-This is the payoff. Disclose it plainly first, then do it:
-
-> e.g. "Now I'll run your first search for real — this makes **live calls** to pull and read postings."
+This is the payoff. Before invoking the runner, compute `B` from the saved enabled queries and sources and
+apply the `first_live_run` row in the canonical
+[Agent-data usage decisions](../../../shared/references/internals.md#agent-data-usage-decisions). Render the
+one-or-two-sentence first-live context from `../../../shared/references/voice.md` → **Agent-data usage
+context** before the first metered call. When `B = 4`, use that reference's approved baseline-four rendering
+verbatim. If the dated available-tier fact cannot be verified, use its calls-only fallback. The onboarding
+request is scoped consent for this first run: after the context, proceed without a redundant confirmation.
 
 Invoke **`job-search-run`** against the workspace (pass `--workspace <workspace>`). It probes the
 source, searches each enabled query, skips postings already seen, judges each new posting against the
@@ -254,13 +264,8 @@ Handle whatever the run reports, in plain language:
 
 - **Blocked** → the run halts on a named error, surfaced through the run record (the run record is the
   contract; a host exit code, where trustworthy, is an additional signal only). Show that error's cause +
-  fix verbatim from `errors.md` and stop the magical framing. Most likely here:
-  - **`E-QUOTA`** — agent-data's API limit for this period was reached, so nothing new was pulled. Fix: pull
-    less often (e.g. `daily` instead of `hourly` in `config.yaml`) or upgrade the plan. Existing matches are
-    unaffected.
-  - **`E-SERVICE-DOWN`** — the source is unreachable right now; usually temporary, the next run retries.
-  - (Auth/config/preferences errors shouldn't appear if steps 2–5 succeeded; if one does, name it and fix
-    the gap.)
+  fix verbatim from `errors.md` and stop the magical framing. Do not improvise quota recovery, account
+  state, or a different fix; the named-error table owns the current wording.
 - **Zero results, all already known** (only possible on an adopted workspace) → reassuring, not an error:
   "No new postings — you've already seen all N of these."
 - **Zero results, literally empty** → actionable: offer to broaden the keywords in the query (and apply it
@@ -300,22 +305,31 @@ stays one command away".
    - **Every 6 hours** — "a few times a day, without the firehose"
    - **Weekly** — "a slow-burn watch"
 
-   Set `schedule.frequency` to the chosen allowed value: `hourly | every-2-hours | every-6-hours |
-   daily | weekly` — `every-2-hours` has no button, so map a typed answer ("every couple of hours")
-   to the nearest allowed value and say which one you set. **Never** add a score or weight field.
+   Resolve the proposed `schedule.frequency` to `hourly | every-2-hours | every-6-hours | daily | weekly`
+   — `every-2-hours` has no button, so map a typed answer ("every couple of hours") to the nearest allowed
+   value and say which one you propose. Hold the value for the preview; do not write it yet.
 2. **Compose the cadence** for the chosen frequency from `internals.md` → Scheduling setup (which
    builds the cron time line with `schedule-line.sh` where a shell runtime exists); the host wraps it
    with its own command / launchd / interval translation.
-3. **Start the unattended schedule** on the host's own scheduler — but **show the user the exact machine
-   change first and start it only on their explicit yes**; never write a crontab/launchd entry silently.
+3. **Preview, confirm once, then start.** Apply the `schedule_enable_with_canary` row in the canonical
+   [Agent-data usage decisions](../../../shared/references/internals.md#agent-data-usage-decisions) and the
+   persistent preview in `../../../shared/references/voice.md`: show the current/proposed baseline, proposed
+   cadence comparison, uncertain continuation/detail work, one canary, and exact machine change. Ask one
+   scoped yes/no question covering the frequency write, that exact machine change, and exactly one real
+   scheduled-path canary. Before that yes, write neither config nor scheduler state. On yes, atomically save
+   the frequency and start the unattended schedule. This approval is not standing authority for another
+   metered canary attempt.
 4. **Prove it works before you record it — run the canary.** Never tell the user it's scheduled until its
    exact unattended invocation has succeeded end to end. Confirm the schedule is **registered** (it appears
    in the host's scheduler), then trigger **one real run through that scheduled invocation** — its own
    permissions and environment, **not this session's** (this session already holds the access the real run
    must prove, so running the canary here would pass while the real scheduled run fails) — and confirm it
    left a fresh, unblocked run record, reached agent-data, and wrote the workspace. The user gets a live
-   digest out of it. If the canary **fails**: diagnose the gap, propose and show the exact fix, apply it on
-   the user's yes, and re-run — loop until green. If it genuinely can't be made to work, **name the gap
+   digest out of it. If the canary **fails**: diagnose the gap and propose the exact fix. Before every
+   metered repair or retry canary, apply the `metered_canary_retry_or_repair` row, give fresh calls-first
+   context for that attempt, and obtain a fresh scoped yes. The original schedule approval covered only the
+   machine change and first canary. Re-run only after the new consent — loop until green. If it genuinely
+   can't be made to work, **name the gap
    plainly and do not claim it's scheduled.** Full flow, consent framing, and failure loop:
    `../../../shared/references/internals.md` → Scheduling setup.
 5. **Only after a green canary, record it** so you don't re-ask: set the scheduling marker (`internals.md` →
@@ -360,13 +374,17 @@ runs", "update my preferences", "show the latest digest").
       parallel subagents; the answer was written to `config.yaml`; on yes the host-specific subagent setup
       your host needs was performed (or the exact path + content was shown if blocked); the user saw
       the default detail-read model — the mid-tier reviewer floor (`balanced`-tier) — named as the concrete model the agent binds it to from its own roster
-- [ ] first **live** `job-search-run` done; strong/moderate matches shown — or the named error if blocked
+- [ ] first **live** `job-search-run` got the canonical one-or-two-sentence context before its first metered
+      call (the approved baseline-four rendering when applicable; calls-only when the tier fact could not be
+      verified), then ran without a redundant confirmation; strong/moderate matches shown — or the named
+      error if blocked
 - [ ] shown matches include the digest reasoning and any "confirm" warning, not just titles/companies
 - [ ] scheduling offered with the **unattended** schedule advocated as default (in-session loop the named
-      fallback — "runs only while a session is open"); on yes the frequency was asked and `schedule.frequency` set
-      (plain-language nudge), then the exact machine change shown first and
-      started on the user's yes, the **canary green (registration + one real scheduled run) before** the
-      marker was set — or the gap named and NOT claimed scheduled; recurring + one-off recipes composed for
+      fallback — "runs only while a session is open"); on yes the frequency was asked, then one scoped preview
+      and confirmation covered the frequency write, exact machine change, and first canary; every later
+      metered repair/retry canary got fresh context and a fresh scoped yes; the **canary green (registration
+      + one real scheduled run) before** the marker was set — or the gap named and NOT claimed scheduled;
+      recurring + one-off recipes composed for
       the host and shown either way; if parallel detail reads were approved on an approval-gating host, the
       scheduled prompt carries the host's required subagent-authorization sentence
 - [ ] every ask carried one line of plain-English context; the four closed choices (workspace location,
