@@ -106,6 +106,17 @@ LIFECYCLE_POSTING_STATES = (
     "terminally_skipped",
 )
 
+LIFECYCLE_PRESENTATION_TRANSITION = {
+    "presented_identity": "same_run_id+source+source_id",
+    "qualifying_job_event": "evaluated+relevant_true+nonempty_reasoning",
+    "surface_proof": "rendered_relevant_posting_with_reasoning",
+    "transition_order": "append_after_successful_render",
+    "ledger_content": "state_transition_only",
+    "reasoning_available_only": "insufficient",
+    "title_only_render": "insufficient",
+    "scheduled_or_canary": "no_interactive_presented_transition",
+}
+
 LIFECYCLE_CLOSE_STATES = (
     "complete",
     "blocked",
@@ -214,7 +225,7 @@ LIFECYCLE_ACTIVATION = {
     "persisted": "false",
     "run_health": "not_blocked",
     "fully_evaluated_postings": "at_least_one",
-    "relevant_matches_shown_with_reasoning": "at_least_one",
+    "relevant_matches_shown_with_reasoning": "at_least_one_valid_presented_transition",
 }
 
 LIFECYCLE_DERIVED_DURATIONS = {
@@ -241,6 +252,7 @@ LIFECYCLE_OWNER_CONTRACT_GROUPS = (
     set(LIFECYCLE_PHASES),
     set(LIFECYCLE_EVENTS),
     set(LIFECYCLE_POSTING_STATES),
+    set(LIFECYCLE_PRESENTATION_TRANSITION) | set(LIFECYCLE_PRESENTATION_TRANSITION.values()),
     set(LIFECYCLE_CLOSE_STATES),
     set(LIFECYCLE_METRICS),
     LIFECYCLE_COMPLETION_SIGNATURE,
@@ -470,6 +482,12 @@ def test_run_lifecycle_contract_has_stable_vocabulary():
     assert set(_contract_list(text, "posting-states")) == set(LIFECYCLE_POSTING_STATES)
     assert set(_contract_list(text, "close-states")) == set(LIFECYCLE_CLOSE_STATES)
     assert set(_contract_list(text, "metric-timestamps")) == set(LIFECYCLE_METRICS)
+
+
+def test_run_lifecycle_contract_pins_rendered_presentation_transition():
+    text = LIFECYCLE.read_text(encoding="utf-8")
+
+    assert _contract_table(text, "presentation-transition") == LIFECYCLE_PRESENTATION_TRANSITION
 
 
 def test_run_lifecycle_contract_pins_completion_recovery_and_privacy():

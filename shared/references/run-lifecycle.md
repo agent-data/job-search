@@ -87,6 +87,31 @@ The posting-state vocabulary is closed:
 
 `presented` is a flag-like evaluated state: a posting whose latest state is
 `presented` counts in both `evaluated` and `presented`, so showing it can never make it look unevaluated.
+It is also a durable coordinator attestation with this closed transition invariant:
+
+<!-- lifecycle-contract:presentation-transition -->
+| Invariant | Contract value |
+|---|---|
+| `presented_identity` | `same_run_id+source+source_id` |
+| `qualifying_job_event` | `evaluated+relevant_true+nonempty_reasoning` |
+| `surface_proof` | `rendered_relevant_posting_with_reasoning` |
+| `transition_order` | `append_after_successful_render` |
+| `ledger_content` | `state_transition_only` |
+| `reasoning_available_only` | `insufficient` |
+| `title_only_render` | `insufficient` |
+| `scheduled_or_canary` | `no_interactive_presented_transition` |
+<!-- /lifecycle-contract:presentation-transition -->
+
+Before appending a `presented` posting state, the coordinator must locate the `jobs.jsonl` `evaluated`
+event with the same `(run_id, source, source_id)`, require `relevant:true` and a nonempty `reasoning` field,
+and successfully render that relevant posting together with its reasoning on the user-facing surface. Only
+after that render succeeds may it append the `presented` transition using the same run and posting identity.
+Reasoning that merely exists, or a surface that renders only a title or other reasoning-free summary, does
+not permit the transition. The lifecycle row stores only its ordinary state transition; reasoning content
+remains solely in `jobs.jsonl` and the rendered output and never enters a lifecycle identifier or metrics.
+Scheduled and canary runs remain quiet and do not append an interactive `presented` transition merely to
+claim activation; publishing their final artifacts does not substitute for this invariant.
+
 `terminally_skipped` is reserved for a selected posting that will not be retried in this run; it is not a
 cleanup shortcut for forcing the completion predicate.
 
@@ -450,17 +475,17 @@ Activation is a view over durable run evidence, not a metric field:
 | `persisted` | `false` |
 | `run_health` | `not_blocked` |
 | `fully_evaluated_postings` | `at_least_one` |
-| `relevant_matches_shown_with_reasoning` | `at_least_one` |
+| `relevant_matches_shown_with_reasoning` | `at_least_one_valid_presented_transition` |
 <!-- /lifecycle-contract:activation -->
 
 Derive activation only when one run satisfies all three evidence clauses. Its final run record has
 `run_health` other than `blocked`; its folded lifecycle ledger has at least one evaluated posting
-(`presented` still counts as evaluated); and at least one posting whose latest ledger state is `presented`
-has a corresponding `jobs.jsonl` evaluated event with `relevant:true` and a nonempty `reasoning` field.
-This proves that a relevant match was actually shown with reasoning rather than merely found. A blocked run,
-a run with no fully evaluated posting, a zero-relevant run, or a relevant match that has not been presented
-does not activate setup. Do not persist an activation boolean, activation timestamp, matching posting
-identity, or reasoning in metrics.
+(`presented` still counts as evaluated); and it has at least one valid `presentation-transition` attestation
+under the invariant above. That transition binds the rendered reasoning to the same run and posting as the
+qualifying `jobs.jsonl` event, rather than inferring presentation from reasoning availability. A blocked run,
+a run with no fully evaluated posting, a zero-relevant run, reasoning that was never rendered, title-only
+output, or a relevant match that has not made the valid transition does not activate setup. Do not persist
+an activation boolean, activation timestamp, matching posting identity, or reasoning in metrics.
 
 The only named durations are derived per setup record:
 
