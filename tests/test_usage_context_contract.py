@@ -23,6 +23,25 @@ APPROVED_PREINSTALL = (
     "Agent-data offers a 100-call monthly free tier—enough to get started with this search."
 )
 
+FORBIDDEN_EQUIVALENT_CHARGE_EXCEPTIONS = (
+    re.compile(r"unless live account data says otherwise"),
+    re.compile(
+        r"(?:pay-as-you-go|computed|dollar) equivalent.{0,160}"
+        r"\b(?:unless|except(?: when)?|but if)\b.{0,160}\b(?:account|charge)\b"
+    ),
+    re.compile(
+        r"\b(?:unless|except(?: when)?|but if)\b.{0,160}\b(?:account|billing)\b"
+        r".{0,160}\b(?:pay-as-you-go|computed|dollar) equivalent\b"
+    ),
+    re.compile(
+        r"if live account(?:-plan)? metadata is absent,?\s+say the equivalent is not an actual charge"
+    ),
+    re.compile(
+        r"(?:pay-as-you-go equivalent|equivalent).{0,200}\bnot an actual charge\b.{0,100}"
+        r"\b(?:because|if|when|unless|except)\b.{0,160}\b(?:account|metadata)\b"
+    ),
+)
+
 ACTION_DECISIONS = {
     "first_live_run": (
         "one_off",
@@ -303,30 +322,35 @@ def test_operator_states_the_optional_equivalent_invariant_unconditionally():
 
 def test_touched_guidance_has_no_equivalent_to_actual_charge_escape_hatch():
     touched_guidance = [VOICE, ONBOARDING, CUSTOMIZATION, RUNNER, OPERATOR]
-    forbidden_escape_hatches = (
-        re.compile(r"unless live account data says otherwise"),
-        re.compile(
-            r"(?:pay-as-you-go|computed|dollar) equivalent.{0,160}"
-            r"\b(?:unless|except(?: when)?|but if)\b.{0,160}\b(?:account|charge)\b"
-        ),
-        re.compile(
-            r"\b(?:unless|except(?: when)?|but if)\b.{0,160}\b(?:account|billing)\b"
-            r".{0,160}\b(?:pay-as-you-go|computed|dollar) equivalent\b"
-        ),
-        re.compile(
-            r"if live account(?:-plan)? metadata is absent,?\s+say the equivalent is not an actual charge"
-        ),
-    )
     violations = []
     for path in touched_guidance:
         text = _normalized_prose(path).lower()
-        for pattern in forbidden_escape_hatches:
+        for pattern in FORBIDDEN_EQUIVALENT_CHARGE_EXCEPTIONS:
             if pattern.search(text):
                 violations.append((path.relative_to(ROOT).as_posix(), pattern.pattern))
     assert not violations, (
         "computed pay-as-you-go equivalents can become actual charges when account data changes: "
         f"{violations}"
     )
+
+
+def test_behavioral_evals_keep_computed_equivalents_unconditionally_non_charge():
+    violations = []
+    for eval_path in sorted(ROOT.glob("skills/*/evals/evals.json")):
+        data = json.loads(eval_path.read_text(encoding="utf-8"))
+        for case in data["evals"]:
+            for expectation in case["expectations"]:
+                normalized = " ".join(expectation.lower().split())
+                for pattern in FORBIDDEN_EQUIVALENT_CHARGE_EXCEPTIONS:
+                    if pattern.search(normalized):
+                        violations.append((data["skill_name"], case["id"], pattern.pattern))
+    assert not violations, f"behavioral evals condition equivalent-vs-charge semantics: {violations}"
+
+    usage_case = next(case for case in _eval("job-search-agent")["evals"] if case["id"] == 11)
+    expectations = " ".join(usage_case["expectations"]).lower()
+    assert "stored 0.063 value byte-for-byte" in expectations
+    assert "never describes that computed value as an actual charge" in expectations
+    assert "authoritative live account data is unavailable in this scenario" in expectations
 
 
 def test_t2_2_effect_evals_cover_all_six_fake_only_red_cases():
