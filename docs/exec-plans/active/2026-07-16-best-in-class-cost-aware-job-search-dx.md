@@ -262,7 +262,7 @@ Rules: PSG-COMM-09/20; AAS-BOUND-03; AAS-DIST-03.
       rg -n "docs-private|time to helpful|early_results_shown|registration drift|activated" \
         docs/design-docs/2026-07-16-cost-aware-verified-recurring-jobs-design.md
 
-- [ ] **T0.2 [TUNE, S] Record explicit non-release-blocking debt.**
+- [x] **T0.2 [TUNE, S] Record explicit non-release-blocking debt.**
 
   **Modify:** docs/exec-plans/tech-debt-tracker.md
 
@@ -1258,6 +1258,12 @@ AAS-DIST-03/05/06.
   `docs-private`, `time to helpful`, `early_results_shown`, `registration drift`, and `activated` present,
   and full doc lint reported
   `Doc lint: clean.` The approved DX addendum and design-index summary land in this task's scoped docs commit.
+- 2026-07-16 — T0.2 added only the two deferred P3 records: credential-safe authentication transport with
+  the current local init path retained as the bounded fallback, and update-reminder backoff with newer-build,
+  compatibility-blocker, and explicit-check bypasses plus a never-auto-update guard. The required tracker
+  audit found `credential-safe`, `backoff`, and `never auto-update` at lines 248, 266–269, and 272; full doc
+  lint reported `Doc lint: clean.` Both follow-ups remain explicitly non-release-blocking, and no hosted-docs
+  or sandbox debt item was added.
 
 ## Decision log
 

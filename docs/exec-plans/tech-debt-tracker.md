@@ -241,6 +241,46 @@ or adding product-critical commands like update recipes.
 **Linked tests:** none yet; future adapter-promotion work should add a manual live verification lane to
 `TESTING.md`.
 
+## Deferred release hardening (2026-07-16)
+
+### P3 — authentication transport can expose the API key (`TODO-CREDENTIAL-SAFE-AUTH`)
+**What:** Replace the current copy/paste plus `agent-data init --api-key <KEY> -y` flow with a
+credential-safe authentication transport, and add credential-handling tests that prove the key does not
+appear in conversation history, command output, process captures, logs, or persisted job-search artifacts.
+**Why:** The documented local init path is functional and bounded to the user's machine, but it carries the
+secret through chat and a command argument. It remains the bounded fallback until agent-data and the active
+host expose a tested stdin, interactive-prompt, or secret-store handoff; this hardening is P3 and explicitly
+non-release-blocking.
+**Impact:** A user connecting agent-data during onboarding can leave the key in host-managed transcripts or
+diagnostic captures even though normal searches and workspace artifacts need only the resulting local auth;
+the exposure is limited to credential setup and does not make the release's search flow incorrect.
+**How to apply:** First pin one producer- and host-supported secret handoff in
+[`agent-data-contract.md`](../../shared/references/agent-data-contract.md), then update onboarding to use it,
+redact all auth command/error rendering, and exercise the real handoff with sentinel-key absence assertions.
+Keep `agent-data init --api-key <KEY> -y` documented as the local fallback until the replacement is available,
+and continue to verify readiness only through `agent-data whoami`.
+**Linked tests:** [`job-search` evals](../../skills/job-search/evals/evals.json) cases 3, 6, and 7 verify the
+current local init plus post-init `whoami` path, but do not prove credential non-observability; extend those
+arms and the onboarding harness with sentinel-key leak assertions when the safe transport lands.
+
+### P3 — update reminders have no display backoff (`TODO-UPDATE-REMINDER-BACKOFF`)
+**What:** Record the checked version/build and check time plus the version/build and time last reminded.
+Suppress the same update reminder during a documented backoff interval; let a newer version/build or a
+compatibility blocker bypass backoff; honor explicit update checks; and never auto-update.
+**Why:** [`update.md`](../../shared/references/update.md) already caches remote checks for 24 hours but renders
+the same available-update banner on every home view. Repetition can train users to ignore the signal; because
+the banner is advisory and compatibility failures remain independently visible, reminder backoff is P3 and
+explicitly non-release-blocking.
+**Impact:** Repeated home views can nag with an identical banner until the user updates, creating warning
+fatigue without corrupting state, hiding a required fix, or preventing an explicit check.
+**How to apply:** Extend the registry's optional `update_check` state with the last checked and last reminded
+version/build timestamps; define one interval and suppress only an identical non-blocking reminder inside it.
+Render immediately for a newer version/build, a known compatibility blocker, or a user-requested check.
+Preserve the existing failure-soft cache rules and update recipe, and never invoke an update automatically.
+**Linked tests:** [`job-search` evals](../../skills/job-search/evals/evals.json) case 4 covers a fresh cached
+update banner; add fake-clock arms for identical-version suppression, newer-version bypass, compatibility-
+blocker bypass, and explicit-check bypass, with an assertion that no update command runs automatically.
+
 ## Pagination and usage-context follow-ups
 
 ### P2 — source/frequency increases lack credit-aware previews (`TODO-USAGE-PREVIEW-LEVERS`)
