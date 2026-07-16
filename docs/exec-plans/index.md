@@ -4,7 +4,7 @@ First-class, checked-in plans. Active plans carry a live progress + decision log
 are archived here.
 
 ## Active
-_None currently._
+- [Best-in-class cost-aware job-search DX and verified recurring runs](active/2026-07-16-best-in-class-cost-aware-job-search-dx.md)
 
 ## Completed
 - [Job Search OS — Foundation & Core (Plan A)](completed/2026-06-05-foundation-core.md)
