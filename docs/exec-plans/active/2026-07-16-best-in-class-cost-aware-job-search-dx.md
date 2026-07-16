@@ -1312,6 +1312,12 @@ AAS-DIST-03/05/06.
   families, calls-first baseline and uncertainty fields, recurring multipliers, free-tier usefulness, scoped
   consent rules, quiet neutral/model-only branches, and durable headless consent. Philosophy guard and doc
   lint were clean, the combined focused suites reported `14 passed`, and full pytest reported `260 passed`.
+- 2026-07-16 — T2.1 formal review-fix RED reported `2 failed, 5 passed`: the free-tier owner omitted its
+  monthly period, while the consumer supplied that volatile period, and the original config-key scan was too
+  broad. GREEN reported `7 passed` after single-homing the complete `100_calls_per_month` fact and replacing
+  the broad scan with semantic coverage of config templates/schemas and fenced persisted-config examples;
+  non-config API/artifact/prose `cost` is explicitly allowed. Philosophy guard and doc lint were clean, the
+  combined focused suites reported `17 passed`, and full pytest reported `263 passed`.
 
 ## Decision log
 

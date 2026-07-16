@@ -46,7 +46,7 @@ account/pricing probe was run.
 <!-- agent-data-metering-contract:pricing -->
 | Option | Included metered calls | Effective value |
 |---|---:|---:|
-| `free_tier` | `100` | `no_charge` |
+| `free_tier` | `100_calls_per_month` | `no_charge` |
 | `pay_as_you_go` | `purchased_as_needed` | `$0.008_per_metered_call;$5_adds_625_calls` |
 | `monthly_subscription_$30` | `4,000_per_month` | `$0.0075_per_call_if_fully_used` |
 | `monthly_subscription_$100` | `15,000_per_month` | `about_$0.0067_per_call_if_fully_used` |

@@ -129,6 +129,45 @@ def _code_table(text, namespace, name, columns):
     return {row[0]: tuple(row[1:]) for row in rows}
 
 
+def _persisted_config_surfaces(root):
+    """Yield real config templates/schemas and fenced persisted-config examples."""
+    roots = [root / name for name in ("shared", "skills", "templates", "examples")]
+    for base in roots:
+        if not base.exists():
+            continue
+        for path in base.rglob("*"):
+            if not path.is_file():
+                continue
+            relative = path.relative_to(root).as_posix()
+            if re.search(r"(?:^|/)(?:config|[^/]+\.config)(?:\.[^/]+)*\.(?:ya?ml|json)$", relative):
+                yield relative, path.read_text(encoding="utf-8")
+                continue
+            if path.suffix != ".md":
+                continue
+
+            text = path.read_text(encoding="utf-8")
+            for index, match in enumerate(
+                re.finditer(r"(?ms)^```(?P<info>[^\n]*)\n(?P<body>.*?)^```[ \t]*$", text), start=1
+            ):
+                info = match.group("info").strip().lower()
+                if info not in {"", "yaml", "yml", "config.yaml", "config.yml"}:
+                    continue
+                heading_start = text.rfind("\n#", 0, match.start())
+                context = text[heading_start + 1 if heading_start >= 0 else 0:match.start()]
+                if "config.yaml" in context.lower() or info.startswith("config."):
+                    yield f"{relative}#config-fence-{index}", match.group("body")
+
+
+def _forbidden_monetary_config_key_hits(root):
+    config_key = re.compile(
+        r"(?im)^[ \t]*(?:-[ \t]*)?[\"']?(budget|credits|cost)[\"']?[ \t]*:"
+    )
+    hits = []
+    for surface, text in _persisted_config_surfaces(root):
+        hits.extend((surface, match.group(1).lower()) for match in config_key.finditer(text))
+    return hits
+
+
 def test_usage_decision_table_covers_exact_action_families_and_rules():
     text = INTERNALS.read_text(encoding="utf-8")
     assert _code_table(text, "usage-context-contract", "action-decisions", 7) == ACTION_DECISIONS
@@ -143,17 +182,26 @@ def test_usage_decision_table_covers_exact_action_families_and_rules():
 def test_free_tier_fact_is_exact_dated_and_loaded_from_its_canonical_owner():
     contract = AGENT_DATA.read_text(encoding="utf-8")
     pricing = _code_table(contract, "agent-data-metering-contract", "pricing", 3)
-    assert pricing["free_tier"] == ("100", "no_charge")
+    assert pricing["free_tier"] == ("100_calls_per_month", "no_charge")
     assert re.search(r"These values were verified on \d{4}-\d{2}-\d{2}\.", contract)
 
+
+def test_usage_decision_contract_loads_but_does_not_duplicate_the_free_tier_fact():
     internals = INTERNALS.read_text(encoding="utf-8")
     assert "(agent-data-contract.md#pricing-and-metering)" in internals
+    assert not re.search(r"(?i)monthly[ -]free[- ]tier|100[- _]calls?(?:[- _]|/)+per[- _]month", internals)
     for literal in ("$0.008", "$0.0075", "$0.0067", "$0.005"):
         for path in SHARED.glob("*.md"):
             if path != AGENT_DATA:
                 assert literal not in path.read_text(encoding="utf-8"), (
                     f"volatile dollar fact {literal!r} duplicated in {path.relative_to(ROOT)}"
                 )
+
+    for path in SHARED.glob("*.md"):
+        if path != AGENT_DATA:
+            text = path.read_text(encoding="utf-8")
+            assert "100_calls_per_month" not in text
+            assert not re.search(r"(?i)100[- ]calls?\s*(?:/|per)\s*month", text)
 
 
 def test_usage_context_is_single_homed_and_every_skill_reaches_it_one_hop():
@@ -179,17 +227,39 @@ def test_usage_context_is_single_homed_and_every_skill_reaches_it_one_hop():
         )
 
 
-def test_no_budget_credits_or_cost_config_key_ships():
-    config_key = re.compile(
-        r"(?im)^[ \t]*(?:-[ \t]*)?[\"']?(budget|credits|cost)[\"']?[ \t]*:"
+def test_no_budget_credits_or_cost_key_in_persisted_config_surfaces():
+    hits = _forbidden_monetary_config_key_hits(ROOT)
+    assert not hits, f"forbidden monetary config keys ship in config surfaces: {hits}"
+
+
+def test_non_config_cost_fields_and_prose_are_allowed(tmp_path):
+    api_doc = tmp_path / "shared" / "references" / "api.md"
+    api_doc.parent.mkdir(parents=True)
+    api_doc.write_text(
+        "Ordinary prose may discuss cost: it is not persisted config.\n\n"
+        "```json\n{\"cost\": \"response metadata\"}\n```\n",
+        encoding="utf-8",
     )
-    roots = (ROOT / "shared", ROOT / "skills", ROOT / "templates", ROOT / "examples")
-    offenders = []
-    for base in roots:
-        if not base.exists():
-            continue
-        for path in base.rglob("*"):
-            if path.is_file() and path.suffix in {".md", ".yaml", ".yml", ".json", ".jsonl"}:
-                if config_key.search(path.read_text(encoding="utf-8")):
-                    offenders.append(path.relative_to(ROOT).as_posix())
-    assert not offenders, f"forbidden monetary config keys ship in: {offenders}"
+    run_artifact = tmp_path / "examples" / "sample-run.json"
+    run_artifact.parent.mkdir(parents=True)
+    run_artifact.write_text('{"cost": "artifact context"}\n', encoding="utf-8")
+
+    assert _forbidden_monetary_config_key_hits(tmp_path) == []
+
+
+def test_forbidden_key_detection_is_scoped_to_real_config_surfaces(tmp_path):
+    template = tmp_path / "templates" / "config.example.yaml"
+    template.parent.mkdir(parents=True)
+    template.write_text("version: 1\nsearch:\n  cost: 10\n", encoding="utf-8")
+    schema_doc = tmp_path / "shared" / "references" / "schema.md"
+    schema_doc.parent.mkdir(parents=True)
+    schema_doc.write_text(
+        "## config.yaml\n\n```yaml\nversion: 1\nbudget: 25\ncredits: 50\n```\n",
+        encoding="utf-8",
+    )
+
+    assert _forbidden_monetary_config_key_hits(tmp_path) == [
+        ("shared/references/schema.md#config-fence-1", "budget"),
+        ("shared/references/schema.md#config-fence-1", "credits"),
+        ("templates/config.example.yaml", "cost"),
+    ]

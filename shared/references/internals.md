@@ -177,9 +177,9 @@ These policy rows pin the cross-action behavior:
 
 For a one-off request, the request itself is scoped consent to run once. Give the row's concise context and
 proceed without asking the user to repeat approval; do not write the one-off scope to config. A first live
-run gets one or two sentences: lead with `B` calls, include the current available monthly free-tier fact,
-and say that promising postings or continuation pages may add calls. Do not turn first-run context into an
-account disclaimer.
+run gets one or two sentences: lead with `B` calls, load and render the current available free-tier fact from
+its dated canonical owner, and say that promising postings or continuation pages may add calls. Do not turn
+first-run context into an account disclaimer.
 
 For a persistent increase, preview the applicable row and ask for scoped confirmation before the atomic
 config write or scheduler change. Enabling a schedule includes consent for its exact machine change and
