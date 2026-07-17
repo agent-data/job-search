@@ -681,7 +681,7 @@ PSG-INJ-03/04/05/11; PSG-COMM-04/09/11.
       python3 scripts/eval_harness.py --root .
       python3 -m pytest -q tests/test_mechanics_scripts.py tests/test_fake_agent_data.py
 
-- [ ] **T4.2 [BLOCKS, M] Tighten posting-detail dispatch and return envelopes.**
+- [x] **T4.2 [BLOCKS, M] Tighten posting-detail dispatch and return envelopes.**
 
   **Modify:**
   - skills/job-search-run/SKILL.md
@@ -1504,6 +1504,31 @@ AAS-DIST-03/05/06.
   `0decbb23665ce0ec42bc7c38796076c7150f352a34e78fd6d5158be55aaa9e13`, content hash `sha256:30a68c2c7c19`). The
   plugin version stays `0.6.0`; the `0.7.0` bump is deferred to T9.5. No live agent-data, model, scheduler,
   network, or billable effect occurred and no branch or worktree changed. **T4.1 is complete.**
+- 2026-07-17 — T4.2 detail evaluation envelopes: single-homed the cold-worker brief and return-envelope schema
+  in `shared/references/parallelism.md` (the seven-part worker brief carries the brief revision, normalized
+  posting identity/source, untrusted-content warning, the exact `search.detail_model`, the rubric by reference,
+  the output schema, and the exact return channel; the envelope is
+  run_id/source/source_id/status/verdict-fields/attempt-attribution with no progress chatter), with the
+  coordinator validating identity and schema before any ledger mutation, a fail-closed missing-return path, and
+  the sequential fallback using the same envelope. Removed the ordinary setup-time subagent explanation (an
+  approval-gating host asks once in outcome language); no worker availability or dispatch is fabricated. Both
+  skills point one hop and `evaluate-job-fit` keeps its judgment-object schema. Five RED evals added (ejf #5
+  injection = stochastic + no-guidance control; jsr #52-55 = cold-worker-brief / wrong-identity fail-closed /
+  malformed-envelope fail-closed / no-capacity sequential fallback), resolving T4.1's two "remain T4.2 scope"
+  placeholders. TDD RED captured first (eval_harness exit 1 plus three positional-assertion failures), then
+  GREEN. Committed as `89cc1d7` (`feat: validate detail evaluation envelopes`) — the five brief files, the
+  regenerated build stamp, and a 4-line ID-anchoring fix to `tests/test_exact_model_repair.py` (the required
+  jsr #52-55 appends displaced the T4.1 lifecycle block from the eval tail and broke a positional `runner[-5:]`
+  assertion; the fix mirrors T4.1's own `runner_repair` ID precedent, pins the exact lifecycle IDs 47-51, and
+  strengthens the test — verified by controller and reviewer against live eval data). A fresh Opus task review
+  returned **Approved** — no Critical or Important; two Minor drift-risk polish notes (recorded in the SDD
+  ledger, no fix) and one cannot-verify item (jsr #52/#55 self-record UNEXERCISED on hosts without delegation —
+  honest self-gating that matches the eval-14 precedent). Controller re-verify on the committed tree: full
+  pytest `486 passed`, eval harness coherent, doc lint / philosophy guard / release version-sync clean, two
+  deterministic builds byte-identical (build-stamp file SHA-256 `3c1beaff…ae2e7854`, content hash
+  `sha256:24fb9ac326ba`), and `git diff --check` clean. The plugin version stays `0.6.0`. No live agent-data,
+  model, scheduler, network, or billable effect occurred and no branch or worktree changed. **T4.2 is
+  complete.**
 
 ## Decision log
 
