@@ -861,7 +861,7 @@ AAS-BOUND-03; PSG-TOOL-15.
 Rules: AAS-PORT-01/03/04/05/10; AAS-LANG-01/03/08; AAS-AUTO-02/04/07;
 AAS-FORM-07/09; PSG-COMM-09/10/18/20.
 
-- [ ] **T6.1 [BLOCKS, L] Build a deterministic fake scheduler and capability fixtures.**
+- [x] **T6.1 [BLOCKS, L] Build a deterministic fake scheduler and capability fixtures.**
 
   **Create:**
   - tests/fake-scheduler
@@ -1652,6 +1652,32 @@ AAS-DIST-03/05/06.
   `89d18bd0…e5d5f67a`), and `git diff --check` clean. The plugin version stays `0.6.0`. No live agent-data,
   model, scheduler, network, or billable effect occurred and no branch or worktree changed. **T5.3 is complete,
   and P5 (quick onboarding, activation, and iterative refinement) is complete.**
+- 2026-07-17 — T6.1 fake scheduler effect harness (P6 opens): built the deterministic dev-only test harness the
+  rest of P6/P7 consume — a stdlib-only Python `tests/fake-scheduler` shim (probe / register-disabled / inspect
+  / fire / enable / disable / remove, driven by JOBSEARCH_TEST_SCHEDULER_{STATE,LOG,SCENARIO}), ten scenario
+  fixtures under tests/fixtures/scheduler/ (native-eligible, native-session-bound, native-no-canary,
+  os-eligible, model-binding-lost, registration-failure, execution-pre-meter-failure, execution-metered-failure,
+  stale-registration, scheduled-success), and two opt-in eval-harness modes (`--check-artifacts`,
+  `--aggregate-results`) that validate LOCAL, UNTRACKED docs-private/eval-evidence JSON (five assertion kinds:
+  file_exists / json_field_equals / jsonl_event_sequence / text_absent / text_matches; plus results rows). The
+  shim touches no real scheduler and imports no subprocess/socket/urllib — it writes the ledger directly and
+  only to env-var temp paths (stricter than the fake-run-lifecycle model it follows); run_ids derive from a
+  persisted fire-tick counter over a fixed clock, so it is fully deterministic and fail-closed on bad
+  scenario/fixture/arg/state. The existing `--root` structural CLI is preserved byte-for-byte and stays free and
+  deterministic without the evidence files. Committed as `7846ec8` (`test: add fake scheduler effect harness`) —
+  14 dev-only files (shim, 10 fixtures, scripts/eval_harness.py, and the two test files); no runtime surface
+  changed so the build stamp is unchanged and not in the commit, and the dogfood docs-private evidence stays
+  untracked. No T6.2 eligibility-decision or T6.3 canary-verdict logic leaked (probe/fire emit raw facts;
+  `verified` is left false for T6.3). TDD RED (`44 failed, 23 passed` with the expected missing-shim/missing-mode
+  errors) then GREEN. A fresh Opus task review returned **Approved** — no Critical or Important; three Minor
+  test-coverage/observation notes (a missing `text_matches` negative test, an untested malformed-JSONL /
+  invalid-JSON branch, and the deliberately illustrative failure-path ledgers — recorded in the SDD ledger as
+  eval-harness hardening candidates, no fix). Controller re-verify on the committed tree: full pytest
+  `531 passed` (486→531), the two named files `67 passed`, eval harness coherent, doc lint / philosophy guard /
+  release version-sync clean, two deterministic builds with the build stamp unchanged at file SHA-256
+  `89d18bd0…e5d5f67a`, and `git diff --check` clean. The plugin version stays `0.6.0`. No live agent-data,
+  model, scheduler, network, or billable effect occurred and no branch or worktree changed. **T6.1 is
+  complete.**
 
 ## Decision log
 
@@ -1708,6 +1734,10 @@ AAS-DIST-03/05/06.
   exception — mandated by Belief 12 (wait for approval before fanning out) and pinned by the P3 invariant that
   folds the parallel choice into the atomic initial model binding — and stays one outcome-language ask, not new
   ceremony.
+- 2026-07-17 — The `--aggregate-results` dev-harness mode does not apply the shipped-prose `gpt-5*` literal gate
+  to a results row's `exact_model`: that gate keeps runtime-resolved model IDs out of pack-authored, shipped
+  eval prose, whereas `exact_model` here is a runtime-resolved value deliberately recorded in local, untracked
+  eval-evidence — so it is validated only as a non-empty string, not gated.
 
 ## Self-review
 
