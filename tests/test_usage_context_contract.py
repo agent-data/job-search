@@ -669,7 +669,7 @@ def test_exact_model_test_guidance_distinguishes_legacy_selectors_from_v2_runtim
         assert "host tier roles" in text
         assert "version-2" in text
         assert "exact host-resolved" in text
-        assert "pack-authored literal model id" in text
+        assert "pack-authored `gpt-5*` literal regression" in text
 
 
 def test_model_setup_is_one_time_and_unknown_primary_blocks_verified_scheduling():

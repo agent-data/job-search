@@ -8,9 +8,10 @@ prose `harness` (how to set up the fake-agent-data shim + drive the skill) and p
 `expectations` graded by the driver. There is no pytest that "runs" a skill — the behavioral
 N>=5 reps happen off-CI against the shim. What CI CAN gate is the SCENARIOS' structural
 coherence and the deterministic math the driver feeds its observed pass/fail into. That is this
-module: `validate_evals` is the structural gate — it also rejects any pack-authored literal model ID.
-Legacy version-1 selectors may resolve through host tier roles; version-2 eval/runtime setup injects an
-exact host-resolved ID. Eval prose and fixtures must not hard-code that runtime value. `aggregate_reps` /
+module: `validate_evals` is the structural gate — it also rejects the pinned pack-authored `gpt-5*`
+literal regression family. Legacy version-1 selectors may resolve through host tier roles; version-2
+eval/runtime setup injects an exact host-resolved ID. Eval prose and fixtures must not hard-code that
+runtime value. `aggregate_reps` /
 `control_delta` are the rate+variance + control-arm capability. Stdlib only; mirrors doc_lint/philosophy_guard shape
 (scan -> hits; main prints and returns 1 on failure).
 """
@@ -31,7 +32,7 @@ OVERLAP_PAIRS = (
     ("job-preference-interview", "evaluate-job-fit"),  # interview -> fit
     ("evaluate-job-fit", "job-search-run"),            # fit -> run
 )
-MODEL_ID_LITERAL = re.compile(r"gpt-5", re.I)  # AAS-TEST-04 / finding #24: no pack-authored literal ID.
+MODEL_ID_LITERAL = re.compile(r"gpt-5", re.I)  # AAS-TEST-04 / finding #24: pinned literal regression.
 
 
 # ---------------------------------------------------------------------------
@@ -78,11 +79,11 @@ def validate_evals(root="."):
         if "harness" in data and not _is_nonempty_str(data["harness"]):
             hits.append(f"{rel}: harness present but empty")
 
-        # No pack-authored model-ID literal anywhere in the file (finding #24 de-literalization gate).
+        # Reject the pinned pack-authored gpt-5* literal family (finding #24 regression gate).
         raw = json.dumps(data)
         if MODEL_ID_LITERAL.search(raw):
             hits.append(
-                f"{rel}: contains a pack-authored literal model id (gpt-5*); "
+                f"{rel}: contains the forbidden pack-authored gpt-5* literal family; "
                 "legacy v1 may name selectors, while v2 must inject an exact host-resolved id at runtime"
             )
 
