@@ -98,8 +98,11 @@ The event vocabulary is closed:
   recorded `brief_revision` governs only evaluations that begin after it. An in-flight producer attempt and
   its judgment are never cancelled, replaced, or re-attributed to satisfy a later revision — they finish and
   account under the revision they began under, and only then does the next revision apply to subsequent
-  selection review. This ordering is the whole of the mid-run revision contract here; rechecking already
-  shown matches, editing the brief, and retrieval-impact previews are a separate later concern.
+  selection review. This ordering is the whole of the mid-run revision contract owned here. The interactive
+  feedback routing that edits the brief, records this revision, applies it to the remaining queue, rechecks
+  already-shown matches only when the outcome could change, and previews retrieval impact before a new search
+  is the front door's concern that consumes this settling rule; it lives with that surface and is not
+  re-decided here.
 - `milestone` records a closed milestone token, never user-facing result content.
 - `run_closed` is the final line and carries exactly one close state.
 

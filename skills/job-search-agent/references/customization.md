@@ -7,6 +7,13 @@ For any action that can change agent-data calls, classify it with the canonical
 its decision-time context with `../../../shared/references/voice.md` → **Agent-data usage context**. This
 reference specializes those rules for each setting; it does not restate the action table.
 
+Applying **user feedback** mid-search — deciding whether a reaction is a general preference (edits the brief
+and revises the run), a posting-specific note (pipeline state only, unless the user generalizes it), or a
+retrieval change (previews agent-data impact first), and when a preference edit rechecks already-shown matches
+only because the outcome could change — is routed by the **job-search** front door (its home view's
+**Applying your feedback**). This manual explains the individual settings that feedback may change; it does
+not duplicate that routing table.
+
 **Contents:** [1. Honoring an explicit score request](#1-honoring-an-explicit-score-request) · [2. Adding a custom filter](#2-adding-a-custom-filter-or-narrowing-results) · [3. Changing how postings are judged](#3-changing-how-postings-are-judged) · [4. Tuning the search feed & detail reads](#4-tuning-the-search-feed--detail-reads) · [5. Explaining agent-data usage](#5-explaining-agent-data-usage) · [6. Adding a new capability or skill](#6-adding-a-new-capability-or-skill)
 
 ---

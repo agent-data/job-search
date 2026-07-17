@@ -50,6 +50,13 @@ command, then its precedence rules) and never hard-code its path.
   ...
   ```
 
+When you're invoked to change the brief **while a search is active** (the user reacted to a match or the
+digest), your job is still just to write the updated brief. Applying that change to the running search —
+recording the brief revision, letting the remaining queue pick it up, and rechecking already-shown matches
+only when the outcome could change — is the **job-search** front door's feedback routing (its home view's
+**Applying your feedback**), not yours. That routing records the `brief_revision` and applies the in-flight
+settling rule owned by `../../shared/references/run-lifecycle.md`.
+
 ## Choose a depth (offer all three; give the question estimate)
 Before you ask anything, let the user choose how deep to go — and make clear they can **start light and deepen
 later** (a follow-up interview reads the existing brief and *enriches* it, never overwrites). **The depth ask

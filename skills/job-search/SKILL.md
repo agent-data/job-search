@@ -72,6 +72,13 @@ before the playbook was opened) or the home view.
 - **Never clobber real user data.** When adopting an existing workspace, only additively create what's
   missing — never overwrite a `config.yaml`, `preferences.md`, or `jobs.jsonl`. See the never-clobber rule
   in `../../shared/references/internals.md`.
+- **Route feedback to the right scope.** When the user reacts — to a match, the digest, or what they want
+  overall — apply it immediately at the correct scope and confirm in one line: a clear general preference
+  edits the brief and, if a run is in flight, records a brief revision on it; a posting-specific reaction
+  touches only pipeline state unless the user generalizes it; ambiguous feedback earns one clarification only
+  when the reading changes the result; a retrieval change previews its agent-data impact first. The single
+  routing table is `references/home.md` → **Applying your feedback** — follow it in both modes (it points
+  one hop at the `run-lifecycle.md` revision/settling and `internals.md` usage contracts).
 
 Read and follow exactly: `../../shared/references/internals.md` (OS state, discovery, never-clobber adoption, config
 recipes, and the verbatim scheduling block), `../../shared/references/conventions.md` (workspace layout, `config.yaml`

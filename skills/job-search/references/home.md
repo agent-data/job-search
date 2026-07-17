@@ -10,7 +10,7 @@ authority for every reader**: invoke `lifecycle-fold.sh` for the candidate's exa
 `closed=true` plus matching folded record state, and use only that fold-derived digest. An open ledger,
 including an intended-complete pre-close file window, is not a home run and is excluded.
 
-**Contents:** [Gather](#gather) · [Render the home](#render-the-home) · [Quick actions](#quick-actions-conversational--never-make-the-user-edit-a-file) · [Nudges](#nudges-surface-only-when-they-apply) · [Coming soon (Plan C)](#coming-soon-plan-c)
+**Contents:** [Gather](#gather) · [Render the home](#render-the-home) · [Quick actions](#quick-actions-conversational--never-make-the-user-edit-a-file) · [Applying your feedback](#applying-your-feedback-steering-the-search) · [Nudges](#nudges-surface-only-when-they-apply) · [Coming soon (Plan C)](#coming-soon-plan-c)
 
 ## Gather
 
@@ -211,6 +211,40 @@ available, say it is not an actual charge and direct account-specific questions 
 <https://agent-data.motie.dev/settings/billing>. Do not infer remaining allowance, current plan, rollover,
 renewal, or exhaustion. Make no agent-data call and write no config or registry state for this explanation.
 Current exact pricing and metering facts stay in `../../../shared/references/agent-data-contract.md`.
+
+## Applying your feedback (steering the search)
+
+When the user reacts to what they see — a match, the digest, the pipeline, or what they want overall — route
+that reaction by **what kind of change it is**, apply it immediately at the right scope, and confirm in one
+line. This is the **single home** for feedback routing: the interview skill and the operator manual point
+here rather than restate it. It also does not restate the contracts it uses — the `brief_revision` ledger
+event and the in-flight settling rule are owned by `../../../shared/references/run-lifecycle.md`, and the
+agent-data usage-decision table is owned by `../../../shared/references/internals.md` — it routes to them one
+hop. Apply this in both modes: the front-door `SKILL.md` routes here for the returning home and after the
+first-run results.
+
+| Feedback | Scope | What you do |
+|---|---|---|
+| **Clear general preference** — "across the board I only want fully-remote roles", "drop anything below ~$180K base" | the brief | Update `preferences.md` immediately (via `job-preference-interview`, folding it into the right bucket and refreshing `updated_at`). If a run is in flight, **record the brief revision on it** — increment the revision and append one `brief_revision` event to the active run's open ledger per `run-lifecycle.md` (the identifier only, never the preferences text; the ledger stays coordinator-written). Confirm in **one line**. Then apply it per **Applying a preference change** below. |
+| **Posting-specific** — "not this company", "already applied here", "not this one" | pipeline only | Change only that posting's `status` with a `jobs.jsonl` `status_changed` event (`../../../shared/references/conventions.md` → jobs.jsonl) — never the brief, no revision — **unless** the user generalizes it ("no companies like X", "nothing in adtech"). A generalization is a general preference: take the brief row above instead. |
+| **Ambiguous** — "the location's not right", "too junior" | ask once, only if it matters | Ask **one** short clarification **only when the interpretation would change the result** (different readings keep different postings relevant, or edit different buckets). When every reasonable reading lands the same way, pick one and proceed — do not ask a question whose answer cannot change what you do. |
+| **Retrieval-changing** — "also search Greenhouse and Lever", "look at the last day", "open it up to the whole US" | new search / config | **Preview agent-data impact first.** Classify the change with `../../../shared/references/internals.md` → **Agent-data usage decisions** and render its row's context with `../../../shared/references/voice.md` → **Agent-data usage context** before any new search or persistent write. A one-off request is scoped consent to run once (context, then run); a saved change asks one scoped confirmation before the atomic write. |
+
+**Applying a preference change** (the general-preference row, and a posting-specific note the user generalized):
+
+- **Remaining queue.** Apply the new brief revision to every posting still to be judged — the run's `queued`
+  postings are evaluated under it as they come up. Don't block, cancel, or restart the run to do this.
+- **Already-shown jobs — recheck only when the outcome could change.** Re-judge an already-shown posting
+  **only when the edit could move its verdict** — a tightened must-have a shown match no longer clears, or a
+  loosened constraint that could now let a previously-excluded posting back in. When the edit **cannot** change
+  what the user already saw (it tightens or loosens a dimension a shown posting already clears, or already
+  fails, on the same side; or it doesn't apply to those postings), leave the shown verdict as it stands.
+  Re-evaluating already-shown postings when the outcome cannot change is a non-goal — don't spend a detail read
+  or re-emit a verdict for no reason.
+- **In-flight evaluations settle first.** An evaluation already under way finishes and settles under the brief
+  revision it started on **before** the new revision applies to later reviews. That settling ordering — and
+  what it means for the started detail worker's judgment — is owned by
+  `../../../shared/references/run-lifecycle.md` (`brief_revision`); route to it, don't re-decide it here.
 
 ## Nudges (surface only when they apply)
 
