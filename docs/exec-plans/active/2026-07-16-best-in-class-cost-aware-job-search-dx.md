@@ -767,7 +767,7 @@ PSG-INJ-03/04/05/11; PSG-COMM-04/09/11.
 Rules: PSG-COMM-04/05/06/07/11/13/15/18; AAS-TRIG-01/02/03/04/05; AAS-AUTO-03;
 AAS-BOUND-03; PSG-TOOL-15.
 
-- [ ] **T5.1 [BLOCKS, L] Replace setup ceremony with the quick golden path.**
+- [x] **T5.1 [BLOCKS, L] Replace setup ceremony with the quick golden path.**
 
   **Modify:**
   - skills/job-search/SKILL.md
@@ -1577,6 +1577,34 @@ AAS-DIST-03/05/06.
   clean. The plugin version stays `0.6.0`. No live agent-data, model, scheduler, network, or billable effect
   occurred and no branch or worktree changed. **T4.4 is complete, and P4 (runner progression, incremental
   results, and honest resumption) is complete.**
+- 2026-07-17 — T5.1 streamlined first run (P5 opens): replaced the setup ceremony with a quick golden path.
+  First use silently defaults to `~/.job-search` (an explicit override or existing-workspace adoption is the
+  only reason a path is mentioned), uses preferences already present in the invocation, and otherwise asks the
+  single verbatim free-form question ("In a sentence or two, what are you looking for? …") inline — not the
+  discrete-choice box. Supplied material (resume/cover letter/notes) is background evidence, never silently
+  promoted to must-haves; the user's stated intent wins. Onboarding then drafts a provisional high-signal brief
+  plus derived searches, shows one compact confidence checkpoint ("a look, not a gate"), and starts the default
+  live run under the setup request's consent after the cost context — no second confirmation. All host-agnostic
+  ceremony (workspace question, interview-or-import fork, interview-depth gate, model choice, schedule) is
+  removed from the first-run path; the deeper standard/thorough interview paths stay explicit later refinements.
+  Both `job-search` and `job-preference-interview` frontmatter descriptions were re-reviewed (what/when,
+  negative scope, sibling routing; no workflow steps or harness syntax). Six RED evals added/reframed. Committed
+  as `82f4aa6` (`feat: streamline first-run job search`) — the six brief files, the regenerated build stamp,
+  and one flagged out-of-brief fix converting the positional `home[-7:]` assertions in
+  `tests/test_exact_model_repair.py` to an ID-anchored `home_repair` (ids 25-31, mirroring the
+  runner_repair/runner_lifecycle precedent; controller- and reviewer-verified correct, coverage-preserving, no
+  evals renumbered). The implementer's flagged concern — whether the approval-gating-host (Codex)
+  subagent-approval question violates "no parallelism before results" — was adjudicated by the controller and
+  independently by the reviewer as the single sanctioned host-specific exception (Belief 12 plus the P3
+  atomic-parallel-choice invariant, unchanged by this task), not a violation. A fresh Opus task review returned
+  **Approved** — no Critical or Important; one Minor (the material-as-evidence rule is operative copy in both
+  onboarding.md and the interview skill's quick sketch — defensible per independent first-run vs refinement
+  paths; recorded in the SDD ledger, no fix). Controller re-verify on the committed tree: full pytest
+  `486 passed`, eval harness coherent, doc lint / philosophy guard / release version-sync clean, two
+  deterministic builds byte-identical (build-stamp file SHA-256 `6bb00f68…bd29a2a7`, content hash
+  `sha256:fe59b9fc8548`), and `git diff --check` clean. The plugin version stays `0.6.0`. No live agent-data,
+  model, scheduler, network, or billable effect occurred and no branch or worktree changed. **T5.1 is
+  complete.**
 
 ## Decision log
 
@@ -1628,6 +1656,11 @@ AAS-DIST-03/05/06.
   fresh calls-first cost awareness, never as a silent second dispatch. When continuation would require an
   opaque or expired pagination cursor, close the run `interrupted` and restart the search cleanly with fresh
   cost context rather than resuming the cursor; cursors are never persisted in any durable artifact.
+- 2026-07-17 — "No parallelism ask before results" (T5.1 requirement 8) governs host-agnostic ceremony only.
+  The approval-gating-host (e.g. Codex) subagent-approval question is the single sanctioned host-specific
+  exception — mandated by Belief 12 (wait for approval before fanning out) and pinned by the P3 invariant that
+  folds the parallel choice into the atomic initial model binding — and stays one outcome-language ask, not new
+  ceremony.
 
 ## Self-review
 
