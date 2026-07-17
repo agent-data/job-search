@@ -447,6 +447,52 @@ def test_cutoff_rejects_incomplete_or_mismatched_canonical_evidence(
     assert json.loads(rejected.stderr)["error"] == "cutoff_not_qualified"
 
 
+@pytest.mark.parametrize(
+    ("completed_at_case", "completed_at"),
+    (
+        ("missing", None),
+        ("empty", ""),
+        ("boolean", True),
+        ("number", 1),
+        ("malformed", "not-a-timestamp"),
+        ("non-utc", "2026-07-16T10:31:00-04:00"),
+    ),
+)
+def test_cutoff_rejects_missing_or_noncanonical_utc_completed_at(
+    tmp_path, completed_at_case, completed_at
+):
+    workspace = tmp_path / f"completed-at-{completed_at_case}"
+    _prepare_v1_workspace(workspace)
+    candidate_config, candidate_binding = _candidate_files(
+        tmp_path, f"completed-at-{completed_at_case}"
+    )
+    _json_stdout(_run_host(tmp_path, "happy", "begin-migration", str(workspace)))
+    _json_stdout(
+        _run_host(
+            tmp_path,
+            "happy",
+            "activate-pair",
+            str(workspace),
+            str(candidate_config),
+            str(candidate_binding),
+        )
+    )
+    _write_cutoff_evidence(workspace)
+    run_record_path = workspace / "runs" / f"{RUN_ID}.json"
+    run_record = json.loads(run_record_path.read_text(encoding="utf-8"))
+    if completed_at_case == "missing":
+        run_record.pop("completed_at")
+    else:
+        run_record["completed_at"] = completed_at
+    run_record_path.write_text(json.dumps(run_record) + "\n", encoding="utf-8")
+
+    rejected = _run_host(
+        tmp_path, "happy", "qualify-cutoff", str(workspace), RUN_ID
+    )
+    assert rejected.returncode != 0
+    assert json.loads(rejected.stderr)["error"] == "cutoff_not_qualified"
+
+
 def test_cutoff_rejects_unrelated_v2_run_without_matching_migration_snapshot(tmp_path):
     workspace = tmp_path / "unrelated-v2"
     _write_active_pair(workspace)
@@ -486,6 +532,21 @@ def test_candidate_validation_accepts_omitted_optional_sources_without_rewrite(
     assert b"sources:" not in bytes_after
     assert b"migration-comment-sentinel" in bytes_after
     assert b"unrelated_sentinel" in bytes_after
+
+
+def test_candidate_validation_accepts_sources_block_list_without_rewrite(tmp_path):
+    candidate = _valid_config(include_sources=False).replace(
+        'search:\n  freshness: "past-2-weeks"',
+        'search:\n'
+        "  sources:\n"
+        "    - linkedin # preserve block-list comment\n"
+        '    - "ashby"\n'
+        '  freshness: "past-2-weeks"',
+    )
+    result, bytes_after = _validate_candidate(tmp_path, candidate)
+    assert _json_stdout(result) == {"candidate": "validated"}
+    assert bytes_after == candidate.encode()
+    assert b"preserve block-list comment" in bytes_after
 
 
 def test_candidate_validation_accepts_canonical_defaultable_section_and_query_omissions(
@@ -563,6 +624,17 @@ def test_candidate_validation_rejects_actual_config_sidecar_model_mismatch(tmp_p
     result, _ = _validate_candidate(
         tmp_path, _valid_config(), _binding(detail_model="fake-capable-001")
     )
+    assert result.returncode != 0
+    assert json.loads(result.stderr)["error"] == "candidate_validation_failed"
+
+
+@pytest.mark.parametrize("invalid_version", (True, 1.0, "1", None))
+def test_candidate_validation_rejects_noninteger_binding_version(
+    tmp_path, invalid_version
+):
+    binding = _binding()
+    binding["version"] = invalid_version
+    result, _ = _validate_candidate(tmp_path, _valid_config(), binding)
     assert result.returncode != 0
     assert json.loads(result.stderr)["error"] == "candidate_validation_failed"
 

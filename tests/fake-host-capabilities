@@ -36,6 +36,10 @@ RUN_ID_PATTERN = re.compile(
 BINDING_ID_PATTERN = re.compile(
     r"binding-[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}"
 )
+UTC_TIMESTAMP_PATTERN = re.compile(
+    r"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}"
+    r"(?:\.[0-9]+)?(?:Z|\+00:00)"
+)
 
 
 def without_yaml_comment(value):
@@ -135,6 +139,7 @@ def parse_candidate_config(text):
     section = None
     malformed = False
     current_query = None
+    block_list_field = None
     for raw_line in text.splitlines():
         if not raw_line.strip() or raw_line.lstrip().startswith("#"):
             continue
@@ -145,6 +150,7 @@ def parse_candidate_config(text):
                 malformed = True
             top[section] = yaml_value(value)
             current_query = None
+            block_list_field = None
             continue
         if section not in {"workspace", "queries", "search", "schedule", "notify"}:
             continue
@@ -169,13 +175,26 @@ def parse_candidate_config(text):
                 current_query[match.group(1)] = yaml_value(match.group(2))
             continue
         if section != "queries" and raw_line.startswith("    "):
+            if block_list_field == ("search", "sources"):
+                item_match = re.match(r"^    -\s+(.*)$", raw_line)
+                item = yaml_value(item_match.group(1)) if item_match else None
+                if not isinstance(item, str) or not item:
+                    malformed = True
+                else:
+                    nested[block_list_field].append(item)
             continue
         match = re.match(r"^  ([a-z_]+):\s*(.*)$", raw_line)
         if match:
             field = (section, match.group(1))
             if top.get(section) is not None or field in nested:
                 malformed = True
-            nested[field] = yaml_value(match.group(2))
+            raw_value = match.group(2)
+            if field == ("search", "sources") and without_yaml_comment(raw_value) == "":
+                nested[field] = []
+                block_list_field = field
+            else:
+                nested[field] = yaml_value(raw_value)
+                block_list_field = None
             continue
         malformed = True
 
@@ -276,7 +295,7 @@ def valid_binding(binding, detail_model):
         "bound_at",
     }:
         return False
-    if binding["version"] != 1:
+    if type(binding["version"]) is not int or binding["version"] != 1:
         return False
     if not isinstance(binding["binding_id"], str) or not BINDING_ID_PATTERN.fullmatch(
         binding["binding_id"]
@@ -332,6 +351,17 @@ def valid_run_id(run_id):
     return True
 
 
+def valid_utc_timestamp(value):
+    if not isinstance(value, str) or not UTC_TIMESTAMP_PATTERN.fullmatch(value):
+        return False
+    normalized = value[:-1] + "+00:00" if value.endswith("Z") else value
+    try:
+        timestamp = datetime.fromisoformat(normalized)
+    except ValueError:
+        return False
+    return timestamp.utcoffset() == timedelta(0)
+
+
 def fold_lifecycle(workspace, run_id):
     ledger = workspace / "runs" / f".lifecycle-{run_id}.jsonl"
     result = subprocess.run(
@@ -375,7 +405,7 @@ def canonical_cutoff_evidence(workspace, run_id, migration_snapshot):
             regular_nonsymlink_file(binding_path),
             regular_nonsymlink_file(config_path),
             run_record.get("run_id") == run_id,
-            run_record.get("completed_at") is not None,
+            valid_utc_timestamp(run_record.get("completed_at")),
             run_record.get("run_health") in {"healthy", "partial", "degraded"},
             valid_binding(binding, detail_model),
             run_record.get("detail_model_binding_id") == binding_id,
