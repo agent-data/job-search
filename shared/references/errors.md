@@ -81,6 +81,30 @@ staged migration**.
 | `raw_user_code` | `none` |
 <!-- /exact-model-contract:config-v1-migration-block -->
 
+Scheduling setup fails closed with its own bounded class. A recurring schedule is **never** recorded until a
+real scheduled-path canary proves it works (`internals.md` → Scheduling setup; the registry state machine
+flips `installed`/`verified` only on a green canary). **E-SCHEDULE-CANARY** is the internal class for a setup
+that could **not** be verified — no probed mechanism passed every eligibility gate, the disabled registration
+failed, or the real scheduled-path canary was not green. Its effect is fail-closed: **no `installed` or
+`verified` marker is written** and the schedule is not recorded, so nothing claims the search is scheduled.
+The user is shown the exact observed gap (which eligibility gate failed · registration failed · the canary
+was blocked) and the honest state — it is **not** scheduled — and, where a mechanism runs but cannot be
+unattended-verified, the **session-only** in-session loop is offered as the named fallback. Like the
+model-binding class, the raw `E-SCHEDULE-CANARY` token is never shown as a user-facing code; a blocked canary
+run record may carry it internally. The canary **run execution and rollback** flow lives in the operator
+manual's `scheduling-and-consent.md`; this entry owns only the named-failure surface and the no-marker
+guarantee.
+
+<!-- scheduling-contract:unverified-schedule -->
+| Policy | Decision |
+|---|---|
+| `internal_class` | `E-SCHEDULE-CANARY` |
+| `applies` | `no_eligible_mechanism_or_registration_or_canary_failure` |
+| `registry_effect` | `no_installed_or_verified_marker_written` |
+| `user_rendering` | `observed_gap_not_scheduled_session_only_fallback_where_available` |
+| `raw_user_code` | `none` |
+<!-- /scheduling-contract:unverified-schedule -->
+
 | Code | When | What the user sees (cause + fix) | Run effect |
 |---|---|---|---|
 | **E-NO-AGENT-DATA** | the `agent-data` CLI is not found on PATH (prereq check, before `whoami`) | "The agent-data CLI isn't installed. Install it (`npm install -g agent-data`), then run `agent-data whoami` to authenticate. Nothing was pulled." | HALT, exit 1 |

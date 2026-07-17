@@ -23,6 +23,16 @@ lifecycle contracts.
 procedure in `internals.md` (registry → `~/.job-search/` → legacy `~/job-search/` → first-run). The registry
 and the discovery/first-run/scheduling rules live in `internals.md`.
 
+**Machine registry file (`config.json`).** The machine registry is a JSON file — `config.json` at the path
+`internals.md` resolves (`$REG`) — not a workspace file, so it is not in the tree above. As an on-disk file
+its contract is: valid JSON with `"version": 1`; every write is a **whole-file atomic replace** (temp file
+then `mv` where no atomic writer exists) that **preserves every unknown key** it does not own; a
+present-but-unparseable file is the corrupt-registry case (never guessed past). Its `scheduling` object holds
+the recurring-run state machine — `installed`/`verified` booleans, `mechanism`/`scheduler_id`,
+`workspace`/`cadence`/`set_at`, `verified_at`/`canary_run_id`, and the exact recurring primary model — whose
+schema, field presence, and staging→post-canary transitions are single-homed in `internals.md` (the Registry
+and Scheduling setup sections); this file does not restate them.
+
 ## config.yaml
 
 An actual newly created workspace uses version 2 and is valid only after interactive setup has written one

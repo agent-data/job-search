@@ -2230,13 +2230,15 @@ def test_exact_model_repair_eval_matrix_is_structural_and_executable():
     runner_repair = [case for case in runner if 42 <= case["id"] <= 46]
     runner_lifecycle = [case for case in runner if 47 <= case["id"] <= 51]
     # Select the exact-model-repair fixtures by id (not a trailing positional slice) so appended
-    # onboarding evals do not shift them, mirroring the runner_repair/runner_lifecycle precedent above.
+    # onboarding/scheduling evals do not shift them, mirroring the runner_repair/runner_lifecycle
+    # precedent above (agent scheduling-eligibility evals 22+ land after this repair family).
     home_repair = [case for case in home if 25 <= case["id"] <= 31]
+    agent_repair = [case for case in agent if 15 <= case["id"] <= 21]
     assert [case["id"] for case in home_repair] == [25, 26, 27, 28, 29, 30, 31]
-    assert [case["id"] for case in agent[-7:]] == [15, 16, 17, 18, 19, 20, 21]
+    assert [case["id"] for case in agent_repair] == [15, 16, 17, 18, 19, 20, 21]
     assert [case["id"] for case in runner_repair] == [42, 43, 44, 45, 46]
     home_matrix = " ".join(case["scenario"].lower() for case in home_repair)
-    agent_matrix = " ".join(case["scenario"].lower() for case in agent[-7:])
+    agent_matrix = " ".join(case["scenario"].lower() for case in agent_repair)
     runner_matrix = " ".join(case["scenario"].lower() for case in runner_repair)
     for phrase in (
         "primary-only",
@@ -2309,6 +2311,6 @@ def test_exact_model_repair_eval_matrix_is_structural_and_executable():
     assert "roster membership" in refusal_text
     assert "preserves completed attempt accounting" in refusal_text
     assert all(case.get("coverage_kind") == "executable_fixture" for case in home_repair)
-    assert all(case.get("coverage_kind") == "executable_fixture" for case in agent[-7:])
+    assert all(case.get("coverage_kind") == "executable_fixture" for case in agent_repair)
     assert [case["id"] for case in runner_lifecycle] == [47, 48, 49, 50, 51]
     assert all(case.get("coverage_kind") == "executable_fixture" for case in runner_lifecycle)

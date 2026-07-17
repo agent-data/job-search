@@ -18,10 +18,11 @@ Use the workspace Discovery (SKILL.md Step 0) already found as `<ws>` throughout
 
 Read just what the home view needs (all local):
 
-- **Schedule marker:** read it from the registry (`internals.md` → Registry) →
-  `{"installed":<bool>,"mechanism":<active-mechanism>|null,"set_at":<iso>|null}` — the mechanism value
-  records the scheduler the recurring run was bound to, set by the scheduling flow (`internals.md` →
-  Registry write rules).
+- **Schedule marker:** read it from the registry (`internals.md` → Registry) → the `scheduling` object
+  (`installed`/`verified` booleans, `mechanism`, `set_at`, and the rest of the expanded state). Apply the
+  read semantics there: an absent `verified` reads `false`, a legacy `mechanism: loop` marker reads
+  **session-only**, and a legacy installed-only marker (no `verified`/`verified_at`/`canary_run_id`) reads
+  **unverified** — never verified. Reading never rewrites the marker.
 - **Update status:** follow `../../../shared/references/update.md` (it self-gates on the cached update
   signal) using the bundled `../../../shared/references/build-stamp.md` and the registry `update_check`
   cache. The result is either `update_available` with the local/remote build ids, or no signal.
@@ -86,8 +87,9 @@ Notes on each part:
 
 - **Status line.** Workspace path; brief age from `preferences.md:updated_at` (fallback `created_at`); sources from `config.yaml` `search.sources` (absent → the default pair); render any additional sources (e.g. `+ Greenhouse`, `+ Lever`) when listed; schedule from
   the registry's scheduling marker — render the cadence (from `config.yaml:schedule.frequency`, e.g. "daily")
-  when installed, or "off" when not; the marker carries only on/off + the mechanism value recorded at install time
-  (the mechanism label is not surfaced in the status line);
+  when the marker reads a **verified** schedule, "session-only" when it reads a session-only loop, and "off"
+  when not installed (a legacy installed-only/unverified marker is not a verified schedule — don't render it
+  as "on"); the mechanism token itself is not surfaced in the status line;
   last-run health from the newest lifecycle-authorized closed `runs/<run_id>.json` `run_health`. Run
   health is one of the four run-health states defined in `conventions.md` (the digest "Run health" line).
 - **Latest digest.** Read the exact fold-derived digest for that same authorized run; show its date and reproduce its **counts

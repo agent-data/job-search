@@ -46,7 +46,8 @@ The OS state is plain files, and every operation on it is a pinned procedure in 
 | Find the active workspace + `first_run` + `source` | `../../shared/references/internals.md` → Workspace discovery — the one correct way to find the workspace |
 | Record the active workspace in the registry | `../../shared/references/internals.md` → Registry write rules |
 | Compose the scheduling run recipe for a frequency | `../../shared/references/internals.md` → Scheduling setup (compose the cadence; the host composes its own run recipe) |
-| Read / set / clear the scheduling marker | `../../shared/references/internals.md` → Registry (the `scheduling` object) |
+| Check scheduler eligibility (six gates) + select native/OS/none | `../../shared/references/internals.md` → Scheduling setup (eligibility gates + selection); doctrine in `references/scheduling-and-consent.md` |
+| Read / stage / set (post-canary) / clear the scheduling marker | `../../shared/references/internals.md` → Registry (the `scheduling` object + state machine) |
 | Repair an unavailable/refused exact primary or detail model | `../../shared/references/internals.md` → Exact-model repair; user rendering in `../../shared/references/errors.md` → model-repair-rendering |
 | Known ids — the dedup set from `jobs.jsonl` | `../../shared/references/conventions.md` → §jobs.jsonl operations |
 | Append one evaluated or status-changed event | `../../shared/references/conventions.md` → §jobs.jsonl operations |
@@ -133,6 +134,7 @@ The recurring run schedules on the **host's or the OS's own scheduler**; the act
 - **Unattended schedule (the default).** Advocate a schedule that keeps firing with **no interactive session open** — a `cron` or `launchd` job, or the host's native unattended scheduler that survives session-close. A search is only useful when it runs while the user isn't watching, so reliability outweighs installing nothing. It stays a real machine change: shown before it is written, applied only on an explicit yes, user-removable — never silent, never auto-installed.
 - **In-session loop (the fallback).** When the host has no unattended scheduler, or the user declines the machine change, offer an in-session loop — installs nothing but runs **only while a session is open**. The named fallback, not the recommendation.
 - **Cloud schedulers do not qualify** — a cloud runner can't see the local `~/.job-search` workspace or the local agent-data auth, so a run there reaches neither the user's data nor their credentials and produces nothing.
+- **Eligibility gates + selection.** A scheduler qualifies only when it passes all **six** gates — unattended, canary-testable through its registered invocation, exact-primary-model-preserving, reaching the local workspace/auth/network, inspectable, and reversible. Probe the native mechanism first and pick it only if every gate passes; else an OS mechanism that passes every gate; else create no verified job (the session-only loop is the labeled fallback). An existing job the agent didn't stage is unowned — inspect, then adopt-or-replace, never clobber. The registry records `installed`/`verified` only after a green canary. Gate table, selection order, and the registry state machine are single-homed in `../../shared/references/internals.md` → Scheduling setup and the Registry; doctrine in `references/scheduling-and-consent.md`.
 
 To start scheduling: offer it as a yes/no (check the scheduling marker first — never re-ask if already set),
 compose the run recipe, then apply the `schedule_enable_with_canary` row in

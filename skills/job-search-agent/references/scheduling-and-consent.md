@@ -32,6 +32,35 @@ the recommendation.
 `~/.job-search` workspace or the local agent-data auth, so a run there reaches neither the user's data nor
 their credentials and produces nothing. This is the test any candidate scheduler must pass.
 
+## Eligibility gates — a scheduler qualifies only when it passes every one
+
+Advocacy is not enough: before the agent binds a recurring run to any mechanism, that mechanism must clear
+**six gates**, and a single failure disqualifies it for a *verified* schedule. A candidate is eligible only
+when it is:
+
+- **unattended** — it fires with no interactive session open;
+- **canary-testable** — a real run can be triggered through its registered invocation, so the canary below
+  can actually prove it;
+- **exact-primary-model-preserving** — it preserves the exact primary model, never silently substituting a
+  host default for the exact recurring primary-model binding;
+- **local-reaching** — it reaches the local workspace, agent-data auth, and network (the cloud disqualifier
+  above is exactly this gate failing);
+- **inspectable** — its registration can be read back and compared to what was staged;
+- **reversible** — it can be disabled and removed.
+
+**Selection is native-first, then OS, then nothing verified.** Probe the host's **native** mechanism first and
+choose it only when every gate passes; otherwise choose an **OS** mechanism (`cron`/`launchd`) that passes
+every gate; if neither qualifies, create **no verified recurring job** — the in-session loop is offered only as
+the labeled **session-only** fallback. The full gate table, the selection order, and the registry state
+machine (disabled staging → a green canary is the only thing that sets `installed` and `verified`) are
+single-homed in `../../../shared/references/internals.md` → Scheduling setup and the Registry; this file does
+not restate the field schema.
+
+**An existing job the agent did not stage is UNOWNED.** Inspect it first and compare it to what you would
+stage; if it does not match, do **not** silently clobber it — surface the drift and ask to adopt it (reuse it)
+or replace it (remove, then re-stage). Only a green canary through a job the agent controls verifies the
+schedule and records the marker.
+
 ## Prove it works before recording the schedule — the canary
 
 The canary is **mandatory before recording the schedule**: never tell the user a job is scheduled until its

@@ -22,7 +22,10 @@ i.e. `~/.config/job-search/config.json` by default. Schema:
 { "version": 1,
   "active_workspace": "/Users/<u>/.job-search",
   "scheduling": {
-    "installed": true, "mechanism": "loop", "set_at": "<iso>",
+    "installed": true, "verified": true,
+    "mechanism": "launchd", "scheduler_id": "<exact scheduler job identifier>",
+    "workspace": "/Users/<u>/.job-search", "cadence": "daily", "set_at": "<iso>",
+    "verified_at": "<iso>", "canary_run_id": "<exact run_id of the green canary>",
     "primary_model": "<exact live model identifier>",
     "primary_model_origin": "session_inheritance"
   },
@@ -38,6 +41,60 @@ The registry is machine state; the workspace's `config.yaml` stays the user-faci
 
 The scheduling metadata owns the recurring primary-model binding. It never stores the posting-detail model
 or its origin; those belong to workspace config and run records respectively.
+
+The `scheduling` object records the whole recurring-run state, not just an on/off flag:
+
+<!-- scheduling-registry-contract:fields -->
+| Field | Presence | Value |
+|---|---|---|
+| `installed` | `always` | `boolean` |
+| `verified` | `always` | `boolean_true_only_after_a_green_canary` |
+| `mechanism` | `installed_schedule` | `active_scheduler_token` |
+| `scheduler_id` | `installed_schedule` | `exact_scheduler_job_identifier` |
+| `workspace` | `installed_schedule` | `absolute_workspace_path` |
+| `cadence` | `installed_schedule` | `schedule_frequency_value` |
+| `set_at` | `installed_schedule` | `utc_iso8601` |
+| `verified_at` | `verified_schedule` | `utc_iso8601_of_the_green_canary` |
+| `canary_run_id` | `verified_schedule` | `exact_run_id_of_the_green_canary` |
+| `primary_model` | `installed_schedule` | `nonempty_exact_live_model_identifier` |
+| `primary_model_origin` | `installed_schedule` | `primary_model_origin_enum` |
+<!-- /scheduling-registry-contract:fields -->
+
+`installed` and `verified` are independent booleans: `installed` means a recurring mechanism is bound;
+`verified` is true only after a real scheduled-path canary proved that exact mechanism works (Scheduling
+setup below). `mechanism` is a short token for the scheduler actually bound (an unattended `cron`/`launchd`
+schedule or the host's native unattended scheduler, or `loop` for the in-session fallback); `scheduler_id`
+is its exact job identifier. `workspace` is the absolute workspace the recurring run targets; `cadence`
+copies `schedule.frequency`. `verified_at` and `canary_run_id` are written only by the post-canary commit and
+name the exact green canary that verified the schedule. The exact `primary_model`/`primary_model_origin`
+fields are the recurring primary-model binding described above and in the model table below.
+
+The registry moves through one state machine; never short-circuit it:
+
+<!-- scheduling-registry-contract:state-machine -->
+| Policy | Decision |
+|---|---|
+| `candidate_qualifies` | `only_when_every_eligibility_gate_passes` |
+| `native_first` | `probe_native_choose_it_if_every_gate_passes` |
+| `os_fallback` | `else_an_os_mechanism_that_passes_every_gate` |
+| `nothing_verified` | `else_no_verified_job_a_session_loop_may_be_offered_labeled_session_only` |
+| `staging` | `register_disabled_never_write_installed_true` |
+| `canary_commit` | `only_the_final_post_canary_atomic_write_sets_installed_true_and_verified_true` |
+| `canary_failure` | `leaves_no_newly_installed_marker` |
+| `legacy_loop` | `reads_session_only_never_verified` |
+| `legacy_installed_only` | `reads_unverified_never_verified` |
+| `unowned_job` | `inspect_then_adopt_or_replace_never_clobber` |
+| `unknown_fields` | `preserve` |
+| `write_mode` | `atomic_whole_file_replace` |
+<!-- /scheduling-registry-contract:state-machine -->
+
+During staging the registry is never written `installed: true`: the disabled registration stands alone until
+the canary. **Only the final post-canary** atomic write sets `installed: true` and `verified: true` together
+(with `mechanism`, `scheduler_id`, `workspace`, `cadence`, `set_at`, `verified_at`, `canary_run_id`, and the
+exact primary-model fields); a registration, staging, or canary failure **leaves no newly installed marker**.
+A legacy `mechanism: loop` marker reads **session-only** and a legacy installed-only marker (no `verified`
+field, no `verified_at`/`canary_run_id`) reads **unverified** — never verified; a reader treats an absent
+`verified` as `false` and never rewrites or upgrades a legacy marker merely by reading it.
 
 <!-- exact-model-contract:scheduler-fields -->
 | Field | Owner | Presence | Value |
@@ -77,16 +134,25 @@ does.
   `{"version": 1, "active_workspace": "<abs path>"}` per the write rules. This writes ONLY the registry; it
   never touches workspace files.
 - **Read the scheduling marker:** the registry's `scheduling` object, defaulting to
-  `{"installed": false, "mechanism": null, "set_at": null, "primary_model": null, "primary_model_origin": null}`
-  when absent. Null model fields are valid only for an uninstalled marker.
-- **Set the scheduling marker** (a recurring run was started): merge
-  `"scheduling": {"installed": true, "mechanism": "<active mechanism>", "set_at": "<UTC ISO>", "primary_model": "<exact live model identifier>", "primary_model_origin": "<primary-model origin>"}` — record the
+  `{"installed": false, "verified": false, "mechanism": null, "scheduler_id": null, "workspace": null, "cadence": null, "set_at": null, "verified_at": null, "canary_run_id": null, "primary_model": null, "primary_model_origin": null}`
+  when absent. Null fields are valid only for an uninstalled marker. An absent `verified` reads `false`; a
+  legacy `mechanism: loop` marker reads **session-only** and a legacy installed-only marker (no `verified`,
+  `verified_at`, or `canary_run_id`) reads **unverified** — never verified — and a read never rewrites it.
+- **Stage the disabled registration** (before the canary): register the recurring job **disabled** in the
+  scheduler; do **not** write the registry marker yet — staging never writes `installed: true`. Hold the
+  intended `scheduling` object in memory until the canary is green.
+- **Set the scheduling marker** (the post-canary commit — a recurring run was verified): only after the real
+  scheduled-path canary passes, merge
+  `"scheduling": {"installed": true, "verified": true, "mechanism": "<active mechanism>", "scheduler_id": "<exact scheduler job id>", "workspace": "<absolute workspace>", "cadence": "<schedule.frequency>", "set_at": "<UTC ISO>", "verified_at": "<UTC ISO>", "canary_run_id": "<exact canary run_id>", "primary_model": "<exact live model identifier>", "primary_model_origin": "<primary-model origin>"}` — record the
   mechanism actually used: a short token for the scheduler the agent bound the run to (an unattended
-  `cron`/`launchd` schedule, or `loop` for the in-session fallback), plus the exact recurring primary model
-  and one origin from the table above. Take the timestamp
-  from `date -u +%Y-%m-%dT%H:%M:%S+00:00`.
+  `cron`/`launchd` schedule or the host's native unattended scheduler, or `loop` for the in-session
+  fallback), its exact `scheduler_id`, the absolute `workspace`, the `cadence` copied from
+  `schedule.frequency`, the exact recurring primary model and one origin from the table above, and the exact
+  `canary_run_id` of the green canary. This single atomic write sets `installed` and `verified` together;
+  never write `installed: true` before the canary is green. Take timestamps from
+  `date -u +%Y-%m-%dT%H:%M:%S+00:00`.
 - **Clear the scheduling marker** (turn-off): merge
-  `"scheduling": {"installed": false, "mechanism": null, "set_at": null, "primary_model": null, "primary_model_origin": null}`.
+  `"scheduling": {"installed": false, "verified": false, "mechanism": null, "scheduler_id": null, "workspace": null, "cadence": null, "set_at": null, "verified_at": null, "canary_run_id": null, "primary_model": null, "primary_model_origin": null}`.
 - **Read the deeper-coverage nudge marker for workspace W:** expand W to its absolute path and look up that
   exact path in `deeper_coverage_nudges`; absence means no marker. The map is per absolute workspace, not
   global, and each marker's `workspace` value must equal its map key.
@@ -606,6 +672,35 @@ fallback**. On either path, **cloud schedulers do not qualify**: a cloud runner 
 `~/.job-search` workspace or the local agent-data auth, so a run there reaches neither the user's data nor
 their credentials and produces nothing — the test any candidate scheduler must pass. (Full doctrine, consent
 framing, and canary spec: the operator manual's `scheduling-and-consent.md`.)
+
+**Eligibility gates — a candidate scheduler qualifies only when it passes every one of these six.** Probe a
+mechanism, then check each gate; a single failure disqualifies it for a *verified* recurring job (an
+in-session loop is a labeled session-only fallback, not a pass on these gates).
+
+<!-- scheduling-eligibility-contract:gates -->
+| Gate | Requirement |
+|---|---|
+| `unattended` | `fires_with_no_interactive_session_open` |
+| `canary_testable` | `a_real_run_through_the_registered_invocation` |
+| `primary_model_preserving` | `preserves_the_exact_primary_model` |
+| `local_access` | `reaches_the_local_workspace_auth_and_network` |
+| `inspectable` | `its_registration_can_be_read_back` |
+| `reversible` | `can_be_disabled_and_removed` |
+<!-- /scheduling-eligibility-contract:gates -->
+
+**Selection — native first, then OS, then nothing verified.** Probe the **native** mechanism first and choose
+it only when **every** gate passes; otherwise choose an **OS** mechanism (`cron`/`launchd`) that passes every
+gate; if neither qualifies, create **no verified recurring job** — a session loop may be offered, labeled
+**session-only**. A cloud scheduler always fails `local_access` (it reaches neither the local workspace nor
+the local agent-data auth), so it never qualifies. This is the `native_first` → `os_fallback` →
+`nothing_verified` progression of the registry state machine above: the disabled registration is staged, and
+only a green canary flips `installed`/`verified`.
+
+**An existing job the agent did not stage is UNOWNED — inspect, then adopt-or-replace; never clobber.** Before
+staging or writing over any job already present in the scheduler, inspect it: read its registration back and
+compare it to what you would stage. If it does not match (a foreign or drifted job), do not silently
+overwrite it — surface the drift and ask to adopt it (reuse it as-is) or replace it (remove, then re-stage).
+Only a green canary through a job the agent controls verifies the schedule and writes the marker.
 
 The ACTIONS are the same across hosts; the agent binds each to its own host. Compose the cadence from
 `schedule.frequency`. **Compose the five-field cron time expression with the shared script where a shell

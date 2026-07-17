@@ -346,9 +346,13 @@ that keeps firing with **no session open**, on the host's or the OS's own schedu
 job, or the host's native unattended scheduler) — because that's the only way the overnight and
 next-morning runs, the ones that matter most, actually happen; an in-session loop stops the instant the
 session closes. Compose the schedule for your own host (there's no per-host recipe to paste — `internals.md`
-→ Scheduling setup). The **in-session loop is the named fallback**, for a host with no unattended scheduler
-or a user who'd rather not change their machine: tell them plainly it **runs only while a session is open**,
-so a quiet overnight is expected and closing the session stops it.
+→ Scheduling setup). Before binding a mechanism, check the **six eligibility gates** and select **native
+first, then OS, else nothing verified** (`../../../shared/references/internals.md` → Scheduling setup); an
+existing job you didn't stage is unowned — inspect, then adopt-or-replace, never clobber; and the registry
+records `installed`/`verified` only after a green canary (the state machine there). The **in-session loop is
+the named fallback**, for a host with no unattended scheduler or a user who'd rather not change their
+machine: tell them plainly it **runs only while a session is open**, so a quiet overnight is expected and
+closing the session stops it.
 
 The unattended schedule is a real change to the user's machine, so the consent core is intact: **show the
 exact line first, write it only on an explicit yes, and leave it user-removable** — never silent, never
