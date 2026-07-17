@@ -24,3 +24,7 @@ fast-moving startup; remote within the US or SF Bay onsite; values shipping over
 ## Red flags
 - On-call rotations or heavy ops burden.
 - "AI" used only as marketing with no real ML work.
+
+_How to use this: your job-search assistant reads this brief next to each posting and judges whether it's
+relevant, and if so whether it's a weak, moderate, or strong match — with reasoning. No score. A brief can
+start as a quick provisional sketch and be deepened anytime._

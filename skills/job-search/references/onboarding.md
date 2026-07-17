@@ -19,7 +19,7 @@ step will say so plainly") — reliability is demonstrated, not promised; meta-a
 `voice.md`: give every question below one short plain-English sentence of what the thing is and why you're
 asking — then ask, closed choices (`voice.md` → Asking questions). No internal vocabulary, ever.
 
-**Contents:** [1. Welcome](#1-welcome) · [2. Prerequisites — agent-data](#2-prerequisites--get-agent-data-ready) · [3. Workspace](#3-workspace) · [4. Preferences](#4-preferences--interview-or-import-a-fork) · [5. Searches](#5-searches-derive-from-the-brief--dont-make-the-user-pick-keywords) · [6. First live sample run](#6-first-live-sample-run--the-magical-moment) · [7. Scheduling](#7-scheduling-offer-it) · [8. Home](#8-home)
+**Contents:** [1. Welcome](#1-welcome) · [2. Prerequisites — agent-data](#2-prerequisites--get-agent-data-ready) · [3. Workspace](#3-workspace) · [4. Preferences](#4-preferences--one-quick-question) · [5. Searches](#5-searches-derive-from-the-brief--dont-make-the-user-pick-keywords) · [6. First live sample run](#6-first-live-sample-run--the-magical-moment) · [7. Scheduling](#7-scheduling-offer-it) · [8. Home](#8-home)
 
 ---
 
@@ -128,24 +128,24 @@ rather than re-interviewing or re-scaffolding.
 
 ### Create a fresh workspace
 
-Otherwise, default to **`~/.job-search/`**:
+Otherwise, **silently default to `~/.job-search/`** — do **not** ask where to put it. A new user doesn't
+know what a "workspace" is, and the default location is never worth a setup question. Mention a path only as
+an **escape hatch**: when the user's request **explicitly named a folder** (honor that override, and you
+may state it back) or when you're **adopting an existing workspace** (above). Never turn the location into a
+question.
 
-1. **Confirm the location as a closed choice** (`voice.md` → Asking questions) — a new user doesn't
-   know what a "workspace" is, so the context rides in the question text. Header `Workspace`; question:
-   "Everything your job search learns and finds — your preferences, saved searches, and matched jobs —
-   lives in one private folder on your machine. Where should I put it?"; options: **`~/.job-search`** —
-   "the default: private and out of the way" · **Somewhere else** — "name any folder; I'll use that". (A
-   path typed via the free-text option is equally fine.)
-2. Create the directory plus `runs/` and `reports/`.
-3. Copy `templates/workspace.gitignore` → `<workspace>/.gitignore` and create an empty
+1. Create the directory — `~/.job-search`, or the explicit folder the user named — plus `runs/` and
+   `reports/`.
+2. Copy `templates/workspace.gitignore` → `<workspace>/.gitignore` and create an empty
    `<workspace>/jobs.jsonl`. Load `templates/config.example.yaml` as an in-memory candidate; do **not** copy
    the intentionally incomplete template to `<workspace>/config.yaml`.
-4. **Resolve the setup-only detail-model choice now.** Use the current host roster to select the exact
+3. **Resolve the setup-only detail-model choice now.** Use the current host roster to select the exact
    least-powerful available model that performs fit judgment well, unless the user has explicitly requested
-   another exact available model. If the host cannot assign a separate worker model, select the creating
-   session's exact primary model and plan sequential detail reads. This is the only model-selection decision;
-   the headless run will obey the saved exact identifier.
-5. Hold the config candidate in memory through the preferences, query, and optional parallel-approval steps
+   another exact available model. Don't ask the user to pick a model — this is a silent setup decision, not a
+   question. If the host cannot assign a separate worker model, select the creating session's exact primary
+   model and plan sequential detail reads. This is the only model-selection decision; the headless run will
+   obey the saved exact identifier.
+4. Hold the config candidate in memory through the preferences, query, and optional parallel-approval steps
    below. Do not record the workspace as active yet. If an exact executable selection and canonical binding
    cannot be established, do not write `config.yaml` or `runs/detail-model-binding.json`, do not run an
    invalid workspace, and route to interactive model repair. The final valid version-2 config, sidecar, and
@@ -154,34 +154,42 @@ Otherwise, default to **`~/.job-search/`**:
 Mention briefly that this workspace is **private** (the bundled `.gitignore` is deny-all) — preferences,
 where they're hunting, and matched jobs live here and shouldn't be committed to a public repo.
 
-## 4. Preferences — interview or import (a fork)
+## 4. Preferences — one quick question
 
 The system needs a **Job Preferences Brief** (prose `preferences.md`) — the "what I want" half that the
-runner reads against each posting. Ask it as a closed choice (`voice.md` → Asking questions): the lead
-sentence is yours to word — introduce the brief in one plain line (what it is, why it's next) and ask how
-they want to build it. This is the one place onboarding introduces the brief; the interview you hand off
-to won't repeat the definition. Header `Brief`; options:
+runner reads against each posting. On first run you build a **provisional, high-signal** version fast; the
+user can deepen it anytime. This is the one place onboarding introduces the brief.
 
-- **Interview me** — "I'll ask questions and write the brief from your answers — you pick how deep to go."
-- **Import one** — "you already have it written down — paste it or give me the path."
+**If the invocation already says what they want, use that — don't ask again.** A setup request like "Set up
+my job search — I want a senior remote AI role, IC not management" already carries the preferences; go
+straight to drafting the brief from it.
 
-Then route on the answer:
+**Otherwise ask exactly one free-form question.** It's free text, so ask it **inline as prose**, not the
+question box (`../../../shared/references/voice.md` → Asking questions). Ask it **verbatim**:
 
-- **Interview** → invoke the **`job-preference-interview`** skill, passing exactly two things: that this is
-  onboarding, and where to write — e.g. args: `onboarding — write the brief to <workspace>/preferences.md`.
-  Nothing else: no depth, no question count, no description of its method. That skill opens by letting the
-  **user** choose how deep to go, and an invocation that says "standard" or "one question at a time" reads
-  as a depth already chosen — the ask silently disappears and the user never learns a one-question sketch
-  existed. It ends with the brief (Summary, Must-haves/dealbreakers, Strong preferences, Nice-to-haves,
-  Red flags) written to `<workspace>/preferences.md`.
-- **Import** → also hand off to **`job-preference-interview`**, which accepts a file path or pasted prose,
-  validates it's usable (prose with at least a Summary and Must-haves), converts any numeric rubric/weights
-  to prose (this system is qualitative only), enriches thin sections with a few targeted questions, and
-  writes `preferences.md`. Follow that skill's import rules — don't reimplement them here.
+> In a sentence or two, what are you looking for? If useful, share or point me to relevant material such as
+> a resume, cover letter, or notes from previous applications.
 
-The interview skill ends by **showing the finished brief rendered in the reply** (per `voice.md`) — don't
-re-print it here; confirm and move on. Either way, the brief ends up at `<workspace>/preferences.md` with
-`created_at:` + `updated_at:` front-matter lines (the home view flags a stale brief from `updated_at`). If for some reason a run is attempted before a usable brief exists, that path surfaces
+**Supplied material is background evidence, not preferences.** A resume, cover letter, or notes are
+**context** that informs the brief — never an existing brief, and never silently promoted into must-haves
+or preferences. When the material conflicts with what the user just said, **the user's stated intent
+wins**: don't turn a résumé line (an old title, a past location, a former stack) into a dealbreaker they
+never asked for.
+
+**Write a provisional high-signal brief.** Draft the five sections (Summary, Must-haves/dealbreakers,
+Strong preferences, Nice-to-haves, Red flags — `../../../shared/references/conventions.md` owns the set)
+the way **`job-preference-interview`** drafts a **quick sketch** (its *Quick sketch* section owns that
+method): from **only what the user actually said** plus safe, direct implications — a stated role /
+location / pay floor becomes a **Must-have**, softer wants go to **Strong preferences / Nice-to-haves**, an
+on-call aversion becomes a **Red flag**. **Don't invent preferences they didn't express**; leave a section
+sparse rather than padding it. Write it to `<workspace>/preferences.md` with `created_at:` + `updated_at:`
+front-matter lines (the home view flags a stale brief from `updated_at`). You present it — rendered, next to
+the derived searches — at the **confidence checkpoint** in §5; don't print it twice.
+
+**The deeper interview and importing a written brief are later refinements, not first-run gates.** A
+standard or thorough **`job-preference-interview`** pass (its depth choice) and importing an
+already-written brief stay available **after** the user has seen results — offer them then, never as a
+first-run question. If a run is ever attempted before a usable brief exists, that path surfaces
 **`E-NO-PREFERENCES`** (build one with the **job-preference-interview** skill, or point
 `config.yaml:workspace.preferences_path` at your own prose brief).
 
@@ -211,8 +219,13 @@ user to name keywords.** They can retune anytime; the goal here is zero upfront 
    Give each `id` a short, human slug built from that query's own terms; keep `enabled: true`; `limit: 25`
    is a fine default. Preserve the template's comments and structure, keep `version: 2`, and insert the
    exact setup-selected identifier as `search.detail_model`.
-3. **Acknowledge what you saved — don't ask them to choose.** Name the searches you derived and make clear
-   they're fully editable, e.g.:
+3. **Show one compact confidence checkpoint — the brief and the searches — then go live.** Present, as a
+   single short look before the first live run: the **provisional brief** rendered in the reply (per
+   `../../../shared/references/voice.md` — no code fence, skip the front-matter lines) and the **search
+   interpretation** you derived — which sources, which queries, which locations. Make clear it's all fully
+   editable, and that this is a **look, not a gate**: you're about to go live, not asking permission to
+   (the run's consent is handled by the setup request + the §6 cost context, not a confirmation here). Name
+   the searches, e.g.:
 
    > "From your preferences I'll search **LinkedIn and public Ashby company boards** for **'AI engineer' · 'ML platform engineer'** across **US-remote +
    > the SF Bay Area**. I can add, retune, or drop any of these anytime — just say the word."
@@ -411,12 +424,17 @@ runs", "update my preferences", "show the latest digest").
       (agent-data introduced once, never re-defined per step), solution-first, **no raw error code
       shown**, no premature claim, no duration promise; a permission-blocked install became a one-line
       `npm install -g agent-data` handoff for the user to run, not an error
-- [ ] workspace adopted-or-created; **never clobbered** an existing `config.yaml` / `preferences.md` /
-      `jobs.jsonl`; a fresh workspace was recorded active only after a valid version-2 config and matching
-      atomic `runs/detail-model-binding.json` write established the exact model binding
-- [ ] `preferences.md` exists (interview or import via `job-preference-interview`)
-- [ ] 2–3 `queries[]` **derived from the brief** and written (no upfront keyword-picking); searches
-      acknowledged
+- [ ] workspace resolved **silently to `~/.job-search`** — no "where should I put it?" question; a path was
+      named only as an escape hatch (an explicit user override, or adopting an existing workspace);
+      **never clobbered** an existing `config.yaml` / `preferences.md` / `jobs.jsonl`; a fresh workspace was
+      recorded active only after a valid version-2 config and matching atomic
+      `runs/detail-model-binding.json` write established the exact model binding
+- [ ] `preferences.md` exists — a **provisional** brief written from the one-sentence sketch (asked
+      verbatim, free-form/inline) or from preferences already in the invocation; supplied material treated
+      as background evidence, not auto-preferences; the deeper interview / import are later refinements, not
+      first-run gates
+- [ ] 2–3 `queries[]` **derived from the brief** and written (no upfront keyword-picking); one compact
+      **confidence checkpoint** (provisional brief + search interpretation) shown before the live run
 - [ ] on an approval-gating host, if `search.parallel_detail_reads` was unset, the user was asked once about
       parallel subagents; the answer was rendered into `config.yaml`; on yes the host-specific subagent setup
       your host needs was performed (or the exact path + content was shown if blocked); the user saw
@@ -434,7 +452,10 @@ runs", "update my preferences", "show the latest digest").
       recurring + one-off recipes composed for
       the host and shown either way; if parallel detail reads were approved on an approval-gating host, the
       scheduled prompt carries the host's required subagent-authorization sentence
-- [ ] every ask carried one line of plain-English context; the four closed choices (workspace location,
-      interview-or-import, scheduling, frequency) asked as closed choices; no internal vocabulary
-      reached the user (`voice.md`)
+- [ ] the workspace location and interview depth were **not** asked before results (silent default;
+      provisional sketch); the model was setup-selected silently (never a question); the single "what are you
+      looking for?" question was **free-form inline**, not a box; the scheduling and frequency closed choices
+      came **after** results (the one host-specific exception is the approval-gating subagent question above);
+      every ask carried one line of plain-English context; no internal vocabulary reached the user
+      (`voice.md`)
 - [ ] home view printed
