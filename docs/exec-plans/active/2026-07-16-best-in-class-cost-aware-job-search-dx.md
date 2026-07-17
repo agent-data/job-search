@@ -708,7 +708,7 @@ PSG-INJ-03/04/05/11; PSG-COMM-04/09/11.
       python3 scripts/eval_harness.py --root .
       python3 -m pytest -q tests/test_eval_harness.py
 
-- [ ] **T4.3 [BLOCKS, L] Show a small relevant set early, then continue automatically.**
+- [x] **T4.3 [BLOCKS, L] Show a small relevant set early, then continue automatically.**
 
   **Modify:**
   - skills/job-search-run/SKILL.md
@@ -1529,6 +1529,30 @@ AAS-DIST-03/05/06.
   `sha256:24fb9ac326ba`), and `git diff --check` clean. The plugin version stays `0.6.0`. No live agent-data,
   model, scheduler, network, or billable effect occurred and no branch or worktree changed. **T4.2 is
   complete.**
+- 2026-07-17 — T4.3 early matches with continuation: an interactive run now presents a small set of
+  fully-judged relevant matches early, then continues automatically. The runner (skills/job-search-run/SKILL.md
+  Loop step 4) draws only from the ordered selected queue after `selection_settled` (pagination correctness
+  preserved), targets three relevant matches, presents one or two only at a natural tranche boundary (the first
+  rolling parallel batch complete, or five sequential judgments) via parallelism.md's dispatch model, shows no
+  early card when zero are relevant, labels the result "early", appends the nonterminal `early_results_shown`,
+  transitions immediately to `reviewing_remaining`, and continues without asking permission; scheduled and
+  canary runs emit no partial presentation and publish only at finalization. `first_relevant_match_ready_at`,
+  `early_results_shown_at`, and `run_completed_at` are recorded as three distinct write-once timestamps. The
+  in-flight settling rule (started workers settle under their recorded `brief_revision` before a new revision
+  applies) landed in run-lifecycle.md; the early/first-look wording landed as voice.md rule 7; full refinement
+  routing stays deferred to T5.3. Six RED evals added (56-61); the mechanics and run-record schema are
+  untouched, so the nonterminal guarantee stays backed by the existing executed
+  `test_lifecycle_early_results_with_remaining_work_is_not_complete`. Committed as `684b7d8`
+  (`feat: show early matches and keep reviewing`) — the four brief files plus the regenerated build stamp; no
+  out-of-brief edit was needed (T4.2's ID-anchored eval-matrix assertions already exclude behavioral evals). A
+  fresh Opus task review returned **Approved** — no Critical or Important; two Minor single-homing/density
+  polish notes in SKILL.md (recorded in the SDD ledger, no fix) and one cannot-verify item (prose-runner
+  behavioral adherence is instruction-coherent, not runtime-proven here — deferred to P9). Controller re-verify
+  on the committed tree: full pytest `486 passed`, eval harness coherent, doc lint / philosophy guard / release
+  version-sync clean, two deterministic builds byte-identical (build-stamp file SHA-256 `9997b598…e9c4e055`,
+  content hash `sha256:03c477e88973`), and `git diff --check` clean. The plugin version stays `0.6.0`. No live
+  agent-data, model, scheduler, network, or billable effect occurred and no branch or worktree changed.
+  **T4.3 is complete.**
 
 ## Decision log
 
