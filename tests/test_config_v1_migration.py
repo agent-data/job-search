@@ -98,7 +98,7 @@ def _lifecycle_append(workspace, command, *args, run_id=RUN_ID):
 
 def _write_cutoff_evidence(workspace, *, close=True):
     (workspace / "reports").mkdir(parents=True, exist_ok=True)
-    ledger = _lifecycle_append(workspace, "start")
+    ledger = _lifecycle_append(workspace, "start", "manual", "-")
     for phase in (
         "searching",
         "selection_settled",

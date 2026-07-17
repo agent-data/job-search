@@ -1,0 +1,650 @@
+#!/usr/bin/env python3
+"""Deterministic, local-only lifecycle coordinator pressure fixture for T4.1.
+
+This is development test infrastructure, not shipped runtime code.  It invokes the canonical POSIX
+append/fold mechanics and simulates producer responses without network, models, scheduler writes, or
+credits.  Usage: fake-run-lifecycle SCENARIO WORKSPACE
+"""
+import hashlib
+import json
+import pathlib
+import subprocess
+import sys
+
+
+ROOT = pathlib.Path(__file__).resolve().parents[1]
+APPEND = ROOT / "shared" / "scripts" / "mechanics" / "lifecycle-append.sh"
+FOLD = ROOT / "shared" / "scripts" / "mechanics" / "lifecycle-fold.sh"
+RUN_ID = "2026-07-17T12-00-00Z"
+TIMESTAMP = "2026-07-17T08:00:00-04:00"
+REVISION = "fixture-revision-1"
+
+ATTRIBUTION = {
+    "happy_manual": ("manual", "-"),
+    "happy_scheduled": ("scheduled", "scheduler-fixture-1"),
+    "happy_canary": ("canary", "scheduler-fixture-1"),
+    "invalid_manual_scheduler": ("manual", "scheduler-fixture-1"),
+    "invalid_scheduled_without_scheduler": ("scheduled", "-"),
+    "invalid_canary_without_scheduler": ("canary", "-"),
+}
+
+VALID_SCENARIOS = {
+    "happy_manual",
+    "happy_scheduled",
+    "happy_canary",
+    "remaining_work",
+    "in_flight_work",
+    "unaccounted_retry",
+    "compaction_after_selection",
+    "interruption_before_selection",
+    "quota_during_detail",
+    "worker_failure",
+    "display_failure",
+    "artifact_write_failure",
+    "artifact_validation_failure",
+    "complete_close_write_failure",
+}
+REJECTED_SCENARIOS = {
+    "invalid_manual_scheduler",
+    "invalid_scheduled_without_scheduler",
+    "invalid_canary_without_scheduler",
+    "mutable_before_ledger",
+}
+
+
+class Coordinator:
+    def __init__(self, scenario, workspace, trigger, scheduler_arg):
+        self.scenario = scenario
+        self.workspace = workspace
+        self.trigger = trigger
+        self.scheduler_arg = scheduler_arg
+        self.scheduler_id = None if scheduler_arg == "-" else scheduler_arg
+        self.ledger = workspace / "runs" / (".lifecycle-%s.jsonl" % RUN_ID)
+        self.jobs = workspace / "jobs.jsonl"
+        self.effects = []
+        self.run_record_valid = False
+        self.digest_valid = False
+        self.validated_before_complete_close = False
+        self.complete_close_attempted = False
+        self.preserved_judgment_bytes = None
+
+    def append(self, command, *args):
+        result = subprocess.run(
+            [
+                "sh",
+                str(APPEND),
+                str(self.ledger),
+                command,
+                RUN_ID,
+                TIMESTAMP,
+                *args,
+            ],
+            capture_output=True,
+            text=True,
+        )
+        if result.returncode != 0:
+            raise RuntimeError("append %s failed: %s" % (command, result.stderr.strip()))
+
+    def fold(self):
+        result = subprocess.run(
+            ["sh", str(FOLD), str(self.ledger), str(self.workspace)],
+            capture_output=True,
+            text=True,
+        )
+        if result.returncode != 0:
+            raise RuntimeError("fold failed: %s" % result.stderr.strip())
+        values = {}
+        for line in result.stdout.splitlines():
+            key, value = line.split("=", 1)
+            values[key] = value
+        return values
+
+    def start(self):
+        self.append("start", self.trigger, self.scheduler_arg)
+        self.effects.append("ledger_started")
+
+    def phase(self, phase):
+        self.append("phase", phase)
+        self.effects.append("phase:%s" % phase)
+
+    def posting(self, source_id, state):
+        self.append("posting", "linkedin", source_id, state, REVISION)
+        self.effects.append("posting_%s" % state)
+
+    def producer(self, attempt_id, operation, metered, outcome, request_id, account=True):
+        self.append("attempt-started", attempt_id, operation)
+        self.effects.append("attempt_started:%s" % attempt_id)
+        # The next effect is the simulated producer invocation.  Its returned status below is the sole
+        # source of metered/outcome/request evidence; the fixture never infers billing from an exception.
+        self.effects.append("producer_call:%s" % attempt_id)
+        if account:
+            self.append(
+                "attempt-accounted",
+                attempt_id,
+                "true" if metered else "false",
+                outcome,
+                request_id if request_id is not None else "-",
+            )
+            self.effects.append("attempt_accounted:%s" % attempt_id)
+
+    def evaluated_job(self, source_id="posting-1"):
+        event = {
+            "event": "evaluated",
+            "ts": TIMESTAMP,
+            "run_id": RUN_ID,
+            "source": "linkedin",
+            "source_id": source_id,
+            "query_id": "fixture-query",
+            "title": "Fixture role",
+            "company_name": "Fixture company",
+            "location_display": "Remote",
+            "salary_display": "",
+            "posted_at": TIMESTAMP,
+            "source_url": "https://example.invalid/%s" % source_id,
+            "posting_id_at_seen": "fixture-posting-id",
+            "detail_read": True,
+            "relevant": True,
+            "match": "strong",
+            "reasoning": "Deterministic fixture reasoning.",
+            "dealbreakers_hit": [],
+            "unknowns": [],
+            "needs_human_check": False,
+            "status": "new",
+            "first_seen": TIMESTAMP,
+        }
+        self.jobs.parent.mkdir(parents=True, exist_ok=True)
+        with self.jobs.open("a", encoding="utf-8") as stream:
+            stream.write(json.dumps(event, separators=(",", ":"), sort_keys=True) + "\n")
+        self.effects.append("mutable_jobs_append")
+
+    def render_and_present(self, succeeds):
+        if succeeds:
+            self.effects.append("interactive_render_succeeded")
+            self.posting("posting-1", "presented")
+        else:
+            self.effects.append("interactive_render_failed")
+
+    def ledger_rows(self):
+        return [json.loads(line) for line in self.ledger.read_text().splitlines()]
+
+    def artifact_values(self, close_state):
+        before = self.fold()
+        rows = self.ledger_rows()
+        operations = {
+            row["attempt_id"]: row["operation"]
+            for row in rows
+            if row["event"] == "attempt_started"
+        }
+        accounted = [row for row in rows if row["event"] == "attempt_accounted"]
+        metered = [row for row in accounted if row["metered"]]
+        by_operation = {
+            operation: sum(
+                1
+                for row in metered
+                if operations[row["attempt_id"]] == operation
+            )
+            for operation in ("initial_search", "continuation_search", "detail_read")
+        }
+        jobs = []
+        if self.jobs.exists():
+            jobs = [json.loads(line) for line in self.jobs.read_text().splitlines()]
+        relevant = sum(1 for row in jobs if row.get("relevant") is True)
+        strong = sum(1 for row in jobs if row.get("match") == "strong")
+        phase = "complete" if close_state == "complete" else before["phase"]
+        health = "healthy" if close_state == "complete" else "blocked"
+        record = {
+            "run_id": RUN_ID,
+            "started_at": TIMESTAMP,
+            "completed_at": TIMESTAMP,
+            "build": {
+                "version": "fixture",
+                "content_hash": "sha256:000000000000",
+                "git_sha": "unknown",
+            },
+            "trigger": self.trigger,
+            "scheduler_id": self.scheduler_id,
+            "primary_model": "fixture-primary-exact",
+            "primary_model_origin": "session_inheritance",
+            "status_probe": "ok",
+            "detail_model": "fixture-detail-exact",
+            "detail_model_origin": "configured_user",
+            "detail_model_binding_id": "fixture-binding-1",
+            "queries": [
+                {
+                    "query_id": "fixture-query",
+                    "source": "linkedin",
+                    "keywords": "fixture",
+                    "results_returned": int(before["selected"]),
+                    "new": int(before["selected"]),
+                    "pages_fetched": 1,
+                    "rows_scanned": int(before["selected"]),
+                    "unique_candidates": int(before["selected"]),
+                    "selected_for_review": int(before["selected"]),
+                    "has_more_at_stop": None,
+                    "stop_reason": "unpaginated",
+                    "attempts": sum(
+                        1 for operation in operations.values() if operation == "initial_search"
+                    ),
+                    "request_ids": [
+                        row["request_id"]
+                        for row in accounted
+                        if operations[row["attempt_id"]] == "initial_search"
+                        and row["request_id"] is not None
+                    ],
+                    "upstream_code": None,
+                    "retryable": None,
+                    "errors": [],
+                }
+            ],
+            "sources_searched": ["linkedin"],
+            "sources_failed": [],
+            "review_scope": {
+                "mode": "first_page",
+                "target_new_postings": None,
+                "origin": "default",
+                "outcome": (
+                    "completed_first_pages"
+                    if close_state == "complete"
+                    else "incomplete"
+                ),
+            },
+            "agent_data_usage": {
+                "metered_calls": len(metered),
+                "unit_rate_usd": None,
+                "payg_equivalent_usd": None,
+                "pricing_basis": "pay_as_you_go_equivalent",
+                "by_operation": by_operation,
+                "diagnostics": {
+                    "retry_attempts": 0,
+                    "charged_failures": sum(
+                        1
+                        for row in metered
+                        if row["outcome"] not in ("success", "quota_rejected")
+                    ),
+                    "quota_rejections": sum(
+                        1 for row in accounted if row["outcome"] == "quota_rejected"
+                    ),
+                    "free_route_calls": 0,
+                },
+            },
+            "pagination_metrics": {
+                "first_page_rows": int(before["selected"]),
+                "continuation_rows": 0,
+                "known_rows": 0,
+                "same_run_cross_query_duplicate_rows": 0,
+                "cross_source_rows_merged": 0,
+                "unique_unseen_roles_first_pages": int(before["selected"]),
+                "unique_unseen_roles_continuations": 0,
+                "selected_roles_from_continuations": 0,
+                "deeper_coverage_nudge_eligible": False,
+                "deeper_coverage_nudge_streams": [],
+            },
+            "results_summary": {
+                "total_results": int(before["selected"]),
+                "new_postings": int(before["selected"]),
+                "evaluated": int(before["evaluated"]),
+                "detail_read": sum(
+                    1 for operation in operations.values() if operation == "detail_read"
+                ),
+                "relevant": relevant,
+                "strong": strong,
+                "moderate": 0,
+                "weak": 0,
+            },
+            "errors": (
+                []
+                if close_state == "complete"
+                else [
+                    {
+                        "stage": "fixture",
+                        "code": "fixture_terminal",
+                        "retryable": False,
+                        "attempts": 1,
+                        "final": "stopped",
+                        "request_id": None,
+                    }
+                ]
+            ),
+            "error": None if close_state == "complete" else {"code": "E-FIXTURE"},
+            "lifecycle": {
+                "phase": phase,
+                "close_state": close_state,
+                "health": health,
+            },
+            "run_health": health,
+        }
+        summary = record["results_summary"]
+        digest = (
+            "# Job search digest — 2026-07-17\n"
+            "Run health: %s\n"
+            "%d new %s · %d strong · %d moderate · %d weak · %d filtered out · 1 searches · %d detail reads\n"
+            "Agent-data usage: %d metered calls this run\n\n"
+            % (
+                health if health == "healthy" else "blocked (action needed)",
+                summary["new_postings"],
+                "posting" if summary["new_postings"] == 1 else "postings",
+                summary["strong"],
+                summary["moderate"],
+                summary["weak"],
+                summary["evaluated"] - summary["relevant"],
+                summary["detail_read"],
+                record["agent_data_usage"]["metered_calls"],
+            )
+        )
+        if close_state == "complete":
+            digest += (
+                "## Strong matches\n"
+                "- **Fixture role** — Fixture company — Remote\n"
+                "  Deterministic fixture reasoning.  [view](https://example.invalid/posting-1)\n\n"
+                "## Moderate matches\n\n## Weak matches\n\n"
+                "## Filtered out (not relevant): 0\n"
+            )
+        else:
+            digest += "Run could not be safely finalized. Completed matches were preserved.\n"
+        return record, digest
+
+    def validate_run_record(self, record):
+        required = {
+            "agent_data_usage", "build", "completed_at", "detail_model",
+            "detail_model_binding_id", "detail_model_origin", "error", "errors",
+            "lifecycle", "pagination_metrics", "primary_model", "primary_model_origin",
+            "queries", "results_summary", "review_scope", "run_health", "run_id",
+            "scheduler_id", "sources_failed", "sources_searched", "started_at",
+            "status_probe", "trigger",
+        }
+        if set(record) != required or record["run_id"] != RUN_ID:
+            return False
+        if set(record["build"]) != {"version", "content_hash", "git_sha"}:
+            return False
+        if record["trigger"] not in ("manual", "scheduled", "canary"):
+            return False
+        if (record["trigger"] == "manual") != (record["scheduler_id"] is None):
+            return False
+        if record["primary_model_origin"] not in (
+            "session_inheritance", "user_override", "repair_session"
+        ):
+            return False
+        if set(record["lifecycle"]) != {"phase", "close_state", "health"}:
+            return False
+        if record["lifecycle"]["health"] != record["run_health"]:
+            return False
+        usage = record["agent_data_usage"]
+        if set(usage) != {
+            "metered_calls", "unit_rate_usd", "payg_equivalent_usd",
+            "pricing_basis", "by_operation", "diagnostics",
+        }:
+            return False
+        if sum(usage["by_operation"].values()) != usage["metered_calls"]:
+            return False
+        return (
+            isinstance(record["queries"], list)
+            and isinstance(record["sources_searched"], list)
+            and isinstance(record["results_summary"], dict)
+            and isinstance(record["pagination_metrics"], dict)
+        )
+
+    def validate_digest(self, digest, record):
+        summary = record["results_summary"]
+        required_lines = [
+            "# Job search digest — 2026-07-17",
+            "Run health: %s" % (
+                "healthy" if record["run_health"] == "healthy" else "blocked (action needed)"
+            ),
+            "Agent-data usage: %d metered calls this run"
+            % record["agent_data_usage"]["metered_calls"],
+        ]
+        if not all(line in digest.splitlines() for line in required_lines):
+            return False
+        counts = next((line for line in digest.splitlines() if " new posting" in line), "")
+        if not all(token in counts for token in ("strong", "moderate", "weak", "filtered out", "searches", "detail reads")):
+            return False
+        if record["lifecycle"]["close_state"] == "complete":
+            return summary["strong"] > 0 and all(
+                token in digest
+                for token in ("## Strong matches", "Deterministic fixture reasoning.", "[view](")
+            )
+        return "Run could not be safely finalized." in digest
+
+    def write_and_validate_artifacts(self, close_state, record_milestones=True):
+        record, digest = self.artifact_values(close_state)
+        run_path = self.workspace / "runs" / (RUN_ID + ".json")
+        digest_path = self.workspace / "reports" / "2026-07-17-digest.md"
+
+        if self.scenario == "artifact_write_failure":
+            return False
+        digest_path.parent.mkdir(parents=True, exist_ok=True)
+        if self.scenario == "artifact_validation_failure":
+            run_path.write_text('{"run_id":"wrong"}\n', encoding="utf-8")
+            digest_path.write_text("# Wrong digest\n", encoding="utf-8")
+        else:
+            run_path.write_text(
+                json.dumps(record, indent=2, sort_keys=True) + "\n",
+                encoding="utf-8",
+            )
+            digest_path.write_text(digest, encoding="utf-8")
+
+        try:
+            loaded_record = json.loads(run_path.read_text(encoding="utf-8"))
+            loaded_digest = digest_path.read_text(encoding="utf-8")
+            self.run_record_valid = (
+                loaded_record == record and self.validate_run_record(loaded_record)
+            )
+            self.digest_valid = (
+                loaded_digest == digest and self.validate_digest(loaded_digest, loaded_record)
+            )
+        except (OSError, ValueError):
+            self.run_record_valid = False
+            self.digest_valid = False
+        valid = self.run_record_valid and self.digest_valid
+        if valid and record_milestones:
+            self.append("milestone", "final_run_record_written")
+            self.append("milestone", "final_digest_written")
+            self.effects.extend(
+                ["final_run_record_validated", "final_digest_validated"]
+            )
+        return valid
+
+    def close(self, close_state, code):
+        if close_state == "complete":
+            self.complete_close_attempted = True
+        self.append("close", close_state, code)
+        self.effects.append("run_closed:%s" % close_state)
+
+    def summary(self):
+        state = self.fold()
+        snapshot_hash = None
+        final_prefix_hash = None
+        preserved = None
+        if self.preserved_judgment_bytes is not None:
+            final_bytes = self.jobs.read_bytes()
+            prefix = final_bytes[: len(self.preserved_judgment_bytes)]
+            snapshot_hash = hashlib.sha256(self.preserved_judgment_bytes).hexdigest()
+            final_prefix_hash = hashlib.sha256(prefix).hexdigest()
+            preserved = prefix == self.preserved_judgment_bytes
+        return {
+            "accepted": True,
+            "run_id": RUN_ID,
+            "ledger_name": self.ledger.name,
+            "trigger": state["trigger"],
+            "scheduler_id": None if state["scheduler_id"] == "null" else state["scheduler_id"],
+            "phase": state["phase"],
+            "close_state": state["close_state"],
+            "can_complete": state["can_complete"] == "true",
+            "remaining": int(state["remaining"]),
+            "in_flight": int(state["in_flight"]),
+            "attempts_started": int(state["attempts_started"]),
+            "attempts_accounted": int(state["attempts_accounted"]),
+            "presented": int(state["presented"]),
+            "run_record_valid": self.run_record_valid,
+            "digest_valid": self.digest_valid,
+            "validated_before_complete_close": self.validated_before_complete_close,
+            "complete_close_attempted": self.complete_close_attempted,
+            "judgments_preserved": preserved,
+            "judgment_snapshot_sha256": snapshot_hash,
+            "judgment_final_prefix_sha256": final_prefix_hash,
+            "effects": self.effects,
+        }
+
+
+def validate_attribution(trigger, scheduler_arg):
+    if trigger == "manual":
+        return scheduler_arg == "-"
+    if trigger in ("scheduled", "canary"):
+        return scheduler_arg != "-"
+    return False
+
+
+def finish(coordinator, close_state, code):
+    artifacts_valid = coordinator.write_and_validate_artifacts(close_state)
+    if close_state == "complete":
+        if not artifacts_valid:
+            raise RuntimeError("complete artifacts did not validate")
+        readiness = coordinator.fold()
+        if readiness["ready_to_close"] != "true":
+            raise RuntimeError("completion predicate was not ready")
+        coordinator.validated_before_complete_close = True
+        if coordinator.scenario == "complete_close_write_failure":
+            coordinator.complete_close_attempted = True
+            coordinator.ledger.chmod(0o444)
+            try:
+                coordinator.append("close", "complete", "-")
+            except RuntimeError:
+                coordinator.effects.append("complete_close_failed")
+            else:
+                raise RuntimeError("fixture could not induce the complete-close write failure")
+            finally:
+                coordinator.ledger.chmod(0o644)
+            if not coordinator.write_and_validate_artifacts(
+                "blocked", record_milestones=False
+            ):
+                raise RuntimeError("failed to repair terminal artifacts after close failure")
+            coordinator.effects.append("terminal_artifacts_repaired")
+            coordinator.close("blocked", "E-FIXTURE-CLOSE-WRITE")
+            return
+    coordinator.close(close_state, code)
+    if close_state == "complete":
+        closed = coordinator.fold()
+        if closed["can_complete"] != "true":
+            raise RuntimeError("post-close fold did not prove completion")
+        coordinator.effects.append("post_close_fold_verified")
+
+
+def run_scenario(scenario, workspace):
+    trigger, scheduler_arg = ATTRIBUTION.get(scenario, ("manual", "-"))
+    coordinator = Coordinator(scenario, workspace, trigger, scheduler_arg)
+    coordinator.start()
+    coordinator.phase("searching")
+    coordinator.producer("search-1", "initial_search", True, "success", "request-search-1")
+
+    if scenario == "interruption_before_selection":
+        finish(coordinator, "interrupted", "E-FIXTURE-INTERRUPTED")
+        return coordinator.summary()
+
+    coordinator.posting("posting-1", "queued")
+    if scenario == "remaining_work":
+        coordinator.posting("posting-2", "queued")
+    if scenario in ("quota_during_detail", "worker_failure"):
+        coordinator.posting("posting-prior", "queued")
+
+    # The phase marker is the commit point: once it exists, the entire selected queue is already durable.
+    coordinator.phase("selection_settled")
+
+    if scenario == "compaction_after_selection":
+        coordinator.effects.append("context_compacted")
+        recovered = coordinator.fold()
+        if recovered["phase"] != "selection_settled" or recovered["remaining"] != "1":
+            raise RuntimeError("post-selection compaction could not recover the queued item")
+        coordinator.effects.append("context_recovered_from_fold")
+
+    coordinator.phase("reviewing_initial_batch")
+
+    if scenario in ("quota_during_detail", "worker_failure"):
+        coordinator.posting("posting-prior", "evaluating")
+        coordinator.producer(
+            "detail-prior", "detail_read", True, "success", "request-detail-prior"
+        )
+        coordinator.evaluated_job("posting-prior")
+        coordinator.posting("posting-prior", "evaluated")
+        coordinator.preserved_judgment_bytes = coordinator.jobs.read_bytes()
+
+    coordinator.posting("posting-1", "evaluating")
+
+    if scenario == "quota_during_detail":
+        coordinator.producer("detail-1", "detail_read", False, "quota_rejected", None)
+        coordinator.posting("posting-1", "terminally_skipped")
+        finish(coordinator, "blocked", "E-FIXTURE-QUOTA")
+        return coordinator.summary()
+    if scenario == "worker_failure":
+        coordinator.producer("detail-1", "detail_read", True, "worker_failed", "request-detail-1")
+        coordinator.posting("posting-1", "terminally_skipped")
+        finish(coordinator, "blocked", "E-FIXTURE-WORKER")
+        return coordinator.summary()
+    if scenario == "in_flight_work":
+        coordinator.producer("detail-1", "detail_read", True, "success", "request-detail-1")
+        finish(coordinator, "interrupted", "E-FIXTURE-IN-FLIGHT")
+        return coordinator.summary()
+    if scenario == "unaccounted_retry":
+        coordinator.producer("detail-1", "detail_read", True, "retryable_failure", "request-detail-1")
+        coordinator.producer("detail-2", "detail_read", False, "unknown", None, account=False)
+        coordinator.posting("posting-1", "terminally_skipped")
+        finish(coordinator, "blocked", "E-FIXTURE-UNACCOUNTED")
+        return coordinator.summary()
+
+    coordinator.producer("detail-1", "detail_read", True, "success", "request-detail-1")
+    coordinator.evaluated_job()
+    coordinator.posting("posting-1", "evaluated")
+
+    if scenario == "display_failure":
+        coordinator.render_and_present(False)
+        finish(coordinator, "blocked", "E-FIXTURE-DISPLAY")
+        return coordinator.summary()
+
+    if coordinator.trigger == "manual":
+        coordinator.render_and_present(True)
+        coordinator.phase("early_results_shown")
+        coordinator.append("milestone", "early_results_shown")
+        coordinator.effects.append("milestone:early_results_shown")
+    else:
+        coordinator.phase("early_results_shown")
+
+    coordinator.phase("reviewing_remaining")
+
+    if scenario == "remaining_work":
+        finish(coordinator, "blocked", "E-FIXTURE-REMAINING")
+        return coordinator.summary()
+
+    coordinator.phase("finalizing")
+    if scenario in ("artifact_write_failure", "artifact_validation_failure"):
+        finish(coordinator, "blocked", "E-FIXTURE-ARTIFACT")
+        return coordinator.summary()
+
+    finish(coordinator, "complete", "-")
+    return coordinator.summary()
+
+
+def main(argv):
+    if len(argv) != 3:
+        print("usage: fake-run-lifecycle SCENARIO WORKSPACE", file=sys.stderr)
+        return 2
+    scenario = argv[1]
+    workspace = pathlib.Path(argv[2])
+    if scenario not in VALID_SCENARIOS | REJECTED_SCENARIOS:
+        print(json.dumps({"accepted": False, "effects": [], "error": "unknown_scenario"}))
+        return 2
+
+    trigger, scheduler_arg = ATTRIBUTION.get(scenario, ("manual", "-"))
+    if scenario == "mutable_before_ledger" or not validate_attribution(trigger, scheduler_arg):
+        print(json.dumps({"accepted": False, "effects": [], "error": "invalid_preflight"}))
+        return 2
+
+    try:
+        summary = run_scenario(scenario, workspace)
+    except (OSError, RuntimeError, ValueError) as exc:
+        print(json.dumps({"accepted": True, "effects": [], "error": str(exc)}))
+        return 1
+    print(json.dumps(summary, sort_keys=True))
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv))

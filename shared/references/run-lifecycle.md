@@ -38,8 +38,10 @@ neither file substitutes for the other.
 8. `complete`
 <!-- /lifecycle-contract:phases -->
 
-The order is monotonic: a run never returns to an earlier phase. `selection_settled` means the selected set
-is durable before posting review begins. An interactive run enters `early_results_shown` only after it has
+The order is monotonic and adjacent: each phase transition advances exactly one row in the canonical order,
+never skips a phase, and never returns to an earlier phase. Before appending `selection_settled`, write
+the `queued` posting state for every selected identity; the phase row is the commit marker proving the whole
+selected set is already durable before posting review begins. An interactive run enters `early_results_shown` only after it has
 actually presented fully evaluated results; a scheduled or canary run, or an interactive run with no ready
 early result, may advance past that inapplicable presentation phase without claiming the milestone.
 `complete` is not an ordinary progress transition: only a valid `run_closed` event with close state
@@ -65,7 +67,10 @@ The event vocabulary is closed:
 - `run_closed`
 <!-- /lifecycle-contract:events -->
 
-- `run_started` establishes the run identity and initial `preflight` phase once.
+- `run_started` establishes the run identity, exact trigger attribution, and initial `preflight` phase once.
+  Its `trigger` is exactly `manual`, `scheduled`, or `canary`; `scheduler_id` is JSON `null` for manual and
+  a restricted nonsecret identifier for scheduled or canary. Reject inconsistent input without
+  normalization rather than guessing or repairing its origin.
 - `phase_changed` records a valid forward phase transition other than the terminal `complete` transition.
 - `posting_state` records the latest state for one selected `(source, source_id)` posting identity and the
   brief revision under which its evaluation began.
@@ -113,7 +118,11 @@ Scheduled and canary runs remain quiet and do not append an interactive `present
 claim activation; publishing their final artifacts does not substitute for this invariant.
 
 `terminally_skipped` is reserved for a selected posting that will not be retried in this run; it is not a
-cleanup shortcut for forcing the completion predicate.
+cleanup shortcut for forcing the completion predicate. Every selected identity first appears as `queued`
+while the working phase is `searching`; only after all such rows exist may `selection_settled` be appended.
+During a review phase its transitions are exactly `queued` → `evaluating` → (`evaluated` or
+`terminally_skipped`), with the optional `evaluated` → `presented` transition subject to the render proof
+above. Reject first-seen, duplicate, shortcut, backward, or post-terminal posting transitions.
 
 <!-- lifecycle-contract:invariants -->
 | Invariant | Contract value |
@@ -158,7 +167,17 @@ postings. In `all_started_attempts_accounted`, every `attempt_started` has exact
 `attempt_accounted`. The two final-artifact clauses require both a concrete, non-symlink regular file at the
 exact path and its matching lifecycle milestone; the digest's `reports/` directory must also be a real
 directory, not a symlink. The digest path's ISO date is derived from `run_started` as specified by the
-fold/check operation below.
+fold/check operation below. The coordinator appends each final-artifact milestone only after it has written
+the exact path, read it back, and validated its schema/content against [conventions.md](conventions.md). The
+fold script mechanically rechecks path identity and concrete-file existence; the milestone is the durable
+coordinator attestation for validation that portable shell cannot reproduce.
+
+For a prospective complete close, the validated artifacts may predeclare the intended terminal complete
+state, but they are not authoritative or user-visible until the matching `run_closed:complete` append
+succeeds. If that append fails, rewrite and revalidate both artifacts to the truthful noncomplete state
+before attempting a blocked/interrupted close. If the fallback close also fails, the open ledger still makes
+`can_complete=false`; surface only the repaired noncomplete artifacts. Never leave a displayed or published
+complete claim without a final canonical complete close.
 
 The close-state vocabulary is closed:
 
@@ -182,7 +201,7 @@ Run the shared script where a POSIX shell runtime exists; otherwise execute the 
 section exactly. The script and fallback accept the same fixed interfaces:
 
 ```text
-lifecycle-append.sh LEDGER start RUN_ID ISO_TIMESTAMP
+lifecycle-append.sh LEDGER start RUN_ID ISO_TIMESTAMP TRIGGER SCHEDULER_ID_OR_DASH
 lifecycle-append.sh LEDGER phase RUN_ID ISO_TIMESTAMP PHASE
 lifecycle-append.sh LEDGER posting RUN_ID ISO_TIMESTAMP SOURCE SOURCE_ID STATE BRIEF_REVISION
 lifecycle-append.sh LEDGER attempt-started RUN_ID ISO_TIMESTAMP ATTEMPT_ID OPERATION
@@ -203,6 +222,11 @@ uses the local calendar date used for this run's digest; later event timestamps 
 This makes the exact digest path derivable through the fixed interface without accepting a
 caller-supplied path. Validation is arithmetic and portable; it does not depend on a host-specific date
 utility.
+
+`TRIGGER` is exactly `manual`, `scheduled`, or `canary`. The value manual requires `-` for
+`SCHEDULER_ID_OR_DASH`, which serializes as JSON `null`; scheduled and canary require a non-dash restricted
+scheduler identifier. Reject every other trigger/scheduler combination without normalization and before
+creating the ledger. These fields are durable source attribution, not a hint that the runner may rewrite.
 
 Every non-path, non-enum argument except an internal operator code is a restricted, nonsecret identifier:
 1–256 characters, beginning with an ASCII letter or digit and continuing only with ASCII letters, digits,
@@ -236,7 +260,7 @@ above; the fixed row shapes allow no extra fields.
 Validate the complete existing ledger with the fold fallback before every append. Only `start` may create a
 ledger, and it fails if the path already exists. Every later command requires exactly one prior
 `run_started` carrying the same run ID. A closed ledger rejects every command. `phase` rejects `complete` and
-requires a phase strictly later than the folded working phase. An attempt ID may have one
+requires exactly the next canonical phase after the folded working phase. An attempt ID may have one
 `attempt_started` and then exactly one `attempt_accounted`; accounting without its prior start, or either
 duplicate, is invalid. Posting rows use last-write-wins identity `(source, source_id)`. A `close complete`
 command requires the open fold to report `ready_to_close=true`; it writes the single terminal row that
@@ -245,7 +269,7 @@ phase. After validation, append exactly one of these canonical, no-whitespace JS
 order, replacing placeholders with the validated arguments:
 
 ```jsonc
-{"event":"run_started","run_id":"RUN_ID","ts":"ISO_TIMESTAMP","phase":"preflight"}
+{"event":"run_started","run_id":"RUN_ID","ts":"ISO_TIMESTAMP","phase":"preflight","trigger":"TRIGGER","scheduler_id":"SCHEDULER_ID"}
 {"event":"phase_changed","run_id":"RUN_ID","ts":"ISO_TIMESTAMP","phase":"PHASE"}
 {"event":"posting_state","run_id":"RUN_ID","ts":"ISO_TIMESTAMP","source":"SOURCE","source_id":"SOURCE_ID","state":"STATE","brief_revision":"BRIEF_REVISION"}
 {"event":"attempt_started","run_id":"RUN_ID","ts":"ISO_TIMESTAMP","attempt_id":"ATTEMPT_ID","operation":"OPERATION"}
@@ -255,16 +279,17 @@ order, replacing placeholders with the validated arguments:
 {"event":"run_closed","run_id":"RUN_ID","ts":"ISO_TIMESTAMP","close_state":"CLOSE_STATE","internal_code":"INTERNAL_CODE"}
 ```
 
-The two nullable fields use the raw JSON value `null`, not the string `"null"`, when their command argument
-is a dash. Otherwise they use a nonempty JSON string; an empty string is never canonical. A complete close
+The three nullable fields (`scheduler_id`, `request_id`, and `internal_code`) use the raw JSON value `null`,
+not the string `"null"`, when their command argument is a dash. Otherwise they use a nonempty JSON string;
+an empty string is never canonical. A complete close
 always uses a null internal code. The append is the sanctioned append-only ledger write; never rewrite or
 reorder existing lines.
 
 ### Fold/check fallback
 
 Read only canonical rows matching the shapes, field order, restricted values, and invariants above. Treat a
-missing/empty ledger, noncanonical row, changed run ID, duplicate start, event after closure, non-forward
-phase, accounting without a prior attempt start, a duplicate attempt event, or complete close outside
+missing/empty ledger, noncanonical row, changed run ID, duplicate start, event after closure, non-adjacent
+phase, invalid posting transition, accounting without a prior attempt start, a duplicate attempt event, or complete close outside
 `finalizing` as a malformed or contradictory ledger; stop without reporting completion. An outstanding
 started attempt is valid open state, but it prevents readiness until exactly one accounting event follows.
 
@@ -289,11 +314,12 @@ Fold valid rows in order:
    `complete`. An open ready ledger has `can_complete=false`; blocked and interrupted ledgers always have
    `can_complete=false`. A complete close whose predicate does not pass is contradictory and fails closed.
 
-Emit normalized `key=value` state in this order: `run_id`, `phase`, `selected`, `evaluated`,
+Emit normalized `key=value` state in this order: `run_id`, `trigger`, `scheduler_id`, `phase`, `selected`, `evaluated`,
 `terminally_skipped`, `presented`, `remaining`, `in_flight`, `attempts_started`, `attempts_accounted`,
 `final_run_record_written`, `final_digest_written`, `closed`, `close_state`, `ready_to_close`, and
 `can_complete`. The two final-artifact output values report exact eligible non-symlink file existence; their
-milestone evidence is additionally required by `ready_to_close`.
+milestone evidence is additionally required by `ready_to_close`. In normalized output, a manual run's JSON
+null scheduler is emitted as the literal text `scheduler_id=null`.
 
 ## Safe recovery and non-resumable search state
 

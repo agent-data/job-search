@@ -32,11 +32,76 @@ Read these before running, and follow them exactly:
 - `../../shared/references/agent-data-contract.md` — CLI + routes + retry rules.
 - `../../shared/references/errors.md` — every E-* with the exact cause+fix wording.
 - `../../shared/references/conventions.md` — file schemas + digest format.
+- `../../shared/references/run-lifecycle.md` — coordinator-only ledger, phase, recovery, and completion contract.
 - `../../shared/references/build-stamp.md` — local build version + content hash to write into run records.
 - `../../shared/references/parallelism.md` — parallel-by-default + how to brief a subagent.
 - `../../shared/references/voice.md` — how any user-facing line is worded (see **Narrating** below).
 - `../../shared/references/internals.md#agent-data-usage-decisions` — classify the invocation or
   setting effect before deciding whether context or confirmation belongs in the live caller.
+
+## Lifecycle coordinator
+
+<!-- run-lifecycle-runner:coordinator -->
+The coordinator is the sole lifecycle writer and follows `run-lifecycle.md` exactly. Read-only discovery and
+preflight facts may be gathered first, but validate trigger/scheduler attribution before creating the ledger:
+`manual` requires a null scheduler ID, while `scheduled` and `canary` require the exact nonsecret ID supplied
+by the invoking scheduler. Reject every inconsistent combination without normalization. Observe the exact
+primary model and its current origin (`session_inheritance`, `user_override`, or `repair_session`) from the
+current invocation or canonical scheduler binding; never reconstruct it from history or guess an alias,
+tier, prefix, or default.
+
+Once a trusted writable workspace, run ID, timestamp, trigger attribution, and exact primary evidence exist,
+invoke `lifecycle-append.sh ... start ...` before any mutable or metered work. This start is the first run
+mutation. Every later append uses that run's exact ID and timestamped evidence; no worker or presenter writes
+the ledger. Invalid attribution is a rejected invocation and creates neither ledger nor run artifacts.
+
+Drive every canonical phase in order, including inapplicable presentation phases:
+
+1. `preflight` is established by `run_started`; append `searching` immediately before the first search batch.
+2. After pagination/reconciliation/selection is final and the non-resumable scratch is no longer needed,
+   append `queued` for every selected posting before any detail dispatch, then append `selection_settled` as
+   the commit marker proving the entire selected queue is already durable.
+3. Append `reviewing_initial_batch`; for each selected identity, append `evaluating` immediately before
+   detail work, followed only by `evaluated` after a validated judgment is durably appended to `jobs.jsonl`, or
+   `terminally_skipped` when that identity will not be retried in this run. A summary-only rejection is still
+   a selected posting and moves from `queued` to `evaluating` to its durable evaluated judgment.
+4. For a live interactive invocation, append `presented` only after successful interactive rendering of a
+   matching relevant `jobs.jsonl` judgment with nonempty reasoning. A render failure leaves it `evaluated`.
+   Scheduled/canary runs append no `presented` transition. Advance through `early_results_shown` (record its
+   milestone only after an actual qualifying interactive display), then immediately to `reviewing_remaining`.
+5. Append `finalizing` only after all selected identities and started producer attempts have settled.
+
+For every agent-data producer attempt, append `attempt_started` immediately before dispatch. Immediately
+after the producer resolves—and before retry, quota, worker-error, or consolidation branching—append exactly
+one `attempt_accounted` from producer-authoritative metered/outcome/request evidence. A retry gets a new
+attempt ID and its own pair. The coordinator folds delegated attempt evidence once; it does not count a
+worker's attempt again. Missing or malformed worker evidence remains unaccounted, prevents completion, and
+may be requested again only as retained evidence without another producer call. The coordinator must never
+infer zero calls from a missing envelope, worker failure, exception, planned call, or dispatch count.
+
+Before any completion claim, invoke `lifecycle-fold.sh LEDGER WORKSPACE` or execute its pinned prose fallback.
+Remaining or in-flight postings, an unaccounted attempt, missing artifacts, malformed/contradictory state,
+quota, worker failure, unsafe compaction recovery, or interruption makes completion false. After compaction,
+fold first and follow the canonical recovery map: reconcile an already-settled queue without replaying a
+producer, or close interrupted before selection and begin a later clean run. Preserve completed judgments
+and producer evidence; never coerce posting state or synthesize accounting to satisfy the predicate.
+
+For a prospective complete run, write the exact intended-terminal `runs/<run_id>.json` and exact digest,
+read back and validate both against `conventions.md`, append both artifact milestones, and fold again. Only
+`ready_to_close=true` permits the final `run_closed:complete` append. Do not display or publish a complete
+artifact while that append is pending. If either artifact write/readback/validation fails, append a truthful
+blocked close when possible. If the complete-close append itself fails, rewrite and revalidate both artifacts
+to the truthful noncomplete state before attempting a blocked/interrupted close. The ledger remains the
+authority: an open, blocked, or interrupted ledger is never reported complete.
+After a successful `run_closed:complete` append, fold again after the close and require `can_complete=true`
+before rendering success; the pre-close ready fold alone is not completion evidence.
+
+Every writable-workspace exit follows the same terminal transaction, including preflight HALTs, quota,
+worker failure, artifact failure, and interruption: preserve existing judgments/evidence; write and validate
+the exact terminal record/digest when possible; append the matching artifact milestones; append exactly one
+`blocked` or `interrupted` close; fold once more; then render only that observed state. The no-workspace
+exceptions in `errors.md` remain the only runs without a ledger or artifacts.
+<!-- /run-lifecycle-runner:coordinator -->
 
 ## Invocation context and saved consent
 

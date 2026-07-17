@@ -2227,12 +2227,13 @@ def test_exact_model_repair_eval_matrix_is_structural_and_executable():
     home = _evals("job-search")
     agent = _evals("job-search-agent")
     runner = _evals("job-search-run")
+    runner_repair = [case for case in runner if 42 <= case["id"] <= 46]
     assert [case["id"] for case in home[-7:]] == [25, 26, 27, 28, 29, 30, 31]
     assert [case["id"] for case in agent[-7:]] == [15, 16, 17, 18, 19, 20, 21]
-    assert [case["id"] for case in runner[-5:]] == [42, 43, 44, 45, 46]
+    assert [case["id"] for case in runner_repair] == [42, 43, 44, 45, 46]
     home_matrix = " ".join(case["scenario"].lower() for case in home[-7:])
     agent_matrix = " ".join(case["scenario"].lower() for case in agent[-7:])
-    runner_matrix = " ".join(case["scenario"].lower() for case in runner[-5:])
+    runner_matrix = " ".join(case["scenario"].lower() for case in runner_repair)
     for phrase in (
         "primary-only",
         "detail-only",

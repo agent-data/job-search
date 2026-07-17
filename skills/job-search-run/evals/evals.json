@@ -603,6 +603,71 @@
         "The only fixture operation is headless-model-check with blocked_exact_dispatch_refused_no_substitute; no repair candidate, canary, network, or new metered operation begins",
         "Config, binding, registry, and disabled/unverified job state remain exact, and normal output routes to interactive exact-model repair without exposing the internal class"
       ]
+    },
+    {
+      "id": 47,
+      "scenario": "lifecycle completion predicate pressure",
+      "coverage_kind": "executable_fixture",
+      "executable_host_controls": true,
+      "prompt": "Use setup-workspace.sh, then run _bin/fake-run-lifecycle in separate temp workspaces for happy_manual, remaining_work, and in_flight_work. Inspect each JSON summary, hidden lifecycle ledger, jobs.jsonl, final run record, and exact-date digest. This is deterministic dev-only mechanics pressure: do not invoke the live runner, model, scheduler, network, or agent-data service.",
+      "expectations": [
+        "happy_manual creates run_started before any jobs mutation or simulated producer call, queues the complete selected set before the selection_settled commit marker, settles every identity and attempt, validates the full conventions-shaped run record and digest before close, folds ready_to_close, closes complete, and folds can_complete afterward",
+        "remaining_work retains one queued selected posting and closes blocked; in_flight_work retains one evaluating posting and closes interrupted. Neither ledger contains a complete close or reports can_complete",
+        "All three summaries and folded ledgers agree on selected, remaining, in_flight, attempts_started, attempts_accounted, trigger attribution, phase, and close state",
+        "The fixture is labeled as deterministic local lifecycle mechanics only and makes no behavioral claim about a live model, scheduler, network, or billing system"
+      ]
+    },
+    {
+      "id": 48,
+      "scenario": "lifecycle interruption and compaction pressure",
+      "coverage_kind": "executable_fixture",
+      "executable_host_controls": true,
+      "prompt": "Use setup-workspace.sh, then run _bin/fake-run-lifecycle in separate temp workspaces for compaction_after_selection and interruption_before_selection. Inspect ledger order, posting state, attempts, terminal artifacts, and summaries; do not add cursor/resume data or run live calls.",
+      "expectations": [
+        "Compaction after selection folds the already-durable queued posting and completed search attempt, resumes that queued review without replaying search, and may complete only after the posting and all later attempts settle",
+        "Interruption before selection preserves the completed search accounting, closes interrupted from searching, and does not invent a selected set from conversation memory",
+        "The pre-selection interruption writes truthful interrupted evidence; the recoverable post-selection arm contains no interrupted close. Both preserve prior evidence and contain no cursor, opaque continuation token, or synthesized accounting",
+        "This is T4.1 lifecycle pressure only; later-run resume/cursor behavior remains outside the fixture"
+      ]
+    },
+    {
+      "id": 49,
+      "scenario": "lifecycle producer accounting pressure",
+      "coverage_kind": "executable_fixture",
+      "executable_host_controls": true,
+      "prompt": "Use setup-workspace.sh, then run _bin/fake-run-lifecycle for unaccounted_retry, quota_during_detail, and worker_failure in isolated temp workspaces. Inspect the ordered effects and canonical attempt_started/attempt_accounted rows; use no live producer.",
+      "expectations": [
+        "Every simulated producer invocation is immediately preceded by one attempt_started row and every resolved authoritative result is immediately followed by exactly one attempt_accounted row",
+        "The unaccounted retry has three starts and only two accounting rows, so it closes blocked and never treats a missing result as free or zero-call evidence",
+        "Quota detail accounting is exactly once, unmetered, outcome quota_rejected, and preserves prior metered search work; worker failure accounting is exactly once from the simulated producer status and cannot complete",
+        "No failure arm retries, launches replacement work, duplicates accounting, forces evaluated state, or appends a complete close"
+      ]
+    },
+    {
+      "id": 50,
+      "scenario": "lifecycle final artifact and close pressure",
+      "coverage_kind": "executable_fixture",
+      "executable_host_controls": true,
+      "prompt": "Use setup-workspace.sh, then run _bin/fake-run-lifecycle for artifact_write_failure, artifact_validation_failure, display_failure, and complete_close_write_failure in isolated temp workspaces. Inspect readback validation, artifact milestones, ledger close rows, run-record lifecycle fields, and digest text.",
+      "expectations": [
+        "Artifact write or exact readback validation failure never attempts a complete close and ends blocked without reporting can_complete",
+        "Display failure preserves the relevant evaluated jobs event with nonempty reasoning but never appends presented because no successful interactive render occurred",
+        "The complete-close-write arm first validates intended complete artifacts and folds ready, induces an actual append write failure with no complete row, then rewrites and revalidates record and digest to blocked before appending blocked close",
+        "No user-visible artifact in any arm claims healthy complete lifecycle state unless the ledger's final canonical row is run_closed complete"
+      ]
+    },
+    {
+      "id": 51,
+      "scenario": "lifecycle trigger attribution and ordering pressure",
+      "coverage_kind": "executable_fixture",
+      "executable_host_controls": true,
+      "prompt": "Use setup-workspace.sh. Run _bin/fake-run-lifecycle for happy_manual, happy_scheduled, happy_canary, invalid_manual_scheduler, invalid_scheduled_without_scheduler, invalid_canary_without_scheduler, and mutable_before_ledger in separate temp paths. Inspect first ledger rows, summaries, effects, artifacts, and absence of paths for rejected arms.",
+      "expectations": [
+        "Manual persists trigger manual with scheduler_id null; scheduled and canary persist their exact scheduler-fixture-1 identifier. Final run records copy those exact values without normalization",
+        "Scheduled and canary complete quietly with no presented transition; manual appends presented only after the successful interactive render effect",
+        "Every accepted arm creates the ledger as its first effect before jobs mutation or producer dispatch, queues selection before detail, and persists exact primary/detail model origins and binding evidence in the run record",
+        "All inconsistent trigger/scheduler arms and mutable-before-ledger are rejected with no runs directory, jobs file, producer effect, or normalized substitute"
+      ]
     }
   ]
 }

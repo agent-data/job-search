@@ -176,10 +176,24 @@ runs_dir=$(dirname "$ledger")
   || reject 'ledger filename does not match run_id'
 
 if [ "$command" = start ]; then
-  [ "$#" -eq 0 ] || usage
+  [ "$#" -eq 2 ] || usage
+  trigger=$1
+  scheduler_id=$2
+  case $trigger in
+    manual)
+      [ "$scheduler_id" = - ] || reject 'manual trigger requires null scheduler_id'
+      scheduler_json=null
+      ;;
+    scheduled|canary)
+      [ "$scheduler_id" != - ] || reject 'scheduled and canary triggers require scheduler_id'
+      payload_identifier scheduler_id "$scheduler_id"
+      scheduler_json="\"$scheduler_id\""
+      ;;
+    *) reject 'unknown trigger' ;;
+  esac
   [ ! -e "$ledger" ] || reject 'run_started already exists'
   [ -d "$runs_dir" ] || mkdir -p "$runs_dir" || reject 'could not create runs directory'
-  append_line "{\"event\":\"run_started\",\"run_id\":\"$run_id\",\"ts\":\"$timestamp\",\"phase\":\"preflight\"}"
+  append_line "{\"event\":\"run_started\",\"run_id\":\"$run_id\",\"ts\":\"$timestamp\",\"phase\":\"preflight\",\"trigger\":\"$trigger\",\"scheduler_id\":$scheduler_json}"
   exit 0
 fi
 
@@ -199,7 +213,8 @@ case $command in
     next_rank=$(phase_rank "$phase") || reject 'unknown phase'
     current_phase=$(state_value phase)
     current_rank=$(phase_rank "$current_phase") || reject 'ledger has an invalid current phase'
-    [ "$next_rank" -gt "$current_rank" ] || reject 'phase transition must move forward'
+    [ "$next_rank" -eq $((current_rank + 1)) ] \
+      || reject 'phase transition must advance exactly one canonical phase'
     append_line "{\"event\":\"phase_changed\",\"run_id\":\"$run_id\",\"ts\":\"$timestamp\",\"phase\":\"$phase\"}"
     ;;
 
@@ -216,6 +231,40 @@ case $command in
     esac
     payload_identifier source_id "$source_id"
     payload_identifier brief_revision "$brief_revision"
+    identity_marker="\"source\":\"$source\",\"source_id\":\"$source_id\""
+    prior_row=$(grep -F "$identity_marker" "$ledger" | tail -n 1)
+    prior_state=$(printf '%s\n' "$prior_row" \
+      | sed -n 's/.*"state":"\([^"]*\)".*/\1/p')
+    current_phase=$(state_value phase)
+    case $posting_state in
+      queued)
+        [ -z "$prior_state" ] || reject 'selected posting was already queued'
+        [ "$current_phase" = searching ] \
+          || reject 'selected postings must be queued while selection is settling'
+        ;;
+      evaluating)
+        [ "$prior_state" = queued ] || reject 'evaluating requires prior queued state'
+        case $current_phase in
+          reviewing_initial_batch|reviewing_remaining) : ;;
+          *) reject 'evaluating requires a review phase' ;;
+        esac
+        ;;
+      evaluated|terminally_skipped)
+        [ "$prior_state" = evaluating ] \
+          || reject 'terminal posting state requires prior evaluating state'
+        case $current_phase in
+          reviewing_initial_batch|reviewing_remaining) : ;;
+          *) reject 'terminal posting state requires a review phase' ;;
+        esac
+        ;;
+      presented)
+        [ "$prior_state" = evaluated ] || reject 'presented requires prior evaluated state'
+        case $current_phase in
+          reviewing_initial_batch|reviewing_remaining) : ;;
+          *) reject 'presented requires a review phase' ;;
+        esac
+        ;;
+    esac
     append_line "{\"event\":\"posting_state\",\"run_id\":\"$run_id\",\"ts\":\"$timestamp\",\"source\":\"$source\",\"source_id\":\"$source_id\",\"state\":\"$posting_state\",\"brief_revision\":\"$brief_revision\"}"
     ;;
 

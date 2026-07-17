@@ -629,8 +629,16 @@ PSG-INJ-03/04/05/11; PSG-COMM-04/09/11.
   - skills/job-search-run/SKILL.md
   - shared/references/conventions.md
   - shared/references/errors.md
+  - shared/references/run-lifecycle.md
+  - shared/scripts/mechanics/lifecycle-append.sh
+  - shared/scripts/mechanics/lifecycle-fold.sh
   - skills/job-search-run/evals/evals.json
   - skills/job-search-run/evals/files/setup-workspace.sh
+  - tests/fake-run-lifecycle
+  - tests/test_run_lifecycle_pressure.py
+  - tests/test_mechanics_scripts.py
+  - tests/test_config_v1_migration.py
+  - tests/test_exact_model_repair.py
 
   The runner must:
 
@@ -1407,6 +1415,18 @@ AAS-DIST-03/05/06.
   `65 passed` focused, `296 passed` cumulative, and `405 passed` full; release integrity, eval, doc, philosophy,
   syntax, compilation, diff, and deterministic build checks were clean. P3 is complete; no live agent-data,
   network, or real scheduler effect occurred.
+- 2026-07-17 — T4.1 RED/GREEN drove every writable-workspace run through canonical trigger-attributed
+  lifecycle evidence. Interface RED reported `6 failed, 88 deselected`; the new coordinator matrix reported
+  `20 failed`; close-write, structural/eval, semantic-review, and mechanics-boundary REDs reported 1, 3, 9,
+  and 1 expected failures respectively. GREEN requires the full selected queue before the
+  `selection_settled` commit marker, adjacent canonical phases/posting transitions, producer-authoritative
+  exactly-once attempt pairs, safe post-selection compaction recovery without search replay, validated full
+  run/digest artifacts, a ready pre-close fold, and a post-close `can_complete` fold. Fresh semantic review
+  found four Important and one Minor issue; all were fixed test-first, and narrow re-review approved with no
+  remaining findings after `156 passed`. Final focused verification reported `211 passed`; full pytest
+  reported `437 passed`; eval, doc, philosophy, release-integrity, POSIX syntax, temp-cache Python
+  compilation, diff, and runtime-leakage gates were clean. Two deterministic builds held
+  `sha256:4fd20929d9c2`. No live agent-data, model, scheduler, network, or billable action occurred.
 
 ## Decision log
 
@@ -1426,6 +1446,11 @@ AAS-DIST-03/05/06.
 - 2026-07-17 — Preserve valid exact model slots during repair and resolve only unavailable/refused slots.
   Scheduled repair uses one receipt-bound confirmation and restores verified status only after a green
   canary; unscheduled detail-only repair is neutral and may not invent or bypass scheduler state.
+- 2026-07-17 — Keep exact trigger/scheduler attribution in canonical `run_started` evidence while model
+  identifiers/origins remain run-record-only. Treat `selection_settled` as the commit marker after every
+  selected identity is already queued, and treat the ledger as final authority: validate intended terminal
+  artifacts before close, then require a second fold after complete close; a close-write failure first
+  repairs both artifacts to truthful noncomplete state.
 - 2026-07-16 — Define verified recurring as unattended plus real-path canary; a session loop is never
   verified recurring.
 - 2026-07-16 — Scope cost context to agent-data calls, mention the available 100-call monthly free tier, and

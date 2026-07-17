@@ -297,6 +297,10 @@ are the skills' own POSIX shell, no third-party dependency):
 ```jsonc
 { "run_id":"…", "started_at":"…", "completed_at":"…",
   "build": { "version":"0.4.0", "content_hash":"sha256:abcdef123456", "git_sha":"<short sha|unknown>" },
+  "trigger":"manual|scheduled|canary",
+  "scheduler_id":"<exact scheduler identifier; null for manual>",
+  "primary_model":"<exact primary model for this run>",
+  "primary_model_origin":"session_inheritance|user_override|repair_session",
   "status_probe":"ok|degraded|unreachable",
   "detail_model":"<exact model used for posting-detail judgment>",
   "detail_model_origin":"configured_auto|configured_user|legacy_v1_selector|repair",
@@ -335,8 +339,41 @@ are the skills' own POSIX shell, no third-party dependency):
                       "relevant":6, "strong":3, "moderate":2, "weak":1 },
   "errors":[ { "stage":"get-posting", "source_id":"…", "code":"upstream_unavailable",
                "retryable":true, "attempts":3, "final":"gave_up", "request_id":"…" } ],
+  "lifecycle": { "phase":"preflight|searching|selection_settled|reviewing_initial_batch|early_results_shown|reviewing_remaining|finalizing|complete",
+                 "close_state":"complete|blocked|interrupted",
+                 "health":"healthy|partial|degraded|blocked" },
   "run_health":"healthy|partial|degraded|blocked" }
 ```
+
+<!-- run-lifecycle-contract:run-record -->
+| Field | Required value and authority |
+|---|---|
+| `trigger` | Exact `manual`, `scheduled`, or `canary` copied from canonical `run_started` evidence. |
+| `scheduler_id` | JSON `null` for manual; exact nonsecret scheduler identifier copied from `run_started` for scheduled/canary. |
+| `primary_model` | Exact observed primary model for this run; never an alias, tier, prefix, guess, or reconstructed value. |
+| `primary_model_origin` | Exact `session_inheritance`, `user_override`, or `repair_session` evidence from the current invocation/scheduler binding. |
+| `detail_model` | Exact bound or resolved detail model actually used for detail dispatch. |
+| `detail_model_origin` | Exact current binding/resolution provenance defined below. |
+| `detail_model_binding_id` | Exact current version-2 binding ID, or JSON `null` for version 1. |
+| `lifecycle.phase` | Intended terminal folded phase: `complete` only for a record being validated immediately before a complete close. |
+| `lifecycle.close_state` | Intended exact terminal close from [run-lifecycle.md](run-lifecycle.md); this consumer does not redefine its closed vocabulary. |
+| `lifecycle.health` | Exact final `run_health`; it never upgrades a partial/degraded/blocked run. |
+<!-- /run-lifecycle-contract:run-record -->
+
+Every ledger-started run carries trigger, scheduler, primary-model, and lifecycle evidence above. Validate
+trigger/scheduler consistency and current exact primary evidence before ledger creation; invalid or
+unobservable attribution is rejected before mutable or metered work rather than normalized or guessed. The
+existing narrow pre-binding blocked-artifact exception in `errors.md` may keep the three detail-model fields
+null because no exact executable detail binding was established; it does not permit guessing. Outside that
+bounded exception, all model fields are required.
+
+The ledger remains authoritative for completion. The coordinator writes the intended terminal run record
+and exact digest, reads back and validates both, records their lifecycle milestones, and folds the ledger
+before attempting `run_closed:complete`; neither artifact is displayed or published as complete while that
+append is pending. If the complete-close append fails, rewrite and revalidate both artifacts to the truthful
+`blocked` or `interrupted` state before attempting that noncomplete close. If even the fallback close cannot
+be appended, leave the ledger open and surface the repaired noncomplete artifacts; never leave a visible
+record or digest that claims complete without a matching complete ledger close.
 
 <!-- exact-model-contract:run-record-fields -->
 | Field | Owner | Presence | Value |

@@ -151,10 +151,30 @@ BEGIN {
 
   if (event == "run_started") {
     phase = string_value(row, "phase")
-    canonical = "{\"event\":\"run_started\",\"run_id\":\"" rid "\",\"ts\":\"" timestamp "\",\"phase\":\"preflight\"}"
+    trigger = string_value(row, "trigger")
+    scheduler_marker = "\"scheduler_id\":"
+    scheduler_start = index(row, scheduler_marker)
+    if (!scheduler_start) fail("missing scheduler_id")
+    scheduler_tail = substr(row, scheduler_start + length(scheduler_marker))
+    if (scheduler_tail == "null}") {
+      scheduler_json = "null"
+      scheduler_is_null = 1
+      scheduler_id = ""
+    } else {
+      scheduler_is_null = 0
+      scheduler_id = string_value(row, "scheduler_id")
+      if (scheduler_id == "") fail("scheduler_id must be null or nonempty")
+      scheduler_json = "\"" scheduler_id "\""
+    }
+    canonical = "{\"event\":\"run_started\",\"run_id\":\"" rid "\",\"ts\":\"" timestamp "\",\"phase\":\"preflight\",\"trigger\":\"" trigger "\",\"scheduler_id\":" scheduler_json "}"
     if (row != canonical || NR != 1 || started || phase != "preflight") fail("invalid run_started row")
+    if (trigger !~ /^(manual|scheduled|canary)$/) fail("invalid trigger")
+    if (trigger == "manual" && !scheduler_is_null) fail("manual trigger requires null scheduler_id")
+    if (trigger != "manual" && (scheduler_is_null || !restricted(scheduler_id) || unsafe_identifier("scheduler_id", scheduler_id))) fail("scheduled and canary triggers require a safe scheduler_id")
     started = 1
     run_id = rid
+    run_trigger = trigger
+    run_scheduler_id = scheduler_is_null ? "null" : scheduler_id
     started_date = substr(timestamp, 1, 10)
     working_phase = "preflight"
     current_rank = phase_rank[working_phase]
@@ -167,7 +187,7 @@ BEGIN {
     phase = string_value(row, "phase")
     canonical = "{\"event\":\"phase_changed\",\"run_id\":\"" rid "\",\"ts\":\"" timestamp "\",\"phase\":\"" phase "\"}"
     if (row != canonical || !(phase in phase_rank)) fail("invalid phase_changed row")
-    if (phase_rank[phase] <= current_rank) fail("phase transition is not forward")
+    if (phase_rank[phase] != current_rank + 1) fail("phase transition must advance exactly one canonical phase")
     current_rank = phase_rank[phase]
     working_phase = phase
     next
@@ -183,7 +203,21 @@ BEGIN {
     if (source !~ /^(linkedin|ashby|greenhouse|lever)$/ || !restricted(source_id) || !restricted(revision)) fail("invalid posting identifier")
     if (state !~ /^(queued|evaluating|evaluated|presented|terminally_skipped)$/) fail("invalid posting state")
     if (unsafe_identifier("source_id", source_id) || unsafe_identifier("brief_revision", revision)) fail("prohibited posting value")
-    posting[source SUBSEP source_id] = state
+    identity = source SUBSEP source_id
+    if (!(identity in posting)) {
+      if (state != "queued" || working_phase != "searching") fail("selected posting must first queue while selection is settling")
+    } else {
+      prior_state = posting[identity]
+      review_phase = working_phase == "reviewing_initial_batch" || working_phase == "reviewing_remaining"
+      if (state == "evaluating") {
+        if (prior_state != "queued" || !review_phase) fail("invalid queued-to-evaluating transition")
+      } else if (state == "evaluated" || state == "terminally_skipped") {
+        if (prior_state != "evaluating" || !review_phase) fail("invalid evaluating-to-terminal transition")
+      } else if (state == "presented") {
+        if (prior_state != "evaluated" || !review_phase) fail("invalid evaluated-to-presented transition")
+      } else fail("duplicate queued or invalid posting transition")
+    }
+    posting[identity] = state
     next
   }
 
@@ -296,6 +330,8 @@ END {
   for (attempt_id in attempts_accounted) accounted_count++
 
   print "run_id=" run_id
+  print "trigger=" run_trigger
+  print "scheduler_id=" run_scheduler_id
   print "started_date=" started_date
   print "working_phase=" working_phase
   print "selected=" selected
@@ -314,6 +350,8 @@ END {
 ' "$ledger" > "$folded" || exit 1
 
 run_id=
+trigger=
+scheduler_id=
 started_date=
 working_phase=
 selected=0
@@ -332,6 +370,8 @@ close_state=open
 while IFS='=' read -r key value; do
   case $key in
     run_id) run_id=$value ;;
+    trigger) trigger=$value ;;
+    scheduler_id) scheduler_id=$value ;;
     started_date) started_date=$value ;;
     working_phase) working_phase=$value ;;
     selected) selected=$value ;;
@@ -406,6 +446,8 @@ if [ "$closed" = true ] && [ "$close_state" = complete ]; then
 fi
 
 printf 'run_id=%s\n' "$run_id"
+printf 'trigger=%s\n' "$trigger"
+printf 'scheduler_id=%s\n' "$scheduler_id"
 printf 'phase=%s\n' "$phase"
 printf 'selected=%s\n' "$selected"
 printf 'evaluated=%s\n' "$evaluated"
