@@ -623,7 +623,7 @@ Rules: AAS-AUTO-02/07/11; AAS-LANG-03/04/08; PSG-SUB-02/03/04/09/13; PSG-COMM-09
 Rules: AAS-PROC-03/04; AAS-FORM-09/14; AAS-AUTO-11; PSG-SUB-02/03/04/06/13;
 PSG-INJ-03/04/05/11; PSG-COMM-04/09/11.
 
-- [ ] **T4.1 [BLOCKS, L] Drive every run through the lifecycle ledger.**
+- [x] **T4.1 [BLOCKS, L] Drive every run through the lifecycle ledger.**
 
   **Modify:**
   - skills/job-search-run/SKILL.md
@@ -1480,6 +1480,30 @@ AAS-DIST-03/05/06.
   producer-authoritative returned evidence, and coordinator-only append/fold of the sole lifecycle ledger.
   Cumulative focused verification now reports `204 passed` (`104` mechanics, `37` lifecycle pressure, `63`
   combined reference/usage). T4.1 remains open pending final cumulative review and controller verification.
+- 2026-07-17 — T4.1 final recovery-evidence cycle: recovery, pre-close validation, and every public reader now
+  prove the same exact durable posting/attempt evidence — case/whitespace-resistant forbidden-model vocabulary;
+  `first_page`/finite/`all` review modes bound to their outcomes; full record, digest, and retry-diagnostic
+  revalidation; canonical source-native job and `jp_` posting identities with the exact
+  `detail-<source>-<source_id>` recovery join; duplicate-free `source_order`; canonical alias-primary
+  selection; bidirectional job/posting reconciliation before both final-artifact milestones and again at public
+  authority; the sole canonical `attempt_resolved:summary_fallback` with exact set-equality to durable
+  `detail_read:false` jobs (an orphan fallback naming no posting/job fails recovery and pre-close while the
+  canonical false fallback still closes and passes public authority); and retry terminality with full
+  logical-operation-history validation. Committed as `d909b95` (`fix: validate lifecycle recovery evidence`)
+  under explicit user Git-metadata authorization after the prior Codex-session escalation was rejected at the
+  account usage limit; the T4.1 range is `bb71e91..d909b95` (`366ce81`, `7fee866`, `d909b95`). A fresh
+  cumulative Opus review of the full range returned **Approved** — no Critical or Important; one Minor (the
+  dev-only fake fixture renders a raw `E-*` code in its tmp-only blocked-digest stand-in — not a shipped
+  surface; logged for the whole-branch review, no fix) and two cannot-verify-from-diff items resolved by the
+  controller (live prose adherence is deferred to T9.1/T9.3/T9.4 with the eval harness already coherent; the R9
+  "every reader" enumeration is complete — all eight shipped surfacing skills delegate to `run-lifecycle.md`'s
+  "Artifact authority for every reader"). Controller gates on the committed tree: focused
+  lifecycle/mechanics/reference/usage `323 passed`, full pytest `486 passed`, eval harness coherent, doc lint
+  and philosophy guard clean, release version-sync clean, POSIX `sh -n` and temp-cache Python compilation
+  clean, `git diff --check` clean, and two deterministic builds byte-identical (build-stamp SHA-256
+  `0decbb23665ce0ec42bc7c38796076c7150f352a34e78fd6d5158be55aaa9e13`, content hash `sha256:30a68c2c7c19`). The
+  plugin version stays `0.6.0`; the `0.7.0` bump is deferred to T9.5. No live agent-data, model, scheduler,
+  network, or billable effect occurred and no branch or worktree changed. **T4.1 is complete.**
 
 ## Decision log
 
@@ -1519,6 +1543,13 @@ AAS-DIST-03/05/06.
   worktree step.
 - 2026-07-16 — The collaboration API exposes no model selector. Dispatches use fresh context and explicitly
   state task/review complexity, while the unavailable model field is recorded as a harness limitation.
+- 2026-07-17 — Bind handled-failure resolution by exact set-equality: the resolved
+  `attempt_resolved:summary_fallback` logical identities must equal the durable primary `detail_read:false`
+  jobs that carry matching attempt history, enforced identically in recovery and in pre-close/public
+  validation. An orphan fallback naming no posting/job fails recovery and pre-close; the canonical false
+  fallback still closes. Every shipped reader that surfaces a record, digest, usage result, activation, or
+  canary derives its answer through the single "Artifact authority for every reader" contract rather than
+  trusting an intended-complete file while the ledger is open.
 
 ## Self-review
 
