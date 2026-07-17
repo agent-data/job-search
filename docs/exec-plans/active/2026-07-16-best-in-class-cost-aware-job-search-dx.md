@@ -741,7 +741,7 @@ PSG-INJ-03/04/05/11; PSG-COMM-04/09/11.
       python3 -m pytest -q tests/test_mechanics_scripts.py
       python3 scripts/doc_lint.py --root .
 
-- [ ] **T4.4 [BLOCKS, M] Specify compaction, restart, and non-resumable search behavior.**
+- [x] **T4.4 [BLOCKS, M] Specify compaction, restart, and non-resumable search behavior.**
 
   **Modify:**
   - skills/job-search-run/SKILL.md
@@ -1553,6 +1553,30 @@ AAS-DIST-03/05/06.
   content hash `sha256:03c477e88973`), and `git diff --check` clean. The plugin version stays `0.6.0`. No live
   agent-data, model, scheduler, network, or billable effect occurred and no branch or worktree changed.
   **T4.3 is complete.**
+- 2026-07-17 — T4.4 interruption and cursor-safe resume: specified the runner's compaction/restart/
+  non-resumable-search behavior on top of T4.1's existing recovery mechanics (no mechanics, run-record schema,
+  or pinned run-lifecycle table touched). After compaction the ledger is authoritative; when `selection_settled`
+  was reached the runner resumes each reconstructed `queued` identity and reconciles an `evaluating`
+  (started-but-unaccounted) attempt from durable ledger/`jobs.jsonl` evidence — settling without re-dispatch
+  when a durable result exists, otherwise treating it as a possibly-consumed metered call accounted honestly
+  (never as zero) and re-requested only with fresh cost awareness, never a silent second dispatch. Before
+  `selection_settled`, or when continuation would need an opaque/expired cursor, the run closes `interrupted`
+  and the next run restarts that search cleanly with fresh calls-first cost context; the cursor never resumes,
+  stale pagination scratch is deleted at the next run (the pre-existing mechanic single-homed in
+  conventions.md), and cursors are never persisted in lifecycle/run/digest/registry/jobs artifacts. Added a
+  user-safe `## E-LIFECYCLE-INCOMPLETE` surfacing subsection in errors.md (the code was already a canonical
+  E-* row; the subsection mirrors the E-QUOTA pattern — cause, preserved work, next step, and a fresh-cost fix,
+  with no raw code) plus three structural-contract evals (62-64). TDD RED (coverage-absence probe) then GREEN.
+  Committed as `eae1c43` (`feat: resume review without cursor reuse`) — the four brief files plus the
+  regenerated build stamp; no out-of-brief edit was needed. A fresh Opus task review returned **Approved** — no
+  Critical or Important; one Minor (mild cross-file rule-text recap that matches each file's altitude, recorded
+  in the SDD ledger, no fix) and one cannot-verify item (the structural evals' behavioral pass is graded
+  off-CI, deferred to P9). Controller re-verify on the committed tree: full pytest `486 passed`, eval harness
+  coherent, doc lint / philosophy guard / release version-sync clean, two deterministic builds byte-identical
+  (build-stamp file SHA-256 `46099fa0…7ade6f49`, content hash `sha256:acac470fd773`), and `git diff --check`
+  clean. The plugin version stays `0.6.0`. No live agent-data, model, scheduler, network, or billable effect
+  occurred and no branch or worktree changed. **T4.4 is complete, and P4 (runner progression, incremental
+  results, and honest resumption) is complete.**
 
 ## Decision log
 
@@ -1599,6 +1623,11 @@ AAS-DIST-03/05/06.
   fallback still closes. Every shipped reader that surfaces a record, digest, usage result, activation, or
   canary derives its answer through the single "Artifact authority for every reader" contract rather than
   trusting an intended-complete file while the ledger is open.
+- 2026-07-17 — On recovery, treat an `evaluating` attempt (started but unaccounted at compaction) as a
+  possibly-consumed metered call: account it honestly rather than as zero and re-request that detail only with
+  fresh calls-first cost awareness, never as a silent second dispatch. When continuation would require an
+  opaque or expired pagination cursor, close the run `interrupted` and restart the search cleanly with fresh
+  cost context rather than resuming the cursor; cursors are never persisted in any durable artifact.
 
 ## Self-review
 
