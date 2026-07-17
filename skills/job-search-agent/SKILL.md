@@ -55,6 +55,12 @@ The OS state is plain files, and every operation on it is a pinned procedure in 
 | Explain recent agent-data usage without changing state | `references/customization.md` → Explaining agent-data usage; run fields in `../../shared/references/conventions.md` |
 | Read or write the one-time deeper-coverage marker | `../../shared/references/internals.md` → Registry write rules |
 
+Any operation that surfaces, explains, activates, or verifies a run first applies
+`../../shared/references/run-lifecycle.md` → **Artifact authority for every reader**: invoke
+`lifecycle-fold.sh` for the candidate's exact run_id, require `closed=true` and matching record state, and
+use only its fold-derived digest. An open intended-complete artifact is not terminal evidence and cannot
+verify a canary or schedule.
+
 ---
 
 ## Configuring it (conversational)
@@ -151,7 +157,12 @@ For the full flow — unattended-first advocacy, the consent line, and the manda
 
 ## When something fails
 
-The run's outcome is the `run_health` field in `runs/<id>.json` and the digest header — one of `healthy | partial (<why>) | degraded (job sources flaky) | blocked (action needed)`. For what each state means and when it's written, see `../../shared/references/errors.md` (the four states and the surfacing story) and `../../shared/references/conventions.md` → the digest "Run health" line. One meaning lives with the runner instead: a `degraded` run still reads promising matches in full — no detail-read cap, relevance decides (see **job-search-run**).
+For an authority-qualified closed run, the outcome is the `run_health` field in `runs/<id>.json` and its
+fold-derived digest header — one of `healthy | partial (<why>) | degraded (job sources flaky) | blocked
+(action needed)`. For what each state means and when it's written, see `../../shared/references/errors.md`
+(the four states and the surfacing story) and `../../shared/references/conventions.md` → the digest "Run
+health" line. One meaning lives with the runner instead: a `degraded` run still reads promising matches in
+full — no detail-read cap, relevance decides (see **job-search-run**).
 
 **How failures surface:** a blocked run writes two durable artifacts — a `runs/<id>.json` record with `run_health:"blocked"`, and a `reports/<date>-digest.md` whose body is the named error + fix. The **home view** the next time you open the **job-search** skill reads `runs/<id>.json` and shows the error there. An attention-pull alert is capability-gated: if your host has an attention-pull surface, fire one alert on a blocked run when `notify.desktop_notify_on_block` is set; otherwise the two file channels carry the failure. **The written record is the primary signal on every harness** — surface every outcome through it (`../../shared/references/errors.md`); where your host provides a trustworthy exit code, that is an additional signal only, never a replacement.
 

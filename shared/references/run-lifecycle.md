@@ -74,8 +74,10 @@ The event vocabulary is closed:
 - `phase_changed` records a valid forward phase transition other than the terminal `complete` transition.
 - `posting_state` records the latest state for one selected `(source, source_id)` posting identity and the
   brief revision under which its evaluation began.
-- `attempt_started` and `attempt_accounted` pair by restricted attempt identifier. Every started attempt,
-  including a failed or retried attempt, requires exactly one accounting event before completion.
+- `attempt_started` and `attempt_accounted` pair by restricted attempt identifier. The start also carries a
+  coordinator-assigned `logical_operation_id` and adjacent positive `attempt_number`; these are the
+  canonical retry link for the same immutable logical operation. Every started attempt, including a failed
+  or retried attempt, requires exactly one accounting event before completion.
 - `brief_revision` records a revision identifier, never the preferences text itself.
 - `milestone` records a closed milestone token, never user-facing result content.
 - `run_closed` is the final line and carries exactly one close state.
@@ -155,16 +157,22 @@ filesystem:
 | `in_flight_zero` | `in_flight=0` |
 | `selected_settled` | `selected=evaluated+terminally_skipped` |
 | `all_started_attempts_accounted` | `each_attempt_started_has_exactly_one_attempt_accounted` |
+| `no_blocking_attempt_failure` | `no_permanent_or_unresolved_attempt_failure` |
 | `final_run_record_written` | `runs/{run_id}.json` |
 | `final_digest_written` | `reports/{ISO-date}-digest.md` |
 | `ledger_closed_complete` | `closed_with_complete_state` |
 <!-- /lifecycle-contract:completion -->
 
-The first six clauses make a run ready to close. Only then may the coordinator append `run_closed` with
-close state `complete`, which establishes the seventh clause. If any clause is unproved, completion is
+The first seven clauses make a run ready to close. Only then may the coordinator append `run_closed` with
+close state `complete`, which establishes the eighth clause. If any clause is unproved, completion is
 unproved; do not close complete or claim success. In `selected_settled`, evaluated includes presented
 postings. In `all_started_attempts_accounted`, every `attempt_started` has exactly one matching
-`attempt_accounted`. The two final-artifact clauses require both a concrete, non-symlink regular file at the
+`attempt_accounted`. Accounting alone is not success. The outcome vocabulary is exactly `success`,
+`retryable_failure`, `terminal_failure`, `worker_failed`, or `quota_rejected`; quota rejection is always
+unmetered. `quota_rejected` and `terminal_failure` remain blocking. A `retryable_failure` or `worker_failed`
+remains blocking unless a later fully accounted `success` has the same `logical_operation_id` and a higher
+adjacent `attempt_number`. A success on another logical operation, or before the failure, does not resolve
+it. The two final-artifact clauses require both a concrete, non-symlink regular file at the
 exact path and its matching lifecycle milestone; the digest's `reports/` directory must also be a real
 directory, not a symlink. The digest path's ISO date is derived from `run_started` as specified by the
 fold/check operation below. The coordinator appends each final-artifact milestone only after it has written
@@ -178,6 +186,30 @@ succeeds. If that append fails, rewrite and revalidate both artifacts to the tru
 before attempting a blocked/interrupted close. If the fallback close also fails, the open ledger still makes
 `can_complete=false`; surface only the repaired noncomplete artifacts. Never leave a displayed or published
 complete claim without a final canonical complete close.
+
+### Artifact authority for every reader
+
+Run files are prospective values; the lifecycle ledger is their publication authority. Every home,
+onboarding, usage, operator, activation, scheduling, and canary consumer applies this procedure before
+trusting a final run record or digest:
+
+1. Accept only a complete timestamp-shaped run-record filename and require its body `run_id` to equal that
+   filename's exact run_id.
+2. Locate exactly `runs/.lifecycle-{run_id}.jsonl` and run `lifecycle-fold.sh LEDGER WORKSPACE` (or its exact
+   prose fallback). Require the fold's exact run_id to equal the candidate record and ledger identities.
+   Require the record's exact `trigger` and `scheduler_id` to equal the folded `trigger` and `scheduler_id`;
+   the fold's literal `scheduler_id=null` corresponds only to the record's JSON null.
+3. Require `closed=true`, and require the record's `lifecycle.close_state` and `lifecycle.phase` to equal the
+   folded close state and phase. For a complete record require `can_complete=true`; for a blocked or
+   interrupted record require the matching noncomplete close and `can_complete=false`.
+4. Trust only the digest derived by that same fold from the run's start date. Never pair a record with a
+   newest or caller-selected digest.
+
+An intended-complete record or digest may exist during the pre-close write/readback window. While its
+ledger is an open ledger it is not a completed run, is excluded from latest-run/latest-digest selection,
+must not be shown as complete, and must not verify a canary, schedule, activation, migration, or other
+operator decision. A truthful repaired blocked file whose fallback close could not be appended remains
+recovery evidence, not an authoritative final run for these readers.
 
 The close-state vocabulary is closed:
 
@@ -204,7 +236,7 @@ section exactly. The script and fallback accept the same fixed interfaces:
 lifecycle-append.sh LEDGER start RUN_ID ISO_TIMESTAMP TRIGGER SCHEDULER_ID_OR_DASH
 lifecycle-append.sh LEDGER phase RUN_ID ISO_TIMESTAMP PHASE
 lifecycle-append.sh LEDGER posting RUN_ID ISO_TIMESTAMP SOURCE SOURCE_ID STATE BRIEF_REVISION
-lifecycle-append.sh LEDGER attempt-started RUN_ID ISO_TIMESTAMP ATTEMPT_ID OPERATION
+lifecycle-append.sh LEDGER attempt-started RUN_ID ISO_TIMESTAMP ATTEMPT_ID OPERATION LOGICAL_OPERATION_ID ATTEMPT_NUMBER
 lifecycle-append.sh LEDGER attempt-accounted RUN_ID ISO_TIMESTAMP ATTEMPT_ID METERED OUTCOME REQUEST_ID_OR_DASH
 lifecycle-append.sh LEDGER revision RUN_ID ISO_TIMESTAMP BRIEF_REVISION
 lifecycle-append.sh LEDGER milestone RUN_ID ISO_TIMESTAMP MILESTONE
@@ -234,7 +266,11 @@ Every non-path, non-enum argument except an internal operator code is a restrict
 must match `E-[A-Z0-9]+(-[A-Z0-9]+)*`; for example, `E-NO-AUTH` is safe and canonical. A dash in either
 `REQUEST_ID_OR_DASH` or `INTERNAL_CODE_OR_DASH` serializes as JSON `null`. Otherwise each nullable argument
 must be nonempty; the fold accepts only raw JSON `null` or a nonempty value matching its field grammar, never
-an empty JSON string. `METERED` is exactly `true` or `false`. `SOURCE` is one of `linkedin`, `ashby`,
+an empty JSON string. `METERED` is exactly `true` or `false`. `ATTEMPT_NUMBER` is an unquoted positive
+decimal integer of at most six digits. The first attempt for a `LOGICAL_OPERATION_ID` is 1; each retry
+advances exactly one, retains the same `OPERATION`, and requires the prior attempt to be accounted before
+its new start. `OUTCOME` uses the closed attempt-outcome vocabulary above, and `quota_rejected` requires
+`METERED=false`. `SOURCE` is one of `linkedin`, `ashby`,
 `greenhouse`, or `lever`; phase, posting-state, and close-state values use the closed vocabularies above. The
 milestone vocabulary is exactly `early_results_shown`, `final_run_record_written`, and
 `final_digest_written`.
@@ -250,7 +286,8 @@ for containing `AUTH`. `OPERATION` is a controlled semantic label, not a payload
 it may therefore contain terms such as `job_description` or `authorization` when naming the coordinator
 action, because those words persist no description prose, header contents, or authorization value. It still
 uses the restricted identifier grammar and rejects percent-encoded octets and key-shaped values. The
-semantic prohibited-term scan remains active for `SOURCE_ID`, `BRIEF_REVISION`, `ATTEMPT_ID`, `OUTCOME`, and
+semantic prohibited-term scan remains active for `SOURCE_ID`, `BRIEF_REVISION`, `ATTEMPT_ID`,
+`LOGICAL_OPERATION_ID`, and
 non-null `REQUEST_ID`, which can carry external identity, revision, result, or provenance values. Append and
 fold apply these same per-field rules. These checks are defense in depth in addition to the privacy boundary
 above; the fixed row shapes allow no extra fields.
@@ -262,7 +299,8 @@ ledger, and it fails if the path already exists. Every later command requires ex
 `run_started` carrying the same run ID. A closed ledger rejects every command. `phase` rejects `complete` and
 requires exactly the next canonical phase after the folded working phase. An attempt ID may have one
 `attempt_started` and then exactly one `attempt_accounted`; accounting without its prior start, or either
-duplicate, is invalid. Posting rows use last-write-wins identity `(source, source_id)`. A `close complete`
+duplicate, is invalid. A retry start is invalid unless its canonical link, stable operation, adjacent
+number, and prior accounting all verify. Posting rows use last-write-wins identity `(source, source_id)`. A `close complete`
 command requires the open fold to report `ready_to_close=true`; it writes the single terminal row that
 atomically establishes both `phase=complete` and `closed=true`. Other close states preserve the last working
 phase. After validation, append exactly one of these canonical, no-whitespace JSON lines in the shown field
@@ -272,7 +310,7 @@ order, replacing placeholders with the validated arguments:
 {"event":"run_started","run_id":"RUN_ID","ts":"ISO_TIMESTAMP","phase":"preflight","trigger":"TRIGGER","scheduler_id":"SCHEDULER_ID"}
 {"event":"phase_changed","run_id":"RUN_ID","ts":"ISO_TIMESTAMP","phase":"PHASE"}
 {"event":"posting_state","run_id":"RUN_ID","ts":"ISO_TIMESTAMP","source":"SOURCE","source_id":"SOURCE_ID","state":"STATE","brief_revision":"BRIEF_REVISION"}
-{"event":"attempt_started","run_id":"RUN_ID","ts":"ISO_TIMESTAMP","attempt_id":"ATTEMPT_ID","operation":"OPERATION"}
+{"event":"attempt_started","run_id":"RUN_ID","ts":"ISO_TIMESTAMP","attempt_id":"ATTEMPT_ID","operation":"OPERATION","logical_operation_id":"LOGICAL_OPERATION_ID","attempt_number":1}
 {"event":"attempt_accounted","run_id":"RUN_ID","ts":"ISO_TIMESTAMP","attempt_id":"ATTEMPT_ID","metered":true,"outcome":"OUTCOME","request_id":"REQUEST_ID"}
 {"event":"brief_revision","run_id":"RUN_ID","ts":"ISO_TIMESTAMP","brief_revision":"BRIEF_REVISION"}
 {"event":"milestone","run_id":"RUN_ID","ts":"ISO_TIMESTAMP","milestone":"MILESTONE"}
@@ -300,14 +338,16 @@ Fold valid rows in order:
 2. Fold `posting_state` last-write-wins by `(source, source_id)`. Derive `selected`, `evaluated`,
    `terminally_skipped`, `presented`, `remaining`, and `in_flight` with the counter rules above.
 3. Count unique attempt starts and their exactly-once accounting rows as `attempts_started` and
-   `attempts_accounted`.
+   `attempts_accounted`. Derive `blocking_attempt_failures` from the outcome/link rules above; fixture or
+   coordinator intent never overrides this canonical fold.
 4. From the first 10 characters of the validated `run_started` timestamp, derive exactly
    `WORKSPACE/reports/YYYY-MM-DD-digest.md`; derive the run record as `WORKSPACE/runs/RUN_ID.json`. Require
    each concrete regular file to be non-symlink and its respective `final_digest_written` or
    `final_run_record_written` milestone; require the `reports/` directory itself to be non-symlink. Accept
    never an arbitrary or newest digest.
 5. Set `ready_to_close=true` only when the working phase is `finalizing`, `remaining=0`, `in_flight=0`,
-   `selected=evaluated+terminally_skipped`, all started attempts are accounted, and both final artifact
+   `selected=evaluated+terminally_skipped`, all started attempts are accounted,
+   `blocking_attempt_failures=0`, and both final artifact
    file-plus-milestone checks pass. A closed `blocked` or `interrupted` ledger always reports
    `ready_to_close=false`.
 6. Set `can_complete=true` only when `ready_to_close=true` and the final canonical row closes the run
@@ -316,7 +356,7 @@ Fold valid rows in order:
 
 Emit normalized `key=value` state in this order: `run_id`, `trigger`, `scheduler_id`, `phase`, `selected`, `evaluated`,
 `terminally_skipped`, `presented`, `remaining`, `in_flight`, `attempts_started`, `attempts_accounted`,
-`final_run_record_written`, `final_digest_written`, `closed`, `close_state`, `ready_to_close`, and
+`blocking_attempt_failures`, `final_run_record_written`, `final_digest_written`, `closed`, `close_state`, `ready_to_close`, and
 `can_complete`. The two final-artifact output values report exact eligible non-symlink file existence; their
 milestone evidence is additionally required by `ready_to_close`. In normalized output, a manual run's JSON
 null scheduler is emitted as the literal text `scheduler_id=null`.
@@ -338,6 +378,13 @@ After compaction or process loss, read and fold the ledger before applying this 
 - For `open_after_selection_settled`, preserve settled results and resume queued review. Reconcile every
   evaluating item and its attempt record explicitly; never assume an unresolved call was free, silently
   replay it, or mark it evaluated without evidence.
+- Recovery must discard all coordinator memory, including prior effects, task-local queues, and conversation
+  state. Reconstruct phase, posting states, and attempt identities only from the exact current run's validated
+  lifecycle ledger. Read `jobs.jsonl` as a separate append-only source: accept only canonical `evaluated`
+  events whose exact `run_id+source+source_id` joins the current ledger identity. An `evaluating` posting may
+  advance without another producer call only when that join and the same logical operation's accounted
+  success are both durable; stale cross-run jobs, malformed events, or unmatched attempts cannot settle it.
+  Resume each reconstructed `queued` identity with a fresh coordinator-owned attempt start and dispatch.
 - For `open_before_selection_settled`, close the run `interrupted` when the valid ledger prefix permits that
   append, then start a fresh search with fresh call context. Do not infer a selected set from conversation
   memory or incomplete scratch.
@@ -504,8 +551,9 @@ Activation is a view over durable run evidence, not a metric field:
 | `relevant_matches_shown_with_reasoning` | `at_least_one_valid_presented_transition` |
 <!-- /lifecycle-contract:activation -->
 
-Derive activation only when one run satisfies all three evidence clauses. Its final run record has
-`run_health` other than `blocked`; its folded lifecycle ledger has at least one evaluated posting
+Derive activation only when one run first passes **Artifact authority for every reader** above—exact run_id,
+matching record, `closed=true`, and the fold-derived digest—and then satisfies all three evidence clauses.
+Its final run record has `run_health` other than `blocked`; its folded lifecycle ledger has at least one evaluated posting
 (`presented` still counts as evaluated); and it has at least one valid `presentation-transition` attestation
 under the invariant above. That transition binds the rendered reasoning to the same run and posting as the
 qualifying `jobs.jsonl` event, rather than inferring presentation from reasoning availability. A blocked run,

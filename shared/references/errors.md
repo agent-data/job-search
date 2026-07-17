@@ -4,8 +4,9 @@ Every failure is named internally and visible — no silent failures. The E-* ta
 errors. Exact-model binding failures use the narrow internal class below and the complete interactive repair
 rendering that follows it; the internal class is never shown as a raw user code. The durable
 guarantee for blocked runs is two **file-backed channels** when a writable workspace exists: the **blocked
-digest** (cause + next interactive step) and the **home view** (reads `run_health` from the newest
-`runs/<id>.json`) — both plain file writes that survive on any host. Every HALT or model-binding block with a
+digest** (cause + next interactive step) and the **home view** (reads `run_health` from the newest record
+that passes [run-lifecycle.md](run-lifecycle.md) exact run_id + `lifecycle-fold.sh` + matching `closed=true`
+authority) — both plain file writes that survive on any host. Every HALT or model-binding block with a
 writable workspace therefore writes a `runs/<id>.json` blocked record. The named exception is **E-NO-CONFIG
 / first_run** with no workspace: there is no run record to write, and visibility comes from the next
 **job-search** visit routing to onboarding. An attention-pull alert is *additional*, capability-gated by the
@@ -13,7 +14,12 @@ writable workspace therefore writes a `runs/<id>.json` blocked record. The named
 phone), fire one alert on a blocked run when the knob is set; otherwise skip it silently — the two file
 channels still carry the failure.
 
-Surface every outcome through the written record — the record is **primary on every harness**, the contract the home view reads — because a skill cannot set the host's exit code. Where a host provides a trustworthy exit code, that is an additional signal only, never a replacement. The digest's "Run health" line carries one of the four run-health states; their names, meanings, and the `<why>` breakdown are defined in `conventions.md` (the digest "Run health" line).
+Surface every outcome through the lifecycle-authorized written record — the record is **primary on every
+harness**, the contract the home view reads — because a skill cannot set the host's exit code. An open
+intended-complete file is never an outcome. Where a host provides a trustworthy exit code, that is an
+additional signal only, never a replacement. The digest's "Run health" line carries one of the four
+run-health states; their names, meanings, and the `<why>` breakdown are defined in `conventions.md` (the
+digest "Run health" line).
 
 <!-- exact-model-contract:model-binding-block -->
 | Policy | Decision |
@@ -166,9 +172,12 @@ amount from `agent-data-contract.md` at consumption time, then derive
 literals. Present the result only as a **pay-as-you-go purchase example**, after the actual run call count,
 not as an account charge or account state.
 
-For a similar-run estimate, filter local run records to completed runs with the exact same enabled source
-list (including order), enabled query count, and review mode; take at most the five most recent comparable
-records. Require at least three records and a positive median `metered_calls`, then compute
+For a similar-run estimate, enumerate only complete-name-matching local candidates and first apply
+`run-lifecycle.md`'s exact closed-ledger artifact-authority procedure. Exclude a bare record, open/mismatched
+ledger, or missing/mismatched fold-derived digest before comparison. From authoritative completed runs,
+filter to the exact same enabled source list (including order), enabled query count, and review mode; take at
+most the five most recent comparable records. Require at least three records and a positive median
+`metered_calls`, then compute
 `similar_runs = floor(purchased_calls / median_calls)`. Say how many comparable records supplied the median
 (`last five` only when five exist), and warn that broader or deeper searches may use more. Omit the
 similar-run estimate for review mode `all`, a zero median, or fewer than three comparable completed runs;

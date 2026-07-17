@@ -78,5 +78,7 @@ recipes, and the verbatim scheduling block), `../../shared/references/convention
 schema, `jobs.jsonl` statuses, digest format + counts line), `../../shared/references/errors.md` (every named error),
 `../../shared/references/voice.md` (how every reply talks to the user — plain English, zero-context first-run asks,
 render documents inline), `../../shared/references/update.md` (cached update signal + update banner), and
-`../../shared/references/agent-data-contract.md` (the source contract `job-search-run` honors). These are the source of
+`../../shared/references/agent-data-contract.md` (the source contract `job-search-run` honors), plus
+`../../shared/references/run-lifecycle.md` (invoke `lifecycle-fold.sh` and require `closed=true` for the
+candidate's exact run_id before any record/digest is surfaced or a canary is trusted). These are the source of
 truth; this skill never restates their details from memory.

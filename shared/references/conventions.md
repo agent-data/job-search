@@ -235,7 +235,10 @@ not define the full migration flow.
 
 Run-record readers enumerate `runs/` but accept only a complete filename matching
 `YYYY-MM-DDTHH-MM-SSZ.json`; they also require the record's `run_id` to equal that filename stem. A broad
-`runs/*.json` glob is not a run-record definition: it would admit the binding sidecar.
+`runs/*.json` glob is not a run-record definition: it would admit the binding sidecar. Before a reader
+surfaces or uses any candidate, it must apply the exact run_id, closed-ledger, record, and derived-digest
+authority procedure in [run-lifecycle.md](run-lifecycle.md#artifact-authority-for-every-reader), using
+`lifecycle-fold.sh`; filename shape alone is never terminal authority.
 
 <!-- exact-model-contract:run-record-selection -->
 | Policy | Decision |
@@ -250,8 +253,8 @@ Run-record readers enumerate `runs/` but accept only a complete filename matchin
 Current state = fold by (**`source`**, **`source_id`**), last-write-wins per field (an event with no `source` (all pre-multi-source history, and any `status_changed` line that omits it) attaches by `source_id` alone — every legacy `evaluated` event already carries `source:"linkedin"`, so in practice only old `status_changed` lines lack it). Two event types:
 ```jsonc
 { "event":"evaluated", "ts":"<iso>", "run_id":"…", "source":"<the result row's source — copied, NEVER a hardcoded literal>", "source_id":"<source-native id — with source, the DEDUP KEY>",
-  "query_id":"…", "title":"…", "company_name":"…", "location_display":"…", "salary_display":"…",
-  "posted_at":"<iso>", "posted_at_extracted":"<iso date — OPTIONAL; only when the API posted_at was null and the JD states a date>", "same_role_as":"<source>:<source_id> — OPTIONAL; this row is the same real-world role as that primary row — parse by splitting on the FIRST colon only (e.g. same_role_as:"greenhouse:acme:7310605" → source "greenhouse", source_id "acme:7310605")>", "source_url":"…", "posting_id_at_seen":"jp_…", "detail_read":true,
+  "query_id":"…", "title":"…", "company_name":"…", "location_display":"…", "salary_display":"<free text or empty string when absent>",
+  "posted_at":"<iso or null when the source omits it>", "posted_at_extracted":"<iso date — OPTIONAL; only when the API posted_at was null and the JD states a date>", "same_role_as":"<source>:<source_id> — OPTIONAL; this row is the same real-world role as that primary row — parse by splitting on the FIRST colon only (e.g. same_role_as:"greenhouse:acme:7310605" → source "greenhouse", source_id "acme:7310605")>", "source_url":"…", "posting_id_at_seen":"jp_…", "detail_read":true,
   "relevant":true, "match":"strong|moderate|weak|null", "reasoning":"…",
   "dealbreakers_hit":[], "unknowns":[], "needs_human_check":false, "status":"new", "first_seen":"<iso>" }
 { "event":"status_changed", "ts":"<iso>", "source_id":"…", "status":"interested", "note":"…" }
@@ -367,6 +370,18 @@ existing narrow pre-binding blocked-artifact exception in `errors.md` may keep t
 null because no exact executable detail binding was established; it does not permit guessing. Outside that
 bounded exception, all model fields are required.
 
+Final artifact validation is strict and fail-closed: require every documented top-level and nested field,
+its exact JSON type, every closed enum, canonical timestamp/build structure, nonnegative integer metrics,
+and all documented cross-field invariants. In particular trigger/scheduler pairing, detail binding/origin,
+usage sums, result-band sums, review-mode target rules, lifecycle phase/close/health, and top-level
+`run_health` must agree. A preflight record cannot claim complete. The bounded pre-binding blocked exception
+above is the only nullable model triple; omission, extra keys, guessed values, boolean-as-integer metrics,
+or contradictory state fails validation and cannot earn an artifact milestone.
+When that exception's folded phase is `preflight`, it is a genuine zero-work record: queries and searched/
+failed sources are empty; every usage, pagination, and result counter is zero; rate/equivalent values are
+null; nudge evidence and attempt errors are empty; and review outcome is `incomplete`. A later exact-dispatch
+failure may preserve producer-authoritative completed-attempt accounting only at its truthful later phase.
+
 The ledger remains authoritative for completion. The coordinator writes the intended terminal run record
 and exact digest, reads back and validates both, records their lifecycle milestones, and folds the ledger
 before attempting `run_closed:complete`; neither artifact is displayed or published as complete while that
@@ -419,7 +434,8 @@ write `"unknown"`. Never derive `git_sha` from the caller/current working direct
 record the user's project SHA instead of the Job Search build. The build object is required on every run
 record written by `job-search-run`, including blocked records where a workspace exists.
 
-Each `queries` item is one logical query/source stream. `unpaginated` is reserved for LinkedIn.
+Each `queries` item is one logical query/source stream. LinkedIn always uses `unpaginated` with
+`has_more_at_stop:null`; no cursor-capable board may use `unpaginated`.
 `has_more_at_stop` is boolean only when valid board pagination metadata makes it trustworthy; write `null`
 for LinkedIn and for an incomplete pagination contract branch. `attempts` includes retries, and
 `request_ids` retains the observable request provenance. Never write a cursor, decoded cursor payload, or
@@ -441,7 +457,7 @@ a pricing update. The canonical dated metering rules and the rate used to derive
 `agent-data-contract.md`; verify there rather than copying a rate into this contract.
 
 `pagination_metrics` is local aggregate evidence, not telemetry. The deeper-coverage nudge is eligible only
-when `unique_unseen_roles_first_pages` is zero and at least one healthy cursor-capable stream returned
+in `first_page` mode with `completed_first_pages`, when `unique_unseen_roles_first_pages` is zero and at least one healthy cursor-capable stream returned
 trustworthy `has_more:true`; `deeper_coverage_nudge_streams` lists those `<query_id>:<source>` identities and
 is empty when ineligible. The runner records this evidence but never a shown marker; the home-view registry
 marker is owned by `internals.md`.

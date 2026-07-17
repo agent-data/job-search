@@ -212,8 +212,10 @@ failure after the first qualifying complete nonblocked version-2 run never resto
 
 ## 5. Explaining agent-data usage
 
-“Explain my agent-data usage” is a read-only local explanation. Read recent `runs/<run_id>.json` records
-whose complete names match the canonical run-id format and lead
+“Explain my agent-data usage” is a read-only local explanation. For each complete-name-matching candidate,
+apply `../../../shared/references/run-lifecycle.md` → **Artifact authority for every reader**: invoke
+`lifecycle-fold.sh` for its exact run_id and require `closed=true` plus matching folded record state. Ignore
+an open intended-complete candidate. Read only recent records that pass, and lead
 with actual `agent_data_usage.metered_calls` derived from completed, producer-authoritative attempt
 metering. The dated contract determines whether a completed failure or retry is metered; diagnostics such
 as retry attempts and charged failures are subsets and are never added to the total again. Then explain the

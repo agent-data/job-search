@@ -5,6 +5,10 @@ show a **compact, glanceable home** for the user's job search, then let them dri
 **chatting**. Think dashboard, not log dump — a few lines they can scan in seconds.
 
 Follow `../../../shared/references/internals.md`, `../../../shared/references/conventions.md`, `../../../shared/references/errors.md`, and `../../../shared/references/voice.md` exactly. No numeric scores.
+For every run record or digest, also follow `../../../shared/references/run-lifecycle.md` → **Artifact
+authority for every reader**: invoke `lifecycle-fold.sh` for the candidate's exact run_id, require
+`closed=true` plus matching folded record state, and use only that fold-derived digest. An open ledger,
+including an intended-complete pre-close file window, is not a home run and is excluded.
 
 **Contents:** [Gather](#gather) · [Render the home](#render-the-home) · [Quick actions](#quick-actions-conversational--never-make-the-user-edit-a-file) · [Nudges](#nudges-surface-only-when-they-apply) · [Coming soon (Plan C)](#coming-soon-plan-c)
 
@@ -28,15 +32,15 @@ Read just what the home view needs (all local):
   omitted, finite, or `"all"`. These facts drive review-depth previews; do not estimate from the last run.
   This is a passive version-1 home read when the config major is 1: preserve `config.yaml` byte-for-byte,
   do not create `runs/detail-model-binding.json`, and do not migrate merely to render the home.
-- **Last run health, usage, and depth evidence:** the newest `<ws>/runs/<run_id>.json` whose complete name
-  matches the run-id format in `conventions.md`—its `run_health`,
-  `review_scope`, `agent_data_usage`, and `pagination_metrics`—or fall back to the **Run health** line of the
-  latest digest only when no run record exists. Nudge eligibility comes only from the newest run record,
-  never from a digest inference or an older run.
+- **Last run health, usage, and depth evidence:** among complete-name-matching candidates, first apply the
+  lifecycle authority procedure above, then choose the newest authoritative closed run and read its
+  `run_health`, `review_scope`, `agent_data_usage`, and `pagination_metrics`. Nudge eligibility comes only
+  from that record, never from a digest inference, an older run, or an unclosed candidate.
 - **Deeper-coverage marker:** expand `<ws>` to its absolute path and read that exact workspace's entry from
   the registry `deeper_coverage_nudges` map (`internals.md` → Registry). Absence means no marker; another
   workspace's marker does not count.
-- **Latest digest:** the newest `<ws>/reports/<date>-digest.md` — its date and its **counts line**.
+- **Latest digest:** the exact digest derived by the selected run's fold — its date and **counts line**.
+  Never select a digest independently by filename.
 - **Pipeline:** fold `<ws>/jobs.jsonl` per the fold operation in `conventions.md` → current jobs (one per (`source`, `source_id`),
   last-write-wins; records aliased by `same_role_as` count as one role — see the fold operation in
   `conventions.md`). Count by `status` and tally how many have `needs_human_check: true`.
@@ -84,10 +88,9 @@ Notes on each part:
   the registry's scheduling marker — render the cadence (from `config.yaml:schedule.frequency`, e.g. "daily")
   when installed, or "off" when not; the marker carries only on/off + the mechanism value recorded at install time
   (the mechanism label is not surfaced in the status line);
-  last-run health from the newest complete-name-matching `runs/<run_id>.json` `run_health` (or the latest
-  digest's Run health line). Run
+  last-run health from the newest lifecycle-authorized closed `runs/<run_id>.json` `run_health`. Run
   health is one of the four run-health states defined in `conventions.md` (the digest "Run health" line).
-- **Latest digest.** Read the newest `reports/<date>-digest.md`; show its date and reproduce its **counts
+- **Latest digest.** Read the exact fold-derived digest for that same authorized run; show its date and reproduce its **counts
   line** (the `N new · S strong · M moderate · W weak · F filtered out · n searches · m detail reads` line —
   see the digest format in `conventions.md`). If there are no digests yet, say "No runs yet — want me to run
   your first search now?" and offer the run.
@@ -144,7 +147,7 @@ scheduling—routes through the canonical **Version-1 staged migration** transac
   recipe must carry whatever authorization the host's unattended parallel fan-out needs. To turn it
   off, stop the active schedule, then clear the scheduling marker (`internals.md` → Registry write rules)
   so it reads `installed: false`, and tell the user it's off.
-- **Show the latest digest** → print the newest `reports/<date>-digest.md` (strong → moderate → weak →
+- **Show the latest digest** → print the exact fold-derived digest for the newest authorized closed run (strong → moderate → weak →
   filtered-out) unchanged, as normal message text in your reply (wherever the user is reading it — never
   inside a code fence, never just the file path).
 
@@ -190,8 +193,8 @@ field.
 
 ### Usage help
 
-For “explain my usage,” read recent local `runs/<run_id>.json` records whose complete names match the
-canonical run-id format and lead with actual
+For “explain my usage,” read only recent local `runs/<run_id>.json` records that pass the exact run_id and
+closed-ledger authority procedure above, and lead with actual
 `agent_data_usage.metered_calls`. Explain the stored `by_operation` breakdown and the outcome drivers in
 the current config: schedule, enabled queries, enabled sources, and review mode. Use each historical run's
 stored decimal equivalent as written rather than recomputing it against today's rate.
@@ -207,7 +210,8 @@ Current exact pricing and metering facts stay in `../../../shared/references/age
 - **Stale brief.** If `preferences.md:updated_at` (fallback `created_at`) is older than ~3 months, gently suggest a refresh: "Your
   preferences are about <N> months old — want to update them? Just say so and I'll walk through it." (This
   mirrors the digest's brief-age footnote.)
-- **Deeper company-board coverage (one time per absolute workspace).** Render this only when the newest run
+- **Deeper company-board coverage (one time per absolute workspace).** Render this only when the newest
+  lifecycle-authorized closed run
   is `first_page`, `pagination_metrics.deeper_coverage_nudge_eligible` is `true`,
   `unique_unseen_roles_first_pages` is zero, at least one listed healthy cursor-capable stream has trustworthy
   `has_more_at_stop:true`, the current config omits `search.max_new_postings_per_run` (resolved first-page
@@ -230,8 +234,8 @@ Current exact pricing and metering facts stay in `../../../shared/references/age
   every later automatic nudge for that workspace, including after an unanswered display, decline, or deferral;
   the user can still ask for depth later. Scheduled runs write eligibility evidence only and never this
   shown/outcome marker.
-- **Last run blocked/failed.** If the newest run's `run_health` is `blocked` (or the latest digest shows a
-  blocked/failed run), use the specific established **`E-*`** from `errors.md` with its cause + fix — e.g. `E-QUOTA`
+- **Last run blocked/failed.** If the newest authorized closed run's `run_health` is `blocked`, use the
+  specific established **`E-*`** from `errors.md` with its cause + fix — e.g. `E-QUOTA`
   (restore access at https://agent-data.motie.dev/settings/billing; existing matches are unaffected; discuss
   usage levers only if the user asks), `E-NO-AUTH` (re-export the key), `E-SERVICE-DOWN` (temporary; next run
   retries). For the bounded model-binding or version-1 migration classes, render only the observed cause,

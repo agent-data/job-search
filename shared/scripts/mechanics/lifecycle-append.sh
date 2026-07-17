@@ -269,16 +269,41 @@ case $command in
     ;;
 
   attempt-started)
-    [ "$#" -eq 2 ] || usage
+    [ "$#" -eq 4 ] || usage
     attempt_id=$1
     operation=$2
+    logical_operation_id=$3
+    attempt_number=$4
     payload_identifier attempt_id "$attempt_id"
     payload_identifier operation "$operation"
+    payload_identifier logical_operation_id "$logical_operation_id"
+    printf '%s\n' "$attempt_number" | LC_ALL=C grep -Eq '^[1-9][0-9]{0,5}$' \
+      || reject 'attempt_number must be a positive integer no greater than six digits'
     if grep -F '"event":"attempt_started"' "$ledger" \
        | grep -Fq "\"attempt_id\":\"$attempt_id\""; then
       reject 'attempt_id was already started'
     fi
-    append_line "{\"event\":\"attempt_started\",\"run_id\":\"$run_id\",\"ts\":\"$timestamp\",\"attempt_id\":\"$attempt_id\",\"operation\":\"$operation\"}"
+    prior_logical_row=$(grep -F '"event":"attempt_started"' "$ledger" \
+      | grep -F "\"logical_operation_id\":\"$logical_operation_id\"" | tail -n 1)
+    if [ -z "$prior_logical_row" ]; then
+      [ "$attempt_number" -eq 1 ] || reject 'a logical operation must begin at attempt_number 1'
+    else
+      prior_operation=$(printf '%s\n' "$prior_logical_row" \
+        | sed -n 's/.*"operation":"\([^"]*\)".*/\1/p')
+      prior_attempt_id=$(printf '%s\n' "$prior_logical_row" \
+        | sed -n 's/.*"attempt_id":"\([^"]*\)".*/\1/p')
+      prior_attempt_number=$(printf '%s\n' "$prior_logical_row" \
+        | sed -n 's/.*"attempt_number":\([0-9][0-9]*\).*/\1/p')
+      [ "$operation" = "$prior_operation" ] \
+        || reject 'a logical operation cannot change operation'
+      [ "$attempt_number" -eq $((prior_attempt_number + 1)) ] \
+        || reject 'retry attempt_number must advance exactly one'
+      if ! grep -F '"event":"attempt_accounted"' "$ledger" \
+           | grep -Fq "\"attempt_id\":\"$prior_attempt_id\""; then
+        reject 'a retry requires the prior attempt to be accounted'
+      fi
+    fi
+    append_line "{\"event\":\"attempt_started\",\"run_id\":\"$run_id\",\"ts\":\"$timestamp\",\"attempt_id\":\"$attempt_id\",\"operation\":\"$operation\",\"logical_operation_id\":\"$logical_operation_id\",\"attempt_number\":$attempt_number}"
     ;;
 
   attempt-accounted)
@@ -289,7 +314,10 @@ case $command in
     request_id=$4
     payload_identifier attempt_id "$attempt_id"
     case $metered in true|false) : ;; *) reject 'metered must be true or false' ;; esac
-    payload_identifier outcome "$outcome"
+    case $outcome in
+      success|retryable_failure|terminal_failure|worker_failed|quota_rejected) : ;;
+      *) reject 'unknown attempt outcome' ;;
+    esac
     if ! grep -F '"event":"attempt_started"' "$ledger" \
          | grep -Fq "\"attempt_id\":\"$attempt_id\""; then
       reject 'attempt_accounted requires one prior attempt_started'
@@ -303,6 +331,9 @@ case $command in
     else
       payload_identifier request_id "$request_id"
       request_json="\"$request_id\""
+    fi
+    if [ "$outcome" = quota_rejected ] && [ "$metered" != false ]; then
+      reject 'quota_rejected must be unmetered'
     fi
     append_line "{\"event\":\"attempt_accounted\",\"run_id\":\"$run_id\",\"ts\":\"$timestamp\",\"attempt_id\":\"$attempt_id\",\"metered\":$metered,\"outcome\":\"$outcome\",\"request_id\":$request_json}"
     ;;

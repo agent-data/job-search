@@ -41,8 +41,11 @@ caught now, not discovered the next day. Two layers, both required:
 1. **Registration.** Confirm the schedule is actually registered — it appears in the host's or OS's own
    scheduler job list. This proves it *exists*.
 2. **Execution canary.** Trigger **one real run through the exact scheduled invocation**, then confirm the
-   artifacts it leaves behind: a fresh `runs/<id>.json` whose `run_health` is anything other than `blocked`,
-   evidence that **agent-data was reached**, and evidence that the **workspace was written**. This proves it
+   artifacts it leaves behind by applying `../../../shared/references/run-lifecycle.md` → **Artifact
+   authority for every reader**: invoke `lifecycle-fold.sh` for the candidate's exact run_id, require
+   `closed=true`, matching record phase/close state, and `can_complete=true`; then require `run_health` other
+   than `blocked`, evidence that **agent-data was reached**, and the exact fold-derived digest in the
+   workspace. An open ledger or intended-complete pre-close file never verifies a canary. This proves it
    *works*. Default depth is a **real run** — the truest proof, and the user gets a live digest out of it
    (the quota cost is one run the first scheduled fire would spend anyway).
 
@@ -87,13 +90,14 @@ that differs is **Verify**: the **unattended schedule** must pass the config-tim
 in the scheduler's job list + a real run through the *actual scheduled invocation, not this session*), while
 the **in-session-loop fallback** can satisfy neither canary layer — it registers in no scheduler job list and
 its run *is* this session — so it is confirmed instead by observing its **first in-session fire** leave a
-fresh run record before the marker is recorded.
+fresh run that passes `run-lifecycle.md` exact run_id + `lifecycle-fold.sh` + matching `closed=true`
+authority before the marker is recorded.
 
 | Step | How | Notes |
 |------|-----|-------|
 | Compose the cadence | from `schedule.frequency`, via `../../../shared/scripts/mechanics/schedule-line.sh <frequency> [HH:MM]` where a shell runtime exists (the prose fallback in `../../../shared/references/internals.md` → Scheduling setup composes the same line directly) | Host-neutral cron time expression; the host wraps it with its own command / launchd / interval translation. |
 | Start it (on yes) | offer scheduling as a yes/no, check the scheduling marker first so you never re-ask, then start the unattended schedule on an affirmative answer | Show the user the exact machine change **before** writing it (Consent below). |
-| Verify | **Unattended:** run the **canary** above — registration + one real scheduled run, proven from the artifacts. **In-session-loop fallback:** it can neither register nor run outside this session, so confirm it by its **first in-session fire** leaving a fresh run record. | Mandatory gate either way: no proof (a green canary, or an observed first-fire run record), no marker. |
+| Verify | **Unattended:** run the **canary** above — registration + one real scheduled run, proven from the authoritative closed artifacts. **In-session-loop fallback:** it can neither register nor run outside this session, so confirm its first fire through the same exact-run closed-ledger gate. | Mandatory gate either way: no authoritative proof, no marker. |
 | Record it | set the scheduling marker (`../../../shared/references/internals.md` → Registry write rules) | Records the **active** mechanism so the home view shows the schedule and you don't re-ask. Only after Verify passed (a green canary, or the loop's observed first-fire run record). |
 | Turn it off | stop the active schedule, then clear the scheduling marker (`../../../shared/references/internals.md` → Registry write rules) | The marker reads `installed: false` afterwards. |
 

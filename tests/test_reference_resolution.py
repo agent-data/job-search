@@ -153,6 +153,7 @@ LIFECYCLE_COMPLETION_CLAUSES = {
     "in_flight_zero": "in_flight=0",
     "selected_settled": "selected=evaluated+terminally_skipped",
     "all_started_attempts_accounted": "each_attempt_started_has_exactly_one_attempt_accounted",
+    "no_blocking_attempt_failure": "no_permanent_or_unresolved_attempt_failure",
     "final_run_record_written": "runs/{run_id}.json",
     "final_digest_written": "reports/{ISO-date}-digest.md",
     "ledger_closed_complete": "closed_with_complete_state",

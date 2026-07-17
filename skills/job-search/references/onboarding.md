@@ -289,6 +289,11 @@ explicit authorization. Then present the result like a
 discovery, not a log dump — surface the **strong and moderate** matches from the digest **as normal message
 text in your reply** (rendered markdown — never a code fence, never just the digest's file path):
 
+Before reading or presenting that record/digest, apply
+`../../../shared/references/run-lifecycle.md` → **Artifact authority for every reader**: invoke
+`lifecycle-fold.sh` for the candidate's exact run_id, require `closed=true` and matching folded state, and
+use only the digest derived by that fold. Do not present intended-complete files while the ledger is open.
+
 > e.g. "Here are **N jobs matching your brief**, found seconds ago:"
 > then the strong matches (title — company — location — one-line reasoning — link), then
 > moderate. Include any "confirm" warning from the digest. Never collapse this to a title-only list.
@@ -363,8 +368,10 @@ registry write includes that exact `primary_model` and origin (`session_inherita
    in the host's scheduler), then trigger **one real run through that scheduled invocation** — its own
    permissions and environment, **not this session's** (this session already holds the access the real run
    must prove, so running the canary here would pass while the real scheduled run fails) — and confirm it
-   left a fresh, unblocked run record, reached agent-data, and wrote the workspace. The user gets a live
-   digest out of it. If the canary **fails**: diagnose the gap and propose the exact fix. Before every
+   left a fresh record whose exact run_id passes that same `run-lifecycle.md` `lifecycle-fold.sh` authority
+   procedure with `closed=true`, matching lifecycle state, `can_complete=true`, and `run_health` other than
+   blocked; reached agent-data; and wrote the fold-derived digest in the workspace. An open intended-complete
+   record never verifies the canary. The user gets a live digest out of it. If the canary **fails**: diagnose the gap and propose the exact fix. Before every
    metered repair or retry canary, apply the `metered_canary_retry_or_repair` row, give fresh calls-first
    context for that attempt, and obtain a fresh scoped yes. The original schedule approval covered only the
    machine change and first canary. Re-run only after the new consent — loop until green. If it genuinely

@@ -112,7 +112,9 @@ def append_ok(ledger, command, *args, run_id=RUN_ID, ts=RUN_STARTED):
 def advance_to_finalizing(ledger, with_posting=True, with_attempt=True):
     append_ok(ledger, "phase", "searching")
     if with_attempt:
-        append_ok(ledger, "attempt-started", "attempt-1", "initial_search")
+        append_ok(
+            ledger, "attempt-started", "attempt-1", "initial_search", "search-1", "1"
+        )
         append_ok(ledger, "attempt-accounted", "attempt-1", "true", "success", "req-1")
     if with_posting:
         append_ok(ledger, "posting", "linkedin", "posting-1", "queued", "revision-1")
@@ -501,7 +503,9 @@ def test_lifecycle_append_emits_canonical_rows_for_every_command(tmp_path):
     ledger = start_lifecycle(workspace)
     append_ok(ledger, "phase", "searching")
     append_ok(ledger, "posting", "linkedin", "posting-1", "queued", "revision-1")
-    append_ok(ledger, "attempt-started", "attempt-1", "detail_read")
+    append_ok(
+        ledger, "attempt-started", "attempt-1", "detail_read", "detail-posting-1", "1"
+    )
     append_ok(ledger, "attempt-accounted", "attempt-1", "true", "success", "req-1")
     append_ok(ledger, "revision", "revision-2")
     append_ok(ledger, "milestone", "early_results_shown")
@@ -517,7 +521,8 @@ def test_lifecycle_append_emits_canonical_rows_for_every_command(tmp_path):
          '"source_id":"posting-1","state":"queued","brief_revision":"revision-1"}')
         % (RUN_ID, RUN_STARTED),
         ('{"event":"attempt_started","run_id":"%s","ts":"%s","attempt_id":"attempt-1",'
-         '"operation":"detail_read"}') % (RUN_ID, RUN_STARTED),
+         '"operation":"detail_read","logical_operation_id":"detail-posting-1",'
+         '"attempt_number":1}') % (RUN_ID, RUN_STARTED),
         ('{"event":"attempt_accounted","run_id":"%s","ts":"%s","attempt_id":"attempt-1",'
          '"metered":true,"outcome":"success","request_id":"req-1"}')
         % (RUN_ID, RUN_STARTED),
@@ -552,6 +557,7 @@ def test_lifecycle_happy_path_needs_artifacts_milestones_and_complete_close(tmp_
         "in_flight": "0",
         "attempts_started": "1",
         "attempts_accounted": "1",
+        "blocking_attempt_failures": "0",
         "final_run_record_written": "true",
         "final_digest_written": "true",
         "closed": "false",
@@ -683,9 +689,13 @@ def test_lifecycle_unaccounted_retry_attempt_prevents_completion(tmp_path):
     workspace = tmp_path / "workspace"
     ledger = start_lifecycle(workspace)
     append_ok(ledger, "phase", "searching")
-    append_ok(ledger, "attempt-started", "attempt-1", "initial_search")
+    append_ok(
+        ledger, "attempt-started", "attempt-1", "initial_search", "search-1", "1"
+    )
     append_ok(ledger, "attempt-accounted", "attempt-1", "true", "retryable_failure", "req-1")
-    append_ok(ledger, "attempt-started", "attempt-2", "initial_search")
+    append_ok(
+        ledger, "attempt-started", "attempt-2", "initial_search", "search-1", "2"
+    )
     append_ok(ledger, "phase", "selection_settled")
     append_ok(ledger, "phase", "reviewing_initial_batch")
     append_ok(ledger, "phase", "early_results_shown")
@@ -701,6 +711,127 @@ def test_lifecycle_unaccounted_retry_attempt_prevents_completion(tmp_path):
     assert state["attempts_accounted"] == "1"
     assert state["ready_to_close"] == "false"
     assert lifecycle_append(ledger, "close", "complete", "-").returncode != 0
+
+
+@pytest.mark.parametrize("outcome", ["quota_rejected", "worker_failed", "terminal_failure"])
+def test_lifecycle_authoritative_terminal_attempt_outcomes_prevent_complete_close(
+    tmp_path, outcome
+):
+    workspace = tmp_path / outcome
+    ledger = start_lifecycle(workspace)
+    append_ok(ledger, "phase", "searching")
+    append_ok(
+        ledger,
+        "attempt-started",
+        "attempt-1",
+        "detail_read",
+        "detail-linkedin-posting-1",
+        "1",
+    )
+    append_ok(
+        ledger,
+        "attempt-accounted",
+        "attempt-1",
+        "false" if outcome == "quota_rejected" else "true",
+        outcome,
+        "-" if outcome == "quota_rejected" else "req-1",
+    )
+    append_ok(ledger, "posting", "linkedin", "posting-1", "queued", "revision-1")
+    append_ok(ledger, "phase", "selection_settled")
+    append_ok(ledger, "phase", "reviewing_initial_batch")
+    append_ok(ledger, "posting", "linkedin", "posting-1", "evaluating", "revision-1")
+    append_ok(
+        ledger, "posting", "linkedin", "posting-1", "terminally_skipped", "revision-1"
+    )
+    append_ok(ledger, "phase", "early_results_shown")
+    append_ok(ledger, "phase", "reviewing_remaining")
+    append_ok(ledger, "phase", "finalizing")
+    write_final_artifacts(workspace)
+    record_final_artifact_milestones(ledger)
+
+    folded, state = lifecycle_fold(ledger, workspace)
+    assert folded.returncode == 0, folded.stderr
+    assert state["ready_to_close"] == "false"
+    assert state["blocking_attempt_failures"] == "1"
+    assert lifecycle_append(ledger, "close", "complete", "-").returncode != 0
+
+
+def test_lifecycle_later_linked_success_resolves_worker_failure_only(tmp_path):
+    workspace = tmp_path / "resolved-worker"
+    ledger = start_lifecycle(workspace)
+    append_ok(ledger, "phase", "searching")
+    append_ok(
+        ledger,
+        "attempt-started",
+        "attempt-1",
+        "detail_read",
+        "detail-linkedin-posting-1",
+        "1",
+    )
+    append_ok(
+        ledger, "attempt-accounted", "attempt-1", "true", "worker_failed", "req-1"
+    )
+    append_ok(
+        ledger,
+        "attempt-started",
+        "attempt-2",
+        "detail_read",
+        "detail-linkedin-posting-1",
+        "2",
+    )
+    append_ok(ledger, "attempt-accounted", "attempt-2", "true", "success", "req-2")
+    append_ok(ledger, "posting", "linkedin", "posting-1", "queued", "revision-1")
+    append_ok(ledger, "phase", "selection_settled")
+    append_ok(ledger, "phase", "reviewing_initial_batch")
+    append_ok(ledger, "posting", "linkedin", "posting-1", "evaluating", "revision-1")
+    append_ok(ledger, "posting", "linkedin", "posting-1", "evaluated", "revision-1")
+    append_ok(ledger, "phase", "early_results_shown")
+    append_ok(ledger, "phase", "reviewing_remaining")
+    append_ok(ledger, "phase", "finalizing")
+    write_final_artifacts(workspace)
+    record_final_artifact_milestones(ledger)
+
+    folded, state = lifecycle_fold(ledger, workspace)
+    assert folded.returncode == 0, folded.stderr
+    assert state["blocking_attempt_failures"] == "0"
+    assert state["ready_to_close"] == "true"
+    closed = lifecycle_append(ledger, "close", "complete", "-")
+    assert closed.returncode == 0, closed.stderr
+
+
+def test_lifecycle_retry_linkage_requires_adjacent_coordinator_attempt_numbers(tmp_path):
+    workspace = tmp_path / "retry-sequence"
+    ledger = start_lifecycle(workspace)
+    append_ok(ledger, "phase", "searching")
+    append_ok(
+        ledger,
+        "attempt-started",
+        "attempt-1",
+        "initial_search",
+        "search-query-1-linkedin",
+        "1",
+    )
+    append_ok(
+        ledger, "attempt-accounted", "attempt-1", "true", "retryable_failure", "req-1"
+    )
+    skipped = lifecycle_append(
+        ledger,
+        "attempt-started",
+        "attempt-3",
+        "initial_search",
+        "search-query-1-linkedin",
+        "3",
+    )
+    assert skipped.returncode != 0
+    wrong_operation = lifecycle_append(
+        ledger,
+        "attempt-started",
+        "attempt-2",
+        "detail_read",
+        "search-query-1-linkedin",
+        "2",
+    )
+    assert wrong_operation.returncode != 0
 
 
 def test_lifecycle_posting_updates_are_last_write_wins_without_double_counting(tmp_path):
@@ -829,7 +960,9 @@ def test_lifecycle_attempt_accounting_requires_one_prior_start(tmp_path):
     )
     assert no_start.returncode != 0
 
-    append_ok(ledger, "attempt-started", "attempt-1", "initial_search")
+    append_ok(
+        ledger, "attempt-started", "attempt-1", "initial_search", "search-1", "1"
+    )
     append_ok(ledger, "attempt-accounted", "attempt-1", "false", "quota_rejected", "-")
     duplicate = lifecycle_append(
         ledger, "attempt-accounted", "attempt-1", "false", "quota_rejected", "-"
@@ -844,7 +977,8 @@ def test_lifecycle_fold_rejects_empty_string_for_nullable_fields(tmp_path, field
         rows = [
             started_row(),
             ('{"event":"attempt_started","run_id":"%s","ts":"%s",'
-             '"attempt_id":"attempt-1","operation":"initial_search"}')
+             '"attempt_id":"attempt-1","operation":"initial_search",'
+             '"logical_operation_id":"search-1","attempt_number":1}')
             % (RUN_ID, RUN_STARTED),
             ('{"event":"attempt_accounted","run_id":"%s","ts":"%s",'
              '"attempt_id":"attempt-1","metered":false,"outcome":"quota_rejected",'
@@ -877,7 +1011,9 @@ def test_lifecycle_blocked_close_accepts_canonical_operator_code(tmp_path):
 def test_lifecycle_operation_accepts_safe_semantic_identifier_words(tmp_path, operation):
     append_workspace = tmp_path / "append" / operation
     ledger = start_lifecycle(append_workspace)
-    appended = lifecycle_append(ledger, "attempt-started", "attempt-1", operation)
+    appended = lifecycle_append(
+        ledger, "attempt-started", "attempt-1", operation, "logical-operation-1", "1"
+    )
     assert appended.returncode == 0, appended.stderr
     folded, state = lifecycle_fold(ledger, append_workspace)
     assert folded.returncode == 0, folded.stderr
@@ -888,7 +1024,8 @@ def test_lifecycle_operation_accepts_safe_semantic_identifier_words(tmp_path, op
         fold_workspace,
         started_row(),
         ('{"event":"attempt_started","run_id":"%s","ts":"%s",'
-         '"attempt_id":"attempt-1","operation":"%s"}')
+         '"attempt_id":"attempt-1","operation":"%s",'
+         '"logical_operation_id":"logical-operation-1","attempt_number":1}')
         % (RUN_ID, RUN_STARTED, operation),
     )
     folded, state = lifecycle_fold(ledger, fold_workspace)
@@ -904,7 +1041,7 @@ def test_lifecycle_operation_still_rejects_key_or_encoded_payload(tmp_path, oper
     append_workspace = tmp_path / "append" / operation
     ledger = start_lifecycle(append_workspace)
     assert lifecycle_append(
-        ledger, "attempt-started", "attempt-1", operation
+        ledger, "attempt-started", "attempt-1", operation, "logical-operation-1", "1"
     ).returncode != 0
 
     fold_workspace = tmp_path / "fold" / operation
@@ -912,7 +1049,8 @@ def test_lifecycle_operation_still_rejects_key_or_encoded_payload(tmp_path, oper
         fold_workspace,
         started_row(),
         ('{"event":"attempt_started","run_id":"%s","ts":"%s",'
-         '"attempt_id":"attempt-1","operation":"%s"}')
+         '"attempt_id":"attempt-1","operation":"%s",'
+         '"logical_operation_id":"logical-operation-1","attempt_number":1}')
         % (RUN_ID, RUN_STARTED, operation),
     )
     folded, _ = lifecycle_fold(ledger, fold_workspace)
@@ -925,7 +1063,8 @@ def test_lifecycle_fold_accepts_null_nullable_fields(tmp_path):
         workspace,
         started_row(),
         ('{"event":"attempt_started","run_id":"%s","ts":"%s",'
-         '"attempt_id":"attempt-1","operation":"initial_search"}') % (RUN_ID, RUN_STARTED),
+         '"attempt_id":"attempt-1","operation":"initial_search",'
+         '"logical_operation_id":"search-1","attempt_number":1}') % (RUN_ID, RUN_STARTED),
         ('{"event":"attempt_accounted","run_id":"%s","ts":"%s",'
          '"attempt_id":"attempt-1","metered":false,"outcome":"quota_rejected",'
          '"request_id":null}') % (RUN_ID, RUN_STARTED),
@@ -1094,7 +1233,8 @@ def test_lifecycle_reference_pins_complete_no_shell_fallback():
         "without normalization",
         "lifecycle-append.sh LEDGER phase RUN_ID ISO_TIMESTAMP PHASE",
         "lifecycle-append.sh LEDGER posting RUN_ID ISO_TIMESTAMP SOURCE SOURCE_ID STATE BRIEF_REVISION",
-        "lifecycle-append.sh LEDGER attempt-started RUN_ID ISO_TIMESTAMP ATTEMPT_ID OPERATION",
+        ("lifecycle-append.sh LEDGER attempt-started RUN_ID ISO_TIMESTAMP ATTEMPT_ID "
+         "OPERATION LOGICAL_OPERATION_ID ATTEMPT_NUMBER"),
         ("lifecycle-append.sh LEDGER attempt-accounted RUN_ID ISO_TIMESTAMP ATTEMPT_ID "
          "METERED OUTCOME REQUEST_ID_OR_DASH"),
         "lifecycle-append.sh LEDGER revision RUN_ID ISO_TIMESTAMP BRIEF_REVISION",

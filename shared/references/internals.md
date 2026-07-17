@@ -6,6 +6,11 @@ paths and precedence rules — follow the procedures as written; they are the co
 Durable run progression, safe recovery, completion, and local milestone evidence are owned by
 [run-lifecycle.md](run-lifecycle.md), including the setup-record shape, timestamp writers, activation
 predicate, and derived durations; this file does not restate those contracts.
+Every procedure here that reads, explains, activates, or verifies a run applies `run-lifecycle.md` →
+**Artifact authority for every reader** first: invoke `lifecycle-fold.sh` for the candidate's exact run_id,
+require `closed=true` and matching record state, and use only the fold-derived digest. An open
+intended-complete artifact never qualifies a canary, cutoff, activation, usage record, latest run, or
+schedule decision.
 
 ## Registry (machine-managed OS state — JSON, not YAML)
 Location (tests/evals redirect it via `$JOBSEARCH_OS_REGISTRY`):
@@ -310,8 +315,9 @@ pair-consistency rule to migration rollback; this is not the full migration proc
   changing `all → finite`, removing the key, or choosing a one-off first-page override is reversible and
   immediate; make that reduction without confirmation. Preserve the existing config major; this setting
   never performs a version-1 migration.
-- **Explain my agent-data usage (read-only):** read only the workspace's `runs/<run_id>.json` records whose
-  complete filenames match the run-id format in `conventions.md`, then explain actual
+- **Explain my agent-data usage (read-only):** among the workspace's complete-name-matching
+  `runs/<run_id>.json` candidates, read only those that pass the exact closed-ledger authority procedure
+  above, then explain actual
   `agent_data_usage` call totals, the recorded pay-as-you-go equivalent when present, the operation breakdown,
   and the configured outcome drivers (frequency, enabled sources/queries, and review mode). Use the decimal
   strings stored with each historical run; point to `agent-data-contract.md` for current canonical
@@ -629,12 +635,14 @@ to own only the exact posting-detail model.
 **Verify before recording — the canary (mandatory).** Before recording the scheduling marker, verify the
 schedule works. For the **unattended schedule**, use the **config-time canary**: **registration** (it appears
 in the host scheduler's job list) + one **real run through the exact scheduled invocation** (its own
-permissions/env, not this session's) proving a fresh `runs/<id>.json` (`run_health` ≠ `blocked`), agent-data
-reached, and workspace written; on failure, diagnose and show the fix, then get fresh scoped confirmation
+permissions/env, not this session's) proving a fresh record passes the exact run_id `lifecycle-fold.sh`
+authority procedure above with `closed=true`, `can_complete=true`, and `run_health` ≠ `blocked`; agent-data
+was reached; and the fold-derived digest was written. On failure, diagnose and show the fix, then get fresh scoped confirmation
 before any metered repair or retry canary; **never record the marker until the canary is green**. The
 **in-session-loop fallback** (`mechanism: loop`) can satisfy neither canary
 layer — it registers in no scheduler job list and its run *is* this session — so verify it differently:
-confirm its **first in-session fire** leaves a fresh run record, then record the marker. Full consent-framed
+confirm its **first in-session fire** leaves a fresh run that passes the same exact run_id,
+`lifecycle-fold.sh`, matching `closed=true` authority gate, then record the marker. Full consent-framed
 flow: the operator manual's `scheduling-and-consent.md` §the canary. Only then set the scheduling marker
 (write rules above — recording the mechanism actually used). After that proof succeeds, apply the
 schedule-setup-owned local milestone procedure in [run-lifecycle.md](run-lifecycle.md); registration alone

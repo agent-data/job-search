@@ -47,6 +47,18 @@ function string_value(row, key, marker, start, rest, finish) {
   if (!finish) return ""
   return substr(rest, 1, finish - 1)
 }
+function number_value(row, key, marker, start, rest, comma, brace, finish) {
+  marker = "\"" key "\":"
+  start = index(row, marker)
+  if (!start) return ""
+  rest = substr(row, start + length(marker))
+  comma = index(rest, ",")
+  brace = index(rest, "}")
+  if (comma && brace) finish = comma < brace ? comma : brace
+  else finish = comma ? comma : brace
+  if (!finish) return ""
+  return substr(rest, 1, finish - 1)
+}
 function restricted(value) {
   return value ~ /^[A-Za-z0-9][A-Za-z0-9._:@\/+%~-]*$/ && length(value) <= 256
 }
@@ -224,11 +236,24 @@ BEGIN {
   if (event == "attempt_started") {
     attempt_id = string_value(row, "attempt_id")
     operation = string_value(row, "operation")
-    canonical = "{\"event\":\"attempt_started\",\"run_id\":\"" rid "\",\"ts\":\"" timestamp "\",\"attempt_id\":\"" attempt_id "\",\"operation\":\"" operation "\"}"
-    if (row != canonical || !restricted(attempt_id) || !restricted(operation)) fail("invalid attempt_started row")
-    if (unsafe_identifier("attempt_id", attempt_id) || unsafe_identifier("operation", operation)) fail("prohibited attempt value")
+    logical_operation_id = string_value(row, "logical_operation_id")
+    attempt_number = number_value(row, "attempt_number")
+    canonical = "{\"event\":\"attempt_started\",\"run_id\":\"" rid "\",\"ts\":\"" timestamp "\",\"attempt_id\":\"" attempt_id "\",\"operation\":\"" operation "\",\"logical_operation_id\":\"" logical_operation_id "\",\"attempt_number\":" attempt_number "}"
+    if (row != canonical || !restricted(attempt_id) || !restricted(operation) || !restricted(logical_operation_id) || attempt_number !~ /^[1-9][0-9]*$/ || length(attempt_number) > 6) fail("invalid attempt_started row")
+    if (unsafe_identifier("attempt_id", attempt_id) || unsafe_identifier("operation", operation) || unsafe_identifier("logical_operation_id", logical_operation_id)) fail("prohibited attempt value")
     if (attempt_id in attempts_started) fail("duplicate attempt_started")
+    if (logical_operation_id in logical_attempt_count) {
+      if (operation != logical_operation[logical_operation_id]) fail("logical operation changed operation")
+      if (attempt_number + 0 != logical_attempt_count[logical_operation_id] + 1) fail("retry attempt_number must advance exactly one")
+      prior_attempt = logical_latest_attempt[logical_operation_id]
+      if (!(prior_attempt in attempts_accounted)) fail("retry started before prior attempt was accounted")
+    } else if (attempt_number + 0 != 1) fail("logical operation did not begin at attempt_number 1")
     attempts_started[attempt_id] = 1
+    attempt_logical[attempt_id] = logical_operation_id
+    attempt_ordinal[attempt_id] = attempt_number + 0
+    logical_attempt_count[logical_operation_id] = attempt_number + 0
+    logical_operation[logical_operation_id] = operation
+    logical_latest_attempt[logical_operation_id] = attempt_id
     next
   }
 
@@ -257,12 +282,18 @@ BEGIN {
       request_json = "\"" request_id "\""
     }
     canonical = "{\"event\":\"attempt_accounted\",\"run_id\":\"" rid "\",\"ts\":\"" timestamp "\",\"attempt_id\":\"" attempt_id "\",\"metered\":" metered ",\"outcome\":\"" outcome "\",\"request_id\":" request_json "}"
-    if (row != canonical || !restricted(attempt_id) || !restricted(outcome)) fail("invalid attempt_accounted row")
+    if (row != canonical || !restricted(attempt_id) || outcome !~ /^(success|retryable_failure|terminal_failure|worker_failed|quota_rejected)$/) fail("invalid attempt_accounted row")
     if (!request_is_null && !restricted(request_id)) fail("invalid request_id")
     if (unsafe_identifier("attempt_id", attempt_id) || unsafe_identifier("outcome", outcome) || (!request_is_null && unsafe_identifier("request_id", request_id))) fail("prohibited accounting value")
     if (!(attempt_id in attempts_started)) fail("attempt_accounted has no prior start")
     if (attempt_id in attempts_accounted) fail("duplicate attempt_accounted")
+    if (outcome == "quota_rejected" && metered != "false") fail("quota_rejected must be unmetered")
     attempts_accounted[attempt_id] = 1
+    attempt_outcome[attempt_id] = outcome
+    if (outcome == "success") {
+      logical = attempt_logical[attempt_id]
+      if (attempt_ordinal[attempt_id] > logical_success_ordinal[logical]) logical_success_ordinal[logical] = attempt_ordinal[attempt_id]
+    }
     next
   }
 
@@ -325,9 +356,15 @@ END {
     else if (state == "presented") { evaluated++; presented++ }
     else if (state == "terminally_skipped") terminally_skipped++
   }
-  started_count = accounted_count = 0
+  started_count = accounted_count = blocking_attempt_failures = 0
   for (attempt_id in attempts_started) started_count++
   for (attempt_id in attempts_accounted) accounted_count++
+  for (attempt_id in attempt_outcome) {
+    outcome = attempt_outcome[attempt_id]
+    logical = attempt_logical[attempt_id]
+    if (outcome == "quota_rejected" || outcome == "terminal_failure") blocking_attempt_failures++
+    else if ((outcome == "worker_failed" || outcome == "retryable_failure") && logical_success_ordinal[logical] <= attempt_ordinal[attempt_id]) blocking_attempt_failures++
+  }
 
   print "run_id=" run_id
   print "trigger=" run_trigger
@@ -342,6 +379,7 @@ END {
   print "in_flight=" in_flight
   print "attempts_started=" started_count
   print "attempts_accounted=" accounted_count
+  print "blocking_attempt_failures=" blocking_attempt_failures
   print "run_record_milestone=" (("final_run_record_written" in milestones) ? "true" : "false")
   print "digest_milestone=" (("final_digest_written" in milestones) ? "true" : "false")
   print "closed=" (closed ? "true" : "false")
@@ -362,6 +400,7 @@ remaining=0
 in_flight=0
 attempts_started=0
 attempts_accounted=0
+blocking_attempt_failures=0
 run_record_milestone=false
 digest_milestone=false
 closed=false
@@ -382,6 +421,7 @@ while IFS='=' read -r key value; do
     in_flight) in_flight=$value ;;
     attempts_started) attempts_started=$value ;;
     attempts_accounted) attempts_accounted=$value ;;
+    blocking_attempt_failures) blocking_attempt_failures=$value ;;
     run_record_milestone) run_record_milestone=$value ;;
     digest_milestone) digest_milestone=$value ;;
     closed) closed=$value ;;
@@ -423,6 +463,7 @@ if [ "$working_phase" = finalizing ] \
    && [ "$in_flight" -eq 0 ] \
    && [ "$selected" -eq "$settled" ] \
    && [ "$attempts_started" -eq "$attempts_accounted" ] \
+   && [ "$blocking_attempt_failures" -eq 0 ] \
    && [ "$final_run_record_written" = true ] \
    && [ "$final_digest_written" = true ] \
    && [ "$run_record_milestone" = true ] \
@@ -457,6 +498,7 @@ printf 'remaining=%s\n' "$remaining"
 printf 'in_flight=%s\n' "$in_flight"
 printf 'attempts_started=%s\n' "$attempts_started"
 printf 'attempts_accounted=%s\n' "$attempts_accounted"
+printf 'blocking_attempt_failures=%s\n' "$blocking_attempt_failures"
 printf 'final_run_record_written=%s\n' "$final_run_record_written"
 printf 'final_digest_written=%s\n' "$final_digest_written"
 printf 'closed=%s\n' "$closed"

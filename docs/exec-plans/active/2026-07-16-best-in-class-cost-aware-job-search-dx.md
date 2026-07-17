@@ -348,10 +348,10 @@ Rules: AAS-PROC-03/04; AAS-FORM-08/09/14; AAS-LANG-08; PSG-INJ-03/04/05/11/14.
   The coordinator is the ledger's only writer. lifecycle-append.sh accepts these exact command shapes and
   emits a canonical single-line JSON object:
 
-      lifecycle-append.sh LEDGER start RUN_ID ISO_TIMESTAMP
+      lifecycle-append.sh LEDGER start RUN_ID ISO_TIMESTAMP TRIGGER SCHEDULER_ID_OR_DASH
       lifecycle-append.sh LEDGER phase RUN_ID ISO_TIMESTAMP PHASE
       lifecycle-append.sh LEDGER posting RUN_ID ISO_TIMESTAMP SOURCE SOURCE_ID STATE BRIEF_REVISION
-      lifecycle-append.sh LEDGER attempt-started RUN_ID ISO_TIMESTAMP ATTEMPT_ID OPERATION
+      lifecycle-append.sh LEDGER attempt-started RUN_ID ISO_TIMESTAMP ATTEMPT_ID OPERATION LOGICAL_OPERATION_ID ATTEMPT_NUMBER
       lifecycle-append.sh LEDGER attempt-accounted RUN_ID ISO_TIMESTAMP ATTEMPT_ID METERED OUTCOME REQUEST_ID_OR_DASH
       lifecycle-append.sh LEDGER revision RUN_ID ISO_TIMESTAMP BRIEF_REVISION
       lifecycle-append.sh LEDGER milestone RUN_ID ISO_TIMESTAMP MILESTONE
@@ -366,7 +366,7 @@ Rules: AAS-PROC-03/04; AAS-FORM-08/09/14; AAS-LANG-08; PSG-INJ-03/04/05/11/14.
   lifecycle-fold.sh reads only canonical rows, verifies the derived runs/RUN_ID.json and final digest exist,
   and emits normalized key=value state, including phase, selected, evaluated, terminally_skipped, presented,
   remaining, in_flight, attempts_started, attempts_accounted, closed, close_state, ready_to_close, and
-  can_complete. A presented posting remains counted as evaluated. The phase subcommand rejects complete:
+  blocking_attempt_failures, and can_complete. A presented posting remains counted as evaluated. The phase subcommand rejects complete:
   after finalizing and artifact writes, the coordinator requires ready_to_close=true and the close complete
   command atomically establishes phase=complete plus closed=true. Blocked/interrupted closure preserves the
   last reached phase. The fold exits nonzero for malformed or contradictory ledgers. Both scripts must be
@@ -627,8 +627,15 @@ PSG-INJ-03/04/05/11; PSG-COMM-04/09/11.
 
   **Modify:**
   - skills/job-search-run/SKILL.md
+  - skills/job-search/SKILL.md
+  - skills/job-search/references/home.md
+  - skills/job-search/references/onboarding.md
+  - skills/job-search-agent/SKILL.md
+  - skills/job-search-agent/references/customization.md
+  - skills/job-search-agent/references/scheduling-and-consent.md
   - shared/references/conventions.md
   - shared/references/errors.md
+  - shared/references/internals.md
   - shared/references/run-lifecycle.md
   - shared/scripts/mechanics/lifecycle-append.sh
   - shared/scripts/mechanics/lifecycle-fold.sh
@@ -637,6 +644,7 @@ PSG-INJ-03/04/05/11; PSG-COMM-04/09/11.
   - tests/fake-run-lifecycle
   - tests/test_run_lifecycle_pressure.py
   - tests/test_mechanics_scripts.py
+  - tests/test_reference_resolution.py
   - tests/test_config_v1_migration.py
   - tests/test_exact_model_repair.py
 
@@ -647,17 +655,26 @@ PSG-INJ-03/04/05/11; PSG-COMM-04/09/11.
   3. record every selected posting before detail review;
   4. move posting state through queued, evaluating, and evaluated or terminally_skipped, and mark evaluated
      matches presented after an interactive display;
-  5. account every metered attempt exactly once using producer-authoritative status;
+  5. keep the coordinator as sole ledger/attempt owner, append a logical-operation-linked start before each
+     authorized producer dispatch, permit no worker-internal retry, and account every attempt exactly once
+     using producer-authoritative status;
   6. use lifecycle-fold.sh, or the pinned prose fallback, before any completion claim;
   7. close blocked/interrupted honestly and preserve completed judgments;
-  8. write final run and digest artifacts before closing complete.
+  8. write and strictly validate final run and digest artifacts before closing complete, repairing writable
+     artifact-failure paths to truthful validated blocked files;
+  9. make every shipped reader require the candidate's exact folded closed ledger before surfacing a record,
+     digest, usage result, activation, or canary; an intended-complete file is never authoritative while open;
+  10. reconstruct exact posting identities and jobs evidence from durable files after compaction rather than
+      retaining coordinator memory.
 
   Add run-record fields trigger=manual|scheduled|canary, scheduler_id null for manual and required for
   scheduled/canary, exact primary_model, primary_model_origin, exact detail_model, detail_model_origin, and
   lifecycle close state.
 
-  **RED evals:** completion with remaining work, unaccounted retry, compaction after selection, interruption
-  before selection, quota during detail reads, worker failure, and final artifact write failure.
+  **RED evals:** completion with remaining work, unaccounted retry, linked retry success, compaction after
+  selection with coordinator re-instantiation, interruption before selection, quota during detail reads,
+  worker failure, final artifact write/validation failure, strict run-record schema mutations, and the
+  intended-complete pre-close consumer/canary window.
 
   **Verify:**
 
@@ -1427,6 +1444,42 @@ AAS-DIST-03/05/06.
   reported `437 passed`; eval, doc, philosophy, release-integrity, POSIX syntax, temp-cache Python
   compilation, diff, and runtime-leakage gates were clean. Two deterministic builds held
   `sha256:4fd20929d9c2`. No live agent-data, model, scheduler, network, or billable action occurred.
+- 2026-07-17 — T4.1 post-commit cumulative review returned `Needs fixes` with four P1 authority gaps:
+  exact missing-envelope evidence language, run-record query/pagination/result cross-invariants, genuine
+  disk-only compaction recovery, and the stale build stamp. Follow-up RED reported `3 failed, 28 deselected`;
+  GREEN reported `3 passed, 28 deselected`, then `135 passed` across lifecycle mechanics and pressure tests.
+  Recovery now discards the prior coordinator, reconstructs posting, job, and attempt identities from the
+  lifecycle ledger plus `jobs.jsonl`, and resumes each durable queued/evaluating identity without replaying
+  search or a producer call whose durable result already exists. T4.1 remains open pending cumulative
+  semantic re-review and controller verification.
+- 2026-07-17 — T4.1's next fresh cumulative review returned `Needs fixes` with three P1s beyond that
+  checkpoint: contradictory validator arms, stale cross-run job evidence plus underspecified shipped recovery,
+  and bare-record comparable-history evals. Follow-up RED reported `6 failed, 28 deselected`; GREEN reported
+  `6 passed, 28 deselected`. An initial broader result was mistakenly recorded as `201 passed`; the next
+  independent review exposed its actual `1 failed, 200 passed` result. The strict validator now rejects legacy model selectors/aliases, noncanonical
+  LinkedIn pagination, non-first-page nudge evidence, nonzero preflight binding blocks, and record/ledger
+  attribution mismatches. Recovery validates canonical current-run evaluated events and joins exact
+  `run_id+source+source_id`; shipped prose discards all coordinator memory and pins the ledger/jobs/attempt
+  join. Comparable-history evals now seed closed record/ledger/digest triplets on distinct run-start dates
+  and require open-ledger candidates to be excluded. Eval and doc lint were clean. T4.1 remains open pending
+  another fresh cumulative semantic review and controller verification.
+- 2026-07-17 — T4.1 v2 cumulative review returned `Needs fixes` with two P1s: recovery rejected a canonical
+  empty salary display and therefore broke the compaction scenario, while two legacy HALT paragraphs still
+  permitted a partial record with noncanonical `ts`. RED reported `3 failed, 33 deselected`. GREEN reported
+  `3 passed, 33 deselected`; the cumulative focused files now report `203 passed` (`104` mechanics, `36`
+  lifecycle pressure, `35` reference resolution, `28` usage context). Recovery accepts empty salary and null
+  source date evidence while preserving exact Ashby identity, and every writable-workspace HALT now requires
+  the complete canonical run-record schema, derived digest, truthful reached-phase/preflight counters, and
+  closed-ledger reader authority. T4.1 remains open pending another cumulative review and final controller
+  verification.
+- 2026-07-17 — T4.1 v3 cumulative review returned `Needs fixes` with two P1 contract omissions: canonical
+  reader authority did not compare record trigger/scheduler attribution to the fold, and eval 14 still
+  rewarded worker-owned attempt ledgers. RED reported `2 failed, 35 deselected`; GREEN reported `2 passed,
+  35 deselected`. The reader procedure now requires exact record-to-fold `trigger` and `scheduler_id`
+  equality, while eval 14 requires one coordinator-owned attempt, one worker producer call with no retry,
+  producer-authoritative returned evidence, and coordinator-only append/fold of the sole lifecycle ledger.
+  Cumulative focused verification now reports `204 passed` (`104` mechanics, `37` lifecycle pressure, `63`
+  combined reference/usage). T4.1 remains open pending final cumulative review and controller verification.
 
 ## Decision log
 
@@ -1451,6 +1504,10 @@ AAS-DIST-03/05/06.
   selected identity is already queued, and treat the ledger as final authority: validate intended terminal
   artifacts before close, then require a second fold after complete close; a close-write failure first
   repairs both artifacts to truthful noncomplete state.
+- 2026-07-17 — Treat compaction as loss of all coordinator memory. Reconstruct attempt identities and
+  posting states only from the lifecycle ledger, reconstruct completed job identities only from
+  `jobs.jsonl`, and resume from that durable join without carrying effects or replaying settled producer
+  work.
 - 2026-07-16 — Define verified recurring as unattended plus real-path canary; a session loop is never
   verified recurring.
 - 2026-07-16 — Scope cost context to agent-data calls, mention the available 100-call monthly free tier, and
