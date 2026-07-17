@@ -546,7 +546,7 @@ Rules: AAS-AUTO-02/07/11; AAS-LANG-03/04/08; PSG-SUB-02/03/04/09/13; PSG-COMM-09
       python3 -m pytest -q tests/test_usage_context_contract.py tests/test_reference_resolution.py
       python3 scripts/doc_lint.py --root .
 
-- [ ] **T3.2 [BLOCKS, L] Add safe version-1 compatibility and staged migration.**
+- [x] **T3.2 [BLOCKS, L] Add safe version-1 compatibility and staged migration.**
 
   **Modify:**
   - shared/references/conventions.md
@@ -1376,6 +1376,19 @@ AAS-DIST-03/05/06.
   migration/repair pressure remains in T3.2. Eval validation, doc lint, philosophy guard, shell syntax,
   deterministic build `sha256:dd6ddce33758`, and diff whitespace were clean; focused semantic re-review
   found no remaining Critical, Important, or Minor issues.
+- 2026-07-17 — T3.2 landed across `b1d982f`, `f318eb8`, and `a0fa1c9` after executable and formal review.
+  Passive home/headless v1 paths preserve exact bytes; a v2-required action resolves the exact model before
+  one combined confirmation, then uses an exclusive backup and transactional config/binding activation.
+  The dev-only host fixture now executes validation, registration, partial-activation, canary, cleanup,
+  prior-sidecar restoration, and first-success cutoff branches without claiming general scheduler fidelity.
+  Formal review exposed and fixed false-positive evidence paths: cutoff qualification now folds canonical
+  lifecycle/run/digest/config/sidecar artifacts and binds to this migration's activated pair; every rollback
+  decision revalidates matching evidence; malformed matching markers fail closed; foreign markers cannot
+  poison the cutoff. Candidate validation preserves canonical omissions and YAML source-list formatting,
+  validates saved review depth and exact sidecar types, and requires a real canonical UTC completion time.
+  Controller verification on the committed tree reported `55 passed` focused, `231 passed` cumulative, and
+  `340 passed` full; eval, doc, philosophy, syntax, compilation, diff, and deterministic build checks were
+  clean. No live agent-data call, scheduler write, network operation, or spend occurred.
 
 ## Decision log
 
@@ -1389,6 +1402,9 @@ AAS-DIST-03/05/06.
 - 2026-07-16 — Store an exact version-2 detail model in workspace config and read it at every dispatch; choose
   the least-powerful adequate judgment model only during setup/repair.
 - 2026-07-16 — A recurring primary inherits the exact creating-session model unless explicitly overridden.
+- 2026-07-17 — Treat v1-to-v2 config plus current binding evidence as one migration transaction. Bind the
+  rollback cutoff to the exact activated pair and derive it only from canonical complete-run evidence;
+  persisted cutoff state is an index/guard, never a substitute for revalidation.
 - 2026-07-16 — Define verified recurring as unattended plus real-path canary; a session loop is never
   verified recurring.
 - 2026-07-16 — Scope cost context to agent-data calls, mention the available 100-call monthly free tier, and
