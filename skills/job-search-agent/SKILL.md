@@ -47,6 +47,7 @@ The OS state is plain files, and every operation on it is a pinned procedure in 
 | Record the active workspace in the registry | `../../shared/references/internals.md` → Registry write rules |
 | Compose the scheduling run recipe for a frequency | `../../shared/references/internals.md` → Scheduling setup (compose the cadence; the host composes its own run recipe) |
 | Read / set / clear the scheduling marker | `../../shared/references/internals.md` → Registry (the `scheduling` object) |
+| Repair an unavailable/refused exact primary or detail model | `../../shared/references/internals.md` → Exact-model repair; user rendering in `../../shared/references/errors.md` → model-repair-rendering |
 | Known ids — the dedup set from `jobs.jsonl` | `../../shared/references/conventions.md` → §jobs.jsonl operations |
 | Append one evaluated or status-changed event | `../../shared/references/conventions.md` → §jobs.jsonl operations |
 | Current state (fold by (`source`, `source_id`), last-write-wins; alias pairs count as one role) | `../../shared/references/conventions.md` → §jobs.jsonl operations |
@@ -137,6 +138,12 @@ fails, every repair or retry attempt gets fresh calls-first context and a fresh 
 the first approval is not standing authority. Only after a green canary set the scheduling marker. To turn
 scheduling off: stop the active schedule, then clear the scheduling marker. Always show the user the
 verbatim run recipe composed for the host — copy it exactly as written; do not reconstruct those tokens.
+
+If a saved exact primary or detail model expires or exact dispatch is refused, keep the schedule disabled
+and unverified and run the canonical **Exact-model repair** procedure in `internals.md`. It preserves valid
+unchanged slots, rejects guessed identifiers, previews both exact bindings and all state effects, and uses
+one scoped confirmation for the complete repair plus one real scheduled-path canary. A failed setup or
+canary restores the exact transaction snapshot; only a green canary enables and verifies the schedule.
 
 For the full flow — unattended-first advocacy, the consent line, and the mandatory canary (including what to do when the user explicitly asks for cron or launchd) — see `references/scheduling-and-consent.md`.
 

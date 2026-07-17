@@ -128,6 +128,14 @@ fallback, and wording rules in `errors.md` rather than restating them here.
      config bytes, write the blocked run record and blocked digest when the workspace is writable, keep the
      three model fields `null`, and never expose that internal class as a raw user code.
 
+     This runner is headless and never performs exact-model repair itself. If the saved scheduled primary
+     model, configured detail model, binding evidence, or exact dispatch is unavailable/refused, stop without
+     trying a host default, alias, tier, prefix, or automatic substitution. Preserve all completed-attempt
+     accounting, leave the affected schedule disabled/unverified, and route the next interactive visit to
+     `internals.md` → **Exact-model repair**. Render the blocked chat/digest through `errors.md` →
+     `model-repair-rendering`: observed slot/cause, preserved safe state, next interactive step, and exact
+     conversational fix—never the raw internal class.
+
      An ordinary version-1 run is passive compatibility, never migration: set
      `detail_model_binding_id:null`, preserve `config.yaml` byte-for-byte, and never create
      `runs/detail-model-binding.json`. Apply the canonical compatibility resolver once for this run. A

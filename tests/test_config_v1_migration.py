@@ -1014,10 +1014,14 @@ def test_canonical_contract_pins_passive_compatibility_transaction_and_cutoff():
         "observed_cause_preserved_work_next_step_exact_fix",
     )
 
-    task = PLAN.read_text(encoding="utf-8").split(
-        "- [ ] **T3.2 [BLOCKS, L] Add safe version-1 compatibility and staged migration.**",
-        1,
-    )[1].split("- [ ] **T3.3", 1)[0]
+    task_match = re.search(
+        r"- \[[ x]\] \*\*T3\.2 \[BLOCKS, L\] Add safe version-1 compatibility "
+        r"and staged migration\.\*\*(.*?)(?=- \[[ x]\] \*\*T3\.3)",
+        PLAN.read_text(encoding="utf-8"),
+        re.DOTALL,
+    )
+    assert task_match, "missing T3.2 plan section"
+    task = task_match.group(1)
     assert "- shared/references/build-stamp.md" in task
 
 

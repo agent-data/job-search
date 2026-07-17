@@ -428,6 +428,99 @@ be verified, fail closed and do not restore version 1.
 | `effect` | `migration_committed_rollback_to_v1_forbidden` |
 <!-- /exact-model-contract:legacy-v1-rollback-cutoff -->
 
+## Exact-model repair
+
+Interactive repair is the only place that may replace an unavailable or refused exact model. A headless
+run detects the affected primary and/or detail slot, writes the bounded blocked artifacts when possible,
+and stops without selecting, tier-resolving, guessing, or accepting an automatic host substitution. Route
+the user to the interactive operator flow. When a schedule exists, repair begins only after that schedule
+has been disabled and its registry state is unverified; expiry never leaves an unverified job running. A
+workspace without a schedule may repair its detail binding directly and has no primary scheduler slot.
+
+Resolve a complete candidate from live exact identifiers. Preserve every still-valid slot exactly as it is.
+For an unavailable primary, prefer the repair session's exact primary and record `repair_session`; if that
+identity cannot be observed, require the user to choose one exact available identifier. For an unavailable
+detail model, choose the least-powerful available model adequate for fit judgment and record `repair`. An
+explicit exact available user choice overrides either default. Reject an unknown, unavailable, or ambiguous
+prefix instead of guessing what the user meant. An available slot with no explicit override preserves both
+its identifier and origin. An explicit same-identifier primary choice is still a user override and may
+rebind only its origin to `user_override`; it does not turn into implicit session inheritance.
+
+<!-- exact-model-contract:exact-model-repair-candidate -->
+| Situation | Decision |
+|---|---|
+| `valid_unchanged_slot` | `preserve_exact_value_and_state` |
+| `primary_unavailable_default` | `repair_session_exact_model_origin_repair_session` |
+| `primary_repair_session_unknown` | `require_exact_available_user_selection` |
+| `detail_unavailable_default` | `least_powerful_available_adequate_judgment_model_origin_repair` |
+| `user_override` | `exact_available_identifier_only` |
+| `same_id_primary_user_override` | `allowed_origin_user_override` |
+| `unknown_unavailable_or_ambiguous` | `reject` |
+<!-- /exact-model-contract:exact-model-repair-candidate -->
+
+Snapshot every affected surface. For a scheduled repair that means the exact config, detail-binding sidecar,
+registry scheduling metadata and verification state, and scheduler job metadata. Preview both slots with
+exact before/after values even when one is unchanged. Also show whether config or binding evidence will
+change, the exact scheduler machine change and removal path, the disabled/unverified state during repair,
+and the exact rollback effect. Give the canonical calls-first context for one real scheduled-path repair
+canary. Model identity alone is neutral; the canary is the metered action. Ask one scoped confirmation that
+covers this whole scheduled candidate, machine change, and exactly one canary—never separate model, config,
+migration, scheduler, or canary prompts.
+
+Without a schedule, only a detail binding can require repair. The user's explicit interactive repair request
+is authority for this neutral model-only edit: show the exact detail before/after and pair-write effect, then
+atomically replace the config plus fresh binding sidecar without cost context, an extra confirmation, or a
+canary. Restore the exact pair if either replacement fails.
+
+<!-- exact-model-contract:exact-model-repair-confirmation -->
+| Policy | Decision |
+|---|---|
+| `applies` | `scheduled_repair` |
+| `no_schedule` | `not_applicable_explicit_request_is_authority` |
+| `count` | `one` |
+| `model_identity` | `neutral` |
+| `metered_action` | `repair_canary` |
+| `primary_and_detail` | `exact_before_after_including_unchanged_slots` |
+| `state_effects` | `scheduler_config_binding_machine_change_removal_and_rollback` |
+| `canary_context` | `canonical_calls_first_preview` |
+<!-- /exact-model-contract:exact-model-repair-confirmation -->
+
+After the scheduled-repair yes, stage the candidate while the scheduler remains disabled and the registry
+remains unverified. A
+primary-only repair changes only scheduler/registry model metadata and preserves a valid config and sidecar
+byte-for-byte. Any detail-binding repair writes the version-2 config plus a complete fresh canonical sidecar
+as one recoverable pair; generate a fresh binding id, timestamp, and `repair` origin even when an explicit
+repair rewrites the same model literal. Validate the staged exact pair and scheduler metadata before the
+canary. Execute one real run through the registered job's actual unattended invocation and require the same
+green evidence as schedule setup. That green real-path canary is the only commit point: only then enable the
+job and mark the registry verified.
+
+If candidate setup, a partial write, scheduler activation, or the canary fails, automatically restore every
+snapshotted surface exactly and ensure no proposed model remains active. The restored schedule stays in its
+prior transaction state—on expiry repair that state is disabled and unverified. Explain the observed cause,
+restoration, next step, and conversational fix. A scheduled retry is a new transaction with a fresh
+calls-first preview and fresh scoped confirmation; the prior yes is consumed. An unscheduled pair-write
+retry instead needs a fresh explicit interactive repair request, but remains neutral: no calls preview,
+extra confirmation, or canary. The deterministic T3.3 fake-host flow tests these boundaries only and is not
+evidence of general scheduler fidelity.
+
+<!-- exact-model-contract:exact-model-repair-transaction -->
+| Phase | Decision |
+|---|---|
+| `snapshot` | `exact_affected_config_sidecar_and_when_present_registry_scheduler_verification_state` |
+| `primary_only` | `preserve_valid_config_and_sidecar_bytes` |
+| `detail_write` | `canonical_fresh_binding_even_when_literal_is_unchanged` |
+| `schedule_exists` | `one_confirmation_and_green_real_path_canary_required` |
+| `no_schedule_detail_repair` | `atomic_config_and_fresh_binding_pair_no_canary` |
+| `no_schedule_confirmation` | `explicit_repair_request_is_neutral_authority` |
+| `during_repair` | `scheduler_disabled_and_registry_unverified` |
+| `setup_or_canary_failure` | `restore_exact_prior_transaction_state_no_proposed_model_active` |
+| `green_real_path_canary` | `only_commit_enable_and_verify` |
+| `scheduled_failed_retry` | `fresh_calls_first_context_and_scoped_confirmation` |
+| `unscheduled_failed_retry` | `fresh_explicit_request_no_calls_preview_or_confirmation` |
+| `fixture_scope` | `t3_3_only_not_general_scheduler_fidelity` |
+<!-- /exact-model-contract:exact-model-repair-transaction -->
+
 ## Scheduling setup
 **Advocate an unattended schedule** for the recurring run — one that keeps firing with **no interactive
 session open** — on the host's or the OS's own scheduler that survives session-close (a `cron` or `launchd`

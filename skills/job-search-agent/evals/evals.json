@@ -187,6 +187,78 @@
         "Only after the fresh second yes does another fake canary attempt run; only after its written run record proves success is the scheduling marker set installed true with the stubbed mechanism",
         "All agent-data work uses the fake shim (zero real credits), all scheduler effects stay under <tmp>, and no account plan/balance or actual-charge claim is invented"
       ]
+    },
+    {
+      "id": 15,
+      "scenario": "exact-model repair uses one confirmation for the complete transaction",
+      "coverage_kind": "executable_fixture",
+      "prompt": "PRE-SEED a disabled/unverified fake scheduled job with both exact bindings expired. Ask how to repair it and inspect the preview before yes. Answer yes once, then drive the T3.3 fixture transaction and one canary.",
+      "expectations": [
+        "The preview names exact before/after primary and detail values including unchanged slots, state effects, machine change/removal, and rollback",
+        "Canonical calls-first canary context precedes one confirmation covering the complete repair and exactly one canary",
+        "There are no separate model, config, scheduler, migration, or canary prompts",
+        "The fixture log records one authorize-repair operation and no live side effect"
+      ]
+    },
+    {
+      "id": 16,
+      "scenario": "same-id detail rewrite creates fresh repair provenance",
+      "coverage_kind": "executable_fixture",
+      "prompt": "PRE-SEED a valid detail model and canonical sidecar. Explicitly choose that same exact available detail identifier during repair, approve once, activate, and inspect config/sidecar before canary.",
+      "expectations": [
+        "An explicit detail-binding repair is a write even though the model literal is unchanged",
+        "The config model stays equal while the complete sidecar receives a fresh binding id, fresh timestamp, and repair origin",
+        "The primary metadata remains unchanged and the job stays disabled/unverified until canary",
+        "No stale sidecar or configured_auto provenance is reused for the repair write"
+      ]
+    },
+    {
+      "id": 17,
+      "scenario": "green canary is the only repair commit point",
+      "coverage_kind": "executable_fixture",
+      "prompt": "PRE-SEED and authorize a repair. Inspect all state after activate-repair but before canary, then invoke repair-canary through the fake registered-job path and inspect again.",
+      "expectations": [
+        "Staged candidate files and metadata are active_unverified while registry and job remain unverified and disabled",
+        "Registration, process success, or staged files do not count as verification",
+        "Only the green fake real-path canary enables the job and marks registry/job verified",
+        "The fake operation is T3.3 repair pressure and makes no claim of general scheduler fidelity"
+      ]
+    },
+    {
+      "id": 18,
+      "scenario": "partial activation rollback is automatic and exact",
+      "coverage_kind": "executable_fixture",
+      "prompt": "PRE-SEED exact config, sidecar, registry, and disabled-job snapshots. Authorize a detail repair, set repair-partial-activation-failure, and invoke activate-repair. Inspect files, state, and host log before any canary.",
+      "expectations": [
+        "The fixture fails deterministically after one partial file replacement and automatically restores every exact snapshot",
+        "No proposed primary/detail binding remains active and the job remains disabled/unverified",
+        "No canary or metered operation occurs after activation failure",
+        "The next retry requires a new candidate, calls-first preview, and scoped confirmation"
+      ]
+    },
+    {
+      "id": 19,
+      "scenario": "failed repair canary restores exact state and refuses inherited authority",
+      "coverage_kind": "executable_fixture",
+      "prompt": "PRE-SEED and authorize a both-slot repair, activate it, then set repair-canary-failure and invoke repair-canary. Compare exact state and try repair-canary again without a fresh begin/authorize sequence.",
+      "expectations": [
+        "The failed canary restores exact config, sidecar, registry, scheduler metadata, and prior disabled/unverified verification state",
+        "The prior yes is consumed and a second canary without fresh calls-first context plus confirmation is rejected",
+        "User output names the observed failure, restored state, next interactive step, and conversational fix",
+        "No raw internal class, invented E-* repair code, live network, or live scheduler appears"
+      ]
+    },
+    {
+      "id": 20,
+      "scenario": "unscheduled detail repair is a neutral atomic pair write",
+      "coverage_kind": "executable_fixture",
+      "prompt": "PRE-SEED a manual-only version-2 workspace with an unavailable exact detail model, valid canonical sidecar, and no installed schedule. Ask interactively to repair the job-search model, accept the displayed exact default through the explicit request, and drive repair-unscheduled-detail through fake-host-capabilities. Inspect config/sidecar bytes, fixture state, and operation log; in a second isolated arm inject repair-unscheduled-partial-failure.",
+      "expectations": [
+        "The repair changes only the detail binding; it does not invent a primary scheduler slot, scheduler metadata, or machine change",
+        "The explicit repair request is neutral authority for the exact model-only pair write, with no cost warning, extra confirmation, or canary",
+        "Success writes the config and a fresh complete repair-origin sidecar as one recoverable pair",
+        "The injected partial failure restores the exact config/sidecar bytes and no live scheduler, network, or agent-data action occurs"
+      ]
     }
   ]
 }

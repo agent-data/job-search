@@ -59,6 +59,27 @@ until green. If it cannot be made to work, name the exact gap in the same named-
 system uses and **stop — do not claim it is scheduled.** No "all set." Only after a **green canary** do you
 set the scheduling marker.
 
+### Repairing an expired or refused exact model
+
+Expiry or exact-dispatch refusal first leaves the recurring job **disabled and unverified**. Then follow the
+single source of truth in `../../../shared/references/internals.md` → **Exact-model repair**, including its
+`exact-model-repair-candidate`, `exact-model-repair-confirmation`, and
+`exact-model-repair-transaction` marked contracts. Do not silently substitute a host default or use a model
+prefix as an identifier.
+
+Show both exact primary and detail before/after values, including an unchanged valid slot; show the config,
+binding, scheduler, machine-change/removal, and exact rollback effects. Add the canonical calls-first preview
+for one real scheduled-path repair canary. Then ask **one scoped confirmation** for that complete proposal
+and exactly one canary—no separate model, config, scheduler, or canary confirmations. Model identity is
+neutral; the real canary is the metered action.
+
+Stage an approved candidate while the job stays disabled and unverified. On any partial setup or canary
+failure, restore the exact transaction snapshot automatically and leave no proposed model active. A retry
+needs fresh calls-first context and a fresh scoped confirmation. **Only a green real scheduled-path canary**
+commits the repair, enables the job, and marks the registry verified. Render either the initial binding
+failure or the later setup/activation/canary phase through `../../../shared/references/errors.md` →
+`model-repair-rendering`; normal chat and digests never show the raw internal failure token.
+
 ## Actions
 
 The steps are the same whichever scheduler is active; the agent binds each to its own host. The one step

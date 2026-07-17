@@ -175,6 +175,18 @@ an explicit exact available model requested by the user overrides it. The canoni
 sidecar, and version-1 compatibility boundary live in `../../../shared/references/conventions.md`; selection
 and write mechanics live in `../../../shared/references/internals.md`.
 
+For an unavailable/refused binding, do not improvise from that setup summary. Follow the canonical
+`exact-model-repair-candidate`, `exact-model-repair-confirmation`, and
+`exact-model-repair-transaction` marked contracts under **Exact-model repair** in
+`../../../shared/references/internals.md`. They preserve a valid unchanged slot, define the distinct
+`repair_session` primary and `repair` detail origins, require exact available overrides, and make the green
+real-path canary the only enable/verify commit point. User-facing failure wording comes from
+`../../../shared/references/errors.md` → `model-repair-rendering`.
+
+Without a schedule, repair only the unavailable detail binding. The explicit interactive repair request is
+neutral authority for the atomic config/fresh-sidecar pair write, with no extra confirmation or canary. A
+primary binding, scheduler update, calls-first preview, and canary apply only when a schedule exists.
+
 On a host that cannot assign a separate worker model, setup stores the exact primary model and configures
 sequential detail reads. Parallel approval, capacity, or refusal may change concurrency, never the saved exact
 model. If that exact dispatch is unavailable or refused, block and route to interactive repair—never choose a

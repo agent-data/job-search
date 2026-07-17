@@ -1,8 +1,8 @@
 # Named errors (E-*) — cause + fix + what the user sees
 
 Every failure is named internally and visible — no silent failures. The E-* table owns established canonical
-errors. Exact-model binding failures use the narrow internal class below until T3.3 defines their complete
-interactive repair and user rendering; the internal class is never shown as a raw user code. The durable
+errors. Exact-model binding failures use the narrow internal class below and the complete interactive repair
+rendering that follows it; the internal class is never shown as a raw user code. The durable
 guarantee for blocked runs is two **file-backed channels** when a writable workspace exists: the **blocked
 digest** (cause + next interactive step) and the **home view** (reads `run_health` from the newest
 `runs/<id>.json`) — both plain file writes that survive on any host. Every HALT or model-binding block with a
@@ -32,8 +32,29 @@ The blocked run record stores `error.class:"detail_model_binding_unavailable"` i
 binding is established, `detail_model`, `detail_model_origin`, and `detail_model_binding_id` are `null`.
 The digest and normal chat state the observed cause and route to interactive model repair without showing
 that class token. Pre-meter failures record zero metered work; a refused/unsupported dispatch preserves all
-completed-attempt accounting already observed. Full recommendation, confirmation, and rollback behavior
-remain T3.3 work.
+completed-attempt accounting already observed. Render the exact unavailable or refused slot, what stayed
+unchanged or was restored, and the next interactive step. Give a concrete conversational fix: say “repair
+the job-search models” to accept the displayed exact defaults, or name one exact available model identifier.
+Do not tell the user to edit an internal file or expose the internal class as if it were an `E-*` code.
+
+If repair setup, activation, or canary failed after the user approved a candidate, name that observed phase
+instead of repeating the initial unavailable/refused-slot cause. State which config, sidecar, registry, and
+scheduler surfaces were restored, that no proposed model remains active, and whether the job is disabled and
+unverified. Then offer the precise next step: fix the observed setup/canary cause and say “repair the
+job-search models” again for a fresh proposal—and, when a schedule exists, fresh calls-first context plus
+one new scoped confirmation. Never print the fixture/internal failure token in normal chat or a digest.
+
+<!-- exact-model-contract:model-repair-rendering -->
+| Policy | Decision |
+|---|---|
+| `initial_binding_failure` | `exact_unavailable_or_refused_slot` |
+| `repair_transaction_failure` | `observed_setup_activation_or_canary_phase` |
+| `safe_state` | `what_was_preserved_or_restored` |
+| `next_step` | `interactive_exact_model_repair` |
+| `exact_fix` | `conversational_available_model_selection_or_default` |
+| `raw_internal_class` | `never_show` |
+| `invented_e_code` | `never_show` |
+<!-- /exact-model-contract:model-repair-rendering -->
 
 Version-1 migration failures use a separate bounded internal class because they describe the transaction,
 not the model-resolution failure above. Store the observed failed phase and safe diagnostic facts in the

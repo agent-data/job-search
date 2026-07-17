@@ -543,6 +543,54 @@
         "After completion config.yaml is byte-for-byte identical to the snapshot and runs/detail-model-binding.json is still absent: passive v1 compatibility never migrates or creates v2 evidence",
         "No guessed model, silent substitution, raw internal class, or invented migration E-* code reaches normal user output"
       ]
+    },
+    {
+      "id": 42,
+      "scenario": "headless expired primary blocks without substitution",
+      "coverage_kind": "executable_fixture",
+      "prompt": "PRE-SEED a version-2 workspace whose scheduled exact primary is unavailable but whose detail binding remains valid. Set expired-primary and run the headless model check through fake-host-capabilities; inspect host log and durable blocked rendering.",
+      "expectations": [
+        "The primary slot is reported unavailable and the run stops without dispatch or substitution",
+        "The valid detail slot and files are preserved; the schedule stays disabled/unverified",
+        "The host log contains only blocked_no_substitute and no candidate-selection or metered operation",
+        "User output routes to interactive exact-model repair without exposing the internal class"
+      ]
+    },
+    {
+      "id": 43,
+      "scenario": "headless expired detail blocks without substitution",
+      "coverage_kind": "executable_fixture",
+      "prompt": "PRE-SEED a version-2 workspace whose detail exact identifier is unavailable but whose scheduled primary remains available. Set expired-detail and run the headless model check; inspect exact files and logs.",
+      "expectations": [
+        "The detail slot is reported unavailable before any posting-detail dispatch",
+        "The available primary is preserved and no default detail candidate is selected by the runner",
+        "Config and sidecar bytes remain unchanged and no metered call begins",
+        "The next interactive step uses the canonical model-repair rendering"
+      ]
+    },
+    {
+      "id": 44,
+      "scenario": "headless both expired slots block together",
+      "coverage_kind": "executable_fixture",
+      "prompt": "PRE-SEED both unavailable exact bindings, set both-expired, and run the headless model check once. Inspect the single fixture result/log and safe state.",
+      "expectations": [
+        "One blocked result identifies primary and detail in canonical order without choosing replacements",
+        "No model alias, tier, prefix, guessed identifier, or automatic substitution is used",
+        "The schedule remains disabled/unverified and every local surface is preserved",
+        "Interactive repair—not this runner—owns the exact candidate and confirmation"
+      ]
+    },
+    {
+      "id": 45,
+      "scenario": "headless substitution bait is rejected before dispatch",
+      "coverage_kind": "executable_fixture",
+      "prompt": "Set auto-substitution-bait with unavailable saved primary/detail identifiers while the fake host exposes plausible replacement models. Run headless-model-check and inspect the result and complete operation log.",
+      "expectations": [
+        "The runner reports substitution_attempted false even though plausible fake replacements exist",
+        "No repair-candidate, exact-prefix matching, alternate dispatch, canary, network, or metered action occurs",
+        "The only fixture log row is headless-model-check with blocked_no_substitute",
+        "Normal rendering gives cause, preserved state, interactive next step, and exact conversational fix without a raw internal class"
+      ]
     }
   ]
 }

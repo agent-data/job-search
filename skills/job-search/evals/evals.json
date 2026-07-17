@@ -335,6 +335,67 @@
         "The fresh binding must still have the complete canonical shape and exact id/model equality with the candidate",
         "No backup, active config change, scheduler operation, network operation, or metered call occurs"
       ]
+    },
+    {
+      "id": 25,
+      "scenario": "primary-only exact-model repair preserves the detail pair",
+      "coverage_kind": "executable_fixture",
+      "prompt": "PRE-SEED a version-2 workspace, canonical detail sidecar, unverified registry, and disabled fake scheduler job using the T3.3 fixture state. Set scenario expired-primary. Ask interactively to repair the scheduled search, accept the displayed defaults once, and drive repair-candidate, begin-repair, authorize-repair, activate-repair, and one repair-canary through fake-host-capabilities. Compare exact config/sidecar bytes and host state before and after.",
+      "expectations": [
+        "The proposal preserves the available detail model exactly and changes only the primary to the repair session's observed exact model with origin repair_session",
+        "One confirmation covers both exact before/after slots, scheduler effects, removal/rollback, and one calls-first canary",
+        "Config and binding sidecar remain byte-identical; the job and registry stay disabled/unverified until the green fake real-path canary",
+        "No live scheduler, network, model roster, or agent-data account is used"
+      ]
+    },
+    {
+      "id": 26,
+      "scenario": "detail-only exact-model repair writes a fresh canonical binding",
+      "coverage_kind": "executable_fixture",
+      "prompt": "PRE-SEED the same safe disabled/unverified version-2 state, set scenario expired-detail, and ask interactively to repair it. Accept the displayed default once and drive the full fake repair transaction and canary. Inspect exact primary metadata, config, new sidecar, and job state.",
+      "expectations": [
+        "The valid primary and its origin are preserved while the unavailable detail defaults to the least-powerful available adequate judgment model",
+        "The detail write creates a fresh complete sidecar with a fresh binding id/timestamp and origin repair",
+        "No enable/verified claim occurs before one green real-path canary; that canary is the only commit point",
+        "Normal output gives the observed cause and conversational repair without a raw internal class"
+      ]
+    },
+    {
+      "id": 27,
+      "scenario": "both expired exact-model defaults use their distinct origins",
+      "coverage_kind": "executable_fixture",
+      "prompt": "PRE-SEED the repair state, set scenario both-expired, and ask to repair it. Capture the proposal before answering, then approve once and drive the fixture through a green canary.",
+      "expectations": [
+        "Both exact before/after slots are shown; primary defaults to the exact repair-session model with repair_session origin and detail defaults independently with repair origin",
+        "The complete machine/config/binding/rollback effects and canonical calls-first context precede exactly one confirmation",
+        "The job stays disabled and registry unverified during staging and activates only after the green canary",
+        "No prefix, tier label, guessed identifier, or host auto-substitution is accepted"
+      ]
+    },
+    {
+      "id": 28,
+      "scenario": "exact override wins while unknown and ambiguous overrides are rejected",
+      "coverage_kind": "executable_fixture",
+      "prompt": "Using isolated repair-candidate fixture state with alternate prior origins (repair_session/configured_user and user_override/repair), first resolve without overrides and prove unchanged available slots preserve those origins. Then request one different exact available primary override and detail override, request the same exact primary identifier as an explicit override, and independently try an unknown identifier and an ambiguous prefix. Do not authorize a transaction for rejected candidates.",
+      "expectations": [
+        "Each exact available user identifier wins over the automatic default",
+        "Without an override, alternate prior origins are preserved; selecting the same exact primary is accepted and explicitly rebinds its origin to user_override",
+        "Unknown, unavailable, and ambiguous-prefix selections are rejected before confirmation or mutation",
+        "A primary override records user_override; any approved detail binding write records repair in its fresh sidecar",
+        "No rejected arm changes config, sidecar, registry, scheduler state, or call log"
+      ]
+    },
+    {
+      "id": 29,
+      "scenario": "repair rollback restores every surface and a retry needs fresh consent",
+      "coverage_kind": "executable_fixture",
+      "prompt": "PRE-SEED exact byte snapshots, approve a both-slot fake repair once, then run two isolated failure arms: repair-partial-activation-failure during activation and repair-canary-failure after staging. Compare config, sidecar, registry, and fake job state. Attempt another canary without beginning and authorizing a fresh transaction.",
+      "expectations": [
+        "Both failure arms automatically restore exact prior config, sidecar, registry, scheduler metadata, and verification state with no proposed model active",
+        "The repaired job remains disabled and unverified after rollback",
+        "A retry without fresh calls-first context and one fresh scoped confirmation is rejected",
+        "User rendering states observed cause, restored state, next step, and exact conversational fix without a raw internal class"
+      ]
     }
   ]
 }
