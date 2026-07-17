@@ -803,7 +803,7 @@ AAS-BOUND-03; PSG-TOOL-15.
       python3 scripts/eval_harness.py --root .
       python3 scripts/doc_lint.py --root .
 
-- [ ] **T5.2 [BLOCKS, M] Make activation and a zero-relevant recovery explicit.**
+- [x] **T5.2 [BLOCKS, M] Make activation and a zero-relevant recovery explicit.**
 
   **Modify:**
   - skills/job-search/references/onboarding.md
@@ -1604,6 +1604,28 @@ AAS-DIST-03/05/06.
   deterministic builds byte-identical (build-stamp file SHA-256 `6bb00f68…bd29a2a7`, content hash
   `sha256:fe59b9fc8548`), and `git diff --check` clean. The plugin version stays `0.6.0`. No live agent-data,
   model, scheduler, network, or billable effect occurred and no branch or worktree changed. **T5.1 is
+  complete.**
+- 2026-07-17 — T5.2 relevant-match activation: made activation and the zero-relevant recovery explicit in the
+  user surfaces without redefining the contract. Activation stays single-homed — a linkable `### Activation`
+  heading was added above the byte-identical T1.3 activation table in run-lifecycle.md — and onboarding and home
+  now surface it one hop: activation requires a nonblocked run, at least one fully evaluated posting, and at
+  least one relevant match *shown with reasoning* (the `presented` transition, not mere evaluation). A new
+  single-homed `### Zero-relevant recovery` section states the search ran and what was learned, does not claim
+  activation, offers exactly one high-signal broadening suggestion (never a list), and re-earns calls-first cost
+  context before any broader run's first metered call. Four RED evals: job-search 36 (relevant activation), 37
+  (no-relevant run — executable, engineers a genuinely zero-relevant brief and checks exactly-one-suggestion
+  plus fresh cost-context ordering), job-search-run 65 (quota before any full evaluation — blocked, no raw E-*
+  in user copy, no retry, no activation), and 66 (a relevant match found but not shown does not activate —
+  keyed to the `presented` transition, backed by eval 50's executable display-failure arm). Committed as
+  `299b897` (`feat: track first relevant activation`) — the five brief files plus the regenerated build stamp;
+  appends only (ids 36-37, 65-66), so no ID-anchored test shifted and no out-of-brief edit was needed. A fresh
+  Opus task review returned **Approved** — no Critical or Important; two Minor inline-restatement drift-surface
+  notes (onboarding/home echo the activation clauses and recovery constraints with explicit authority
+  attribution — acceptable surfacing; recorded in the SDD ledger, no fix). Controller re-verify on the committed
+  tree: full pytest `486 passed`, eval harness coherent, doc lint / philosophy guard / release version-sync
+  clean, two deterministic builds byte-identical (build-stamp file SHA-256 `980cff3d…0d579116`, content hash
+  `sha256:538e3d9da8cd`), and `git diff --check` clean. The plugin version stays `0.6.0`. No live agent-data,
+  model, scheduler, network, or billable effect occurred and no branch or worktree changed. **T5.2 is
   complete.**
 
 ## Decision log
