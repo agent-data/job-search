@@ -93,6 +93,7 @@ LIFECYCLE_EVENTS = (
     "posting_state",
     "attempt_started",
     "attempt_accounted",
+    "attempt_resolved",
     "brief_revision",
     "milestone",
     "run_closed",

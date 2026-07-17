@@ -50,6 +50,18 @@ operator_code() {
   [ "${#_operator_code}" -le 256 ] \
     && printf '%s\n' "$_operator_code" | LC_ALL=C grep -Eq '^E-[A-Z0-9]+(-[A-Z0-9]+)*$'
 }
+source_order_value() {
+  _source_order=$1
+  printf '%s\n' "$_source_order" | awk -F+ '
+    NF < 1 { exit 1 }
+    {
+      for (i = 1; i <= NF; i++) {
+        if ($i !~ /^(linkedin|ashby|greenhouse|lever)$/) exit 1
+        for (j = 1; j < i; j++) if ($i == $j) exit 1
+      }
+    }
+  '
+}
 decimal() {
   _decimal=$1
   while [ "${_decimal#0}" != "$_decimal" ]; do
@@ -176,9 +188,10 @@ runs_dir=$(dirname "$ledger")
   || reject 'ledger filename does not match run_id'
 
 if [ "$command" = start ]; then
-  [ "$#" -eq 2 ] || usage
+  [ "$#" -eq 3 ] || usage
   trigger=$1
   scheduler_id=$2
+  source_order=$3
   case $trigger in
     manual)
       [ "$scheduler_id" = - ] || reject 'manual trigger requires null scheduler_id'
@@ -191,9 +204,10 @@ if [ "$command" = start ]; then
       ;;
     *) reject 'unknown trigger' ;;
   esac
+  source_order_value "$source_order" || reject 'invalid source_order'
   [ ! -e "$ledger" ] || reject 'run_started already exists'
   [ -d "$runs_dir" ] || mkdir -p "$runs_dir" || reject 'could not create runs directory'
-  append_line "{\"event\":\"run_started\",\"run_id\":\"$run_id\",\"ts\":\"$timestamp\",\"phase\":\"preflight\",\"trigger\":\"$trigger\",\"scheduler_id\":$scheduler_json}"
+  append_line "{\"event\":\"run_started\",\"run_id\":\"$run_id\",\"ts\":\"$timestamp\",\"phase\":\"preflight\",\"trigger\":\"$trigger\",\"scheduler_id\":$scheduler_json,\"source_order\":\"$source_order\"}"
   exit 0
 fi
 
@@ -225,6 +239,10 @@ case $command in
     posting_state=$3
     brief_revision=$4
     case $source in linkedin|ashby|greenhouse|lever) : ;; *) reject 'unknown source' ;; esac
+    case "+$(state_value source_order)+" in
+      *"+$source+"*) : ;;
+      *) reject 'posting source is absent from source_order' ;;
+    esac
     case $posting_state in
       queued|evaluating|evaluated|presented|terminally_skipped) : ;;
       *) reject 'unknown posting state' ;;
@@ -283,6 +301,17 @@ case $command in
        | grep -Fq "\"attempt_id\":\"$attempt_id\""; then
       reject 'attempt_id was already started'
     fi
+    resolved_attempt_ids=$(sed -n \
+      's/.*"event":"attempt_resolved".*"attempt_id":"\([^"]*\)".*/\1/p' \
+      "$ledger")
+    for resolved_attempt_id in $resolved_attempt_ids; do
+      resolved_start=$(grep -F '"event":"attempt_started"' "$ledger" \
+        | grep -F "\"attempt_id\":\"$resolved_attempt_id\"" | tail -n 1)
+      resolved_logical=$(printf '%s\n' "$resolved_start" \
+        | sed -n 's/.*"logical_operation_id":"\([^"]*\)".*/\1/p')
+      [ "$resolved_logical" != "$logical_operation_id" ] \
+        || reject 'resolved logical operation cannot be retried'
+    done
     prior_logical_row=$(grep -F '"event":"attempt_started"' "$ledger" \
       | grep -F "\"logical_operation_id\":\"$logical_operation_id\"" | tail -n 1)
     if [ -z "$prior_logical_row" ]; then
@@ -298,10 +327,17 @@ case $command in
         || reject 'a logical operation cannot change operation'
       [ "$attempt_number" -eq $((prior_attempt_number + 1)) ] \
         || reject 'retry attempt_number must advance exactly one'
-      if ! grep -F '"event":"attempt_accounted"' "$ledger" \
-           | grep -Fq "\"attempt_id\":\"$prior_attempt_id\""; then
+      prior_accounted_row=$(grep -F '"event":"attempt_accounted"' "$ledger" \
+        | grep -F "\"attempt_id\":\"$prior_attempt_id\"" | tail -n 1)
+      if [ -z "$prior_accounted_row" ]; then
         reject 'a retry requires the prior attempt to be accounted'
       fi
+      prior_outcome=$(printf '%s\n' "$prior_accounted_row" \
+        | sed -n 's/.*"outcome":"\([^"]*\)".*/\1/p')
+      case $prior_outcome in
+        retryable_failure|worker_failed) : ;;
+        *) reject 'a retry requires a retryable prior outcome' ;;
+      esac
     fi
     append_line "{\"event\":\"attempt_started\",\"run_id\":\"$run_id\",\"ts\":\"$timestamp\",\"attempt_id\":\"$attempt_id\",\"operation\":\"$operation\",\"logical_operation_id\":\"$logical_operation_id\",\"attempt_number\":$attempt_number}"
     ;;
@@ -336,6 +372,53 @@ case $command in
       reject 'quota_rejected must be unmetered'
     fi
     append_line "{\"event\":\"attempt_accounted\",\"run_id\":\"$run_id\",\"ts\":\"$timestamp\",\"attempt_id\":\"$attempt_id\",\"metered\":$metered,\"outcome\":\"$outcome\",\"request_id\":$request_json}"
+    ;;
+
+  attempt-resolved)
+    [ "$#" -eq 2 ] || usage
+    attempt_id=$1
+    resolution=$2
+    payload_identifier attempt_id "$attempt_id"
+    [ "$resolution" = summary_fallback ] || reject 'unknown attempt resolution'
+    start_row=$(grep -F '"event":"attempt_started"' "$ledger" \
+      | grep -F "\"attempt_id\":\"$attempt_id\"" | tail -n 1)
+    [ -n "$start_row" ] || reject 'attempt_resolved requires one prior attempt_started'
+    operation=$(printf '%s\n' "$start_row" \
+      | sed -n 's/.*"operation":"\([^"]*\)".*/\1/p')
+    logical_operation_id=$(printf '%s\n' "$start_row" \
+      | sed -n 's/.*"logical_operation_id":"\([^"]*\)".*/\1/p')
+    [ "$operation" = detail_read ] || reject 'summary fallback requires detail_read'
+    latest_start=$(grep -F '"event":"attempt_started"' "$ledger" \
+      | grep -F "\"logical_operation_id\":\"$logical_operation_id\"" | tail -n 1)
+    latest_attempt_id=$(printf '%s\n' "$latest_start" \
+      | sed -n 's/.*"attempt_id":"\([^"]*\)".*/\1/p')
+    [ "$latest_attempt_id" = "$attempt_id" ] \
+      || reject 'summary fallback must resolve the latest attempt'
+    accounted_row=$(grep -F '"event":"attempt_accounted"' "$ledger" \
+      | grep -F "\"attempt_id\":\"$attempt_id\"" | tail -n 1)
+    [ -n "$accounted_row" ] || reject 'attempt_resolved requires prior accounting'
+    outcome=$(printf '%s\n' "$accounted_row" \
+      | sed -n 's/.*"outcome":"\([^"]*\)".*/\1/p')
+    case $outcome in
+      retryable_failure|terminal_failure|worker_failed) : ;;
+      *) reject 'summary fallback requires an accounted failure' ;;
+    esac
+    logical_attempt_ids=$(grep -F '"event":"attempt_started"' "$ledger" \
+      | grep -F "\"logical_operation_id\":\"$logical_operation_id\"" \
+      | sed -n 's/.*"attempt_id":"\([^"]*\)".*/\1/p')
+    for logical_attempt_id in $logical_attempt_ids; do
+      logical_accounted=$(grep -F '"event":"attempt_accounted"' "$ledger" \
+        | grep -F "\"attempt_id\":\"$logical_attempt_id\"" | tail -n 1)
+      logical_outcome=$(printf '%s\n' "$logical_accounted" \
+        | sed -n 's/.*"outcome":"\([^"]*\)".*/\1/p')
+      [ "$logical_outcome" != success ] \
+        || reject 'summary fallback cannot follow a successful attempt'
+    done
+    if grep -F '"event":"attempt_resolved"' "$ledger" \
+       | grep -Fq "\"attempt_id\":\"$attempt_id\""; then
+      reject 'attempt was already resolved'
+    fi
+    append_line "{\"event\":\"attempt_resolved\",\"run_id\":\"$run_id\",\"ts\":\"$timestamp\",\"attempt_id\":\"$attempt_id\",\"resolution\":\"$resolution\"}"
     ;;
 
   revision)

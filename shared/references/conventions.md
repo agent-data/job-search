@@ -86,6 +86,26 @@ valid version-2 `search.detail_model` value. This compatibility boundary does no
 to rewrite or migrate the workspace.
 <!-- /exact-model-contract:legacy-v1-selectors -->
 
+Run-record model fields contain exact executable identifiers, never a selector or indirection token. The
+validator requires an already-trimmed value and compares that complete value, case-insensitively, with this
+closed vocabulary; it does not
+reject an exact identifier merely because one of these words is a substring (for example,
+`claude-sonnet-4-5-20250929` remains an exact identifier).
+
+<!-- exact-model-contract:forbidden-run-record-values -->
+- `auto`
+- `balanced`
+- `default`
+- `fast`
+- `haiku`
+- `high`
+- `inherit`
+- `latest`
+- `opus`
+- `quality`
+- `sonnet`
+<!-- /exact-model-contract:forbidden-run-record-values -->
+
 A version-1 headless run recognizes that saved selector and uses the canonical resolver below. Resolve the
 selector once for the run from the host's current roster; this is a bounded compatibility resolution, not a
 new per-posting selection decision. Preserve the config bytes, never migrate in the runner, and record the
@@ -266,6 +286,25 @@ JSON object — never pretty-printed; every event carries a non-empty `"source_i
 `"source_id"` appears exactly once per line; every `evaluated` event carries a non-empty `"source"`; the
 literal key `"source"` appears at most once per line (the per-source pre-filter grep depends on it, exactly as
 the `"source_id"`-once rule protects the id extraction); `same_role_as` is a FLAT string — never a nested object (the `"source_id"`-appears-once rule is load-bearing for the grep extraction). Validate an event against this contract before appending it.
+
+For current-run `evaluated` evidence, validation is strict rather than best-effort: `source_id` and
+`source_url` must satisfy that source's row in the sole per-source table in
+[agent-data-contract.md](agent-data-contract.md#per-source-quirks-one-table-the-only-per-source-contract-surface);
+`posting_id_at_seen` matches the exact listing-scoped `jp_` plus 12 lowercase hexadecimal characters; and
+each populated API date is a
+real ISO date or timestamp. Ashby keeps API `posted_at:null`; LinkedIn, Greenhouse, and Lever require their
+populated API value. `posted_at_extracted`, when present, is a nonempty real ISO calendar date and is valid
+only when `posted_at` is null. `same_role_as`, when present, is a nonempty flat string that splits on the
+first colon into a different canonical `(source, source-native source_id)` identity; an object, empty
+string, invalid target, or self-reference is malformed. Across a current run, that target must be a present
+primary event rather than another alias, and the alias and primary share the exact verdict fields
+(`relevant`, `match`, `reasoning`, `dealbreakers_hit`, `unknowns`, and `needs_human_check`). Judgment string
+arrays contain only nonempty strings. Every alias carries `detail_read:false`; the primary carries the
+actual group result — `true` only when the group received a detail call, and `false` when summary evidence
+settled it without one. Whenever a group contains a company-board row, its primary is the earliest such
+board source in `search.sources` order; LinkedIn can be primary only when the group has no board row.
+Recovery and every artifact reader reject rather than normalize a current-run event that violates any of
+these invariants.
 
 Operations — **run the shared script where a shell runtime exists, else follow the prose fallback**
 (each script reproduces its fallback EXACTLY — pinned by `tests/test_mechanics_scripts.py`; the scripts
@@ -448,6 +487,29 @@ stream ended; and any quota halt, source failure, or untrustworthy pagination br
 `incomplete` while preserving trustworthy rows already found. `origin` records whether the resolved choice
 came from omission (`default`), a conversational one-run override (`one_off`), or config (`saved`).
 
+The mode, outcome, and per-query stop evidence are one contract, not independent enums. LinkedIn's only
+normal stop is `unpaginated` in every mode. For cursor-capable boards, apply this table exactly; the two
+failure stops are permitted only with the overriding `incomplete` outcome, while an `incomplete` caused
+later by quota or detail work may retain the mode's otherwise-normal query stops.
+
+<!-- review-scope-contract:mode-outcome-stop-reason -->
+| Mode | Non-incomplete outcome | Cursor-capable board stop evidence |
+|---|---|---|
+| `first_page` | `completed_first_pages` | every healthy query is `first_page_complete` |
+| `finite` | `target_reached` | each healthy query is `target_reached` or `sources_exhausted`; the global selected count is exactly the finite target, including when a terminal board page supplies the final role |
+| `finite` | `sources_exhausted` | every healthy query is `sources_exhausted` |
+| `all` | `sources_exhausted` | every healthy query is `sources_exhausted` |
+| any mode | `incomplete` | mode-normal stops plus `pagination_incomplete` or `source_failed`; every failure stop forces this outcome |
+<!-- /review-scope-contract:mode-outcome-stop-reason -->
+
+`completed_first_pages` is invalid outside `first_page`; `target_reached` is invalid outside `finite`;
+`first_page` can never claim `target_reached` or `sources_exhausted`; and `all` can never claim
+`completed_first_pages` or `target_reached`. A `source_failed` query's source appears exactly once in
+`sources_failed`, and a non-incomplete outcome has no failed source or failure stop.
+For finite mode, `target_reached` requires exactly `target_new_postings` selected unique roles;
+`sources_exhausted` requires fewer than that target because outcome precedence would otherwise select
+`target_reached`.
+
 `agent_data_usage` is attempt-based. Its three `by_operation` counters classify each metered attempt exactly
 once and must sum to `metered_calls`. Charged failures are a metered subset; retry attempts are diagnostic
 and count every resolved attempt numbered greater than one even when that retry is unmetered. Quota
@@ -492,6 +554,7 @@ from `updated_at`** (fall back to `created_at` for briefs written before `update
 ## Digest format (reports/<date>-digest.md)
 ```
 # Job search digest — <date>
+Run ID: <run_id>
 Run health: healthy
 9 new postings (6 LinkedIn · 3 Ashby) · 3 strong · 2 moderate · 1 weak · 3 filtered out · <n> searches · <m> detail reads
 Agent-data usage: <N> metered calls this run · about $<payg_equivalent_usd> pay-as-you-go equivalent
@@ -512,7 +575,8 @@ Agent-data usage: <N> metered calls this run · about $<payg_equivalent_usd> pay
 
 <footnotes: stale detail links, partial failures, unidentifiable (null source_id) rows, brief-age nudge; first pass over a source (that source returned rows AND its known-ids set was empty at run start): `First pass over <Source> company boards — this batch can include older postings, since boards don't always state dates.`; per-source outage / unsupported / ignored (one line each — exact texts in `errors.md`)>
 ```
-Strong first. Always show the Run health line, counts, and calls-first usage line. Load the verified rate from
+Strong first. Always show the exact run ID immediately after the heading, then the Run health line, counts,
+and calls-first usage line. Load the verified rate from
 `agent-data-contract.md` and render the stored exact decimal equivalent; the label states that it is context,
 not an account balance or charge. If that canonical rate is unavailable or cannot be verified, use the
 calls-only fallback `Agent-data usage: <N> metered calls this run` with no dollar clause. The parenthetical

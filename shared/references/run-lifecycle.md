@@ -62,22 +62,37 @@ The event vocabulary is closed:
 - `posting_state`
 - `attempt_started`
 - `attempt_accounted`
+- `attempt_resolved`
 - `brief_revision`
 - `milestone`
 - `run_closed`
 <!-- /lifecycle-contract:events -->
 
-- `run_started` establishes the run identity, exact trigger attribution, and initial `preflight` phase once.
+- `run_started` establishes the run identity, exact trigger attribution, immutable enabled-source order, and
+  initial `preflight` phase once.
   Its `trigger` is exactly `manual`, `scheduled`, or `canary`; `scheduler_id` is JSON `null` for manual and
-  a restricted nonsecret identifier for scheduled or canary. Reject inconsistent input without
+  a restricted nonsecret identifier for scheduled or canary. `source_order` is the nonempty, duplicate-free,
+  `+`-joined `search.sources` list using only the canonical source enum. Reject inconsistent input without
   normalization rather than guessing or repairing its origin.
 - `phase_changed` records a valid forward phase transition other than the terminal `complete` transition.
-- `posting_state` records the latest state for one selected `(source, source_id)` posting identity and the
-  brief revision under which its evaluation began.
+- `posting_state` records the latest state for one selected unique role's primary `(source, source_id)`
+  identity and the brief revision under which its evaluation began. A merged role's non-primary alias rows
+  have `jobs.jsonl` provenance events but never separate lifecycle states; otherwise source-row aliases
+  would inflate the unique-role counters.
 - `attempt_started` and `attempt_accounted` pair by restricted attempt identifier. The start also carries a
   coordinator-assigned `logical_operation_id` and adjacent positive `attempt_number`; these are the
   canonical retry link for the same immutable logical operation. Every started attempt, including a failed
   or retried attempt, requires exactly one accounting event before completion.
+  A posting detail operation uses the deterministic identity `detail-<source>-<source_id>` copied from that
+  exact queued posting. Recovery never interprets an initial-search or other operation as posting detail
+  evidence merely because it reused that string.
+- `attempt_resolved` is the sole handled-failure resolution. It binds the latest fully accounted
+  `detail_read` attempt for one logical operation to exact resolution `summary_fallback`, only after the
+  coordinator has durably written the canonical primary `detail_read:false` judgment. It is invalid for a
+  logical operation containing any success, quota rejection, unaccounted attempt, non-detail operation,
+  non-latest retry, or any later retry. Recovery and artifact authority also enforce the reverse join:
+  every resolution's deterministic logical identity must name that durable false primary, and the set of
+  resolved logical identities must equal the false-primary identities that have attempt history.
 - `brief_revision` records a revision identifier, never the preferences text itself.
 - `milestone` records a closed milestone token, never user-facing result content.
 - `run_closed` is the final line and carries exactly one close state.
@@ -138,7 +153,7 @@ above. Reject first-seen, duplicate, shortcut, backward, or post-terminal postin
 
 Fold posting state last-write-wins per selected identity. Derive counters as follows:
 
-- `selected` is the number of unique posting identities recorded by `posting_state`.
+- `selected` is the number of unique primary role identities recorded by `posting_state`.
 - `remaining` is the number whose latest state is `queued`.
 - `in_flight` is the number whose latest state is `evaluating`.
 - `evaluated` is the number whose latest state is `evaluated` or `presented`.
@@ -169,14 +184,21 @@ unproved; do not close complete or claim success. In `selected_settled`, evaluat
 postings. In `all_started_attempts_accounted`, every `attempt_started` has exactly one matching
 `attempt_accounted`. Accounting alone is not success. The outcome vocabulary is exactly `success`,
 `retryable_failure`, `terminal_failure`, `worker_failed`, or `quota_rejected`; quota rejection is always
-unmetered. `quota_rejected` and `terminal_failure` remain blocking. A `retryable_failure` or `worker_failed`
+unmetered. `quota_rejected` remains blocking. `terminal_failure` remains blocking unless its detail logical
+operation has the canonical durable `summary_fallback` resolution. A `retryable_failure` or `worker_failed`
 remains blocking unless a later fully accounted `success` has the same `logical_operation_id` and a higher
-adjacent `attempt_number`. A success on another logical operation, or before the failure, does not resolve
-it. The two final-artifact clauses require both a concrete, non-symlink regular file at the
+adjacent `attempt_number`, or the logical operation's latest fully accounted detail failure has the canonical
+durable `summary_fallback` resolution. That resolution makes the handled logical operation nonblocking but
+does not erase its attempt, metering, error, or retry diagnostics. A success on another logical operation,
+or before the failure, does not resolve it. The two final-artifact clauses require both a concrete, non-symlink regular file at the
 exact path and its matching lifecycle milestone; the digest's `reports/` directory must also be a real
 directory, not a symlink. The digest path's ISO date is derived from `run_started` as specified by the
 fold/check operation below. The coordinator appends each final-artifact milestone only after it has written
 the exact path, read it back, and validated its schema/content against [conventions.md](conventions.md). The
+same pre-milestone validation applies the bidirectional primary job-to-evaluated/presented posting join,
+alias-through-primary/source/query checks, and durable source-order rule from **Artifact authority for every
+reader** below. A missing job, premature job on a queued identity, alias lifecycle state, or contradictory
+source/query blocks both milestones and therefore blocks complete close. The
 fold script mechanically rechecks path identity and concrete-file existence; the milestone is the durable
 coordinator attestation for validation that portable shell cannot reproduce.
 
@@ -202,8 +224,37 @@ trusting a final run record or digest:
 3. Require `closed=true`, and require the record's `lifecycle.close_state` and `lifecycle.phase` to equal the
    folded close state and phase. For a complete record require `can_complete=true`; for a blocked or
    interrupted record require the matching noncomplete close and `can_complete=false`.
-4. Trust only the digest derived by that same fold from the run's start date. Never pair a record with a
-   newest or caller-selected digest.
+4. Every reader must
+   strictly validate the complete current run-record schema and every cross-field invariant in
+   [conventions.md](conventions.md#runsrun_idjson--audit-log), then rederive every ledger-owned count,
+   retry diagnostic, attempt/call total, lifecycle value, and attribution field from the validated ledger
+   and fold. Join every canonical current-run primary job event's exact `run_id+source+source_id` to a
+   posting that the folded ledger leaves `evaluated` or `presented`, and require the reverse join for every
+   primary posting in either of those states. A non-primary alias joins through its canonical present
+   primary and never requires or permits its own lifecycle state. Every job row's `source` must occur in
+   both durable `source_order` and record `sources_searched`, and its exact `source+query_id` must occur in
+   `queries`; a job source absent from any required surface is contradictory. For an alias group, rederive
+   the primary board source from durable `source_order` and reject an inverted primary. A primary
+   `detail_read:false` must join either zero exact detail starts or the latest fully accounted failed
+   detail attempt's `summary_fallback` resolution with no success anywhere in that logical history. A primary
+   `detail_read:true` must join the exact logical history's latest fully accounted success and no handled
+   resolution. Require the reverse join too: every handled resolution must name a present evaluated or
+   presented false primary through exact deterministic logical identity, with set equality between
+   resolutions and false primaries that have attempt history. Missing, orphaned, opposite, unresolved, or
+   hidden-success evidence is contradictory. A
+   schema-valid record that disagrees with durable evidence is not authoritative.
+5. Locate only the digest derived by that same fold from the run's start date. Validate the digest heading
+   exactly: date, `Run ID` line, health line, counts line, and calls-first usage line and placement. Validate
+   the ordered band headings and content, filtered section, links, and blocked body against the record, canonical
+   current-run `jobs.jsonl` events, and fold. Missing, added, reordered, or contradictory content rejects the
+   pair. A noncomplete body names the exact terminal condition and renders its canonical cause and fix;
+   alias groups render once with the primary link followed by their `also on` links. Never pair a record with
+   a newest or caller-selected digest. Rederive the digest's result-row total, ordered per-source
+   breakdown, per-match source tags, and missing-API-date marks from those joined canonical job rows; alias
+   collapse changes rendered role/pipeline totals, never the result-row count.
+
+This is the canonical every-reader procedure. Shipped readers delegate here and do not replace it with a
+filename check, a partial JSON projection, digest substring matching, or a locally weakened interpretation.
 
 An intended-complete record or digest may exist during the pre-close write/readback window. While its
 ledger is an open ledger it is not a completed run, is excluded from latest-run/latest-digest selection,
@@ -233,11 +284,12 @@ Run the shared script where a POSIX shell runtime exists; otherwise execute the 
 section exactly. The script and fallback accept the same fixed interfaces:
 
 ```text
-lifecycle-append.sh LEDGER start RUN_ID ISO_TIMESTAMP TRIGGER SCHEDULER_ID_OR_DASH
+lifecycle-append.sh LEDGER start RUN_ID ISO_TIMESTAMP TRIGGER SCHEDULER_ID_OR_DASH SOURCE_ORDER
 lifecycle-append.sh LEDGER phase RUN_ID ISO_TIMESTAMP PHASE
 lifecycle-append.sh LEDGER posting RUN_ID ISO_TIMESTAMP SOURCE SOURCE_ID STATE BRIEF_REVISION
 lifecycle-append.sh LEDGER attempt-started RUN_ID ISO_TIMESTAMP ATTEMPT_ID OPERATION LOGICAL_OPERATION_ID ATTEMPT_NUMBER
 lifecycle-append.sh LEDGER attempt-accounted RUN_ID ISO_TIMESTAMP ATTEMPT_ID METERED OUTCOME REQUEST_ID_OR_DASH
+lifecycle-append.sh LEDGER attempt-resolved RUN_ID ISO_TIMESTAMP ATTEMPT_ID SUMMARY_FALLBACK
 lifecycle-append.sh LEDGER revision RUN_ID ISO_TIMESTAMP BRIEF_REVISION
 lifecycle-append.sh LEDGER milestone RUN_ID ISO_TIMESTAMP MILESTONE
 lifecycle-append.sh LEDGER close RUN_ID ISO_TIMESTAMP COMPLETE_OR_BLOCKED_OR_INTERRUPTED INTERNAL_CODE_OR_DASH
@@ -259,6 +311,9 @@ utility.
 `SCHEDULER_ID_OR_DASH`, which serializes as JSON `null`; scheduled and canary require a non-dash restricted
 scheduler identifier. Reject every other trigger/scheduler combination without normalization and before
 creating the ledger. These fields are durable source attribution, not a hint that the runner may rewrite.
+`SOURCE_ORDER` is the exact nonempty `search.sources` list joined with `+` (for example,
+`linkedin+ashby+greenhouse`), contains no duplicate, and uses only `linkedin`, `ashby`, `greenhouse`, and
+`lever`. The start row owns it immutably. Every later posting source must occur in that durable order.
 
 Every non-path, non-enum argument except an internal operator code is a restricted, nonsecret identifier:
 1–256 characters, beginning with an ASCII letter or digit and continuing only with ASCII letters, digits,
@@ -269,11 +324,15 @@ must be nonempty; the fold accepts only raw JSON `null` or a nonempty value matc
 an empty JSON string. `METERED` is exactly `true` or `false`. `ATTEMPT_NUMBER` is an unquoted positive
 decimal integer of at most six digits. The first attempt for a `LOGICAL_OPERATION_ID` is 1; each retry
 advances exactly one, retains the same `OPERATION`, and requires the prior attempt to be accounted before
-its new start. `OUTCOME` uses the closed attempt-outcome vocabulary above, and `quota_rejected` requires
+its new start. Only `retryable_failure` and `worker_failed` permit that next start; `success`,
+`terminal_failure`, `quota_rejected`, and a handled resolution are terminal for the logical operation.
+`OUTCOME` uses the closed attempt-outcome vocabulary above, and `quota_rejected` requires
 `METERED=false`. `SOURCE` is one of `linkedin`, `ashby`,
 `greenhouse`, or `lever`; phase, posting-state, and close-state values use the closed vocabularies above. The
 milestone vocabulary is exactly `early_results_shown`, `final_run_record_written`, and
 `final_digest_written`.
+`SUMMARY_FALLBACK` is the exact token `summary_fallback` and is accepted only by the handled-failure rules
+above.
 
 Before appending, reject wrong arity, multiline values, a ledger/run identity mismatch, an unknown enum, an
 identifier outside that field's grammar, or a value shaped as any prohibited persistence field. The
@@ -300,18 +359,22 @@ ledger, and it fails if the path already exists. Every later command requires ex
 requires exactly the next canonical phase after the folded working phase. An attempt ID may have one
 `attempt_started` and then exactly one `attempt_accounted`; accounting without its prior start, or either
 duplicate, is invalid. A retry start is invalid unless its canonical link, stable operation, adjacent
-number, and prior accounting all verify. Posting rows use last-write-wins identity `(source, source_id)`. A `close complete`
+number, and prior accounting all verify, and no handled resolution already exists for that logical
+operation. `attempt-resolved` requires the latest fully accounted failed detail attempt and is unique for
+the logical operation. Posting rows use last-write-wins primary unique-role identity
+`(source, source_id)` and reject a source absent from the run's durable `source_order`. A `close complete`
 command requires the open fold to report `ready_to_close=true`; it writes the single terminal row that
 atomically establishes both `phase=complete` and `closed=true`. Other close states preserve the last working
 phase. After validation, append exactly one of these canonical, no-whitespace JSON lines in the shown field
 order, replacing placeholders with the validated arguments:
 
 ```jsonc
-{"event":"run_started","run_id":"RUN_ID","ts":"ISO_TIMESTAMP","phase":"preflight","trigger":"TRIGGER","scheduler_id":"SCHEDULER_ID"}
+{"event":"run_started","run_id":"RUN_ID","ts":"ISO_TIMESTAMP","phase":"preflight","trigger":"TRIGGER","scheduler_id":"SCHEDULER_ID","source_order":"SOURCE_ORDER"}
 {"event":"phase_changed","run_id":"RUN_ID","ts":"ISO_TIMESTAMP","phase":"PHASE"}
 {"event":"posting_state","run_id":"RUN_ID","ts":"ISO_TIMESTAMP","source":"SOURCE","source_id":"SOURCE_ID","state":"STATE","brief_revision":"BRIEF_REVISION"}
 {"event":"attempt_started","run_id":"RUN_ID","ts":"ISO_TIMESTAMP","attempt_id":"ATTEMPT_ID","operation":"OPERATION","logical_operation_id":"LOGICAL_OPERATION_ID","attempt_number":1}
 {"event":"attempt_accounted","run_id":"RUN_ID","ts":"ISO_TIMESTAMP","attempt_id":"ATTEMPT_ID","metered":true,"outcome":"OUTCOME","request_id":"REQUEST_ID"}
+{"event":"attempt_resolved","run_id":"RUN_ID","ts":"ISO_TIMESTAMP","attempt_id":"ATTEMPT_ID","resolution":"summary_fallback"}
 {"event":"brief_revision","run_id":"RUN_ID","ts":"ISO_TIMESTAMP","brief_revision":"BRIEF_REVISION"}
 {"event":"milestone","run_id":"RUN_ID","ts":"ISO_TIMESTAMP","milestone":"MILESTONE"}
 {"event":"run_closed","run_id":"RUN_ID","ts":"ISO_TIMESTAMP","close_state":"CLOSE_STATE","internal_code":"INTERNAL_CODE"}
@@ -335,11 +398,14 @@ Fold valid rows in order:
 
 1. Start at `preflight`; apply strictly forward `phase_changed` rows. Preserve that working phase for
    `blocked` or `interrupted`; use `complete` only for a valid complete close.
-2. Fold `posting_state` last-write-wins by `(source, source_id)`. Derive `selected`, `evaluated`,
+2. Fold `posting_state` last-write-wins by primary unique-role `(source, source_id)` and reject any posting
+   source absent from immutable `source_order`. Derive `selected`, `evaluated`,
    `terminally_skipped`, `presented`, `remaining`, and `in_flight` with the counter rules above.
 3. Count unique attempt starts and their exactly-once accounting rows as `attempts_started` and
    `attempts_accounted`. Derive `blocking_attempt_failures` from the outcome/link rules above; fixture or
-   coordinator intent never overrides this canonical fold.
+   coordinator intent never overrides this canonical fold. A valid latest `summary_fallback` resolution
+   removes the handled logical operation from `blocking_attempt_failures` without removing its accounting or
+   diagnostics; every other failure follows the ordinary blocking rules.
 4. From the first 10 characters of the validated `run_started` timestamp, derive exactly
    `WORKSPACE/reports/YYYY-MM-DD-digest.md`; derive the run record as `WORKSPACE/runs/RUN_ID.json`. Require
    each concrete regular file to be non-symlink and its respective `final_digest_written` or
@@ -354,7 +420,7 @@ Fold valid rows in order:
    `complete`. An open ready ledger has `can_complete=false`; blocked and interrupted ledgers always have
    `can_complete=false`. A complete close whose predicate does not pass is contradictory and fails closed.
 
-Emit normalized `key=value` state in this order: `run_id`, `trigger`, `scheduler_id`, `phase`, `selected`, `evaluated`,
+Emit normalized `key=value` state in this order: `run_id`, `trigger`, `scheduler_id`, `source_order`, `phase`, `selected`, `evaluated`,
 `terminally_skipped`, `presented`, `remaining`, `in_flight`, `attempts_started`, `attempts_accounted`,
 `blocking_attempt_failures`, `final_run_record_written`, `final_digest_written`, `closed`, `close_state`, `ready_to_close`, and
 `can_complete`. The two final-artifact output values report exact eligible non-symlink file existence; their
@@ -379,11 +445,24 @@ After compaction or process loss, read and fold the ledger before applying this 
   evaluating item and its attempt record explicitly; never assume an unresolved call was free, silently
   replay it, or mark it evaluated without evidence.
 - Recovery must discard all coordinator memory, including prior effects, task-local queues, and conversation
-  state. Reconstruct phase, posting states, and attempt identities only from the exact current run's validated
-  lifecycle ledger. Read `jobs.jsonl` as a separate append-only source: accept only canonical `evaluated`
-  events whose exact `run_id+source+source_id` joins the current ledger identity. An `evaluating` posting may
-  advance without another producer call only when that join and the same logical operation's accounted
-  success are both durable; stale cross-run jobs, malformed events, or unmatched attempts cannot settle it.
+  state. Reconstruct phase, immutable source order, primary posting states, and attempt identities only from
+  the exact current run's validated lifecycle ledger. Read `jobs.jsonl` as a separate append-only source:
+  accept only canonical `evaluated` groups whose primary event's exact `run_id+source+source_id` joins the
+  current ledger identity. Validate each alias through that present primary, require its source in durable
+  source order, and rederive the earliest board primary from that order; an alias never owns lifecycle state.
+  An `evaluating` posting may advance without another producer call only through one of two exact branches.
+  A joined primary with `detail_read:false` settles from that canonical durable summary judgment when either
+  no attempt start exists for exact logical operation `detail-<source>-<source_id>`, or its latest start is
+  a fully accounted detail failure carrying the exact durable `summary_fallback` resolution. A success,
+  quota rejection, unaccounted failure, missing resolution, or later retry contradicts the false value.
+  A joined primary with `detail_read:true` also requires that exact
+  logical operation's latest adjacent attempt to be durable, its start to say `operation=detail_read`, and
+  its unique accounting row to say `outcome=success`. A prior success followed by a failed or unaccounted
+  later ordinal cannot settle the posting. Stale cross-run jobs,
+  malformed events, wrong-operation starts, wrong source/source_id identities, unmatched attempts, and
+  non-adjacent or unaccounted ordinals cannot settle it. Before resuming any posting, reverse-join every
+  handled resolution to a durable false primary through exact deterministic logical identity and require
+  set equality with the false primaries that have attempt history.
   Resume each reconstructed `queued` identity with a fresh coordinator-owned attempt start and dispatch.
 - For `open_before_selection_settled`, close the run `interrupted` when the valid ledger prefix permits that
   append, then start a fresh search with fresh call context. Do not infer a selected set from conversation

@@ -65,6 +65,15 @@ function restricted(value) {
 function operator_code(value) {
   return length(value) <= 256 && value ~ /^E-[A-Z0-9]+(-[A-Z0-9]+)*$/
 }
+function valid_source_order(value, parts, count, i, j) {
+  count = split(value, parts, "+")
+  if (count < 1) return 0
+  for (i = 1; i <= count; i++) {
+    if (parts[i] !~ /^(linkedin|ashby|greenhouse|lever)$/) return 0
+    for (j = 1; j < i; j++) if (parts[i] == parts[j]) return 0
+  }
+  return 1
+}
 function has_long_token(lower, prefix, minimum, start, position, absolute, before, rest, i, character, count) {
   start = 1
   while ((position = index(substr(lower, start), prefix)) > 0) {
@@ -168,7 +177,7 @@ BEGIN {
     scheduler_start = index(row, scheduler_marker)
     if (!scheduler_start) fail("missing scheduler_id")
     scheduler_tail = substr(row, scheduler_start + length(scheduler_marker))
-    if (scheduler_tail == "null}") {
+    if (substr(scheduler_tail, 1, 5) == "null,") {
       scheduler_json = "null"
       scheduler_is_null = 1
       scheduler_id = ""
@@ -178,15 +187,18 @@ BEGIN {
       if (scheduler_id == "") fail("scheduler_id must be null or nonempty")
       scheduler_json = "\"" scheduler_id "\""
     }
-    canonical = "{\"event\":\"run_started\",\"run_id\":\"" rid "\",\"ts\":\"" timestamp "\",\"phase\":\"preflight\",\"trigger\":\"" trigger "\",\"scheduler_id\":" scheduler_json "}"
+    source_order = string_value(row, "source_order")
+    canonical = "{\"event\":\"run_started\",\"run_id\":\"" rid "\",\"ts\":\"" timestamp "\",\"phase\":\"preflight\",\"trigger\":\"" trigger "\",\"scheduler_id\":" scheduler_json ",\"source_order\":\"" source_order "\"}"
     if (row != canonical || NR != 1 || started || phase != "preflight") fail("invalid run_started row")
     if (trigger !~ /^(manual|scheduled|canary)$/) fail("invalid trigger")
     if (trigger == "manual" && !scheduler_is_null) fail("manual trigger requires null scheduler_id")
     if (trigger != "manual" && (scheduler_is_null || !restricted(scheduler_id) || unsafe_identifier("scheduler_id", scheduler_id))) fail("scheduled and canary triggers require a safe scheduler_id")
+    if (!valid_source_order(source_order)) fail("invalid source_order")
     started = 1
     run_id = rid
     run_trigger = trigger
     run_scheduler_id = scheduler_is_null ? "null" : scheduler_id
+    run_source_order = source_order
     started_date = substr(timestamp, 1, 10)
     working_phase = "preflight"
     current_rank = phase_rank[working_phase]
@@ -213,6 +225,7 @@ BEGIN {
     canonical = "{\"event\":\"posting_state\",\"run_id\":\"" rid "\",\"ts\":\"" timestamp "\",\"source\":\"" source "\",\"source_id\":\"" source_id "\",\"state\":\"" state "\",\"brief_revision\":\"" revision "\"}"
     if (row != canonical) fail("noncanonical posting_state row")
     if (source !~ /^(linkedin|ashby|greenhouse|lever)$/ || !restricted(source_id) || !restricted(revision)) fail("invalid posting identifier")
+    if (!index("+" run_source_order "+", "+" source "+")) fail("posting source is absent from source_order")
     if (state !~ /^(queued|evaluating|evaluated|presented|terminally_skipped)$/) fail("invalid posting state")
     if (unsafe_identifier("source_id", source_id) || unsafe_identifier("brief_revision", revision)) fail("prohibited posting value")
     identity = source SUBSEP source_id
@@ -242,18 +255,40 @@ BEGIN {
     if (row != canonical || !restricted(attempt_id) || !restricted(operation) || !restricted(logical_operation_id) || attempt_number !~ /^[1-9][0-9]*$/ || length(attempt_number) > 6) fail("invalid attempt_started row")
     if (unsafe_identifier("attempt_id", attempt_id) || unsafe_identifier("operation", operation) || unsafe_identifier("logical_operation_id", logical_operation_id)) fail("prohibited attempt value")
     if (attempt_id in attempts_started) fail("duplicate attempt_started")
+    if (logical_operation_id in logical_resolution) fail("resolved logical operation cannot be retried")
     if (logical_operation_id in logical_attempt_count) {
       if (operation != logical_operation[logical_operation_id]) fail("logical operation changed operation")
       if (attempt_number + 0 != logical_attempt_count[logical_operation_id] + 1) fail("retry attempt_number must advance exactly one")
       prior_attempt = logical_latest_attempt[logical_operation_id]
       if (!(prior_attempt in attempts_accounted)) fail("retry started before prior attempt was accounted")
+      if (attempt_outcome[prior_attempt] !~ /^(retryable_failure|worker_failed)$/) fail("retry followed a nonretryable outcome")
     } else if (attempt_number + 0 != 1) fail("logical operation did not begin at attempt_number 1")
     attempts_started[attempt_id] = 1
+    attempt_operation[attempt_id] = operation
     attempt_logical[attempt_id] = logical_operation_id
     attempt_ordinal[attempt_id] = attempt_number + 0
     logical_attempt_count[logical_operation_id] = attempt_number + 0
     logical_operation[logical_operation_id] = operation
     logical_latest_attempt[logical_operation_id] = attempt_id
+    next
+  }
+
+  if (event == "attempt_resolved") {
+    attempt_id = string_value(row, "attempt_id")
+    resolution = string_value(row, "resolution")
+    canonical = "{\"event\":\"attempt_resolved\",\"run_id\":\"" rid "\",\"ts\":\"" timestamp "\",\"attempt_id\":\"" attempt_id "\",\"resolution\":\"" resolution "\"}"
+    if (row != canonical || !restricted(attempt_id) || resolution != "summary_fallback") fail("invalid attempt_resolved row")
+    if (!(attempt_id in attempts_started) || !(attempt_id in attempts_accounted)) fail("attempt_resolved requires a fully accounted attempt")
+    logical = attempt_logical[attempt_id]
+    if (attempt_operation[attempt_id] != "detail_read") fail("summary fallback requires detail_read")
+    if (logical_latest_attempt[logical] != attempt_id) fail("summary fallback must resolve the latest attempt")
+    if (attempt_outcome[attempt_id] !~ /^(retryable_failure|terminal_failure|worker_failed)$/) fail("summary fallback requires an accounted failure")
+    for (prior_attempt in attempt_logical) {
+      if (attempt_logical[prior_attempt] == logical && attempt_outcome[prior_attempt] == "success") fail("summary fallback cannot follow a successful attempt")
+    }
+    if (logical in logical_resolution) fail("duplicate logical operation resolution")
+    logical_resolution[logical] = resolution
+    resolution_attempt[logical] = attempt_id
     next
   }
 
@@ -362,6 +397,7 @@ END {
   for (attempt_id in attempt_outcome) {
     outcome = attempt_outcome[attempt_id]
     logical = attempt_logical[attempt_id]
+    if (logical_resolution[logical] == "summary_fallback") continue
     if (outcome == "quota_rejected" || outcome == "terminal_failure") blocking_attempt_failures++
     else if ((outcome == "worker_failed" || outcome == "retryable_failure") && logical_success_ordinal[logical] <= attempt_ordinal[attempt_id]) blocking_attempt_failures++
   }
@@ -369,6 +405,7 @@ END {
   print "run_id=" run_id
   print "trigger=" run_trigger
   print "scheduler_id=" run_scheduler_id
+  print "source_order=" run_source_order
   print "started_date=" started_date
   print "working_phase=" working_phase
   print "selected=" selected
@@ -390,6 +427,7 @@ END {
 run_id=
 trigger=
 scheduler_id=
+source_order=
 started_date=
 working_phase=
 selected=0
@@ -411,6 +449,7 @@ while IFS='=' read -r key value; do
     run_id) run_id=$value ;;
     trigger) trigger=$value ;;
     scheduler_id) scheduler_id=$value ;;
+    source_order) source_order=$value ;;
     started_date) started_date=$value ;;
     working_phase) working_phase=$value ;;
     selected) selected=$value ;;
@@ -489,6 +528,7 @@ fi
 printf 'run_id=%s\n' "$run_id"
 printf 'trigger=%s\n' "$trigger"
 printf 'scheduler_id=%s\n' "$scheduler_id"
+printf 'source_order=%s\n' "$source_order"
 printf 'phase=%s\n' "$phase"
 printf 'selected=%s\n' "$selected"
 printf 'evaluated=%s\n' "$evaluated"

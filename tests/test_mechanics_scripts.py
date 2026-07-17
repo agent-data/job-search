@@ -95,10 +95,11 @@ def start_lifecycle(
     ts=RUN_STARTED,
     trigger=RUN_TRIGGER,
     scheduler_id=RUN_SCHEDULER_ID,
+    source_order="linkedin",
 ):
     ledger = workspace / "runs" / (".lifecycle-%s.jsonl" % run_id)
     r = lifecycle_append(
-        ledger, "start", trigger, scheduler_id, run_id=run_id, ts=ts
+        ledger, "start", trigger, scheduler_id, source_order, run_id=run_id, ts=ts
     )
     assert r.returncode == 0, r.stderr
     return ledger
@@ -158,14 +159,16 @@ def started_row(
     ts=RUN_STARTED,
     trigger=RUN_TRIGGER,
     scheduler_id=None,
+    source_order="linkedin",
 ):
     scheduler_json = "null" if scheduler_id is None else '"%s"' % scheduler_id
     return ('{"event":"run_started","run_id":"%s","ts":"%s","phase":"preflight",'
-            '"trigger":"%s","scheduler_id":%s}') % (
+            '"trigger":"%s","scheduler_id":%s,"source_order":"%s"}') % (
         run_id,
         ts,
         trigger,
         scheduler_json,
+        source_order,
     )
 
 
@@ -423,7 +426,7 @@ def test_lifecycle_start_requires_exact_trigger_and_scheduler_attribution(tmp_pa
         ("interactive", "-"),
     ]
     for trigger, scheduler_id in invalid_combinations:
-        rejected = lifecycle_append(ledger, "start", trigger, scheduler_id)
+        rejected = lifecycle_append(ledger, "start", trigger, scheduler_id, "linkedin")
         assert rejected.returncode != 0
         assert not ledger.exists()
 
@@ -448,6 +451,43 @@ def test_lifecycle_start_persists_scheduler_attribution_without_normalizing(
     )
 
 
+def test_lifecycle_start_persists_exact_immutable_source_order(tmp_path):
+    workspace = tmp_path / "source-order"
+    ledger = workspace / "runs" / (".lifecycle-%s.jsonl" % RUN_ID)
+    started = lifecycle_append(
+        ledger,
+        "start",
+        "manual",
+        "-",
+        "linkedin+ashby+greenhouse",
+    )
+    assert started.returncode == 0, started.stderr
+
+    folded, state = lifecycle_fold(ledger, workspace)
+    assert folded.returncode == 0, folded.stderr
+    assert state["source_order"] == "linkedin+ashby+greenhouse"
+    assert '"source_order":"linkedin+ashby+greenhouse"' in ledger.read_text()
+    append_ok(ledger, "phase", "searching")
+    assert lifecycle_append(
+        ledger, "posting", "lever", "fixture:job", "queued", "revision-1"
+    ).returncode != 0
+
+    for invalid in ("", "linkedin+linkedin", "linkedin+unknown", "ashby+linkedin+"):
+        rejected_workspace = tmp_path / ("invalid-" + (invalid or "empty"))
+        rejected_ledger = rejected_workspace / "runs" / (
+            ".lifecycle-%s.jsonl" % RUN_ID
+        )
+        rejected = lifecycle_append(
+            rejected_ledger,
+            "start",
+            "manual",
+            "-",
+            invalid,
+        )
+        assert rejected.returncode != 0, invalid
+        assert not rejected_ledger.exists()
+
+
 @pytest.mark.parametrize(
     "trigger,scheduler_json",
     [
@@ -463,7 +503,7 @@ def test_lifecycle_fold_rejects_invalid_trigger_scheduler_attribution(
     workspace = tmp_path / trigger / scheduler_json.replace('"', "")
     row = (
         '{"event":"run_started","run_id":"%s","ts":"%s","phase":"preflight",'
-        '"trigger":"%s","scheduler_id":%s}'
+        '"trigger":"%s","scheduler_id":%s,"source_order":"linkedin"}'
         % (RUN_ID, RUN_STARTED, trigger, scheduler_json)
     )
     ledger = write_lifecycle_rows(workspace, row)
@@ -506,14 +546,17 @@ def test_lifecycle_append_emits_canonical_rows_for_every_command(tmp_path):
     append_ok(
         ledger, "attempt-started", "attempt-1", "detail_read", "detail-posting-1", "1"
     )
-    append_ok(ledger, "attempt-accounted", "attempt-1", "true", "success", "req-1")
+    append_ok(
+        ledger, "attempt-accounted", "attempt-1", "true", "terminal_failure", "req-1"
+    )
+    append_ok(ledger, "attempt-resolved", "attempt-1", "summary_fallback")
     append_ok(ledger, "revision", "revision-2")
     append_ok(ledger, "milestone", "early_results_shown")
     append_ok(ledger, "close", "blocked", "E-TEST-BLOCK")
 
     assert ledger.read_text().splitlines() == [
         ('{"event":"run_started","run_id":"%s","ts":"%s","phase":"preflight",'
-         '"trigger":"manual","scheduler_id":null}')
+         '"trigger":"manual","scheduler_id":null,"source_order":"linkedin"}')
         % (RUN_ID, RUN_STARTED),
         '{"event":"phase_changed","run_id":"%s","ts":"%s","phase":"searching"}'
         % (RUN_ID, RUN_STARTED),
@@ -524,7 +567,10 @@ def test_lifecycle_append_emits_canonical_rows_for_every_command(tmp_path):
          '"operation":"detail_read","logical_operation_id":"detail-posting-1",'
          '"attempt_number":1}') % (RUN_ID, RUN_STARTED),
         ('{"event":"attempt_accounted","run_id":"%s","ts":"%s","attempt_id":"attempt-1",'
-         '"metered":true,"outcome":"success","request_id":"req-1"}')
+         '"metered":true,"outcome":"terminal_failure","request_id":"req-1"}')
+        % (RUN_ID, RUN_STARTED),
+        ('{"event":"attempt_resolved","run_id":"%s","ts":"%s",'
+         '"attempt_id":"attempt-1","resolution":"summary_fallback"}')
         % (RUN_ID, RUN_STARTED),
         '{"event":"brief_revision","run_id":"%s","ts":"%s","brief_revision":"revision-2"}'
         % (RUN_ID, RUN_STARTED),
@@ -548,6 +594,7 @@ def test_lifecycle_happy_path_needs_artifacts_milestones_and_complete_close(tmp_
         "run_id": RUN_ID,
         "trigger": "manual",
         "scheduler_id": "null",
+        "source_order": "linkedin",
         "phase": "finalizing",
         "selected": "1",
         "evaluated": "1",
@@ -575,6 +622,116 @@ def test_lifecycle_happy_path_needs_artifacts_milestones_and_complete_close(tmp_
     assert state["close_state"] == "complete"
     assert state["ready_to_close"] == "true"
     assert state["can_complete"] == "true"
+
+
+def test_lifecycle_handled_summary_fallback_resolves_failed_detail_operation(tmp_path):
+    workspace = tmp_path / "handled-summary"
+    ledger = start_lifecycle(workspace)
+    append_ok(ledger, "phase", "searching")
+    append_ok(ledger, "posting", "linkedin", "posting-1", "queued", "revision-1")
+    append_ok(ledger, "phase", "selection_settled")
+    append_ok(ledger, "phase", "reviewing_initial_batch")
+    append_ok(ledger, "posting", "linkedin", "posting-1", "evaluating", "revision-1")
+    append_ok(
+        ledger,
+        "attempt-started",
+        "detail-1",
+        "detail_read",
+        "detail-linkedin-posting-1",
+        "1",
+    )
+    append_ok(
+        ledger,
+        "attempt-accounted",
+        "detail-1",
+        "true",
+        "terminal_failure",
+        "request-detail-1",
+    )
+    append_ok(ledger, "attempt-resolved", "detail-1", "summary_fallback")
+    append_ok(ledger, "posting", "linkedin", "posting-1", "evaluated", "revision-1")
+    append_ok(ledger, "phase", "early_results_shown")
+    append_ok(ledger, "phase", "reviewing_remaining")
+    append_ok(ledger, "phase", "finalizing")
+    write_final_artifacts(workspace)
+    record_final_artifact_milestones(ledger)
+
+    folded, state = lifecycle_fold(ledger, workspace)
+    assert folded.returncode == 0, folded.stderr
+    assert state["blocking_attempt_failures"] == "0"
+    assert state["ready_to_close"] == "true"
+    append_ok(ledger, "close", "complete", "-")
+    closed, state = lifecycle_fold(ledger, workspace)
+    assert closed.returncode == 0, closed.stderr
+    assert state["can_complete"] == "true"
+
+
+@pytest.mark.parametrize("outcome", ["success", "terminal_failure", "quota_rejected"])
+def test_lifecycle_rejects_retry_after_nonretryable_outcome(tmp_path, outcome):
+    workspace = tmp_path / outcome
+    ledger = start_lifecycle(workspace)
+    append_ok(
+        ledger,
+        "attempt-started",
+        "detail-1",
+        "detail_read",
+        "detail-linkedin-posting-1",
+        "1",
+    )
+    append_ok(
+        ledger,
+        "attempt-accounted",
+        "detail-1",
+        "false" if outcome == "quota_rejected" else "true",
+        outcome,
+        "-" if outcome == "quota_rejected" else "request-detail-1",
+    )
+    rejected = lifecycle_append(
+        ledger,
+        "attempt-started",
+        "detail-2",
+        "detail_read",
+        "detail-linkedin-posting-1",
+        "2",
+    )
+    assert rejected.returncode != 0
+    folded, _ = lifecycle_fold(ledger, workspace)
+    assert folded.returncode == 0, folded.stderr
+
+
+def test_lifecycle_fold_rejects_success_hidden_by_later_summary_resolution(tmp_path):
+    workspace = tmp_path / "hidden-success"
+    ledger = start_lifecycle(workspace)
+    append_ok(
+        ledger,
+        "attempt-started",
+        "detail-1",
+        "detail_read",
+        "detail-linkedin-posting-1",
+        "1",
+    )
+    append_ok(
+        ledger,
+        "attempt-accounted",
+        "detail-1",
+        "true",
+        "success",
+        "request-detail-1",
+    )
+    with ledger.open("a") as stream:
+        stream.write(
+            '{"event":"attempt_started","run_id":"%s","ts":"%s",'
+            '"attempt_id":"detail-2","operation":"detail_read",'
+            '"logical_operation_id":"detail-linkedin-posting-1","attempt_number":2}\n'
+            '{"event":"attempt_accounted","run_id":"%s","ts":"%s",'
+            '"attempt_id":"detail-2","metered":true,"outcome":"terminal_failure",'
+            '"request_id":"request-detail-2"}\n'
+            '{"event":"attempt_resolved","run_id":"%s","ts":"%s",'
+            '"attempt_id":"detail-2","resolution":"summary_fallback"}\n'
+            % (RUN_ID, RUN_STARTED, RUN_ID, RUN_STARTED, RUN_ID, RUN_STARTED)
+        )
+    folded, _ = lifecycle_fold(ledger, workspace)
+    assert folded.returncode != 0
 
 
 def test_lifecycle_complete_close_fails_closed_without_artifact_milestones(tmp_path):
@@ -644,7 +801,7 @@ def test_lifecycle_fold_rejects_ledger_from_a_different_workspace(tmp_path):
 
 def test_lifecycle_early_results_with_remaining_work_is_not_complete(tmp_path):
     workspace = tmp_path / "workspace"
-    ledger = start_lifecycle(workspace)
+    ledger = start_lifecycle(workspace, source_order="linkedin+ashby")
     append_ok(ledger, "phase", "searching")
     append_ok(ledger, "posting", "linkedin", "ready", "queued", "revision-1")
     append_ok(ledger, "posting", "ashby", "waiting", "queued", "revision-1")
@@ -669,7 +826,7 @@ def test_lifecycle_early_results_with_remaining_work_is_not_complete(tmp_path):
 
 def test_lifecycle_evaluating_posting_counts_as_in_flight(tmp_path):
     workspace = tmp_path / "workspace"
-    ledger = start_lifecycle(workspace)
+    ledger = start_lifecycle(workspace, source_order="greenhouse")
     append_ok(ledger, "phase", "searching")
     append_ok(ledger, "posting", "greenhouse", "acme:7310605", "queued", "revision-1")
     append_ok(ledger, "phase", "selection_settled")
@@ -836,7 +993,7 @@ def test_lifecycle_retry_linkage_requires_adjacent_coordinator_attempt_numbers(t
 
 def test_lifecycle_posting_updates_are_last_write_wins_without_double_counting(tmp_path):
     workspace = tmp_path / "workspace"
-    ledger = start_lifecycle(workspace)
+    ledger = start_lifecycle(workspace, source_order="lever+ashby")
     append_ok(ledger, "phase", "searching")
     append_ok(ledger, "posting", "lever", "acme/123", "queued", "revision-1")
     append_ok(ledger, "posting", "ashby", "other", "queued", "revision-1")
@@ -901,7 +1058,7 @@ def test_lifecycle_fold_rejects_handwritten_noncanonical_or_contradictory_rows(t
 
     ledger.write_text(
         ('{"event":"run_started","run_id":"%s","ts":"%s","phase":"preflight",'
-         '"trigger":"manual","scheduler_id":null}\n'
+         '"trigger":"manual","scheduler_id":null,"source_order":"linkedin"}\n'
          '{"event":"phase_changed","run_id":"%s","ts":"%s","phase":"searching"}\n'
          '{"event":"phase_changed","run_id":"%s","ts":"%s","phase":"preflight"}\n')
         % (RUN_ID, RUN_STARTED, RUN_ID, RUN_STARTED, RUN_ID, RUN_STARTED)
@@ -917,7 +1074,7 @@ def test_lifecycle_fold_rejects_api_key_shaped_value_in_canonical_row(tmp_path):
     ledger.parent.mkdir(parents=True)
     ledger.write_text(
         ('{"event":"run_started","run_id":"%s","ts":"%s","phase":"preflight",'
-         '"trigger":"manual","scheduler_id":null}\n'
+         '"trigger":"manual","scheduler_id":null,"source_order":"linkedin"}\n'
          '{"event":"posting_state","run_id":"%s","ts":"%s","source":"linkedin",'
          '"source_id":"sk-secretvalue","state":"queued","brief_revision":"revision-1"}\n')
         % (RUN_ID, RUN_STARTED, RUN_ID, RUN_STARTED)
@@ -1214,7 +1371,7 @@ def test_lifecycle_symlinked_final_artifact_never_satisfies_readiness(tmp_path, 
 def test_lifecycle_scripts_execute_under_posix_shells(tmp_path, shell):
     workspace = tmp_path / shell
     ledger = workspace / "runs" / (".lifecycle-%s.jsonl" % RUN_ID)
-    started = lifecycle_append(ledger, "start", "manual", "-", shell=shell)
+    started = lifecycle_append(ledger, "start", "manual", "-", "linkedin", shell=shell)
     assert started.returncode == 0, started.stderr
     folded, state = lifecycle_fold(ledger, workspace, shell=shell)
     assert folded.returncode == 0, folded.stderr
@@ -1227,7 +1384,9 @@ def test_lifecycle_reference_pins_complete_no_shell_fallback():
     text = LIFECYCLE_REFERENCE.read_text()
     required = [
         ("lifecycle-append.sh LEDGER start RUN_ID ISO_TIMESTAMP "
-         "TRIGGER SCHEDULER_ID_OR_DASH"),
+         "TRIGGER SCHEDULER_ID_OR_DASH SOURCE_ORDER"),
+        "immutable source order",
+        "source absent",
         "manual requires `-`",
         "scheduled and canary require",
         "without normalization",
@@ -1237,6 +1396,9 @@ def test_lifecycle_reference_pins_complete_no_shell_fallback():
          "OPERATION LOGICAL_OPERATION_ID ATTEMPT_NUMBER"),
         ("lifecycle-append.sh LEDGER attempt-accounted RUN_ID ISO_TIMESTAMP ATTEMPT_ID "
          "METERED OUTCOME REQUEST_ID_OR_DASH"),
+        ("lifecycle-append.sh LEDGER attempt-resolved RUN_ID ISO_TIMESTAMP ATTEMPT_ID "
+         "SUMMARY_FALLBACK"),
+        "handled-failure resolution",
         "lifecycle-append.sh LEDGER revision RUN_ID ISO_TIMESTAMP BRIEF_REVISION",
         "lifecycle-append.sh LEDGER milestone RUN_ID ISO_TIMESTAMP MILESTONE",
         ("lifecycle-append.sh LEDGER close RUN_ID ISO_TIMESTAMP "

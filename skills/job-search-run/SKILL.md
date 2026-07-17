@@ -50,8 +50,9 @@ primary model and its current origin (`session_inheritance`, `user_override`, or
 current invocation or canonical scheduler binding; never reconstruct it from history or guess an alias,
 tier, prefix, or default.
 
-Once a trusted writable workspace, run ID, timestamp, trigger attribution, and exact primary evidence exist,
-invoke `lifecycle-append.sh ... start ...` before any mutable or metered work. This start is the first run
+Once a trusted writable workspace, run ID, timestamp, trigger attribution, exact ordered `search.sources`,
+and exact primary evidence exist, invoke `lifecycle-append.sh ... start ...` with that nonempty source list
+joined by `+` before any mutable or metered work. This start is the first run
 mutation. Every later append uses that run's exact ID and timestamped evidence; no worker or presenter writes
 the ledger. Invalid attribution is a rejected invocation and creates neither ledger nor run artifacts.
 
@@ -59,9 +60,10 @@ Drive every canonical phase in order, including inapplicable presentation phases
 
 1. `preflight` is established by `run_started`; append `searching` immediately before the first search batch.
 2. After pagination/reconciliation/selection is final and the non-resumable scratch is no longer needed,
-   append `queued` for every selected posting before any detail dispatch, then append `selection_settled` as
+   append `queued` for every selected unique role's primary source row before any detail dispatch, then
+   append `selection_settled` as
    the commit marker proving the entire selected queue is already durable.
-3. Append `reviewing_initial_batch`; for each selected identity, append `evaluating` immediately before
+3. Append `reviewing_initial_batch`; for each selected primary identity, append `evaluating` immediately before
    detail work, followed only by `evaluated` after a validated judgment is durably appended to `jobs.jsonl`, or
    `terminally_skipped` when that identity will not be retried in this run. A summary-only rejection is still
    a selected posting and moves from `queued` to `evaluating` to its durable evaluated judgment.
@@ -69,16 +71,21 @@ Drive every canonical phase in order, including inapplicable presentation phases
    matching relevant `jobs.jsonl` judgment with nonempty reasoning. A render failure leaves it `evaluated`.
    Scheduled/canary runs append no `presented` transition. Advance through `early_results_shown` (record its
    milestone only after an actual qualifying interactive display), then immediately to `reviewing_remaining`.
-5. Append `finalizing` only after all selected identities and started producer attempts have settled.
+5. Append `finalizing` only after all selected primary identities and started producer attempts have settled.
+   Non-primary merged-source rows receive their canonical alias events in `jobs.jsonl` but no separate
+   lifecycle states; the lifecycle fold therefore continues to count unique roles rather than source rows.
 
 The coordinator is the sole ledger writer and owns every producer attempt. For each immutable logical
-operation it assigns a stable restricted `logical_operation_id` and an adjacent `attempt_number`. It appends
+operation it assigns a stable restricted `logical_operation_id` and an adjacent `attempt_number`; posting
+detail uses the exact deterministic `detail-<source>-<source_id>` identity from the queued row. It appends
 `attempt_started` immediately before each producer dispatch; only then may a sequential call or parallel
 worker receive one authorized attempt. Immediately after that producer resolves—and before retry, quota,
 worker-error, or consolidation branching—the coordinator appends exactly one `attempt_accounted` from
 producer-authoritative metered/outcome/request evidence. A retry is a fresh coordinator decision: after the
-prior attempt is accounted, assign the next number, append a new `attempt_started`, then perform a new
-dispatch. No worker owns lifecycle rows or producer retry policy. Missing or malformed returned evidence
+prior attempt is accounted as `retryable_failure` or `worker_failed`, assign the next number, append a new
+`attempt_started`, then perform a new dispatch. Success, terminal failure, quota rejection, and handled
+summary fallback are terminal for that logical operation and never permit another start. No worker owns
+lifecycle rows or producer retry policy. Missing or malformed returned evidence
 remains unaccounted, prevents completion, and may be requested again only as retained evidence without
 another producer call. The coordinator must never infer zero calls from a missing envelope or return, worker failure,
 exception, planned call, or dispatch count.
@@ -91,13 +98,29 @@ producer, or close interrupted before selection and begin a later clean run. Pre
 and producer evidence; never coerce posting state or synthesize accounting to satisfy the predicate.
 After compaction, discard all coordinator memory and reconstruct phase, posting states, and attempt identities only from the
 exact current run's validated ledger. Separately validate `jobs.jsonl` and accept only canonical current-run
-evaluated events joined by exact `run_id+source+source_id`. Settle a reconstructed `evaluating` identity
-without a new producer call only when that durable job join and its logical operation's accounted success
-both exist; stale cross-run job evidence is never authority. Resume reconstructed `queued` identities
-through fresh coordinator-owned attempt starts and dispatches.
+evaluated groups whose primary event joins by exact `run_id+source+source_id`. Validate every alias through
+that primary and the immutable folded source order, including the earliest-board-primary rule; aliases own no
+lifecycle identities. Reconcile the job/primary-state join bidirectionally before resuming: a queued or
+terminally-skipped identity cannot already have a job, and every evaluated/presented identity requires its
+canonical job. Settle a reconstructed `evaluating` primary identity without a new producer call by branching
+on its canonical durable job event. `detail_read:false` settles when exact
+`detail-<source>-<source_id>` has no start, or when its latest fully accounted detail failure carries the
+exact durable `summary_fallback` resolution; success, quota, missing accounting/resolution, or a later retry
+contradicts the false value.
+`detail_read:true` also requires that exact logical operation's latest adjacent attempt, whose joined start
+says `operation=detail_read` and whose unique accounting row says `outcome=success`; an earlier success
+followed by failure or missing accounting does not settle it. Stale cross-run job evidence and wrong
+operation/source/source_id/ordinal evidence are never authority. Before resuming, reverse-join every handled
+resolution through exact deterministic logical identity to a durable false primary and require set equality
+with the false primaries that have attempt history. Resume reconstructed `queued` identities through fresh
+coordinator-owned attempt starts and dispatches.
 
 For a prospective complete run, write the exact intended-terminal `runs/<run_id>.json` and exact digest,
-read back and validate both against `conventions.md`, append both artifact milestones, and fold again. Only
+read back and validate both against `conventions.md`, and apply the canonical bidirectional primary
+job-to-evaluated/presented lifecycle join plus alias/source/query checks before appending either artifact
+milestone. Also reverse-join every handled resolution to an evaluated/presented false primary and require
+set equality with false primaries that have attempt history. A queued job, settled posting without a job, or
+orphan resolution fails this pre-close validation. Then fold again. Only
 `ready_to_close=true` permits the final `run_closed:complete` append. Do not display or publish a complete
 artifact while that append is pending. If either intended artifact write/readback/validation fails and the
 workspace remains writable, overwrite or create both public terminal artifacts with canonical truthful
@@ -445,7 +468,7 @@ fallback, and wording rules in `errors.md` rather than restating them here.
    The event MUST carry provenance — `event:"evaluated"`, `ts`, `run_id`, `source` — **copied from the result row, never a literal**, `query_id`,
    `title`, `company_name`, `location_display`, `salary_display`, `posted_at`, `posted_at_extracted` (optional — the JD-stated date read when the row's effective date was unknown, i.e. both `published_at` and `posted_at` null), `source_url`,
    `posting_id_at_seen` (the `jp_` id), `detail_read` — AND the judgment — `source_id`, `relevant`, `match`,
-   `reasoning`, `dealbreakers_hit`, `unknowns`, `needs_human_check`, `status:"new"`, `first_seen`. For a merged group, append one `evaluated` event per row (each with its own `source`/`source_id`/`source_url`/`posted_at`), all sharing the verdict fields; every NON-primary row's event also carries `"same_role_as":"<source>:<source_id>"` pointing at the primary (the row that got the detail read). Write
+   `reasoning`, `dealbreakers_hit`, `unknowns`, `needs_human_check`, `status:"new"`, `first_seen`. For a merged group, append one `evaluated` event per row (each with its own `source`/`source_id`/`source_url`/`posted_at`), all sharing the verdict fields; every NON-primary row's event also carries `"same_role_as":"<source>:<source_id>"` pointing at the primary (the row that got the detail read). When an accounted detail failure takes the mandated summary fallback, append exact lifecycle `attempt_resolved:summary_fallback` only after this canonical primary `detail_read:false` event is durable and before appending the primary posting's `evaluated` state. Never resolve success, quota, an unaccounted failure, a non-latest retry, or a failure without that durable fallback judgment. Write
    `runs/<run_id>.json` and `reports/<date>-digest.md` (format in conventions.md — the counts line, per-source
    breakdown, per-match source tags, and date marks all per that spec; strong → moderate → weak, then
    "filtered out: N"). Unselected unseen rows receive no detail call, event, or digest entry. Footnotes:
