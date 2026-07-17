@@ -501,8 +501,19 @@ Rules: AAS-AUTO-02/07/11; AAS-LANG-03/04/08; PSG-SUB-02/03/04/09/13; PSG-COMM-09
   **Modify:**
   - shared/references/conventions.md
   - shared/references/internals.md
+  - shared/references/errors.md
   - shared/references/parallelism.md
   - templates/config.example.yaml
+  - docs/design-docs/core-beliefs.md
+  - skills/job-search-run/SKILL.md
+  - skills/job-search-run/evals/evals.json
+  - skills/job-search-run/evals/files/setup-workspace.sh
+  - skills/job-search/references/onboarding.md
+  - skills/job-search/references/home.md
+  - skills/job-search-agent/SKILL.md
+  - skills/job-search-agent/references/customization.md
+  - skills/job-search/evals/evals.json
+  - TESTING.md
   - tests/test_usage_context_contract.py
 
   Version 2 stores search.detail_model as an exact model identifier, never fast, balanced, high, or inherit.
@@ -519,6 +530,11 @@ Rules: AAS-AUTO-02/07/11; AAS-LANG-03/04/08; PSG-SUB-02/03/04/09/13; PSG-COMM-09
   exact detail model and use detail origins configured_auto, configured_user, legacy_v1_selector, and repair.
   If setup cannot determine the creating session's exact model, no verified schedule may be created until
   the user selects an exact available model.
+
+  The formal-review fix also pins a current private binding sidecar and makes onboarding produce its valid
+  version-2 config/sidecar pair before the first run. It pulls forward only the runner's bounded version-1
+  fail-closed compatibility branches plus the narrow run-record filename filter needed to keep the sidecar
+  out of home/usage readers; full migration, rollback mechanics, and interactive repair remain in T3.2/T3.3.
 
   **RED:** tests fail on any new-config tier token, absent run-record model-origin field, invented template
   model, or runner language that tells a headless run to choose a model again.
@@ -1333,6 +1349,15 @@ AAS-DIST-03/05/06.
   with `legacy_v1_selector`, while version 2 performs no runtime model selection. Final GREEN reported
   `55 passed` focused and `277 passed` full; eval validation, doc lint, philosophy guard, deterministic
   rebuild, and diff whitespace were clean.
+- 2026-07-16 — T3.1 formal-review fix RED reported `4 failed, 53 passed` for stale same-literal
+  provenance, non-runnable onboarding, and missing version-1 fail-closed behavior. GREEN introduced the
+  current private binding sidecar, runnable exact-model version-2 onboarding, and bounded v1 failure matrix.
+  A follow-on collision RED (`1 failed, 22 deselected`) proved the sidecar could be mistaken for a broad
+  `runs/*.json` reader; complete timestamp-shaped filename filtering fixed it. Cumulative review then drove
+  a three-test integration RED for blocked artifact semantics, stale shipped tier/version guidance, and the
+  incomplete runner fixture. Final GREEN reported `60 passed` focused and `282 passed` full, with a valid
+  legacy-v1 runner fixture and seven-arm behavioral fail-closed eval; eval validation, doc lint, philosophy
+  guard, and diff whitespace were clean.
 
 ## Decision log
 

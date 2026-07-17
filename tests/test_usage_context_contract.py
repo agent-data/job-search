@@ -11,12 +11,16 @@ INTERNALS = SHARED / "internals.md"
 AGENT_DATA = SHARED / "agent-data-contract.md"
 VOICE = SHARED / "voice.md"
 CONVENTIONS = SHARED / "conventions.md"
+ERRORS = SHARED / "errors.md"
 PARALLELISM = SHARED / "parallelism.md"
 CONFIG_TEMPLATE = ROOT / "templates" / "config.example.yaml"
+CORE_BELIEFS = ROOT / "docs" / "design-docs" / "core-beliefs.md"
 ONBOARDING = ROOT / "skills" / "job-search" / "references" / "onboarding.md"
+HOME = ROOT / "skills" / "job-search" / "references" / "home.md"
 CUSTOMIZATION = ROOT / "skills" / "job-search-agent" / "references" / "customization.md"
 RUNNER = ROOT / "skills" / "job-search-run" / "SKILL.md"
 OPERATOR = ROOT / "skills" / "job-search-agent" / "SKILL.md"
+RUNNER_SETUP = ROOT / "skills" / "job-search-run" / "evals" / "files" / "setup-workspace.sh"
 
 APPROVED_CONNECTED_BASELINE = (
     "Agent-data offers a 100-call monthly free tier. This search starts with 4 calls; "
@@ -139,14 +143,30 @@ CONFIG_V2_MODEL_FIELDS = {
 RUN_RECORD_MODEL_FIELDS = {
     "detail_model": (
         "run_record",
-        "required",
-        "exact_model_used_for_posting_detail_judgment",
+        "required_after_binding_else_null_on_model_binding_block",
+        "exact_model_used_or_resolved",
     ),
     "detail_model_origin": (
         "run_record",
-        "required_observed_provenance",
+        "required_after_binding_else_null_on_model_binding_block",
         "detail_model_origin_enum",
     ),
+    "detail_model_binding_id": (
+        "run_record",
+        "required_after_binding_else_null_on_model_binding_block",
+        "current_binding_id_or_null_for_legacy_v1",
+    ),
+}
+
+MODEL_BINDING_BLOCK = {
+    "internal_class": ("detail_model_binding_unavailable",),
+    "applies": ("v2_evidence_or_v1_resolution_or_exact_dispatch_failure",),
+    "config_effect": ("preserve_bytes",),
+    "run_effect": ("blocked_record_and_digest_when_workspace_writable",),
+    "model_fields_before_binding": ("null",),
+    "metering": ("preserve_completed_attempt_accounting",),
+    "user_route": ("t3_3_interactive_model_repair",),
+    "raw_user_code": ("none",),
 }
 
 DETAIL_MODEL_ORIGINS = {
@@ -159,9 +179,59 @@ DETAIL_MODEL_ORIGINS = {
 DETAIL_MODEL_ORIGIN_EVIDENCE = {
     "writer": ("run_record_producer",),
     "accepted_evidence": (
-        "setup_migration_repair_context_or_trustworthy_same_exact_model_prior_run_binding",
+        "canonical_active_workspace_binding_sidecar_or_observed_legacy_v1_resolution",
     ),
-    "missing_evidence": ("never_guess_origin_block_or_repair",),
+    "version_2_copy": ("binding_id_and_origin_from_valid_sidecar",),
+    "prior_run_evidence": ("prohibited_even_for_same_exact_model",),
+    "missing_invalid_or_mismatched": ("block_and_route_interactive_model_repair",),
+}
+
+DETAIL_MODEL_BINDING_FIELDS = {
+    "version": ("binding_sidecar", "required", "1"),
+    "binding_id": (
+        "binding_sidecar",
+        "required",
+        "fresh_locally_generated_identifier",
+    ),
+    "detail_model": (
+        "binding_sidecar",
+        "required",
+        "exact_copy_of_config_search.detail_model",
+    ),
+    "detail_model_origin": (
+        "binding_sidecar",
+        "required",
+        "binding_origin_enum",
+    ),
+    "bound_at": ("binding_sidecar", "required", "utc_iso8601_timestamp"),
+}
+
+DETAIL_MODEL_BINDING_ORIGINS = {
+    "configured_auto": ("setup_selected_exact_model",),
+    "configured_user": ("user_selected_exact_model",),
+    "repair": ("repaired_exact_model",),
+}
+
+DETAIL_MODEL_BINDING_POLICY = {
+    "path": ("runs/detail-model-binding.json",),
+    "authority": ("config_search.detail_model",),
+    "write_mode": ("atomic_whole_file_replace",),
+    "write_on": ("every_setup_config_migration_repair_write_even_same_model",),
+    "binding_id": ("fresh_on_every_write",),
+    "history": ("current_only_not_append_history",),
+    "pii": ("none",),
+    "preflight_validation": ("canonical_active_workspace_exact_model_equality",),
+    "run_record_copy": ("binding_id_and_origin",),
+    "invalid_evidence": ("missing_malformed_or_mismatch_blocks_interactive_repair",),
+    "prior_run_lookup": ("prohibited",),
+    "t3_2_rollback": ("restore_config_and_sidecar_consistently",),
+}
+
+RUN_RECORD_SELECTION = {
+    "candidate_path": ("runs/<run_id>.json",),
+    "filename_filter": ("complete_name_matches_run_id_format",),
+    "detail_model_binding_sidecar": ("excluded",),
+    "hidden_lifecycle_or_scratch": ("excluded",),
 }
 
 LEGACY_V1_RUNTIME = {
@@ -174,6 +244,18 @@ LEGACY_V1_RUNTIME = {
     "config_effect": ("preserve_bytes_no_write_no_migration",),
     "run_model": ("exact_resolved_model",),
     "run_origin": ("legacy_v1_selector",),
+}
+
+LEGACY_V1_FAILURES = {
+    "missing_selector": ("block_preserve_bytes_route_interactive_repair",),
+    "invalid_selector": ("block_preserve_bytes_route_interactive_repair",),
+    "tier_roster_unavailable": ("block_preserve_bytes_route_interactive_repair",),
+    "tier_resolution_unavailable": ("block_preserve_bytes_route_interactive_repair",),
+    "inherit_primary_unknown": ("block_preserve_bytes_route_interactive_repair",),
+    "exact_dispatch_unsupported": ("block_no_substitute_route_interactive_repair",),
+    "exact_dispatch_refused": ("block_no_substitute_route_interactive_repair",),
+    "legacy_origin": ("only_after_observed_executable_exact_resolution",),
+    "failure_route_owner": ("t3_3_interactive_model_repair_no_new_user_facing_code",),
 }
 
 SCHEDULER_MODEL_FIELDS = {
@@ -326,6 +408,9 @@ def test_config_v2_requires_one_exact_live_detail_model_and_isolates_legacy_sele
     assert _code_table(text, "exact-model-contract", "legacy-v1-runtime", 2) == {
         key: value for key, value in LEGACY_V1_RUNTIME.items()
     }
+    assert _code_table(text, "exact-model-contract", "legacy-v1-fail-closed", 2) == {
+        key: value for key, value in LEGACY_V1_FAILURES.items()
+    }
 
 
 def test_static_config_template_is_v2_but_never_invents_a_model_identifier():
@@ -361,6 +446,15 @@ def test_exact_model_ownership_and_origin_enums_are_pinned_to_their_canonical_ow
     assert _code_table(
         conventions, "exact-model-contract", "detail-origin-evidence", 2
     ) == {key: value for key, value in DETAIL_MODEL_ORIGIN_EVIDENCE.items()}
+    assert _code_table(conventions, "exact-model-contract", "binding-sidecar-fields", 4) == {
+        key: value for key, value in DETAIL_MODEL_BINDING_FIELDS.items()
+    }
+    assert _code_table(conventions, "exact-model-contract", "binding-sidecar-origins", 2) == {
+        key: value for key, value in DETAIL_MODEL_BINDING_ORIGINS.items()
+    }
+    assert _code_table(conventions, "exact-model-contract", "binding-sidecar-policy", 2) == {
+        key: value for key, value in DETAIL_MODEL_BINDING_POLICY.items()
+    }
     assert _code_table(internals, "exact-model-contract", "scheduler-fields", 4) == {
         key: value for key, value in SCHEDULER_MODEL_FIELDS.items()
     }
@@ -380,6 +474,153 @@ def test_exact_model_ownership_and_origin_enums_are_pinned_to_their_canonical_ow
     assert "detail_model_origin" not in _marked_block(
         internals, "exact-model-contract", "scheduler-fields"
     )
+
+
+def test_runner_preflight_uses_only_current_active_binding_provenance_and_v1_fails_closed():
+    runner = _normalized_prose(RUNNER).lower()
+    assert "runs/detail-model-binding.json" in runner
+    assert "active workspace" in runner
+    assert "exactly equals" in runner
+    assert "detail_model_binding_id" in runner
+    assert "never search prior run records" in runner
+    assert "missing, malformed, or mismatched" in runner
+    assert "interactive model repair" in runner
+    for condition in (
+        "missing selector",
+        "invalid selector",
+        "tier roster",
+        "tier resolution",
+        "exact primary model is unknown",
+        "unsupported",
+        "refused",
+    ):
+        assert condition in runner
+    assert "only after the exact resolved model has been observed executable" in runner
+
+    assert _code_table(
+        ERRORS.read_text(encoding="utf-8"),
+        "exact-model-contract",
+        "model-binding-block",
+        2,
+    ) == {key: value for key, value in MODEL_BINDING_BLOCK.items()}
+    assert "detail_model_binding_unavailable" in runner
+    assert "blocked run record" in runner
+    assert "blocked digest" in runner
+
+
+def test_binding_sidecar_cannot_be_misread_as_a_run_record():
+    conventions = CONVENTIONS.read_text(encoding="utf-8")
+    assert _code_table(conventions, "exact-model-contract", "run-record-selection", 2) == {
+        key: value for key, value in RUN_RECORD_SELECTION.items()
+    }
+    for consumer in (INTERNALS, HOME, CUSTOMIZATION):
+        text = consumer.read_text(encoding="utf-8")
+        assert "runs/*.json" not in text, (
+            f"{consumer.relative_to(ROOT)} must not admit the detail-model sidecar as a run record"
+        )
+
+
+def test_template_to_onboarding_writes_a_bound_runnable_v2_workspace_before_running():
+    onboarding = ONBOARDING.read_text(encoding="utf-8")
+    normalized = " ".join(onboarding.split()).lower()
+    assert "templates/config.example.yaml" in onboarding
+    assert "version: 2" in onboarding
+    assert "search.detail_model" in onboarding
+    assert "runs/detail-model-binding.json" in onboarding
+    assert "atomically" in normalized
+    assert "before the first live run" in normalized
+    assert "do not write" in normalized
+    assert "invalid workspace" in normalized
+    assert "keep `version: 1`" not in onboarding
+    assert "`balanced` tier" not in onboarding
+
+    happy = next(case for case in _eval("job-search")["evals"] if case["id"] == 1)
+    effects = " ".join(happy["expectations"]).lower()
+    assert "version: 2" in effects
+    assert "exact search.detail_model" in effects
+    assert "runs/detail-model-binding.json" in effects
+    assert "before the first live run" in effects
+    assert "primary_model" in effects
+    assert "session_inheritance" in effects
+
+
+def test_shipped_v2_surfaces_use_exact_ids_and_preserve_the_current_major():
+    core_text = CORE_BELIEFS.read_text(encoding="utf-8")
+    beliefs = " ".join(
+        _marked_block(
+            core_text,
+            "exact-model-contract",
+            "parallel-belief",
+        ).split()
+    ).lower()
+    assert "setup persists" in beliefs
+    assert "exact `search.detail_model`" in beliefs
+    assert "runtime" in beliefs
+    assert "tier token" not in beliefs
+    assert "self-selection from its own roster" not in beliefs
+    failure_belief = re.search(r"(?ms)^## 4\. No silent failures.*?(?=^## 5\.)", core_text)
+    assert failure_belief
+    failure_text = failure_belief.group(0).lower()
+    assert "internally named" in failure_text
+    assert "bounded non-user-facing class" in failure_text
+    assert "every blocked path is a named `e-*`" not in failure_text
+
+    operator = OPERATOR.read_text(encoding="utf-8")
+    assert "Always preserve `version: 1`" not in operator
+    assert "New workspaces use config `version: 2`" in operator
+
+    home = HOME.read_text(encoding="utf-8")
+    quick_actions = re.search(
+        r"(?ms)^## Quick actions.*?(?=^### Review-depth changes)", home
+    )
+    assert quick_actions
+    quick = quick_actions.group(0).lower()
+    assert "preserve the existing config major" in quick
+    assert "`search.detail_model`" in quick
+    assert "exact available model identifier" in quick
+    assert "runs/detail-model-binding.json" in quick
+    assert "model tier" not in quick
+    assert "detail-model tiers" not in quick
+
+    customization = CUSTOMIZATION.read_text(encoding="utf-8")
+    detail = re.search(
+        r"(?ms)^\*\*Detail-read model.*?(?=^---$)", customization
+    )
+    assert detail
+    detail_text = detail.group(0).lower()
+    assert "exact live model identifier" in detail_text
+    assert "setup" in detail_text
+    assert "explicit conversational user selection" in detail_text
+    assert "interactive repair" in detail_text
+    assert "binds the tier" not in detail_text
+    assert "detail_model: fast" not in detail_text
+    assert "detail_model: high" not in detail_text
+
+
+def test_runner_eval_fixture_is_valid_legacy_v1_and_covers_fail_closed_behavior():
+    setup = RUNNER_SETUP.read_text(encoding="utf-8")
+    assert "version: 2/version: 1" in setup
+    assert 'detail_model: "balanced"' in setup
+
+    evals = _eval("job-search-run")["evals"]
+    newer = next(case for case in evals if case["id"] == 12)
+    assert "version: 1/version: 3" in newer["prompt"]
+
+    fail_closed = next(case for case in evals if case["id"] == 39)
+    scenario = (fail_closed["prompt"] + " " + " ".join(fail_closed["expectations"])).lower()
+    for branch in (
+        "missing selector",
+        "invalid selector",
+        "tier roster unavailable",
+        "tier resolution unavailable",
+        "inherit primary unknown",
+        "exact dispatch unsupported",
+        "exact dispatch refused",
+        "preserves config bytes",
+        "never substitute",
+        "detail_model_binding_unavailable",
+    ):
+        assert branch in scenario
 
 
 def test_model_setup_is_one_time_and_unknown_primary_blocks_verified_scheduling():

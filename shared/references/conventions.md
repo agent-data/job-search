@@ -14,6 +14,7 @@ lifecycle contracts.
   preferences.md             # Job Preferences Brief — prose only
   resumes/master.md          # base resume; resumes/tailored/ for generated ones (Plan C)
   jobs.jsonl                 # append-only EVENT log; current state = fold by (source, source_id)
+  runs/detail-model-binding.json # current private provenance for config's exact detail model
   runs/<run_id>.json         # per-run audit log
   reports/<date>-digest.md   # human digest per run
   .gitignore                 # deny-all (from templates/workspace.gitignore)
@@ -74,8 +75,9 @@ effective date is dropped (server parity); with `any` nothing is dropped. `detai
 identifier for the per-posting **fit verdict** — the judgment the detail read produces. In version 2,
 setup resolves that model once and writes its exact live
 identifier; every later posting-detail judgment obeys that stored value without tier interpretation or a
-new selection decision. Workspace config owns this exact detail-model binding only: it never stores the
-recurring primary model or either model's provenance field.
+new selection decision. Workspace config is the sole authority for the exact detail model: the private
+binding sidecar below is provenance evidence only and can never override `search.detail_model`. Config never
+stores the recurring primary model or either model's provenance field.
 
 <!-- exact-model-contract:legacy-v1-selectors -->
 Historical version-1 workspaces may contain the selectors `fast`, `balanced`, `high`, or `inherit`.
@@ -103,6 +105,26 @@ exact resolved model with `detail_model_origin:legacy_v1_selector`.
 | `run_origin` | `legacy_v1_selector` |
 <!-- /exact-model-contract:legacy-v1-runtime -->
 
+The legacy origin is valid only after the host has resolved the saved selector to an exact model and
+observed that exact model as executable. Unresolved compatibility input never authorizes guessing a model,
+substituting a different model, changing config bytes, or recording `legacy_v1_selector`. The bounded
+failure route below blocks and hands the workspace to interactive model repair; T3.3 owns that repair's
+canonical user rendering, so this compatibility contract does not invent a new user-facing error code.
+
+<!-- exact-model-contract:legacy-v1-fail-closed -->
+| Condition | Decision |
+|---|---|
+| `missing_selector` | `block_preserve_bytes_route_interactive_repair` |
+| `invalid_selector` | `block_preserve_bytes_route_interactive_repair` |
+| `tier_roster_unavailable` | `block_preserve_bytes_route_interactive_repair` |
+| `tier_resolution_unavailable` | `block_preserve_bytes_route_interactive_repair` |
+| `inherit_primary_unknown` | `block_preserve_bytes_route_interactive_repair` |
+| `exact_dispatch_unsupported` | `block_no_substitute_route_interactive_repair` |
+| `exact_dispatch_refused` | `block_no_substitute_route_interactive_repair` |
+| `legacy_origin` | `only_after_observed_executable_exact_resolution` |
+| `failure_route_owner` | `t3_3_interactive_model_repair_no_new_user_facing_code` |
+<!-- /exact-model-contract:legacy-v1-fail-closed -->
+
 `parallel_detail_reads` is optional and records whether the user approved parallel subagents for detail
 reads on hosts that require explicit authorization. Unset means interactive front-door flows may ask; `true`
 means use parallel subagents where available; `false` means read details sequentially. The runner reads this
@@ -128,7 +150,79 @@ and saved-change recipes use the canonical action classes, call preview, and con
 [Agent-data usage decisions](internals.md#agent-data-usage-decisions); this file owns only the stored values
 and resolved review-scope behavior.
 
+## runs/detail-model-binding.json — current private binding provenance
+
+This whole-file JSON sidecar proves the provenance of the active workspace's current version-2 model
+binding. It is local, non-PII, current-state evidence—not append history. `config.yaml` remains the sole
+authority for which exact model to execute. A sidecar is canonical only when it is at this exact path under
+the active workspace, has exactly the fields and value forms below, and its `detail_model` exactly equals
+the active config's `search.detail_model`.
+
+```json
+{
+  "version": 1,
+  "binding_id": "binding-<locally generated lowercase UUID v4>",
+  "detail_model": "<exact copy of config search.detail_model>",
+  "detail_model_origin": "configured_auto|configured_user|repair",
+  "bound_at": "<UTC ISO-8601 timestamp>"
+}
+```
+
+<!-- exact-model-contract:binding-sidecar-fields -->
+| Field | Owner | Presence | Value |
+|---|---|---|---|
+| `version` | `binding_sidecar` | `required` | `1` |
+| `binding_id` | `binding_sidecar` | `required` | `fresh_locally_generated_identifier` |
+| `detail_model` | `binding_sidecar` | `required` | `exact_copy_of_config_search.detail_model` |
+| `detail_model_origin` | `binding_sidecar` | `required` | `binding_origin_enum` |
+| `bound_at` | `binding_sidecar` | `required` | `utc_iso8601_timestamp` |
+<!-- /exact-model-contract:binding-sidecar-fields -->
+
+<!-- exact-model-contract:binding-sidecar-origins -->
+| Origin | Meaning |
+|---|---|
+| `configured_auto` | `setup_selected_exact_model` |
+| `configured_user` | `user_selected_exact_model` |
+| `repair` | `repaired_exact_model` |
+<!-- /exact-model-contract:binding-sidecar-origins -->
+
+<!-- exact-model-contract:binding-sidecar-policy -->
+| Policy | Decision |
+|---|---|
+| `path` | `runs/detail-model-binding.json` |
+| `authority` | `config_search.detail_model` |
+| `write_mode` | `atomic_whole_file_replace` |
+| `write_on` | `every_setup_config_migration_repair_write_even_same_model` |
+| `binding_id` | `fresh_on_every_write` |
+| `history` | `current_only_not_append_history` |
+| `pii` | `none` |
+| `preflight_validation` | `canonical_active_workspace_exact_model_equality` |
+| `run_record_copy` | `binding_id_and_origin` |
+| `invalid_evidence` | `missing_malformed_or_mismatch_blocks_interactive_repair` |
+| `prior_run_lookup` | `prohibited` |
+| `t3_2_rollback` | `restore_config_and_sidecar_consistently` |
+<!-- /exact-model-contract:binding-sidecar-policy -->
+
+Every supported setup, config update, migration, or repair builds a complete replacement sidecar with a
+fresh locally generated `binding_id` and `bound_at`, even when the exact model literal did not change, then
+atomically replaces the whole file. A setup/config write is not runnable until both candidate files are
+valid and the replacements succeed. T3.2 migration rollback must restore config and its matching sidecar
+consistently; this task does not define the full migration flow.
+
 `run_id` format: UTC timestamp `YYYY-MM-DDTHH-MM-SSZ` (hyphens, not colons, in the time component — safe as a filename on every platform). `<date>` for digests: `YYYY-MM-DD` (local tz).
+
+Run-record readers enumerate `runs/` but accept only a complete filename matching
+`YYYY-MM-DDTHH-MM-SSZ.json`; they also require the record's `run_id` to equal that filename stem. A broad
+`runs/*.json` glob is not a run-record definition: it would admit the binding sidecar.
+
+<!-- exact-model-contract:run-record-selection -->
+| Policy | Decision |
+|---|---|
+| `candidate_path` | `runs/<run_id>.json` |
+| `filename_filter` | `complete_name_matches_run_id_format` |
+| `detail_model_binding_sidecar` | `excluded` |
+| `hidden_lifecycle_or_scratch` | `excluded` |
+<!-- /exact-model-contract:run-record-selection -->
 
 ## jobs.jsonl — append-only events (one JSON object per line)
 Current state = fold by (**`source`**, **`source_id`**), last-write-wins per field (an event with no `source` (all pre-multi-source history, and any `status_changed` line that omits it) attaches by `source_id` alone — every legacy `evaluated` event already carries `source:"linkedin"`, so in practice only old `status_changed` lines lack it). Two event types:
@@ -184,6 +278,7 @@ are the skills' own POSIX shell, no third-party dependency):
   "status_probe":"ok|degraded|unreachable",
   "detail_model":"<exact model used for posting-detail judgment>",
   "detail_model_origin":"configured_auto|configured_user|legacy_v1_selector|repair",
+  "detail_model_binding_id":"<current binding id; null for legacy version 1>",
   "queries":[ {
     "query_id":"…", "source":"<source>", "keywords":"…", "results_returned":25, "new":6,
     "pages_fetched":3, "rows_scanned":75, "unique_candidates":31, "selected_for_review":25,
@@ -224,8 +319,9 @@ are the skills' own POSIX shell, no third-party dependency):
 <!-- exact-model-contract:run-record-fields -->
 | Field | Owner | Presence | Value |
 |---|---|---|---|
-| `detail_model` | `run_record` | `required` | `exact_model_used_for_posting_detail_judgment` |
-| `detail_model_origin` | `run_record` | `required_observed_provenance` | `detail_model_origin_enum` |
+| `detail_model` | `run_record` | `required_after_binding_else_null_on_model_binding_block` | `exact_model_used_or_resolved` |
+| `detail_model_origin` | `run_record` | `required_after_binding_else_null_on_model_binding_block` | `detail_model_origin_enum` |
+| `detail_model_binding_id` | `run_record` | `required_after_binding_else_null_on_model_binding_block` | `current_binding_id_or_null_for_legacy_v1` |
 <!-- /exact-model-contract:run-record-fields -->
 
 <!-- exact-model-contract:detail-origins -->
@@ -237,18 +333,24 @@ are the skills' own POSIX shell, no third-party dependency):
 | `repair` | `repaired_exact_model` |
 <!-- /exact-model-contract:detail-origins -->
 
-`detail_model_origin` is observed provenance, not a guess and not another workspace or registry field.
-Setup, migration, or repair context can supply it to the first run. A later producer may carry it forward
-only from trustworthy prior run evidence bound to the same exact `detail_model`; without such evidence, it
-must block or route to repair rather than invent an origin. This pins evidence ownership without prescribing
-the later producer algorithm.
+`detail_model_origin` is observed provenance, not a guess and not another config or registry field. For
+version 2, the run producer accepts it only from the canonical binding sidecar in the active workspace,
+after exact equality with config, and copies both that origin and the current `binding_id`. It never searches
+prior run records for provenance—even a prior record with the same exact model could belong to an older
+A→B→A binding. Version 1 has no sidecar: its binding id is `null`, and its legacy origin is recorded only
+after the exact resolved model has been observed executable. Missing, malformed, or mismatched version-2
+evidence blocks and routes to interactive model repair rather than inventing an origin.
+The narrow blocked-artifact contract for a failure before binding is established lives in `errors.md`; all
+three model fields are `null` in that blocked record rather than carrying a guessed or unobserved value.
 
 <!-- exact-model-contract:detail-origin-evidence -->
 | Policy | Decision |
 |---|---|
 | `writer` | `run_record_producer` |
-| `accepted_evidence` | `setup_migration_repair_context_or_trustworthy_same_exact_model_prior_run_binding` |
-| `missing_evidence` | `never_guess_origin_block_or_repair` |
+| `accepted_evidence` | `canonical_active_workspace_binding_sidecar_or_observed_legacy_v1_resolution` |
+| `version_2_copy` | `binding_id_and_origin_from_valid_sidecar` |
+| `prior_run_evidence` | `prohibited_even_for_same_exact_model` |
+| `missing_invalid_or_mismatched` | `block_and_route_interactive_model_repair` |
 <!-- /exact-model-contract:detail-origin-evidence -->
 
 `build.version` and `build.content_hash` are copied from the bundled `references/build-stamp.md`.

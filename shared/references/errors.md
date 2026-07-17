@@ -1,8 +1,39 @@
 # Named errors (E-*) — cause + fix + what the user sees
 
-Every failure is named and visible — no silent failures. The durable guarantee for blocked runs is two **file-backed channels** when a writable workspace exists: the **blocked digest** (named error as the body) and the **home view** (reads `run_health` from the newest `runs/<id>.json`) — both plain file writes that survive on any host. Every HALT with a writable workspace therefore writes a `runs/<id>.json` blocked record. The named exception is **E-NO-CONFIG / first_run** with no workspace: there is no run record to write, and visibility comes from the next **job-search** visit routing to onboarding. An attention-pull alert is *additional*, capability-gated by the `notify.desktop_notify_on_block` knob: if your host has an attention-pull surface (desktop / terminal / phone), fire one alert on a blocked run when the knob is set; otherwise skip it silently — the two file channels still carry the failure.
+Every failure is named internally and visible — no silent failures. The E-* table owns established canonical
+errors. Exact-model binding failures use the narrow internal class below until T3.3 defines their complete
+interactive repair and user rendering; the internal class is never shown as a raw user code. The durable
+guarantee for blocked runs is two **file-backed channels** when a writable workspace exists: the **blocked
+digest** (cause + next interactive step) and the **home view** (reads `run_health` from the newest
+`runs/<id>.json`) — both plain file writes that survive on any host. Every HALT or model-binding block with a
+writable workspace therefore writes a `runs/<id>.json` blocked record. The named exception is **E-NO-CONFIG
+/ first_run** with no workspace: there is no run record to write, and visibility comes from the next
+**job-search** visit routing to onboarding. An attention-pull alert is *additional*, capability-gated by the
+`notify.desktop_notify_on_block` knob: if your host has an attention-pull surface (desktop / terminal /
+phone), fire one alert on a blocked run when the knob is set; otherwise skip it silently — the two file
+channels still carry the failure.
 
 Surface every outcome through the written record — the record is **primary on every harness**, the contract the home view reads — because a skill cannot set the host's exit code. Where a host provides a trustworthy exit code, that is an additional signal only, never a replacement. The digest's "Run health" line carries one of the four run-health states; their names, meanings, and the `<why>` breakdown are defined in `conventions.md` (the digest "Run health" line).
+
+<!-- exact-model-contract:model-binding-block -->
+| Policy | Decision |
+|---|---|
+| `internal_class` | `detail_model_binding_unavailable` |
+| `applies` | `v2_evidence_or_v1_resolution_or_exact_dispatch_failure` |
+| `config_effect` | `preserve_bytes` |
+| `run_effect` | `blocked_record_and_digest_when_workspace_writable` |
+| `model_fields_before_binding` | `null` |
+| `metering` | `preserve_completed_attempt_accounting` |
+| `user_route` | `t3_3_interactive_model_repair` |
+| `raw_user_code` | `none` |
+<!-- /exact-model-contract:model-binding-block -->
+
+The blocked run record stores `error.class:"detail_model_binding_unavailable"` internally. Before an exact
+binding is established, `detail_model`, `detail_model_origin`, and `detail_model_binding_id` are `null`.
+The digest and normal chat state the observed cause and route to interactive model repair without showing
+that class token. Pre-meter failures record zero metered work; a refused/unsupported dispatch preserves all
+completed-attempt accounting already observed. Full recommendation, confirmation, and rollback behavior
+remain T3.3 work.
 
 | Code | When | What the user sees (cause + fix) | Run effect |
 |---|---|---|---|

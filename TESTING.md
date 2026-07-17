@@ -438,8 +438,8 @@ PATH needs no python3 — the skills are zero-dependency; see T9.4.)*
 ### T7.3 E-NO-CONFIG — covered by T5.3. **Result:** ⬜
 ### T7.4 E-NO-PREFERENCES — 👤
 ```bash
-T5=$(mktemp -d); mkdir -p "$T5/.job-search/runs" "$T5/.job-search/reports"
-cp "$JSOS/templates/config.example.yaml" "$T5/.job-search/config.yaml"; : > "$T5/.job-search/preferences.md"; : > "$T5/.job-search/jobs.jsonl"
+T5=$(mktemp -d); bash "$JSOS/skills/job-search-run/evals/files/setup-workspace.sh" "$T5/.job-search" >/dev/null
+: > "$T5/.job-search/preferences.md"
 claude --plugin-dir "$JSOS" -p "/job-search:job-search-run --workspace $T5/.job-search"; echo "exit: $?"; rm -rf "$T5"
 ```
 **Expected:** **E-NO-PREFERENCES** naming the job-preference-interview skill; nothing pulled; writes a `runs/<id>.json` with `run_health: blocked` naming **E-NO-PREFERENCES**, so the next job-search home view surfaces it; the headless `claude -p` process returns **0**, so do not assert on `$?`.
@@ -476,7 +476,7 @@ workspace, so they don't depend on the shared `$SH` above.
 ### T7.11 E-CONFIG-VERSION — a config from a newer version halts — 👤
 ```bash
 SHV=$(mktemp -d); bash "$JSOS/skills/job-search-run/evals/files/setup-workspace.sh" "$SHV" >/dev/null
-sed -i.bak 's/^version: 1/version: 2/' "$SHV/config.yaml"      # pretend a newer skill wrote it
+sed -i.bak 's/^version: 1/version: 3/' "$SHV/config.yaml"      # pretend a newer skill wrote it
 PATH="$SHV/_bin:$PATH" JOBSEARCH_FIXTURES="$JSOS/tests/fixtures" \
   claude --plugin-dir "$JSOS" -p "/job-search:job-search-run --workspace $SHV"; echo "exit: $?"; rm -rf "$SHV"
 ```
@@ -496,6 +496,8 @@ workspace:
 queries:
   - { id: "good", keywords: "software engineer", location: "United States",   limit: 10, enabled: true }
   - { id: "bad",  keywords: "data engineer",     location: "INVALID-LOCATION", limit: 10, enabled: true }
+search:
+  detail_model: "balanced"  # valid legacy-v1 selector
 schedule:
   frequency: "daily"
   time: "08:00"
@@ -568,6 +570,9 @@ and duplicate/merge volume. Record the observation; do not auto-tune `max_new_po
 T6=$(mktemp -d)
 mkdir -p "$T6/job-search"                                  # LEGACY (visible) location
 cp "$JSOS/templates/config.example.yaml" "$T6/job-search/config.yaml"
+sed -i.bak -e 's/^version: 2/version: 1/' \
+  -e 's/^  # Setup inserts the required exact search.detail_model before writing a valid new workspace\./  detail_model: "balanced"/' \
+  "$T6/job-search/config.yaml"; rm -f "$T6/job-search/config.yaml.bak"
 printf 'SENTINEL-PREFS\n' > "$T6/job-search/preferences.md"
 printf '{"event":"evaluated","source_id":"SENTINEL-JOB","status":"new"}\n' > "$T6/job-search/jobs.jsonl"
 shasum -a 256 "$T6/job-search/"{preferences.md,jobs.jsonl,config.yaml}     # record

@@ -167,24 +167,25 @@ the run uses the parallel fan-out (the default where the host supports it), it f
 subagent per posting (see
 `../../../shared/references/parallelism.md` for the general pattern, the host's own fan-out primitive, and the
 sequential fallback). Each subagent follows the `evaluate-job-fit` skill. This
-key controls which tier those detail readers use — the agent binds the tier to a concrete model from its own
-roster. If the user asks which model a tier maps to on this host, name the concrete model you'd use.
+key is one exact live model identifier in version 2. Setup, an explicit conversational user selection
+(`configured_user`), or interactive repair selects and persists it after availability validation; runtime
+uses that exact value for every posting-detail judgment without reselecting or substituting. The
+automatic setup/repair choice is the least-powerful available model that performs fit judgment well, while
+an explicit exact available model requested by the user overrides it. The canonical schema, private binding
+sidecar, and version-1 compatibility boundary live in `../../../shared/references/conventions.md`; selection
+and write mechanics live in `../../../shared/references/internals.md`.
 
-The four tiers, what each is for, and which is the default are in the config schema — see
-`../../../shared/references/conventions.md` (the `config.yaml` section).
-
-`balanced` — the **mid-tier reviewer floor** — is the default, because the per-posting fit verdict is a judgment, not a mechanical step: a well-specified, bite-sized review belongs on a mid-tier model, not the cheapest tier. Scale up with `detail_model: high` where the brief's distinctions are fine-grained or the must-have/red-flag list is long. Opt down with `detail_model: fast` (the cheapest tier) for faster, lighter reads — a touch looser on subtle qualitative calls (occasionally an out-of-vocabulary band or a stray numeric value), though the consolidation step after all subagents return still validates and coerces every verdict before anything reaches `jobs.jsonl` or the digest, so no invalid output persists. This is a **fidelity/speed tradeoff**, not a quality-gate — and the genuinely mechanical bulk (dedup, the summary prefilter, provenance) stays cheap regardless of this tier.
-
-> **Note:** Per-subagent tier selection is effective only on hosts that support isolated-context subagents.
-> On a single-model host, or one without isolated-context subagents, the knob is inert. If parallel reads are
-> disabled, unavailable, or refused, the same tier still describes the intended detail-read fidelity, but the
-> runner evaluates sequentially.
+On a host that cannot assign a separate worker model, setup stores the exact primary model and configures
+sequential detail reads. Parallel approval, capacity, or refusal may change concurrency, never the saved exact
+model. If that exact dispatch is unavailable or refused, block and route to interactive repair—never choose a
+replacement during the run.
 
 ---
 
 ## 5. Explaining agent-data usage
 
-“Explain my agent-data usage” is a read-only local explanation. Read recent `runs/*.json` records and lead
+“Explain my agent-data usage” is a read-only local explanation. Read recent `runs/<run_id>.json` records
+whose complete names match the canonical run-id format and lead
 with actual `agent_data_usage.metered_calls` derived from completed, producer-authoritative attempt
 metering. The dated contract determines whether a completed failure or retry is metered; diagnostics such
 as retry attempts and charged failures are subsets and are never added to the total again. Then explain the

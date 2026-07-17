@@ -137,10 +137,19 @@ Otherwise, default to **`~/.job-search/`**:
    "the default: private and out of the way" · **Somewhere else** — "name any folder; I'll use that". (A
    path typed via the free-text option is equally fine.)
 2. Create the directory plus `runs/` and `reports/`.
-3. Copy `templates/config.example.yaml` → `<workspace>/config.yaml` and
-   `templates/workspace.gitignore` → `<workspace>/.gitignore`.
-4. Create an empty `<workspace>/jobs.jsonl`.
-5. Record it as the active workspace in the registry (`internals.md` → Registry write rules).
+3. Copy `templates/workspace.gitignore` → `<workspace>/.gitignore` and create an empty
+   `<workspace>/jobs.jsonl`. Load `templates/config.example.yaml` as an in-memory candidate; do **not** copy
+   the intentionally incomplete template to `<workspace>/config.yaml`.
+4. **Resolve the setup-only detail-model choice now.** Use the current host roster to select the exact
+   least-powerful available model that performs fit judgment well, unless the user has explicitly requested
+   another exact available model. If the host cannot assign a separate worker model, select the creating
+   session's exact primary model and plan sequential detail reads. This is the only model-selection decision;
+   the headless run will obey the saved exact identifier.
+5. Hold the config candidate in memory through the preferences, query, and optional parallel-approval steps
+   below. Do not record the workspace as active yet. If an exact executable selection and canonical binding
+   cannot be established, do not write `config.yaml` or `runs/detail-model-binding.json`, do not run an
+   invalid workspace, and route to interactive model repair. The final valid version-2 config, sidecar, and
+   registry write happen together at the end of §5.
 
 Mention briefly that this workspace is **private** (the bundled `.gitignore` is deny-all) — preferences,
 where they're hunting, and matched jobs live here and shouldn't be committed to a public repo.
@@ -190,8 +199,9 @@ user to name keywords.** They can retune anytime; the goal here is zero upfront 
      own query. **If remote is a must-have, also fold the word `remote` into `keywords`** (e.g. "remote AI
      engineer") — the search API has no remote filter, so without it the feed fills with onsite roles the
      judge then has to cull.
-2. **Write them to `config.yaml`** per the `internals.md` "Add a query" recipe — never make the user open the
-   file. One worked item — the `keywords` and `location` below are **illustrative; derive your own from
+2. **Render them into the in-memory version-2 config candidate** per the `internals.md` "Add a query" recipe
+   — never make the user open the file. One worked item — the `keywords` and `location` below are
+   **illustrative; derive your own from
    *this* user's brief, never paste these literal words**:
 
    ```yaml
@@ -199,7 +209,8 @@ user to name keywords.** They can retune anytime; the goal here is zero upfront 
    ```
 
    Give each `id` a short, human slug built from that query's own terms; keep `enabled: true`; `limit: 25`
-   is a fine default. Preserve the file's comments and structure, and keep `version: 1`.
+   is a fine default. Preserve the template's comments and structure, keep `version: 2`, and insert the
+   exact setup-selected identifier as `search.detail_model`.
 3. **Acknowledge what you saved — don't ask them to choose.** Name the searches you derived and make clear
    they're fully editable, e.g.:
 
@@ -208,8 +219,10 @@ user to name keywords.** They can retune anytime; the goal here is zero upfront 
 
    Only if the brief is too thin to derive anything sensible (rare) do you ask one focused question to fill
    the gap — lead with derivation, never a blank "what should I search for?".
-   The config already comes preset with a recency window (recent postings only — you can change it, or ask for a different window any time) and a fast model for reading
-   posting details — both are tunable anytime just by asking. The config also comes preset with the default job sources (LinkedIn + Ashby company boards) — tunable anytime just by asking.
+   The config already comes preset with a recency window (recent postings only — you can change it, or ask
+   for a different window any time) and the exact detail model selected during setup — both are tunable
+   anytime just by asking. The config also comes preset with the default job sources (LinkedIn + Ashby
+   company boards) — tunable anytime just by asking.
 
 ### Parallel detail-read approval (approval-gating hosts only)
 
@@ -218,23 +231,43 @@ posting-detail reads. If your host gates subagents this way, run this step; if i
 subagents, skip this whole step (the parallel fan-out is already the default) and go to §6.
 
 On an **approval-gating host**, if `search.parallel_detail_reads` is unset, ask once after the searches are
-saved and before the first live run. Ask it as a closed choice; the question must say **subagents** and must
-name the default detail-read model (the mid-tier reviewer floor — the `balanced` tier; the agent binds it to
-a concrete model from its own roster, the least-powerful that does the judgment well, not the cheapest).
+derived and before the first live run. Ask it as a closed choice; the question must say **subagents** and
+must name the exact detail model already selected during setup. Present that selection as a fact, not a tier
+choice.
 
 On **yes**:
 
-1. Write `search.parallel_detail_reads: true` to `config.yaml`; preserve comments/structure and keep
-   `version: 1`.
-2. Keep `search.detail_model` at its default — the mid-tier reviewer floor (`balanced`) — unless the user
-   explicitly chooses another tier. If they ask what a tier means, name the concrete model you'd use for it.
+1. Add `search.parallel_detail_reads: true` to the in-memory config candidate; preserve comments/structure
+   and keep `version: 2`.
+2. Keep the already-selected exact `search.detail_model`; parallel approval is not a second model-selection
+   decision.
 3. Perform any host-specific subagent setup your host needs
    (e.g. writing a scoped profile so unattended runs may use subagents). Tell the user in plain language what
    the setting does. If the sandbox blocks that write, show the exact path and content;
    don't silently skip it.
 
-On **no**, write `search.parallel_detail_reads: false` and read details sequentially. Do not ask again unless
-the user later asks to change it.
+On **no**, add `search.parallel_detail_reads: false` to the config candidate and read details sequentially.
+Do not ask again unless the user later asks to change it.
+
+### Finalize the runnable version-2 workspace
+
+Before the first live run, finish the template-copy-to-runnable integration:
+
+1. Render a complete candidate from `templates/config.example.yaml` with `version: 2`, the derived queries,
+   the exact setup-selected `search.detail_model`, and any parallel choice. Validate it against
+   `conventions.md`; the static template by itself is not a valid workspace config.
+2. Build the canonical private `runs/detail-model-binding.json` candidate with a fresh locally generated
+   `binding_id`, the exact same `detail_model`, origin `configured_auto` for the setup default or
+   `configured_user` for an explicit user choice, and current UTC `bound_at`.
+3. Validate both complete candidates before touching their final paths. Then atomically write the sidecar and
+   atomically write `config.yaml`. If either write fails, leave the workspace non-runnable, do not invoke the
+   runner, and report the interactive repair route; never proceed with a config/sidecar mismatch.
+4. Only after both files are valid and present, record the workspace as active in the registry
+   (`internals.md` → Registry write rules).
+
+This establishes a fresh binding before the first live run. Later supported config, migration, and repair
+writes replace the whole sidecar—even when the literal model is unchanged—under the canonical
+`conventions.md` policy.
 
 ## 6. First live sample run — the magical moment
 
@@ -294,6 +327,12 @@ checking** — "runs on its own, on your chosen cadence" · **No, I'll run it my
 stays one command away".
 
 **On yes** — pick the cadence, then start it, prove it, and record it:
+
+Before previewing the schedule, resolve the creating session's exact primary model per `internals.md`. Present
+the exact primary and detail bindings as facts, not choices; if the exact primary is unknown, require an
+explicit exact available selection before creating a verified schedule. After the canary, the scheduling
+registry write includes that exact `primary_model` and origin (`session_inheritance` for the default,
+`user_override` for an explicit choice) alongside the ordinary marker.
 
 1. **Ask how often — now, as part of setting the schedule up.** This is the moment the cadence
    actually matters, so ask it here, not before there's a schedule: a closed choice (`voice.md` →
@@ -366,14 +405,15 @@ runs", "update my preferences", "show the latest digest").
       shown**, no premature claim, no duration promise; a permission-blocked install became a one-line
       `npm install -g agent-data` handoff for the user to run, not an error
 - [ ] workspace adopted-or-created; **never clobbered** an existing `config.yaml` / `preferences.md` /
-      `jobs.jsonl`; the active workspace recorded in the registry
+      `jobs.jsonl`; a fresh workspace was recorded active only after a valid version-2 config and matching
+      atomic `runs/detail-model-binding.json` write established the exact model binding
 - [ ] `preferences.md` exists (interview or import via `job-preference-interview`)
 - [ ] 2–3 `queries[]` **derived from the brief** and written (no upfront keyword-picking); searches
       acknowledged
 - [ ] on an approval-gating host, if `search.parallel_detail_reads` was unset, the user was asked once about
-      parallel subagents; the answer was written to `config.yaml`; on yes the host-specific subagent setup
+      parallel subagents; the answer was rendered into `config.yaml`; on yes the host-specific subagent setup
       your host needs was performed (or the exact path + content was shown if blocked); the user saw
-      the default detail-read model — the mid-tier reviewer floor (`balanced`-tier) — named as the concrete model the agent binds it to from its own roster
+      the already-selected exact detail-read model named as a fact, with no second tier-selection decision
 - [ ] first **live** `job-search-run` got the canonical one-or-two-sentence context before its first metered
       call (the approved baseline-four rendering when applicable; calls-only when the tier fact could not be
       verified), then ran without a redundant confirmation; strong/moderate matches shown — or the named

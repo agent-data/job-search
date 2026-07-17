@@ -117,6 +117,23 @@ fallback, and wording rules in `errors.md` rather than restating them here.
    - `agent-data` not found on PATH → E-NO-AGENT-DATA (HALT, exit 1).
    - No `config.yaml` → E-NO-CONFIG (HALT, exit 1).
    - `config.yaml` `version` major unknown → E-CONFIG-VERSION (HALT, exit 1).
+   - **Establish the exact detail-model binding before any API call.** For version 2, read only the active
+     workspace's `runs/detail-model-binding.json` and validate the exact canonical schema in
+     `conventions.md`: correct active-workspace location, exact field set and value forms, and a sidecar
+     `detail_model` that exactly equals config `search.detail_model`. Copy its `binding_id` to
+     `detail_model_binding_id` and its origin into this run record. Never search prior run records for
+     provenance, even for the same literal model; that would accept a stale A→B→A binding. A missing,
+     malformed, or mismatched sidecar blocks before search and routes to interactive model repair owned by
+     T3.3; use the bounded internal `detail_model_binding_unavailable` contract in `errors.md`. Preserve
+     config bytes, write the blocked run record and blocked digest when the workspace is writable, keep the
+     three model fields `null`, and never expose that internal class as a raw user code.
+
+     For version 1, set `detail_model_binding_id:null`, preserve config bytes, and apply the canonical
+     compatibility resolver. A missing selector, invalid selector, unavailable tier roster, failed tier
+     resolution, or `inherit` when the exact primary model is unknown blocks before API calls and routes to
+     interactive model repair. Never guess or substitute a model. Carry `legacy_v1_selector` only after the
+     exact resolved model has been observed executable; an unsupported or refused exact dispatch blocks by
+     the same internal class and artifact route without changing config.
    - Brief missing/empty (`workspace.preferences_path`) → E-NO-PREFERENCES (HALT, exit 1, named fix).
    - Delete stale files whose complete name matches `runs/.pagination-<run_id>.jsonl`, where `<run_id>` has
      the format in `conventions.md`. Delete them without reading them: scratch is never resumable state.
@@ -271,17 +288,20 @@ fallback, and wording rules in `errors.md` rather than restating them here.
    For version 2, apply the posting-detail model binding in `../../shared/references/parallelism.md`, including
    its one-line runtime authority and no-substitution rule. Configuration time already made the model
    decision; this headless run does not choose, tier-resolve, scale, or replace it. A version 1 selector is
-   legacy compatibility input, not an exact model identifier: resolve it once per run with the canonical
-   version-1 resolver in `../../shared/references/conventions.md`, preserve the config bytes, and record
-   `detail_model_origin:legacy_v1_selector`; do not apply the version-2 exact-value rule to that selector.
+   legacy compatibility input, not an exact model identifier: use the one exact model resolved at preflight
+   by the canonical version-1 resolver in `../../shared/references/conventions.md` and preserve the config
+   bytes; do not apply the version-2 exact-value rule to that selector. Record
+   `detail_model_origin:legacy_v1_selector` only after the exact resolved model has been observed executable.
    For the parallel fan-out, dispatch queued postings as one concurrent batch where capacity allows, one
    subagent per posting. The genuinely mechanical
    bulk here — dedup, the summary prefilter (step 3), provenance — remains in this primary context and the
    shared scripts, independent of the configured detail-model binding. If the host applies a subagent/thread
    limit, continue in rolling batches. Authorization or capacity can change parallelism. A version-2
    sequential fallback must execute the exact configured model; a version-1 sequential fallback must execute
-   the exact resolved model from the canonical legacy resolver. Never substitute another model after either
-   binding resolves. No posting is dropped merely because batching is required.
+   the exact resolved model from the canonical legacy resolver. If exact dispatch is unsupported or refused,
+   preserve completed-attempt accounting, write the canonical model-binding blocked artifacts, and route to
+   interactive model repair; never retry on a guessed or substituted model. Never substitute another model
+   after either binding resolves. No posting is dropped merely because batching is required.
 
    In a rolling parallel fan-out, a returned quota-rejection attempt stops dispatch of every not-yet-started
    worker. Let all workers already started in that batch finish and return their attempt envelopes before the
@@ -451,6 +471,9 @@ Every run with a writable workspace ends by writing `runs/<run_id>.json` with at
 `{"run_id","run_health","build","error"|null,"ts"}`. **Every HALT with a writable workspace writes
 this record with `run_health:"blocked"`, `build`, and its `E-*` BEFORE stopping** — this is the
 source the home view reads, so a failed scheduled run is named on the user's next job-search home view.
+The bounded `detail_model_binding_unavailable` block follows the same record+digest guarantee, stores the
+internal class only in `error.class`, uses null model fields until a binding is established, and never shows
+the class token in normal chat or the digest.
 When a writable workspace exists, a HALT also writes the blocked `reports/<date>-digest.md` (named
 error + fix as the body). If your host has an attention-pull surface, fire one alert on a blocked run when
 `notify.desktop_notify_on_block` is set; otherwise the two file channels carry the failure.

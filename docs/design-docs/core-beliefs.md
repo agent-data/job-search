@@ -78,8 +78,10 @@ and are linked, never restated here — this doc is a live design-doc subject to
 
 ## 4. No silent failures — named errors
 
-- **Statement.** Every blocked path is a named `E-*` error carrying its own cause and fix, surfaced to
-  the user through the home view, the digest, and a desktop notification.
+- **Statement.** Every blocked path is internally named with a durable cause and fix, surfaced to the user
+  through the home view and digest, with a desktop notification where supported. Established failures use
+  canonical `E-*` values; an explicitly bounded non-user-facing class may bridge a staged contract, but its
+  raw token never reaches normal chat or the digest.
 - **Why.** A headless run that fails quietly is worse than no run. Naming each failure — with the fix
   attached — means a user always learns what to do next, and never has to read a log to find out a run
   did nothing.
@@ -90,7 +92,8 @@ and are linked, never restated here — this doc is a live design-doc subject to
   halt scenarios in `skills/job-search-run/evals/evals.json`).
 - **How to verify.** Read [shared/references/errors.md](../../shared/references/errors.md); then run
   the job-search-run evals (ask Claude to "run the evals for job-search-run") and confirm each blocked
-  scenario names its `E-*` and writes a blocked record.
+  scenario writes its internal classification and blocked record while user-visible artifacts carry cause +
+  fix without leaking a bounded internal-class token.
 
 ## 5. Single source of truth
 
@@ -255,29 +258,29 @@ and are linked, never restated here — this doc is a live design-doc subject to
 
 ## 12. Parallel by default
 
+<!-- exact-model-contract:parallel-belief -->
+
 - **Statement.** Independent work runs concurrently, not in sequence — a run dispatches mutually-independent
   subtasks (e.g. one detail-read subagent per posting) wherever the host supports it, and briefs each like a
   colleague with zero context. The one carve-out: hosts that gate subagents behind explicit user approval
-  (e.g. Codex) wait for that approval before fanning out; every other host parallelizes by default. The tier
-  binds to a concrete model by the agent's self-selection from its own roster — not a per-host adapter table
-  (the `AAS-LANG-04` deviation for this adapter-free pack); the required-slot rule (`AAS-AUTO-07`) and the
-  judgment-never-cheapest floor (`AAS-AUTO-11`) are the mitigation for the one host fact with no runtime
-  backstop.
+  (e.g. Codex) wait for that approval before fanning out; every other host parallelizes by default. Setup
+  persists one exact `search.detail_model`; runtime dispatch uses that exact identifier for every posting
+  judgment and never reselects, interprets, scales, or substitutes it.
 - **Why.** Time-to-value is a product feature. Parallelizing independent work turns a serial crawl into one
   concurrent step; isolating each subtask in its own subagent keeps the primary context clean and dispatches each
-  isolated subtask on the least powerful model that can do it *well* — sp's spectrum: mechanical steps (dedup,
-  provenance, extraction, prefilter) on the cheapest tier; the per-posting fit verdict, a well-specified
-  bite-sized review, at the reviewer floor (a mid-tier model), scaled up for higher-risk postings; the
-  dispatching model always specified explicitly. A well-briefed subagent makes judgment calls — a terse one returns shallow, generic work.
+  isolated subtask with an explicit model binding. Setup chooses the least-powerful available model that can
+  perform the fit judgment well unless the user requests another exact available model; when the host cannot
+  assign a separate worker model, setup saves the exact primary model and runtime evaluates sequentially. A
+  well-briefed subagent makes judgment calls — a terse one returns shallow, generic work.
 - **Enforced by.** **Cultural / by design** — no linter for parallelism. The principle and the subagent-briefing
   guidance are owned by [shared/references/parallelism.md](../../shared/references/parallelism.md) (bundled into
   every skill); `job-search-run` embodies it (scan → parallel per-posting fan-out by default, sequential only
   where the host lacks the primitive or awaits subagent approval → consolidate; the `search.detail_model` and
   parallel-approval knobs live in [shared/references/conventions.md](../../shared/references/conventions.md)).
-  Model self-selection is owned by the runner (`skills/job-search-run/SKILL.md`) + `parallelism.md`, with **no
-  adapter model-tier table**: the `config.yaml search.detail_model` tier token is the portable intent, and the
-  agent binds the concrete model from its own roster.
+  Setup-time model selection is owned by [shared/references/internals.md](../../shared/references/internals.md);
+  exact runtime authority is owned by `parallelism.md` and `skills/job-search-run/SKILL.md`.
 - **How to verify.** Inspect [shared/references/parallelism.md](../../shared/references/parallelism.md) and
   `skills/job-search-run/SKILL.md`; confirm mutually-independent work is dispatched concurrently by default
   (sequential only where the host lacks the primitive or awaits subagent approval), and that the fallback
-  still evaluates every queued item.
+  still evaluates every queued item with the exact saved model.
+<!-- /exact-model-contract:parallel-belief -->

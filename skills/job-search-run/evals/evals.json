@@ -127,7 +127,7 @@
     {
       "id": 12,
       "scenario": "config written by newer version (E-CONFIG-VERSION)",
-      "prompt": "Build a temp workspace + shim (setup-workspace.sh), PATH=<tmp>/_bin:$PATH, JOBSEARCH_TEST_SCENARIO=happy, JOBSEARCH_FIXTURES=<repo>/tests/fixtures. Then bump the config version: `sed -i.bak 's/^version: 1/version: 2/' <tmp>/config.yaml`. Run the job-search-run skill with --workspace <tmp>.",
+      "prompt": "Build a temp workspace + shim (setup-workspace.sh), PATH=<tmp>/_bin:$PATH, JOBSEARCH_TEST_SCENARIO=happy, JOBSEARCH_FIXTURES=<repo>/tests/fixtures. Then bump the config version to an unsupported major: `sed -i.bak 's/^version: 1/version: 3/' <tmp>/config.yaml`. Run the job-search-run skill with --workspace <tmp>.",
       "expectations": [
         "Halts at preflight with E-CONFIG-VERSION (config written by a newer version; update the job-search skills); makes NO search-jobs/get-posting calls",
         "Writes runs/<id>.json with run_health 'blocked' naming E-CONFIG-VERSION and including build.version, build.content_hash, and build.git_sha so the home view surfaces it — that blocked record is the primary, universal contract; the exit code is platform-scoped (this suite runs on Claude, where a headless run exits 0 even when blocked, so do not assert non-zero; on a trustworthy-exit-code harness — Codex/opencode/Droid — a blocked run exits non-zero)",
@@ -501,6 +501,18 @@
         "With exactly three comparable completed records [0,0,9], the ZERO arm uses the zero median rather than the positive arithmetic mean and therefore shows the derived pay-as-you-go purchase example but omits every similar-run estimate and its broader/deeper caveat",
         "When the current review mode is all, the ALL arm omits the similar-run/run-equivalent estimate even with five comparable positive records; the calls-first current-run sentence and optional derived pay-as-you-go purchase example remain distinct from an account charge or balance claim",
         "Every seeded history file in every arm remains byte-identical; no arm rewrites historical rate/equivalent strings, changes config, invents account state, or derives the current run count from JOBSEARCH_TEST_QUOTA_AFTER"
+      ]
+    },
+    {
+      "id": 39,
+      "scenario": "legacy version-1 exact-model resolution fails closed",
+      "prompt": "Create seven isolated workspaces with setup-workspace.sh and snapshot each config byte-for-byte. MISSING SELECTOR arm: remove search.detail_model. INVALID SELECTOR arm: replace balanced with bogus-tier. TIER ROSTER UNAVAILABLE arm: keep balanced but run on a host context that exposes no executable tier roster. TIER RESOLUTION UNAVAILABLE arm: expose a roster but make the balanced-to-exact mapping fail. INHERIT PRIMARY UNKNOWN arm: set detail_model: inherit while the exact primary model is unavailable to the runner. EXACT DISPATCH UNSUPPORTED arm: resolve balanced to an observed exact model, allow ordinary search selection, then run where explicit exact detail dispatch is unsupported. EXACT DISPATCH REFUSED arm: resolve balanced to an observed exact model, allow ordinary search selection, then make the host refuse that exact detail dispatch. Run job-search-run headlessly in every arm and inspect call logs, config snapshots, blocked run records, and blocked digests.",
+      "expectations": [
+        "Missing selector, invalid selector, tier roster unavailable, tier resolution unavailable, and inherit primary unknown all block in preflight before agent-data calls; each preserves config bytes and records zero metered calls",
+        "Exact dispatch unsupported and exact dispatch refused preserve completed search attempt accounting, block without launching a replacement detail worker, and never substitute or guess another model",
+        "Every writable arm writes a blocked run record with error.class detail_model_binding_unavailable plus a blocked digest; the three detail-model fields are null until an exact executable binding is observed",
+        "Normal chat and digest expose no raw internal class or invented E-* code; they route to interactive model repair owned by T3.3",
+        "No arm writes legacy_v1_selector origin before exact executable resolution, changes config bytes, migrates to version 2, or drops already-accounted work"
       ]
     }
   ]

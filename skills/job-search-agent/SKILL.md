@@ -77,7 +77,9 @@ status (`new | interested | applied | rejected | archived`) is a `status_changed
 run `job-preference-interview` or edit `preferences.md` directly.
 
 **Invariants — never break these:**
-- Always preserve `version: 1` in `config.yaml`.
+- Preserve the existing config major on ordinary edits. New workspaces use config `version: 2`; never
+  migrate a version-1 workspace incidentally. Every supported version-2 config write refreshes the canonical
+  private detail-model binding sidecar per `internals.md`.
 - Always preserve existing comments and structure when editing.
 - Never add a `score` or `weight` field anywhere.
 - Never add `budget`, `credits`, or `cost` config fields. Accurate calls-first usage and a clearly labeled
@@ -188,6 +190,8 @@ For the full `E-*` table with exact cause and fix wording: see `../../shared/ref
 
 **Philosophy guard.** The repo's CI runs a philosophy guard that rejects any file introducing numeric scores or score-threshold config into the shipped default output (`examples/`, `templates/`). Keep the guard green before opening a PR (exact commands in `CONTRIBUTING.md`).
 
-**Versioning.** `config.yaml` carries `version: 1`. If a breaking schema change is needed, bump the major version and add the corresponding `E-CONFIG-VERSION` detection to the runner's preflight.
+**Versioning.** New workspaces use config `version: 2`; the runner retains bounded version-1 compatibility.
+If a later breaking schema change is needed, bump the major version and add the corresponding
+`E-CONFIG-VERSION` detection to the runner's preflight.
 
 **Full contributor guide:** `CONTRIBUTING.md`.

@@ -26,7 +26,8 @@ Read just what the home view needs (all local):
 - **Config facts:** from `<ws>/config.yaml`, count enabled queries and read `search.sources` (using its
   documented default when absent), `schedule.frequency`, and whether `search.max_new_postings_per_run` is
   omitted, finite, or `"all"`. These facts drive review-depth previews; do not estimate from the last run.
-- **Last run health, usage, and depth evidence:** the newest `<ws>/runs/*.json`—its `run_health`,
+- **Last run health, usage, and depth evidence:** the newest `<ws>/runs/<run_id>.json` whose complete name
+  matches the run-id format in `conventions.md`—its `run_health`,
   `review_scope`, `agent_data_usage`, and `pagination_metrics`—or fall back to the **Run health** line of the
   latest digest only when no run record exists. Nudge eligibility comes only from the newest run record,
   never from a digest inference or an older run.
@@ -81,7 +82,8 @@ Notes on each part:
   the registry's scheduling marker — render the cadence (from `config.yaml:schedule.frequency`, e.g. "daily")
   when installed, or "off" when not; the marker carries only on/off + the mechanism value recorded at install time
   (the mechanism label is not surfaced in the status line);
-  last-run health from the newest `runs/*.json` `run_health` (or the latest digest's Run health line). Run
+  last-run health from the newest complete-name-matching `runs/<run_id>.json` `run_health` (or the latest
+  digest's Run health line). Run
   health is one of the four run-health states defined in `conventions.md` (the digest "Run health" line).
 - **Latest digest.** Read the newest `reports/<date>-digest.md`; show its date and reproduce its **counts
   line** (the `N new · S strong · M moderate · W weak · F filtered out · n searches · m detail reads` line —
@@ -92,7 +94,13 @@ Notes on each part:
 
 ## Quick actions (conversational — never make the user edit a file)
 
-Offer these and apply each by **chatting**, editing `config.yaml` per the `internals.md` recipes:
+Offer these and apply each by **chatting**, editing `config.yaml` per the `internals.md` recipes. Preserve the
+existing config major on ordinary edits. For version 2, every supported write atomically refreshes
+`runs/detail-model-binding.json` with a fresh binding id even when the exact model is unchanged. A version-1
+workspace remains readable and runnable through bounded compatibility: compatible query, freshness, source,
+parallelism, schedule-field, and review-depth edits preserve version 1. Only an action that requires an exact
+version-2 binding—such as changing the detail model or creating verified scheduling—routes through the
+interactive migration flow owned by T3.2.
 
 - **Run a search now** → disclose it makes live calls, then invoke `job-search-run` against `<ws>`. On a host
   that gates parallel detail reads behind approval, if
@@ -104,17 +112,16 @@ Offer these and apply each by **chatting**, editing `config.yaml` per the `inter
   reasoning line, link, and any "confirm" warning.
 - **Add or edit a query** → append/modify a `queries[]` item
   (`{ id, keywords, location, limit, enabled }`); `limit` is the per-query feed size (its range and default live in `conventions.md`).
-  Preserve comments; keep `version: 1`. If the user asks for another search without naming keywords,
+  Preserve comments and preserve the existing config major. If the user asks for another search without naming keywords,
   **derive** it from their brief (don't make them pick) and acknowledge what you added — same as onboarding
   step 5.
 - **Tune the feed** → set `search.freshness` to narrow or widen the recency window (applied server-side), or just ask for a window in the moment — "jobs from the last day" — and that search uses it; set `search.detail_model`
-  to control which model tier reads full posting details; set `search.sources` to choose job sources (narrow
+  through setup, an explicit conversational user choice (`configured_user`), or interactive repair to an
+  exact available model identifier; set `search.sources` to choose job sources (narrow
   to a single board, or add more company boards to widen coverage); and, where the host needs approval, set
   `search.parallel_detail_reads` (`true | false`) to use parallel subagents or read sequentially. The allowed
-  values for each key — the freshness windows, the detail-model tiers, and the source list — live in the
-  config schema in `conventions.md`. The agent binds each detail tier to a concrete model from its own roster;
-  when the user asks which model a tier maps to on this host, name the concrete model you'd use.
-  Edit `config.yaml` per the `internals.md` recipes; preserve comments; keep `version: 1`.
+  values and exact-model ownership live in `conventions.md`; the setup/repair selection policy lives in
+  `internals.md`. Edit `config.yaml` per those recipes and preserve comments plus the existing config major.
 - **Review deeper results** → interpret one-off versus saved wording and follow **Review-depth changes**
   below. `queries[].limit` remains per-call page size; `search.max_new_postings_per_run` controls the run's
   review depth. Never turn a role target into a credit allowance or a promised page-call cap.
@@ -169,7 +176,8 @@ and never add a `budget`, `credits`, or `cost` config field.
 
 ### Usage help
 
-For “explain my usage,” read recent local `runs/*.json` records and lead with actual
+For “explain my usage,” read recent local `runs/<run_id>.json` records whose complete names match the
+canonical run-id format and lead with actual
 `agent_data_usage.metered_calls`. Explain the stored `by_operation` breakdown and the outcome drivers in
 the current config: schedule, enabled queries, enabled sources, and review mode. Use each historical run's
 stored decimal equivalent as written rather than recomputing it against today's rate.

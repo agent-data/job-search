@@ -237,6 +237,17 @@ the required key because it cannot know the live roster.
 | `creating_session_primary_unknown` | `block_verified_schedule_until_user_selects_exact_available_model` |
 <!-- /exact-model-contract:setup-policy -->
 
+Every supported version-2 config writer also replaces the active workspace's private
+`runs/detail-model-binding.json` using the canonical schema and policy in `conventions.md`. Treat config as
+the sole exact-model authority and the sidecar as provenance evidence only. Before writing, build and
+validate both complete candidates in memory; generate a fresh local binding id and timestamp even when the
+model literal is unchanged. For a non-model config edit, carry forward the origin only from the valid
+current sidecar. For setup or an explicit user model choice use `configured_auto` or `configured_user`; a
+repair uses `repair`. Serialize the two whole-file atomic replacements, and if either replacement fails,
+restore the prior pair (or leave a new workspace non-runnable) and do not run. Missing, malformed, or
+mismatched current evidence is not a writable baseline: route to interactive model repair. T3.2 must apply
+the same pair-consistency rule to migration rollback; this is not the full migration procedure.
+
 - **Add a query:** append to `queries:` an item like
   `  - { id: "ml-platform-sf", keywords: "ML platform engineer", location: "San Francisco Bay Area", limit: 25, enabled: true }`
   When the user hasn't named keywords (onboarding, or a vague "add another search"), **derive** them from
@@ -295,7 +306,8 @@ the required key because it cannot know the live roster.
   changing `all → finite`, removing the key, or choosing a one-off first-page override is reversible and
   immediate; make that reduction without confirmation. Preserve the existing config major; this setting
   never performs a version-1 migration.
-- **Explain my agent-data usage (read-only):** read the workspace's `runs/*.json` records and explain actual
+- **Explain my agent-data usage (read-only):** read only the workspace's `runs/<run_id>.json` records whose
+  complete filenames match the run-id format in `conventions.md`, then explain actual
   `agent_data_usage` call totals, the recorded pay-as-you-go equivalent when present, the operation breakdown,
   and the configured outcome drivers (frequency, enabled sources/queries, and review mode). Use the decimal
   strings stored with each historical run; point to `agent-data-contract.md` for current canonical
