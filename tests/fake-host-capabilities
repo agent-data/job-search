@@ -7,10 +7,12 @@ test-job canary, cleanup, and rollback-cutoff evidence. It never touches a real 
 model roster, scheduler, network, or agent-data account.
 """
 
+import base64
 import json
 import os
 import pathlib
 import re
+import subprocess
 import sys
 import tempfile
 from datetime import datetime, timedelta, timezone
@@ -26,65 +28,242 @@ ROSTER = {
 }
 ALIASES = {"haiku": "fast", "sonnet": "balanced", "opus": "high"}
 PRIMARY = "fake-primary-001"
+REPO_ROOT = pathlib.Path(__file__).resolve().parents[1]
+LIFECYCLE_FOLD = REPO_ROOT / "shared" / "scripts" / "mechanics" / "lifecycle-fold.sh"
+RUN_ID_PATTERN = re.compile(
+    r"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}-[0-9]{2}-[0-9]{2}Z"
+)
 BINDING_ID_PATTERN = re.compile(
     r"binding-[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}"
 )
 
 
-def yaml_scalar(value):
-    value = value.split("#", 1)[0].strip()
-    if len(value) >= 2 and value[0] == value[-1] and value[0] in {"'", '"'}:
-        value = value[1:-1]
+def without_yaml_comment(value):
+    quote = None
+    escaped = False
+    rendered = []
+    for character in value:
+        if escaped:
+            rendered.append(character)
+            escaped = False
+            continue
+        if quote == '"' and character == "\\":
+            rendered.append(character)
+            escaped = True
+            continue
+        if character in {"'", '"'}:
+            if quote is None:
+                quote = character
+            elif quote == character:
+                quote = None
+            rendered.append(character)
+            continue
+        if character == "#" and quote is None:
+            break
+        rendered.append(character)
+    return "".join(rendered).strip()
+
+
+def split_yaml_items(value):
+    items = []
+    start = 0
+    quote = None
+    depth = 0
+    for index, character in enumerate(value):
+        if character in {"'", '"'}:
+            if quote is None:
+                quote = character
+            elif quote == character:
+                quote = None
+        elif quote is None and character in "[{":
+            depth += 1
+        elif quote is None and character in "]}":
+            depth -= 1
+        elif quote is None and depth == 0 and character == ",":
+            items.append(value[start:index].strip())
+            start = index + 1
+    items.append(value[start:].strip())
+    return items
+
+
+def yaml_value(value):
+    value = without_yaml_comment(value)
+    if value == "":
+        return None
+    if len(value) >= 2 and value[0] == value[-1] == '"':
+        try:
+            return json.loads(value)
+        except ValueError:
+            return object()
+    if len(value) >= 2 and value[0] == value[-1] == "'":
+        return value[1:-1].replace("''", "'")
+    if value == "true":
+        return True
+    if value == "false":
+        return False
+    if value in {"null", "~"}:
+        return None
+    if re.fullmatch(r"-?(0|[1-9][0-9]*)", value):
+        return int(value)
+    if value.startswith("[") and value.endswith("]"):
+        inner = value[1:-1].strip()
+        return [] if not inner else [yaml_value(item) for item in split_yaml_items(inner)]
     return value
 
 
+def inline_yaml_map(value):
+    value = without_yaml_comment(value)
+    if not (value.startswith("{") and value.endswith("}")):
+        return None
+    fields = {}
+    for item in split_yaml_items(value[1:-1]):
+        if ":" not in item:
+            return None
+        key, raw_value = item.split(":", 1)
+        key = key.strip()
+        if not re.fullmatch(r"[a-z_]+", key) or key in fields:
+            return None
+        fields[key] = yaml_value(raw_value)
+    return fields
+
+
 def parse_candidate_config(text):
-    """Parse only the canonical fields this deterministic fixture must validate."""
+    """Parse and validate the canonical config-v2 subset used by migration."""
     top = {}
     nested = {}
     query_rows = []
     section = None
+    malformed = False
+    current_query = None
     for raw_line in text.splitlines():
         if not raw_line.strip() or raw_line.lstrip().startswith("#"):
             continue
         if raw_line == raw_line.lstrip() and ":" in raw_line:
             key, value = raw_line.split(":", 1)
             section = key.strip()
-            top[section] = yaml_scalar(value)
+            if section in top:
+                malformed = True
+            top[section] = yaml_value(value)
+            current_query = None
+            continue
+        if section not in {"workspace", "queries", "search", "schedule", "notify"}:
             continue
         if section == "queries" and raw_line.startswith("  - "):
-            query_rows.append(raw_line.strip())
+            item = raw_line[4:].strip()
+            current_query = inline_yaml_map(item)
+            if current_query is None and ":" in item:
+                key, raw_value = item.split(":", 1)
+                key = key.strip()
+                if re.fullmatch(r"[a-z_]+", key):
+                    current_query = {key: yaml_value(raw_value)}
+            if current_query is None:
+                malformed = True
+            else:
+                query_rows.append(current_query)
+            continue
+        if section == "queries" and raw_line.startswith("    ") and current_query is not None:
+            match = re.match(r"^    ([a-z_]+):\s*(.*)$", raw_line)
+            if not match or match.group(1) in current_query:
+                malformed = True
+            else:
+                current_query[match.group(1)] = yaml_value(match.group(2))
+            continue
+        if section != "queries" and raw_line.startswith("    "):
             continue
         match = re.match(r"^  ([a-z_]+):\s*(.*)$", raw_line)
         if match:
-            nested[(section, match.group(1))] = yaml_scalar(match.group(2))
+            field = (section, match.group(1))
+            if top.get(section) is not None or field in nested:
+                malformed = True
+            nested[field] = yaml_value(match.group(2))
+            continue
+        malformed = True
 
-    required_nested = {
+    required_query_fields = {"id", "keywords"}
+    if malformed or top.get("version") != 2:
+        return None
+    if not {"queries", "search"}.issubset(top):
+        return None
+    if any(
+        top[section] is not None
+        for section in ("workspace", "queries", "search", "schedule", "notify")
+        if section in top
+    ):
+        return None
+    if ("search", "detail_model") not in nested:
+        return None
+    string_fields = {
         ("workspace", "preferences_path"),
         ("workspace", "master_resume_path"),
-        ("search", "sources"),
-        ("search", "freshness"),
         ("search", "detail_model"),
         ("schedule", "frequency"),
         ("schedule", "time"),
         ("schedule", "timezone"),
         ("notify", "digest_path_template"),
-        ("notify", "desktop_notify_on_block"),
     }
-    required_query_tokens = {"id:", "keywords:", "location:", "limit:", "enabled:"}
-    if top.get("version") != "2":
-        return None
-    if not {"workspace", "queries", "search", "schedule", "notify"}.issubset(top):
-        return None
-    if not required_nested.issubset(nested):
-        return None
-    if any(not nested[field] for field in required_nested):
-        return None
-    if not query_rows or any(
-        not required_query_tokens.issubset(set(re.findall(r"[a-z_]+:", row)))
-        for row in query_rows
+    if any(
+        not isinstance(nested[field], str) or not nested[field].strip()
+        for field in string_fields.intersection(nested)
     ):
         return None
+    frequency = nested.get(("schedule", "frequency"), "daily")
+    if frequency not in {
+        "hourly",
+        "every-2-hours",
+        "every-6-hours",
+        "daily",
+        "weekly",
+    }:
+        return None
+    schedule_time = nested.get(("schedule", "time"), "08:00")
+    if not re.fullmatch(r"(?:[01][0-9]|2[0-3]):[0-5][0-9]", schedule_time):
+        return None
+    notify_block = nested.get(("notify", "desktop_notify_on_block"), True)
+    if ("notify", "desktop_notify_on_block") in nested and not isinstance(
+        notify_block, bool
+    ):
+        return None
+    freshness = nested.get(("search", "freshness"), "past-2-weeks")
+    if freshness not in {"any", "past-week", "past-2-weeks", "past-month"}:
+        return None
+    sources = nested.get(("search", "sources"), ["linkedin", "ashby"])
+    if (
+        not isinstance(sources, list)
+        or not sources
+        or any(source not in {"linkedin", "ashby", "greenhouse", "lever"} for source in sources)
+        or len(sources) != len(set(sources))
+    ):
+        return None
+    parallel = nested.get(("search", "parallel_detail_reads"), False)
+    if ("search", "parallel_detail_reads") in nested and not isinstance(parallel, bool):
+        return None
+    if ("search", "max_new_postings_per_run") in nested:
+        depth = nested[("search", "max_new_postings_per_run")]
+        if not (
+            (isinstance(depth, int) and not isinstance(depth, bool) and depth > 0)
+            or depth == "all"
+        ):
+            return None
+    if not query_rows:
+        return None
+    for query in query_rows:
+        if not required_query_fields.issubset(query):
+            return None
+        if any(
+            not isinstance(query[field], str) or not query[field].strip()
+            for field in ("id", "keywords")
+        ):
+            return None
+        if "location" in query and not isinstance(query["location"], str):
+            return None
+        if "limit" in query and (
+            isinstance(query["limit"], bool)
+            or not isinstance(query["limit"], int)
+            or not 1 <= query["limit"] <= 100
+        ):
+            return None
+        if "enabled" in query and not isinstance(query["enabled"], bool):
+            return None
     return {"detail_model": nested[("search", "detail_model")]}
 
 
@@ -128,6 +307,111 @@ def regular_nonsymlink_file(path):
         return False
 
 
+def atomic_write_bytes(path, payload):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd, temp_name = tempfile.mkstemp(prefix=path.name + ".", dir=str(path.parent))
+    try:
+        with os.fdopen(fd, "wb") as handle:
+            handle.write(payload)
+        os.replace(temp_name, path)
+    except BaseException:
+        try:
+            os.unlink(temp_name)
+        except FileNotFoundError:
+            pass
+        raise
+
+
+def valid_run_id(run_id):
+    if not isinstance(run_id, str) or not RUN_ID_PATTERN.fullmatch(run_id):
+        return False
+    try:
+        datetime.strptime(run_id, "%Y-%m-%dT%H-%M-%SZ")
+    except ValueError:
+        return False
+    return True
+
+
+def fold_lifecycle(workspace, run_id):
+    ledger = workspace / "runs" / f".lifecycle-{run_id}.jsonl"
+    result = subprocess.run(
+        ["sh", str(LIFECYCLE_FOLD), str(ledger), str(workspace)],
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode != 0:
+        return None
+    folded = {}
+    for line in result.stdout.splitlines():
+        if "=" not in line:
+            return None
+        key, value = line.split("=", 1)
+        folded[key] = value
+    return folded
+
+
+def canonical_cutoff_evidence(workspace, run_id, migration_snapshot):
+    if not valid_run_id(run_id) or not workspace.is_dir():
+        return None
+    config_path = workspace / "config.yaml"
+    binding_path = workspace / "runs" / "detail-model-binding.json"
+    run_record_path = workspace / "runs" / f"{run_id}.json"
+    try:
+        config = parse_candidate_config(config_path.read_text(encoding="utf-8"))
+        with run_record_path.open(encoding="utf-8") as handle:
+            run_record = json.load(handle)
+        with binding_path.open(encoding="utf-8") as handle:
+            binding = json.load(handle)
+    except (OSError, ValueError):
+        return None
+    if not isinstance(config, dict) or not isinstance(run_record, dict):
+        return None
+    detail_model = config.get("detail_model")
+    binding_id = binding.get("binding_id") if isinstance(binding, dict) else None
+    folded = fold_lifecycle(workspace, run_id)
+    qualified = all(
+        (
+            regular_nonsymlink_file(run_record_path),
+            regular_nonsymlink_file(binding_path),
+            regular_nonsymlink_file(config_path),
+            run_record.get("run_id") == run_id,
+            run_record.get("completed_at") is not None,
+            run_record.get("run_health") in {"healthy", "partial", "degraded"},
+            valid_binding(binding, detail_model),
+            run_record.get("detail_model_binding_id") == binding_id,
+            run_record.get("detail_model") == detail_model,
+            isinstance(folded, dict),
+            folded.get("run_id") == run_id if isinstance(folded, dict) else False,
+            folded.get("can_complete") == "true"
+            if isinstance(folded, dict)
+            else False,
+            folded.get("final_run_record_written") == "true"
+            if isinstance(folded, dict)
+            else False,
+            folded.get("final_digest_written") == "true"
+            if isinstance(folded, dict)
+            else False,
+            isinstance(migration_snapshot, dict),
+            migration_snapshot.get("activation_stage") == "pair_active"
+            if isinstance(migration_snapshot, dict)
+            else False,
+            migration_snapshot.get("activated_binding_id") == binding_id
+            if isinstance(migration_snapshot, dict)
+            else False,
+            migration_snapshot.get("activated_detail_model") == detail_model
+            if isinstance(migration_snapshot, dict)
+            else False,
+        )
+    )
+    if not qualified:
+        return None
+    return {
+        "binding_id": binding_id,
+        "detail_model": detail_model,
+        "run_id": run_id,
+    }
+
+
 def emit(value, *, stream=sys.stdout, status=0):
     print(json.dumps(value, sort_keys=True), file=stream)
     raise SystemExit(status)
@@ -164,6 +448,9 @@ def read_state():
         state = json.load(handle)
     if not isinstance(state, dict) or not isinstance(state.get("jobs"), dict):
         fail("invalid_test_state")
+    for key in ("migration_snapshots", "migration_cutoffs"):
+        if key in state and not isinstance(state[key], dict):
+            fail("invalid_test_state")
     return state
 
 
@@ -279,8 +566,94 @@ def main(args):
         log(operation, arguments, "success")
         emit({"status": "ok", "metered_calls": 0})
 
+    if operation == "begin-migration":
+        if len(args) != 2:
+            fail("invalid_migration_request")
+        workspace = pathlib.Path(need_arg(args, 1, "workspace")).resolve()
+        config_path = workspace / "config.yaml"
+        binding_path = workspace / "runs" / "detail-model-binding.json"
+        if not regular_nonsymlink_file(config_path):
+            fail("invalid_migration_baseline")
+        if binding_path.exists() and not regular_nonsymlink_file(binding_path):
+            fail("invalid_migration_baseline")
+        config_bytes = config_path.read_bytes()
+        prior_binding = binding_path.read_bytes() if binding_path.exists() else None
+        state = read_state()
+        state.setdefault("migration_snapshots", {})[str(workspace)] = {
+            "config_b64": base64.b64encode(config_bytes).decode("ascii"),
+            "prior_sidecar_present": prior_binding is not None,
+            "prior_sidecar_b64": (
+                base64.b64encode(prior_binding).decode("ascii")
+                if prior_binding is not None
+                else None
+            ),
+            "activation_stage": "baseline",
+        }
+        write_state(state)
+        log(operation, arguments, "snapshotted")
+        emit(
+            {
+                "config_snapshotted": True,
+                "prior_sidecar": "present" if prior_binding is not None else "absent",
+            }
+        )
+
+    if operation == "activate-pair":
+        if len(args) != 4:
+            fail("invalid_activation_request")
+        workspace = pathlib.Path(need_arg(args, 1, "workspace")).resolve()
+        candidate_config_path = pathlib.Path(need_arg(args, 2, "candidate_config"))
+        candidate_binding_path = pathlib.Path(need_arg(args, 3, "candidate_binding"))
+        state = read_state()
+        snapshot = state.get("migration_snapshots", {}).get(str(workspace))
+        if not isinstance(snapshot, dict):
+            fail("missing_migration_snapshot")
+        try:
+            config_bytes = candidate_config_path.read_bytes()
+            binding_bytes = candidate_binding_path.read_bytes()
+            config = parse_candidate_config(config_bytes.decode("utf-8"))
+            binding = json.loads(binding_bytes.decode("utf-8"))
+        except (OSError, UnicodeError, ValueError):
+            fail("candidate_validation_failed")
+        if config is None or not valid_binding(binding, config["detail_model"]):
+            fail("candidate_validation_failed")
+        active_config = workspace / "config.yaml"
+        active_binding = workspace / "runs" / "detail-model-binding.json"
+        atomic_write_bytes(active_config, config_bytes)
+        snapshot["activation_stage"] = "config_only"
+        write_state(state)
+        if SCENARIO == "partial-activation-failure":
+            log(operation, arguments, "partial_activation_failed")
+            fail("partial_activation_failed", active_effect="config_only")
+        atomic_write_bytes(active_binding, binding_bytes)
+        snapshot["activation_stage"] = "pair_active"
+        snapshot["activated_binding_id"] = binding["binding_id"]
+        snapshot["activated_detail_model"] = binding["detail_model"]
+        write_state(state)
+        try:
+            active_config_data = parse_candidate_config(
+                active_config.read_text(encoding="utf-8")
+            )
+            active_binding_data = json.loads(active_binding.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            fail("activation_reread_failed")
+        if active_config_data is None or not valid_binding(
+            active_binding_data, active_config_data["detail_model"]
+        ):
+            fail("activation_reread_failed")
+        log(operation, arguments, "complete")
+        emit(
+            {
+                "activation": "complete",
+                "detail_model": active_config_data["detail_model"],
+            }
+        )
+
     if operation == "register-disabled":
         job_id = need_arg(args, 1, "job_id")
+        if SCENARIO == "register-failure":
+            log(operation, arguments, "register_failed")
+            fail("register_failed")
         state = read_state()
         state["jobs"][job_id] = {"state": "disabled", "fixture_scope": "t3_2_migration"}
         write_state(state)
@@ -309,49 +682,91 @@ def main(args):
         )
 
     if operation == "qualify-cutoff":
-        run_record_path = pathlib.Path(need_arg(args, 1, "run_record"))
-        digest_path = pathlib.Path(need_arg(args, 2, "final_digest"))
-        binding_path = pathlib.Path(need_arg(args, 3, "binding"))
-        can_complete = need_arg(args, 4, "can_complete")
-        try:
-            with run_record_path.open(encoding="utf-8") as handle:
-                run_record = json.load(handle)
-            with binding_path.open(encoding="utf-8") as handle:
-                binding = json.load(handle)
-        except (OSError, ValueError):
+        if len(args) != 3:
+            log(operation, arguments, "invalid_cutoff_request")
+            fail("invalid_cutoff_request")
+        workspace = pathlib.Path(need_arg(args, 1, "workspace")).resolve()
+        run_id = need_arg(args, 2, "run_id")
+        state = read_state()
+        migration_snapshot = state.get("migration_snapshots", {}).get(str(workspace))
+        evidence = canonical_cutoff_evidence(workspace, run_id, migration_snapshot)
+        if evidence is None:
             log(operation, arguments, "cutoff_not_qualified")
             fail("cutoff_not_qualified")
-        detail_model = binding.get("detail_model") if isinstance(binding, dict) else None
-        binding_id = binding.get("binding_id") if isinstance(binding, dict) else None
-        completed_at = run_record.get("completed_at") if isinstance(run_record, dict) else None
-        run_health = run_record.get("run_health") if isinstance(run_record, dict) else None
-        run_binding_id = (
-            run_record.get("detail_model_binding_id")
-            if isinstance(run_record, dict)
-            else None
-        )
-        run_detail_model = (
-            run_record.get("detail_model") if isinstance(run_record, dict) else None
-        )
-        qualified = all(
-            (
-                regular_nonsymlink_file(run_record_path),
-                regular_nonsymlink_file(digest_path),
-                regular_nonsymlink_file(binding_path),
-                can_complete == "true",
-                isinstance(run_record, dict),
-                completed_at is not None,
-                run_health in {"healthy", "partial", "degraded"},
-                valid_binding(binding, detail_model),
-                run_binding_id == binding_id,
-                run_detail_model == detail_model,
-            )
-        )
-        if not qualified:
-            log(operation, arguments, "cutoff_not_qualified")
-            fail("cutoff_not_qualified")
+        state.setdefault("migration_cutoffs", {})[str(workspace)] = evidence
+        write_state(state)
         log(operation, arguments, "qualified")
-        emit({"cutoff_qualifies": True})
+        emit({**evidence, "cutoff_qualifies": True})
+
+    if operation == "rollback-migration":
+        workspace = pathlib.Path(need_arg(args, 1, "workspace")).resolve()
+        job_id = need_arg(args, 2, "job_id")
+        state = read_state()
+        snapshots = state.get("migration_snapshots", {})
+        snapshot = snapshots.get(str(workspace))
+        if not isinstance(snapshot, dict):
+            log(operation, arguments, "missing_migration_snapshot")
+            fail("missing_migration_snapshot")
+        cutoffs = state.get("migration_cutoffs", {})
+        cutoff = cutoffs.get(str(workspace))
+        if isinstance(cutoff, dict):
+            marker_matches_migration = (
+                cutoff.get("binding_id") == snapshot.get("activated_binding_id")
+                and cutoff.get("detail_model")
+                == snapshot.get("activated_detail_model")
+            )
+            if not marker_matches_migration:
+                cutoffs.pop(str(workspace), None)
+            else:
+                evidence = canonical_cutoff_evidence(
+                    workspace, cutoff.get("run_id"), snapshot
+                )
+                if evidence == cutoff:
+                    log(operation, arguments, "rollback_forbidden_after_cutoff")
+                    fail("rollback_forbidden_after_cutoff")
+                log(operation, arguments, "cutoff_evidence_unverifiable")
+                fail("cutoff_evidence_unverifiable")
+        try:
+            original_config = base64.b64decode(snapshot["config_b64"], validate=True)
+            prior_present = snapshot["prior_sidecar_present"] is True
+            prior_sidecar = (
+                base64.b64decode(snapshot["prior_sidecar_b64"], validate=True)
+                if prior_present
+                else None
+            )
+        except (KeyError, TypeError, ValueError):
+            fail("invalid_test_state")
+        config_path = workspace / "config.yaml"
+        binding_path = workspace / "runs" / "detail-model-binding.json"
+        atomic_write_bytes(config_path, original_config)
+        if prior_present:
+            atomic_write_bytes(binding_path, prior_sidecar)
+            sidecar_effect = "restored_exact"
+        else:
+            try:
+                binding_path.unlink()
+            except FileNotFoundError:
+                pass
+            sidecar_effect = "removed"
+        if job_id not in state["jobs"]:
+            job_state = "not_created"
+        elif SCENARIO == "remove-unavailable":
+            state["jobs"][job_id]["state"] = "disabled"
+            job_state = "disabled"
+        else:
+            state["jobs"].pop(job_id, None)
+            job_state = "absent"
+        snapshots.pop(str(workspace), None)
+        write_state(state)
+        log(operation, arguments, f"restored_{job_state}")
+        emit(
+            {
+                "config": "restored_exact",
+                "job_id": job_id,
+                "job_state": job_state,
+                "sidecar": sidecar_effect,
+            }
+        )
 
     if operation in {"remove-job", "disable-job"}:
         job_id = need_arg(args, 1, "job_id")

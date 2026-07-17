@@ -348,7 +348,11 @@ After confirmation, execute this transaction in order:
    legacy selector with the resolved exact `search.detail_model`. Build a complete fresh matching binding
    sidecar per `conventions.md`, with a fresh id, current UTC timestamp, and the observed origin. Validate the
    complete parsed config, exact model value, complete sidecar shape, and exact equality before any active
-   file changes.
+   file changes. Honor the canonical config defaults: an omitted optional key such as `search.sources`
+   remains omitted and resolves through its documented default; migration never materializes optional
+   defaults merely to validate or upgrade the required schema/model fields. Validate every known optional
+   value that is present against `conventions.md`, including query controls and
+   `search.max_new_postings_per_run`; an example config is not a required-field schema.
 3. Create `runs/config-backups/` if needed and save the exact original config bytes at
    `runs/config-backups/<UTC-safe-timestamp>-config-v1.yaml`. The timestamp uses UTC with filename-safe
    punctuation (hyphens rather than colons in its time component). Use an exclusive create. On collision,
@@ -356,12 +360,14 @@ After confirmation, execute this transaction in order:
    existing backup. If a distinct name cannot be allocated, stop before activation.
 4. Activate config plus binding as one transaction: write each complete candidate to a same-directory temp
    file, atomically replace the two whole files, then immediately re-read and validate the active pair. A
-   partial replacement is transaction failure, not a runnable intermediate state.
+   partial replacement is transaction failure, not a runnable intermediate state, and takes the same
+   pre-cutoff rollback path as any other activation failure.
 5. Perform the free preflight with the active candidate pair: local config/sidecar validation, CLI presence,
    authentication, preferences, and service status only. Make no metered search or detail call during this
    preflight. For schedule setup, register the new job disabled only after this preflight passes, then run the
    one approved canary through the requested setup path; do not enable or record the schedule as verified
-   until its written run evidence qualifies below.
+   until its written run evidence qualifies below. A failed disabled-job registration is setup failure and
+   takes the rollback path; registration alone is never success evidence.
 6. If candidate validation, backup, activation, re-read, free preflight, setup, or canary fails before the
    cutoff, roll back the whole migration transaction. Atomically restore the exact original version-1 config
    bytes; restore an exact prior sidecar if one existed, otherwise remove the newly created binding sidecar;
@@ -375,11 +381,16 @@ After confirmation, execute this transaction in order:
 | `confirmation` | `single_action_confirmation_includes_migration_no_separate_prompt` |
 | `candidate` | `preserve_comments_and_unrelated_fields_replace_only_required_schema_and_model` |
 | `candidate_validation` | `complete_v2_config_and_fresh_matching_binding_before_activation` |
+| `candidate_defaults` | `preserve_optional_omission_do_not_materialize` |
+| `activated_pair_identity` | `fresh_binding_id_and_exact_model_bound_to_migration_snapshot` |
 | `backup_path` | `runs/config-backups/<utc-safe-timestamp>-config-v1.yaml` |
 | `backup_write` | `exclusive_create_retry_fresh_timestamp_never_overwrite` |
 | `activation` | `atomic_whole_file_replacements_one_config_binding_transaction` |
 | `preflight` | `free_after_activation_before_canary_or_enable` |
 | `setup_or_canary_failure` | `restore_exact_v1_bytes_and_prior_sidecar_state` |
+| `register_failure` | `rollback_before_cutoff` |
+| `partial_activation` | `rollback_before_cutoff` |
+| `prior_sidecar_on_rollback` | `restore_exact_prior_bytes` |
 | `new_binding_on_rollback` | `remove` |
 | `new_scheduler_job_on_rollback` | `remove_or_disable` |
 | `post_cutoff_failure` | `never_restore_stale_v1` |
@@ -387,12 +398,20 @@ After confirmation, execute this transaction in order:
 
 The mechanically checkable rollback cutoff is the first complete, nonblocked run record whose
 `detail_model_binding_id` equals the fresh migration sidecar's binding id and whose `detail_model` equals the
-active version-2 config and sidecar. Fold the canonical lifecycle ledger from `run-lifecycle.md` and require
+active version-2 config and sidecar. That binding id and model must be the activated pair recorded by this
+migration transaction's pre-activation snapshot; an unrelated valid version-2 run cannot commit this
+migration. Fold the canonical lifecycle ledger from `run-lifecycle.md` and require
 `can_complete=true`; do not infer completion from a process exit or run-record field alone. The eligible,
 non-symlink complete run record and its exact required final digest must exist. A started run, blocked record,
 missing completion timestamp, mismatched binding, `can_complete=false`, or incomplete/missing final artifact
 does not qualify. Once qualifying evidence exists, the migration is committed: later failures may repair the
-active version-2 pair, but must never resurrect the stale version-1 backup automatically.
+active version-2 pair, but must never resurrect the stale version-1 backup automatically. The canonical
+ledger, matching run record, active config/sidecar, and exact digest are durable cutoff evidence. A persisted
+cutoff marker is only an index into that evidence. Before every rollback decision, compare it with this
+migration's activated-pair identity and re-fold and re-check all canonical evidence rather than trusting
+process memory, persisted state, or a caller-supplied flag. Ignore a marker for a foreign migration and take
+the ordinary pre-cutoff rollback path. If a marker matches this migration but its canonical evidence cannot
+be verified, fail closed and do not restore version 1.
 
 <!-- exact-model-contract:legacy-v1-rollback-cutoff -->
 | Evidence | Decision |
@@ -402,6 +421,10 @@ active version-2 pair, but must never resurrect the stale version-1 backup autom
 | `blocked_run` | `not_qualifying` |
 | `incomplete_or_missing_artifacts` | `not_qualifying` |
 | `lifecycle_gate` | `folded_run_ledger_can_complete_true` |
+| `persistence` | `recheck_canonical_cutoff_artifacts_before_any_rollback` |
+| `persisted_marker` | `index_only_revalidate_canonical_evidence` |
+| `foreign_marker` | `ignore_for_this_migration_and_rollback` |
+| `unverifiable_marker` | `fail_closed_never_restore_v1` |
 | `effect` | `migration_committed_rollback_to_v1_forbidden` |
 <!-- /exact-model-contract:legacy-v1-rollback-cutoff -->
 

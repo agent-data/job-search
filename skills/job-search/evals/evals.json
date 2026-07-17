@@ -229,14 +229,14 @@
       "id": 16,
       "scenario": "version-1 schedule request migrates transactionally in its single schedule confirmation",
       "coverage_kind": "executable_fixture",
-      "prompt": "PRE-SEED a returning version-1 workspace as in case 15, with daily cadence, two enabled queries, two enabled sources, exact original-byte snapshot, no binding sidecar, and a registry sentinel. Symlink fake-host-capabilities into <tmp>/_bin, prepend it to PATH, set JOBSEARCH_TEST_HOST_SCENARIO=happy plus isolated host state/log, and ask to create the daily schedule. Use fake-host-capabilities utc-now; pre-create runs/config-backups/2026-07-16T12-00-00Z-config-v1.yaml with COLLISION-SENTINEL so exclusive-create collision handling is observable. Withhold yes until the complete single schedule confirmation, then approve. All host model, candidate-validation, free-preflight, disabled-job, canary, and remove/disable effects must use the fixture; all job data calls use fake-agent-data; never touch a real scheduler or network.",
+      "prompt": "PRE-SEED a returning version-1 workspace as in case 15, with daily cadence, two enabled queries, two enabled sources, exact original-byte snapshot, no binding sidecar, and a registry sentinel. Symlink fake-host-capabilities into <tmp>/_bin, prepend it to PATH, set JOBSEARCH_TEST_HOST_SCENARIO=happy plus isolated host state/log, and ask to create the daily schedule. Use fake-host-capabilities utc-now; pre-create runs/config-backups/2026-07-16T12-00-00Z-config-v1.yaml with COLLISION-SENTINEL so exclusive-create collision handling is observable. Withhold yes until the complete single schedule confirmation, then approve. After yes drive the transaction snapshot through begin-migration, candidate validation through validate-candidate, and pair activation through activate-pair. All host model, free-preflight, disabled-job, canary, rollback, and cutoff effects must use the fixture; canonical run lifecycle evidence uses the bundled lifecycle mechanics, all job data calls use fake-agent-data, and no real scheduler or network is touched.",
       "expectations": [
         "Before yes, one single schedule confirmation names cadence and machine change, removal path, exact primary model and exact detail model returned by fake-host-capabilities, the version-1 to version-2 migration, backup, calls-first recurring/canary context, one canary, and rollback; there is no separate migration prompt or model-choice ceremony",
         "Before yes config, binding, registry, scheduler fixture state, call log, and collision backup are unchanged",
         "After yes the complete candidate preserves the sentinel comment and unrelated field, replaces only version and required model material, and validate-candidate passes before activation",
         "The original bytes are exclusively saved under runs/config-backups with a fresh UTC-safe timestamp; the pre-existing COLLISION-SENTINEL backup is never overwritten, truncated, or reused",
-        "Config and a fresh matching runs/detail-model-binding.json activate as one validated transaction; free-preflight reports zero metered calls before register-disabled and canary",
-        "Only after fake-host-capabilities qualify-cutoff receives the eligible run record, exact final digest, active binding, and the canonical lifecycle fold's can_complete=true does the matching binding id/model establish the first successful version-2 run cutoff; the fixture job then becomes eligible for the later scheduling flow, while this T3.2 fixture claims no general scheduler fidelity",
+        "begin-migration snapshots exact prior config/sidecar state; activate-pair makes config and a fresh matching runs/detail-model-binding.json one validated transaction, and free-preflight reports zero metered calls before register-disabled and canary",
+        "Only after fake-host-capabilities qualify-cutoff <workspace> <run_id> locates and folds the canonical ledger, exact run record/digest, active config, and canonical sidecar does the matching binding id/model establish and persist the first successful version-2 run cutoff; the fixture job then becomes eligible for the later scheduling flow, while this T3.2 fixture claims no general scheduler fidelity",
         "No raw migration class or invented E-* migration code appears in normal chat, home, or digest"
       ]
     },
@@ -255,11 +255,11 @@
       "id": 18,
       "scenario": "version-1 migration canary failure rolls back the pair and removes the new test job",
       "coverage_kind": "executable_fixture",
-      "prompt": "PRE-SEED and approve as in case 16, but set JOBSEARCH_TEST_HOST_SCENARIO=canary-failure. Let candidate validation, non-clobbering backup, pair activation, free-preflight, and register-disabled succeed; then drive the canary failure and cleanup through fake-host-capabilities. Require the flow to call remove-job (or disable-job only when removal reports unavailable). Inspect exact original-byte snapshot, active config/sidecar, backup, host state/log, registry, and call log.",
+      "prompt": "PRE-SEED and approve as in case 16, but set JOBSEARCH_TEST_HOST_SCENARIO=canary-failure. Let begin-migration, candidate validation, non-clobbering backup, activate-pair, free-preflight, and register-disabled succeed; then drive the canary failure and exact restoration/job cleanup through fake-host-capabilities rollback-migration <workspace> <job_id>. Inspect exact original-byte snapshot, active config/sidecar, backup, host state/log, registry, and call log.",
       "expectations": [
         "The canary failure is a blocked run and does not qualify as the first successful version-2 run cutoff",
         "The migration transaction atomically restores exact original version-1 config bytes and prior sidecar absence, so the newly created runs/detail-model-binding.json is removed; the recovery backup remains and is byte-identical to v1",
-        "The host log proves remove-job removed the newly registered disabled test job (or disable-job left it disabled only if removal was unavailable); registry never claims an installed or verified schedule",
+        "The host log proves rollback-migration restored the pair and removed the newly registered disabled test job (or left it disabled only when removal is unavailable); registry never claims an installed or verified schedule",
         "No later operation guesses success from registration, process status, or a started/blocked run; user output states cause, restored work, next step, and fix without a raw migration code"
       ]
     },
@@ -267,12 +267,73 @@
       "id": 19,
       "scenario": "first successful version-2 run fixes the rollback cutoff against later failure",
       "coverage_kind": "executable_fixture",
-      "prompt": "Complete the happy migration from case 16 and retain its exact v1 backup, active v2 config, matching binding id/model, complete nonblocked run record, exact final digest, host log, and registry. First show that a started-only fixture canary and a blocked fixture canary do not qualify. Fold the canonical lifecycle ledger and drive fake-host-capabilities qualify-cutoff with the eligible run record, exact digest, active binding, and can_complete value; exercise false before true. Then show the first successful version-2 run with non-null completed_at, nonblocked run_health, matching binding/model, and final artifacts. After that cutoff, inject a later preflight or canary failure and inspect every file.",
+      "prompt": "Complete the happy migration from case 16 and retain its exact v1 backup, migration snapshot, active v2 config, matching binding id/model, complete nonblocked run record, canonical lifecycle ledger, exact final digest, host log, and registry. First show that a started-only or blocked ledger does not qualify. Show that the old caller-supplied run/digest/binding/true qualify-cutoff shape is rejected, then call fake-host-capabilities qualify-cutoff <workspace> <run_id>; it must locate and fold canonical evidence itself. Exercise an unrelated version-2 run without the matching migration snapshot plus missing/mismatched ledger, run_id, run-record model/binding, digest, and active config arms before the complete matching arm. After the cutoff is persisted, prove that the persisted cutoff marker is an index by re-folding canonical evidence during rollback: a foreign forged marker cannot block legitimate pre-cutoff rollback, while a matching marker with unavailable canonical evidence must fail closed without restoring v1. Then invoke rollback-migration with intact cutoff evidence and inject a later preflight or canary failure; inspect every file.",
       "expectations": [
-        "A merely started run, blocked run, missing completed_at, mismatched binding/model, missing exact final artifact, or lifecycle can_complete=false makes qualify-cutoff fail and never establishes the rollback cutoff",
-        "The first successful version-2 run qualifies only when qualify-cutoff observes lifecycle can_complete=true plus complete nonblocked written evidence whose detail_model_binding_id and exact detail model match the active migration pair",
-        "After that cutoff, the later failure preserves the active version-2 config and matching binding evidence and never restores the stale version-1 backup; repair remains a version-2 action",
+        "Caller-supplied completion, a merely started or blocked ledger, missing/mismatched ledger or run_id, missing completed_at, mismatched config/sidecar/run binding or model, or missing exact final artifact makes qualify-cutoff fail and never establishes the rollback cutoff",
+        "The first successful version-2 run qualifies only when qualify-cutoff derives lifecycle can_complete=true from the canonical workspace ledger, observes the exact canonical record/digest plus active config/sidecar equality, and binds them to the exact fresh pair stored by this migration snapshot; it persists that binding/model/run cutoff",
+        "rollback-migration revalidates a matching marker against the canonical lifecycle/config/binding artifacts; it ignores a foreign marker for another migration, and a matching but unverifiable marker must fail closed without restoring version 1",
+        "After that cutoff, rollback-migration refuses restoration: later failures preserve the active version-2 config and matching binding evidence and never restore the stale version-1 backup; repair remains a version-2 action",
         "The backup stays immutable recovery history, the failed new test job is removed or disabled, and no normal user surface leaks a raw migration class or invented E-* code"
+      ]
+    },
+    {
+      "id": 20,
+      "scenario": "rollback restores an exact prior sidecar and removes the registered job",
+      "coverage_kind": "executable_fixture",
+      "prompt": "PRE-SEED a version-1 workspace with exact original config bytes and an unexpected prior sidecar containing a prior sidecar byte sentinel. Set an isolated happy fixture state/log. Drive begin-migration, validate-candidate, activate-pair, and register-disabled; then set JOBSEARCH_TEST_HOST_SCENARIO=canary-failure, invoke canary, and call rollback-migration <workspace> <job_id>. Compare exact bytes and host state/log.",
+      "expectations": [
+        "begin-migration records prior sidecar present and retains its exact bytes as rollback state",
+        "rollback-migration restores the exact original version-1 config and exact prior sidecar bytes rather than deleting, validating, or rewriting that prior file",
+        "The registered disabled fixture job is removed, with job_state absent in the rollback result and cleanup evidence in the host log",
+        "No registry state claims a verified schedule and the non-clobbering config backup remains recovery evidence"
+      ]
+    },
+    {
+      "id": 21,
+      "scenario": "register failure rolls back the activated pair before canary",
+      "coverage_kind": "executable_fixture",
+      "prompt": "PRE-SEED a version-1 workspace with no prior sidecar and exact byte snapshots. Drive begin-migration, validate-candidate, activate-pair, and free-preflight successfully, then set JOBSEARCH_TEST_HOST_SCENARIO=register-failure and call register-disabled followed by rollback-migration <workspace> <job_id>. Inspect files, state, and ordered host log.",
+      "expectations": [
+        "The register failure occurs after the free preflight and before any canary, verified-schedule registry write, or metered call",
+        "rollback-migration restores exact version-1 config bytes and removes the newly activated binding because the prior sidecar was absent",
+        "Cleanup reports job_state not_created and fixture state contains no scheduler job; no remove success is invented for a job that was never created",
+        "User rendering reports the setup cause, restored work, next step, and fix without a raw migration code"
+      ]
+    },
+    {
+      "id": 22,
+      "scenario": "partial activation failure restores the exact pre-migration pair",
+      "coverage_kind": "executable_fixture",
+      "prompt": "PRE-SEED a version-1 workspace and exact snapshots, drive begin-migration plus validate-candidate, then set JOBSEARCH_TEST_HOST_SCENARIO=partial-activation-failure and invoke activate-pair followed by rollback-migration <workspace> <job_id>. Inspect the intermediate and restored files plus state/log.",
+      "expectations": [
+        "activate-pair deterministically fails after replacing config only and reports active_effect config_only, so partial activation is executable rather than narrative",
+        "Before rollback the v2 candidate config is active while the new binding is absent; this partial pair is never treated as runnable or successful",
+        "rollback-migration restores exact version-1 config bytes and prior sidecar state, with job_state not_created because registration never ran",
+        "No free preflight, registration, canary, registry schedule write, or metered call occurs after partial activation failure"
+      ]
+    },
+    {
+      "id": 23,
+      "scenario": "rollback leaves the disabled job when removal is unavailable",
+      "coverage_kind": "executable_fixture",
+      "prompt": "PRE-SEED and activate as in case 18, register the fixture job disabled, then set JOBSEARCH_TEST_HOST_SCENARIO=remove-unavailable and invoke rollback-migration <workspace> <job_id>. Inspect exact pair bytes, fixture state, host log, and registry.",
+      "expectations": [
+        "rollback-migration restores the exact pre-migration config/sidecar state before reporting cleanup",
+        "Removal unavailable is explicit fixture evidence: rollback reports job_state disabled and the fixture state retains the same job disabled",
+        "The registry never claims an installed or verified schedule, and normal output states that the disabled job remains plus the exact removal follow-up",
+        "No generic scheduler fidelity is claimed from this narrow removal unavailable control"
+      ]
+    },
+    {
+      "id": 24,
+      "scenario": "version-2 candidate validation honors defaults and rejects malformed present values",
+      "coverage_kind": "executable_fixture",
+      "prompt": "Build a minimal version-2 migration candidate with version, one query containing only id and keywords, search.detail_model, and its fresh exact matching binding. Deliberately leave omitted optional workspace, schedule, notify, search.sources, query location, query limit, and query enabled fields omitted. Validate it through fake-host-capabilities validate-candidate and prove the candidate bytes remain unchanged. In independent invalid arms, set search.max_new_postings_per_run to null, zero, negative, a float, a numeric string, and true. Also run valid arms with a positive integer or exact `all`. Inspect fixture output and candidate bytes; perform no activation, scheduler, network, or metered call.",
+      "expectations": [
+        "The minimal candidate with omitted optional fields validates without materializing defaults or rewriting its bytes",
+        "Every malformed max_new_postings_per_run arm is rejected before activation, while a positive integer or exact `all` validates",
+        "The fresh binding must still have the complete canonical shape and exact id/model equality with the candidate",
+        "No backup, active config change, scheduler operation, network operation, or metered call occurs"
       ]
     }
   ]

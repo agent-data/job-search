@@ -6,6 +6,8 @@ import pathlib
 import re
 import subprocess
 
+import pytest
+
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 FAKE_HOST = ROOT / "tests" / "fake-host-capabilities"
@@ -22,6 +24,113 @@ PLAN = (
     / "active"
     / "2026-07-16-best-in-class-cost-aware-job-search-dx.md"
 )
+LIFECYCLE_APPEND = ROOT / "shared" / "scripts" / "mechanics" / "lifecycle-append.sh"
+RUN_ID = "2026-07-16T14-30-00Z"
+RUN_STARTED = "2026-07-16T10:30:00-04:00"
+BINDING_ID = "binding-123e4567-e89b-42d3-a456-426614174000"
+DETAIL_MODEL = "fake-review-001"
+
+
+def _valid_config(*, include_sources=True, detail_model=DETAIL_MODEL):
+    sources = '  sources: ["linkedin", "ashby"]\n' if include_sources else ""
+    return f'''# migration-comment-sentinel
+version: 2
+workspace:
+  preferences_path: "preferences.md"
+  master_resume_path: "resumes/master.md"
+queries:
+  - {{ id: "ai-eng", keywords: "AI engineer", location: "United States", limit: 25, enabled: true }}
+search:
+{sources}  freshness: "past-2-weeks"
+  detail_model: "{detail_model}"
+schedule:
+  frequency: "daily"
+  time: "08:00"
+  timezone: "America/New_York"
+notify:
+  digest_path_template: "reports/{{date}}-digest.md"
+  desktop_notify_on_block: true
+unrelated_sentinel: "preserve-me"
+'''
+
+
+def _binding(*, binding_id=BINDING_ID, detail_model=DETAIL_MODEL):
+    return {
+        "version": 1,
+        "binding_id": binding_id,
+        "detail_model": detail_model,
+        "detail_model_origin": "configured_auto",
+        "bound_at": "2026-07-16T12:00:00+00:00",
+    }
+
+
+def _write_active_pair(workspace, *, include_sources=True):
+    runs = workspace / "runs"
+    reports = workspace / "reports"
+    runs.mkdir(parents=True, exist_ok=True)
+    reports.mkdir(parents=True, exist_ok=True)
+    (workspace / "config.yaml").write_text(
+        _valid_config(include_sources=include_sources), encoding="utf-8"
+    )
+    (runs / "detail-model-binding.json").write_text(
+        json.dumps(_binding(), sort_keys=True) + "\n", encoding="utf-8"
+    )
+
+
+def _lifecycle_append(workspace, command, *args, run_id=RUN_ID):
+    ledger = workspace / "runs" / f".lifecycle-{run_id}.jsonl"
+    result = subprocess.run(
+        [
+            "sh",
+            str(LIFECYCLE_APPEND),
+            str(ledger),
+            command,
+            run_id,
+            RUN_STARTED,
+            *args,
+        ],
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    return ledger
+
+
+def _write_cutoff_evidence(workspace, *, close=True):
+    (workspace / "reports").mkdir(parents=True, exist_ok=True)
+    ledger = _lifecycle_append(workspace, "start")
+    for phase in (
+        "searching",
+        "selection_settled",
+        "reviewing_initial_batch",
+        "early_results_shown",
+    ):
+        _lifecycle_append(workspace, "phase", phase)
+    _lifecycle_append(workspace, "milestone", "early_results_shown")
+    for phase in ("reviewing_remaining", "finalizing"):
+        _lifecycle_append(workspace, "phase", phase)
+    (workspace / "runs" / f"{RUN_ID}.json").write_text(
+        json.dumps(
+            {
+                "run_id": RUN_ID,
+                "completed_at": "2026-07-16T14:31:00+00:00",
+                "run_health": "healthy",
+                "detail_model_binding_id": BINDING_ID,
+                "detail_model": DETAIL_MODEL,
+            },
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    (workspace / "reports" / "2026-07-16-digest.md").write_text(
+        "# Exact final digest\n", encoding="utf-8"
+    )
+    _lifecycle_append(workspace, "milestone", "final_run_record_written")
+    _lifecycle_append(workspace, "milestone", "final_digest_written")
+    if close:
+        _lifecycle_append(workspace, "close", "complete", "-")
+    return ledger
 
 
 def _run_host(tmp_path, scenario, *args):
@@ -210,75 +319,576 @@ notify:
     assert complete["run_health"] == "healthy"
     assert complete["completed_at"] is not None
 
-    run_record = tmp_path / "2026-07-16T12-00-00Z.json"
-    digest = tmp_path / "2026-07-16-digest.md"
-    digest.write_text("# Final digest\n", encoding="utf-8")
-    run_record.write_text(
-        json.dumps(
-            {
-                "completed_at": "2026-07-16T12:00:00+00:00",
-                "run_health": "healthy",
-                "detail_model_binding_id": "binding-123e4567-e89b-42d3-a456-426614174000",
-                "detail_model": "fake-review-001",
-            }
+def test_cutoff_is_derived_from_canonical_workspace_evidence_and_persists(tmp_path):
+    workspace = tmp_path / "workspace"
+    original_v1 = _prepare_v1_workspace(workspace)
+    candidate_config, candidate_binding = _candidate_files(tmp_path, "cutoff")
+    _json_stdout(_run_host(tmp_path, "happy", "begin-migration", str(workspace)))
+    _json_stdout(
+        _run_host(
+            tmp_path,
+            "happy",
+            "activate-pair",
+            str(workspace),
+            str(candidate_config),
+            str(candidate_binding),
         )
-        + "\n",
+    )
+    _write_cutoff_evidence(workspace)
+
+    assert _json_stdout(
+        _run_host(tmp_path, "happy", "qualify-cutoff", str(workspace), RUN_ID)
+    ) == {
+        "binding_id": BINDING_ID,
+        "cutoff_qualifies": True,
+        "detail_model": DETAIL_MODEL,
+        "run_id": RUN_ID,
+    }
+
+    config_before = (workspace / "config.yaml").read_bytes()
+    binding_before = (workspace / "runs" / "detail-model-binding.json").read_bytes()
+    refused = _run_host(
+        tmp_path, "happy", "rollback-migration", str(workspace), "migration-job"
+    )
+    assert refused.returncode != 0
+    assert json.loads(refused.stderr)["error"] == "rollback_forbidden_after_cutoff"
+    assert (workspace / "config.yaml").read_bytes() == config_before
+    assert (workspace / "runs" / "detail-model-binding.json").read_bytes() == binding_before
+    assert config_before != original_v1
+
+
+def test_cutoff_rejects_caller_supplied_paths_and_completion_flag(tmp_path):
+    workspace = tmp_path / "workspace"
+    _write_active_pair(workspace)
+    _write_cutoff_evidence(workspace)
+    lied = _run_host(
+        tmp_path,
+        "happy",
+        "qualify-cutoff",
+        str(workspace / "runs" / f"{RUN_ID}.json"),
+        str(workspace / "reports" / "2026-07-16-digest.md"),
+        str(workspace / "runs" / "detail-model-binding.json"),
+        "true",
+    )
+    assert lied.returncode != 0
+    assert json.loads(lied.stderr)["error"] == "invalid_cutoff_request"
+
+
+@pytest.mark.parametrize(
+    "evidence_gap",
+    (
+        "caller_lied_completion",
+        "missing_ledger",
+        "mismatched_requested_run_id",
+        "mismatched_record_run_id",
+        "mismatched_model",
+        "mismatched_binding",
+        "missing_digest",
+        "mismatched_active_config",
+    ),
+)
+def test_cutoff_rejects_incomplete_or_mismatched_canonical_evidence(
+    tmp_path, evidence_gap
+):
+    workspace = tmp_path / evidence_gap
+    _prepare_v1_workspace(workspace)
+    candidate_config, candidate_binding = _candidate_files(tmp_path, evidence_gap)
+    _json_stdout(_run_host(tmp_path, "happy", "begin-migration", str(workspace)))
+    _json_stdout(
+        _run_host(
+            tmp_path,
+            "happy",
+            "activate-pair",
+            str(workspace),
+            str(candidate_config),
+            str(candidate_binding),
+        )
+    )
+    ledger = _write_cutoff_evidence(
+        workspace, close=evidence_gap != "caller_lied_completion"
+    )
+    requested_run_id = RUN_ID
+    run_record_path = workspace / "runs" / f"{RUN_ID}.json"
+
+    if evidence_gap == "missing_ledger":
+        ledger.unlink()
+    elif evidence_gap == "mismatched_requested_run_id":
+        requested_run_id = "2026-07-16T14-30-01Z"
+    elif evidence_gap in {
+        "mismatched_record_run_id",
+        "mismatched_model",
+        "mismatched_binding",
+    }:
+        run_record = json.loads(run_record_path.read_text(encoding="utf-8"))
+        if evidence_gap == "mismatched_record_run_id":
+            run_record["run_id"] = "2026-07-16T14-30-01Z"
+        elif evidence_gap == "mismatched_model":
+            run_record["detail_model"] = "fake-capable-001"
+        else:
+            run_record["detail_model_binding_id"] = (
+                "binding-00000000-0000-4000-8000-000000000000"
+            )
+        run_record_path.write_text(json.dumps(run_record) + "\n", encoding="utf-8")
+    elif evidence_gap == "missing_digest":
+        (workspace / "reports" / "2026-07-16-digest.md").unlink()
+    elif evidence_gap == "mismatched_active_config":
+        (workspace / "config.yaml").write_text(
+            _valid_config(detail_model="fake-capable-001"), encoding="utf-8"
+        )
+
+    rejected = _run_host(
+        tmp_path,
+        "happy",
+        "qualify-cutoff",
+        str(workspace),
+        requested_run_id,
+    )
+    assert rejected.returncode != 0
+    assert json.loads(rejected.stderr)["error"] == "cutoff_not_qualified"
+
+
+def test_cutoff_rejects_unrelated_v2_run_without_matching_migration_snapshot(tmp_path):
+    workspace = tmp_path / "unrelated-v2"
+    _write_active_pair(workspace)
+    _write_cutoff_evidence(workspace)
+    rejected = _run_host(
+        tmp_path, "happy", "qualify-cutoff", str(workspace), RUN_ID
+    )
+    assert rejected.returncode != 0
+    assert json.loads(rejected.stderr)["error"] == "cutoff_not_qualified"
+
+
+def _validate_candidate(tmp_path, config_text, binding=None):
+    config_path = tmp_path / "candidate.yaml"
+    binding_path = tmp_path / "candidate-binding.json"
+    config_path.write_text(config_text, encoding="utf-8")
+    binding_path.write_text(
+        json.dumps(_binding() if binding is None else binding) + "\n",
         encoding="utf-8",
     )
+    result = _run_host(
+        tmp_path,
+        "happy",
+        "validate-candidate",
+        str(config_path),
+        str(binding_path),
+    )
+    return result, config_path.read_bytes()
+
+
+def test_candidate_validation_accepts_omitted_optional_sources_without_rewrite(
+    tmp_path,
+):
+    candidate = _valid_config(include_sources=False)
+    result, bytes_after = _validate_candidate(tmp_path, candidate)
+    assert _json_stdout(result) == {"candidate": "validated"}
+    assert bytes_after == candidate.encode()
+    assert b"sources:" not in bytes_after
+    assert b"migration-comment-sentinel" in bytes_after
+    assert b"unrelated_sentinel" in bytes_after
+
+
+def test_candidate_validation_accepts_canonical_defaultable_section_and_query_omissions(
+    tmp_path,
+):
+    candidate = f'''version: 2
+queries:
+  - {{ id: "ai-eng", keywords: "AI engineer" }}
+search:
+  detail_model: "{DETAIL_MODEL}"
+unrelated_sentinel: "preserve-me"
+'''
+    result, bytes_after = _validate_candidate(tmp_path, candidate)
+    assert _json_stdout(result) == {"candidate": "validated"}
+    assert bytes_after == candidate.encode()
+
+
+def test_candidate_validation_accepts_preserved_block_style_query_mapping(tmp_path):
+    candidate = _valid_config(include_sources=False).replace(
+        '  - { id: "ai-eng", keywords: "AI engineer", location: "United States", limit: 25, enabled: true }',
+        '  - id: "ai-eng"\n'
+        '    keywords: "AI engineer"\n'
+        '    location: "United States"\n'
+        "    limit: 25\n"
+        "    enabled: true",
+    )
+    result, bytes_after = _validate_candidate(tmp_path, candidate)
+    assert _json_stdout(result) == {"candidate": "validated"}
+    assert bytes_after == candidate.encode()
+
+
+def test_candidate_validation_preserves_unrelated_nested_yaml_without_interpreting_it(
+    tmp_path,
+):
+    candidate = _valid_config(include_sources=False) + (
+        "unrelated_nested:\n"
+        "  child:\n"
+        "    - alpha\n"
+        "    - beta # keep this comment\n"
+    )
+    result, bytes_after = _validate_candidate(tmp_path, candidate)
+    assert _json_stdout(result) == {"candidate": "validated"}
+    assert bytes_after == candidate.encode()
+
+
+@pytest.mark.parametrize(
+    "candidate",
+    (
+        _valid_config().replace("version: 2", 'version: "2"'),
+        _valid_config().replace("search:\n", "search: []\n"),
+        _valid_config().replace(
+            '  sources: ["linkedin", "ashby"]', '  sources: "linkedin"'
+        ),
+        _valid_config().replace('  frequency: "daily"', '  frequency: "sometimes"'),
+        _valid_config().replace("  desktop_notify_on_block: true", '  desktop_notify_on_block: "yes"'),
+        _valid_config().replace(
+            '  - { id: "ai-eng", keywords: "AI engineer", location: "United States", limit: 25, enabled: true }',
+            '  - { id: "", keywords: "", location: 9, limit: 0, enabled: "yes" }',
+        ),
+        _valid_config().replace(
+            'queries:\n  - { id: "ai-eng", keywords: "AI engineer", location: "United States", limit: 25, enabled: true }',
+            "queries: []",
+        ),
+    ),
+)
+def test_candidate_validation_rejects_malformed_sections_values_and_queries(
+    tmp_path, candidate
+):
+    result, _ = _validate_candidate(tmp_path, candidate)
+    assert result.returncode != 0
+    assert json.loads(result.stderr)["error"] == "candidate_validation_failed"
+
+
+def test_candidate_validation_rejects_actual_config_sidecar_model_mismatch(tmp_path):
+    result, _ = _validate_candidate(
+        tmp_path, _valid_config(), _binding(detail_model="fake-capable-001")
+    )
+    assert result.returncode != 0
+    assert json.loads(result.stderr)["error"] == "candidate_validation_failed"
+
+
+@pytest.mark.parametrize(
+    "invalid_depth",
+    ("null", "0", "-1", "1.5", '"50"', "true"),
+)
+def test_candidate_validation_rejects_invalid_saved_review_depth_before_activation(
+    tmp_path, invalid_depth
+):
+    candidate = _valid_config().replace(
+        f'  detail_model: "{DETAIL_MODEL}"',
+        f"  max_new_postings_per_run: {invalid_depth}\n"
+        f'  detail_model: "{DETAIL_MODEL}"',
+    )
+    result, _ = _validate_candidate(tmp_path, candidate)
+    assert result.returncode != 0
+    assert json.loads(result.stderr)["error"] == "candidate_validation_failed"
+
+
+@pytest.mark.parametrize("valid_depth", ("25", '"all"'))
+def test_candidate_validation_accepts_canonical_saved_review_depth(
+    tmp_path, valid_depth
+):
+    candidate = _valid_config().replace(
+        f'  detail_model: "{DETAIL_MODEL}"',
+        f"  max_new_postings_per_run: {valid_depth}\n"
+        f'  detail_model: "{DETAIL_MODEL}"',
+    )
+    result, _ = _validate_candidate(tmp_path, candidate)
+    assert _json_stdout(result) == {"candidate": "validated"}
+
+
+def _prepare_v1_workspace(workspace, prior_sidecar=None):
+    (workspace / "runs").mkdir(parents=True, exist_ok=True)
+    original_config = (
+        b"# original-v1-comment\nversion: 1\nsearch:\n"
+        b'  detail_model: "balanced"\nunrelated_sentinel: "keep-exact"\n'
+    )
+    (workspace / "config.yaml").write_bytes(original_config)
+    binding_path = workspace / "runs" / "detail-model-binding.json"
+    if prior_sidecar is not None:
+        binding_path.write_bytes(prior_sidecar)
+    return original_config
+
+
+def _candidate_files(tmp_path, suffix):
+    config_path = tmp_path / f"candidate-{suffix}.yaml"
+    binding_path = tmp_path / f"candidate-{suffix}-binding.json"
+    config_path.write_text(_valid_config(include_sources=False), encoding="utf-8")
+    binding_path.write_text(json.dumps(_binding()) + "\n", encoding="utf-8")
+    return config_path, binding_path
+
+
+def test_rollback_restores_exact_prior_sidecar_and_removes_registered_job(tmp_path):
+    workspace = tmp_path / "prior-present"
+    prior_sidecar = b'{"prior":"sidecar-byte-sentinel"}\n'
+    original_config = _prepare_v1_workspace(workspace, prior_sidecar)
+    candidate_config, candidate_binding = _candidate_files(tmp_path, "prior-present")
+
+    assert _json_stdout(
+        _run_host(tmp_path, "happy", "begin-migration", str(workspace))
+    ) == {"config_snapshotted": True, "prior_sidecar": "present"}
     assert _json_stdout(
         _run_host(
             tmp_path,
             "happy",
-            "qualify-cutoff",
-            str(run_record),
-            str(digest),
+            "activate-pair",
+            str(workspace),
+            str(candidate_config),
             str(candidate_binding),
-            "true",
         )
-    ) == {"cutoff_qualifies": True}
-    not_complete = _run_host(
-        tmp_path,
-        "happy",
-        "qualify-cutoff",
-        str(run_record),
-        str(digest),
-        str(candidate_binding),
-        "false",
-    )
-    assert not_complete.returncode != 0
-    assert json.loads(not_complete.stderr)["error"] == "cutoff_not_qualified"
+    )["activation"] == "complete"
+    _json_stdout(_run_host(tmp_path, "happy", "register-disabled", "migration-job"))
 
-    mismatched = json.loads(run_record.read_text(encoding="utf-8"))
-    mismatched["detail_model_binding_id"] = "binding-00000000-0000-4000-8000-000000000000"
-    run_record.write_text(json.dumps(mismatched) + "\n", encoding="utf-8")
-    mismatch = _run_host(
-        tmp_path,
-        "happy",
-        "qualify-cutoff",
-        str(run_record),
-        str(digest),
-        str(candidate_binding),
-        "true",
-    )
-    assert mismatch.returncode != 0
-    assert json.loads(mismatch.stderr)["error"] == "cutoff_not_qualified"
+    assert _json_stdout(
+        _run_host(
+            tmp_path, "happy", "rollback-migration", str(workspace), "migration-job"
+        )
+    ) == {
+        "config": "restored_exact",
+        "job_id": "migration-job",
+        "job_state": "absent",
+        "sidecar": "restored_exact",
+    }
+    assert (workspace / "config.yaml").read_bytes() == original_config
+    assert (
+        workspace / "runs" / "detail-model-binding.json"
+    ).read_bytes() == prior_sidecar
 
-    mismatched["detail_model_binding_id"] = (
-        "binding-123e4567-e89b-42d3-a456-426614174000"
+
+def test_register_failure_rolls_back_exact_v1_and_new_sidecar_absence(tmp_path):
+    workspace = tmp_path / "register-failure"
+    original_config = _prepare_v1_workspace(workspace)
+    candidate_config, candidate_binding = _candidate_files(tmp_path, "register-failure")
+    _json_stdout(_run_host(tmp_path, "happy", "begin-migration", str(workspace)))
+    _json_stdout(
+        _run_host(
+            tmp_path,
+            "happy",
+            "activate-pair",
+            str(workspace),
+            str(candidate_config),
+            str(candidate_binding),
+        )
     )
-    run_record.write_text(json.dumps(mismatched) + "\n", encoding="utf-8")
-    candidate_binding.write_text("[]\n", encoding="utf-8")
-    malformed_binding = _run_host(
+    register = _run_host(
+        tmp_path, "register-failure", "register-disabled", "migration-job"
+    )
+    assert register.returncode != 0
+    assert json.loads(register.stderr)["error"] == "register_failed"
+
+    rolled_back = _json_stdout(
+        _run_host(
+            tmp_path,
+            "register-failure",
+            "rollback-migration",
+            str(workspace),
+            "migration-job",
+        )
+    )
+    assert rolled_back["job_state"] == "not_created"
+    assert rolled_back["sidecar"] == "removed"
+    assert (workspace / "config.yaml").read_bytes() == original_config
+    assert not (workspace / "runs" / "detail-model-binding.json").exists()
+
+
+def test_partial_activation_failure_is_executable_and_rolls_back_exact_pair(tmp_path):
+    workspace = tmp_path / "partial-activation"
+    original_config = _prepare_v1_workspace(workspace)
+    candidate_config, candidate_binding = _candidate_files(tmp_path, "partial")
+    _json_stdout(_run_host(tmp_path, "happy", "begin-migration", str(workspace)))
+
+    partial = _run_host(
+        tmp_path,
+        "partial-activation-failure",
+        "activate-pair",
+        str(workspace),
+        str(candidate_config),
+        str(candidate_binding),
+    )
+    assert partial.returncode != 0
+    assert json.loads(partial.stderr) == {
+        "active_effect": "config_only",
+        "error": "partial_activation_failed",
+    }
+    assert (workspace / "config.yaml").read_text(encoding="utf-8").startswith(
+        "# migration-comment-sentinel\nversion: 2"
+    )
+    assert not (workspace / "runs" / "detail-model-binding.json").exists()
+
+    rolled_back = _json_stdout(
+        _run_host(
+            tmp_path,
+            "partial-activation-failure",
+            "rollback-migration",
+            str(workspace),
+            "migration-job",
+        )
+    )
+    assert rolled_back["config"] == "restored_exact"
+    assert rolled_back["sidecar"] == "removed"
+    assert (workspace / "config.yaml").read_bytes() == original_config
+
+
+def test_rollback_leaves_job_disabled_when_fixture_removal_is_unavailable(tmp_path):
+    workspace = tmp_path / "remove-unavailable"
+    _prepare_v1_workspace(workspace)
+    candidate_config, candidate_binding = _candidate_files(tmp_path, "remove-unavailable")
+    _json_stdout(_run_host(tmp_path, "happy", "begin-migration", str(workspace)))
+    _json_stdout(
+        _run_host(
+            tmp_path,
+            "happy",
+            "activate-pair",
+            str(workspace),
+            str(candidate_config),
+            str(candidate_binding),
+        )
+    )
+    _json_stdout(_run_host(tmp_path, "happy", "register-disabled", "migration-job"))
+    rolled_back = _json_stdout(
+        _run_host(
+            tmp_path,
+            "remove-unavailable",
+            "rollback-migration",
+            str(workspace),
+            "migration-job",
+        )
+    )
+    assert rolled_back["job_state"] == "disabled"
+    state = json.loads((tmp_path / "host-state.json").read_text(encoding="utf-8"))
+    assert state["jobs"]["migration-job"]["state"] == "disabled"
+
+
+def test_forged_cutoff_state_is_rejected_by_refold_and_does_not_block_rollback(
+    tmp_path,
+):
+    workspace = tmp_path / "forged-cutoff"
+    original_config = _prepare_v1_workspace(workspace)
+    candidate_config, candidate_binding = _candidate_files(tmp_path, "forged-cutoff")
+    _json_stdout(_run_host(tmp_path, "happy", "begin-migration", str(workspace)))
+    _json_stdout(
+        _run_host(
+            tmp_path,
+            "happy",
+            "activate-pair",
+            str(workspace),
+            str(candidate_config),
+            str(candidate_binding),
+        )
+    )
+    state_path = tmp_path / "host-state.json"
+    state = json.loads(state_path.read_text(encoding="utf-8"))
+    state.setdefault("migration_cutoffs", {})[str(workspace.resolve())] = {
+        "run_id": RUN_ID,
+        "binding_id": "binding-00000000-0000-4000-8000-000000000000",
+        "detail_model": DETAIL_MODEL,
+    }
+    state_path.write_text(json.dumps(state) + "\n", encoding="utf-8")
+
+    rolled_back = _json_stdout(
+        _run_host(
+            tmp_path,
+            "happy",
+            "rollback-migration",
+            str(workspace),
+            "migration-job",
+        )
+    )
+    assert rolled_back["config"] == "restored_exact"
+    assert (workspace / "config.yaml").read_bytes() == original_config
+
+
+def test_stale_matching_cutoff_state_refolds_and_fails_closed_without_v1_restore(
+    tmp_path,
+):
+    workspace = tmp_path / "stale-cutoff"
+    original_config = _prepare_v1_workspace(workspace)
+    candidate_config, candidate_binding = _candidate_files(tmp_path, "stale-cutoff")
+    _json_stdout(_run_host(tmp_path, "happy", "begin-migration", str(workspace)))
+    _json_stdout(
+        _run_host(
+            tmp_path,
+            "happy",
+            "activate-pair",
+            str(workspace),
+            str(candidate_config),
+            str(candidate_binding),
+        )
+    )
+    active_config = (workspace / "config.yaml").read_bytes()
+    state_path = tmp_path / "host-state.json"
+    state = json.loads(state_path.read_text(encoding="utf-8"))
+    state.setdefault("migration_cutoffs", {})[str(workspace.resolve())] = {
+        "run_id": RUN_ID,
+        "binding_id": BINDING_ID,
+        "detail_model": DETAIL_MODEL,
+    }
+    state_path.write_text(json.dumps(state) + "\n", encoding="utf-8")
+
+    refused = _run_host(
         tmp_path,
         "happy",
-        "qualify-cutoff",
-        str(run_record),
-        str(digest),
-        str(candidate_binding),
-        "true",
+        "rollback-migration",
+        str(workspace),
+        "migration-job",
     )
-    assert malformed_binding.returncode != 0
-    assert json.loads(malformed_binding.stderr)["error"] == "cutoff_not_qualified"
+    assert refused.returncode != 0
+    assert json.loads(refused.stderr)["error"] == "cutoff_evidence_unverifiable"
+    assert (workspace / "config.yaml").read_bytes() == active_config
+    assert active_config != original_config
+
+
+@pytest.mark.parametrize(
+    "marker_run_id",
+    (
+        pytest.param(None, id="missing-run-id"),
+        pytest.param("not-a-run-id", id="malformed-run-id"),
+    ),
+)
+def test_matching_cutoff_with_unusable_run_id_fails_closed_without_v1_restore(
+    tmp_path, marker_run_id
+):
+    workspace = tmp_path / f"unusable-run-id-{marker_run_id}"
+    original_config = _prepare_v1_workspace(workspace)
+    candidate_config, candidate_binding = _candidate_files(
+        tmp_path, f"unusable-run-id-{marker_run_id}"
+    )
+    _json_stdout(_run_host(tmp_path, "happy", "begin-migration", str(workspace)))
+    _json_stdout(
+        _run_host(
+            tmp_path,
+            "happy",
+            "activate-pair",
+            str(workspace),
+            str(candidate_config),
+            str(candidate_binding),
+        )
+    )
+    active_config = (workspace / "config.yaml").read_bytes()
+    marker = {
+        "binding_id": BINDING_ID,
+        "detail_model": DETAIL_MODEL,
+    }
+    if marker_run_id is not None:
+        marker["run_id"] = marker_run_id
+    state_path = tmp_path / "host-state.json"
+    state = json.loads(state_path.read_text(encoding="utf-8"))
+    state.setdefault("migration_cutoffs", {})[str(workspace.resolve())] = marker
+    state_path.write_text(json.dumps(state) + "\n", encoding="utf-8")
+
+    refused = _run_host(
+        tmp_path,
+        "happy",
+        "rollback-migration",
+        str(workspace),
+        "migration-job",
+    )
+    assert refused.returncode != 0
+    assert json.loads(refused.stderr)["error"] == "cutoff_evidence_unverifiable"
+    assert (workspace / "config.yaml").read_bytes() == active_config
+    assert active_config != original_config
+    persisted = json.loads(state_path.read_text(encoding="utf-8"))
+    assert persisted["migration_cutoffs"][str(workspace.resolve())] == marker
 
 
 def test_canonical_contract_pins_passive_compatibility_transaction_and_cutoff():
@@ -295,11 +905,18 @@ def test_canonical_contract_pins_passive_compatibility_transaction_and_cutoff():
         "confirmation": ("single_action_confirmation_includes_migration_no_separate_prompt",),
         "candidate": ("preserve_comments_and_unrelated_fields_replace_only_required_schema_and_model",),
         "candidate_validation": ("complete_v2_config_and_fresh_matching_binding_before_activation",),
+        "candidate_defaults": ("preserve_optional_omission_do_not_materialize",),
+        "activated_pair_identity": (
+            "fresh_binding_id_and_exact_model_bound_to_migration_snapshot",
+        ),
         "backup_path": ("runs/config-backups/<utc-safe-timestamp>-config-v1.yaml",),
         "backup_write": ("exclusive_create_retry_fresh_timestamp_never_overwrite",),
         "activation": ("atomic_whole_file_replacements_one_config_binding_transaction",),
         "preflight": ("free_after_activation_before_canary_or_enable",),
         "setup_or_canary_failure": ("restore_exact_v1_bytes_and_prior_sidecar_state",),
+        "register_failure": ("rollback_before_cutoff",),
+        "partial_activation": ("rollback_before_cutoff",),
+        "prior_sidecar_on_rollback": ("restore_exact_prior_bytes",),
         "new_binding_on_rollback": ("remove",),
         "new_scheduler_job_on_rollback": ("remove_or_disable",),
         "post_cutoff_failure": ("never_restore_stale_v1",),
@@ -312,6 +929,10 @@ def test_canonical_contract_pins_passive_compatibility_transaction_and_cutoff():
         "blocked_run": ("not_qualifying",),
         "incomplete_or_missing_artifacts": ("not_qualifying",),
         "lifecycle_gate": ("folded_run_ledger_can_complete_true",),
+        "persistence": ("recheck_canonical_cutoff_artifacts_before_any_rollback",),
+        "persisted_marker": ("index_only_revalidate_canonical_evidence",),
+        "foreign_marker": ("ignore_for_this_migration_and_rollback",),
+        "unverifiable_marker": ("fail_closed_never_restore_v1",),
         "effect": ("migration_committed_rollback_to_v1_forbidden",),
     }
     migration_error = _marked_table(ERRORS, "config-v1-migration-block")
@@ -384,10 +1005,23 @@ def test_evals_keep_case_39_structural_and_add_executable_migration_pressure():
         "validation failure",
         "canary failure",
         "config-backups",
-        "remove-job",
+        "job_state absent",
         "qualify-cutoff",
+        "prior sidecar",
+        "register failure",
+        "partial activation",
+        "rollback-migration",
+        "removal unavailable",
         "first successful version-2 run",
         "later failure",
         "never restore",
+        "omitted optional",
+        "max_new_postings_per_run",
+        "unrelated version-2 run",
+        "persisted cutoff marker is an index",
+        "fail closed",
     ):
         assert token in joined
+
+    candidate_contract = next(case for case in migration if case["id"] == 24)
+    assert "positive integer or exact `all`" in json.dumps(candidate_contract).lower()
