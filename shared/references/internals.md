@@ -444,7 +444,11 @@ detail model, choose the least-powerful available model adequate for fit judgmen
 explicit exact available user choice overrides either default. Reject an unknown, unavailable, or ambiguous
 prefix instead of guessing what the user meant. An available slot with no explicit override preserves both
 its identifier and origin. An explicit same-identifier primary choice is still a user override and may
-rebind only its origin to `user_override`; it does not turn into implicit session inheritance.
+rebind only its origin to `user_override`; it does not turn into implicit session inheritance. Before any
+preview or receipt, require the disabled job's duplicated primary identifier and origin to equal the
+canonical registry scheduling fields exactly. Reject a contradiction without normalizing or mutating either
+surface. A same-identifier origin rebind is still a real scheduler change and the confirmation effects must
+say that it updates the exact primary metadata.
 
 <!-- exact-model-contract:exact-model-repair-candidate -->
 | Situation | Decision |
@@ -455,6 +459,8 @@ rebind only its origin to `user_override`; it does not turn into implicit sessio
 | `detail_unavailable_default` | `least_powerful_available_adequate_judgment_model_origin_repair` |
 | `user_override` | `exact_available_identifier_only` |
 | `same_id_primary_user_override` | `allowed_origin_user_override` |
+| `candidate_registry_job_baseline` | `exact_primary_model_and_origin_equality_or_reject_before_preview` |
+| `origin_only_change_preview` | `update_exact_primary_scheduler_effect` |
 | `unknown_unavailable_or_ambiguous` | `reject` |
 | `roster_present_refused_slot` | `treat_as_unusable_for_that_slot_and_replace_exactly` |
 | `transaction_authority` | `candidate_owned_one_use_exact_receipt_not_caller_models_or_origins` |
@@ -541,7 +547,9 @@ state; malformed generator state or a parser/replacement mismatch takes the same
 Copy the candidate-bound scenario into transaction state and require it at activation and canary, so phase
 behavior cannot change after confirmation. Store and validate exact staged config, sidecar, and registry
 bytes plus the exact staged job value; a semantic-equivalent byte rewrite is not the staged evidence that
-was authorized.
+was authorized. Decode and type-check transaction-staged byte and object evidence without leaving the
+shared invalid-evidence path: missing, wrong-type, undecodable, malformed, or mismatched staged evidence
+restores the exact snapshot, cancels the transaction, and consumes its authority rather than exiting early.
 
 <!-- exact-model-contract:exact-model-repair-transaction -->
 | Phase | Decision |
@@ -558,6 +566,7 @@ was authorized.
 | `staged_binding_evidence` | `exact_generated_id_timestamp_model_origin_and_snapshot_freshness` |
 | `phase_continuity` | `receipt_scenario_revalidated_at_activation_and_canary` |
 | `staged_surface_derivatives` | `exact_config_sidecar_registry_bytes_and_job_value` |
+| `malformed_staged_evidence` | `restore_cancel_and_consume_no_early_exit` |
 | `registry_location` | `owned_canonical_contract_never_caller_selected` |
 | `green_real_path_canary` | `only_commit_enable_and_verify` |
 | `scheduled_failed_retry` | `fresh_calls_first_context_and_scoped_confirmation` |

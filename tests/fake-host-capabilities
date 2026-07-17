@@ -438,6 +438,13 @@ def decode_bytes(payload):
         fail("invalid_test_state")
 
 
+def decode_staged_bytes(payload):
+    try:
+        return base64.b64decode(payload, validate=True)
+    except (TypeError, ValueError):
+        return None
+
+
 def repair_key(workspace):
     return str(workspace.resolve())
 
@@ -745,6 +752,9 @@ def main(args):
             or scheduling.get("verified") is not False
             or job_before.get("state") != "disabled"
             or job_before.get("verified") is not False
+            or job_before.get("primary_model") != scheduling.get("primary_model")
+            or job_before.get("primary_model_origin")
+            != scheduling.get("primary_model_origin")
         ):
             fail("invalid_repair_state")
         old_primary = scheduling.get("primary_model")
@@ -1399,6 +1409,12 @@ def main(args):
             sidecar = None
             config = None
         job = state["jobs"].get(job_id)
+        staged_sidecar_bytes = decode_staged_bytes(
+            transaction.get("staged_sidecar_b64")
+        )
+        staged_registry_bytes = decode_staged_bytes(
+            transaction.get("staged_registry_b64")
+        )
         if transaction["write_detail"]:
             expected_config = replace_detail_model(
                 decode_bytes(transaction["config_b64"]),
@@ -1424,8 +1440,8 @@ def main(args):
             ) and (
                 isinstance(staged_binding, dict)
                 and sidecar == staged_binding
-                and sidecar_bytes
-                == decode_bytes(transaction.get("staged_sidecar_b64"))
+                and staged_sidecar_bytes is not None
+                and sidecar_bytes == staged_sidecar_bytes
                 and valid_binding(staged_binding, transaction["detail_after"])
                 and staged_binding.get("detail_model_origin") == "repair"
                 and staged_binding.get("binding_id")
@@ -1465,9 +1481,11 @@ def main(args):
             or scheduling.get("primary_model") != transaction["primary_after"]
             or scheduling.get("primary_model_origin")
             != transaction["primary_origin_after"]
+            or not isinstance(transaction.get("staged_registry"), dict)
             or registry != transaction.get("staged_registry")
-            or registry_bytes
-            != decode_bytes(transaction.get("staged_registry_b64"))
+            or staged_registry_bytes is None
+            or registry_bytes != staged_registry_bytes
+            or not isinstance(transaction.get("staged_job"), dict)
             or job != transaction.get("staged_job")
             or job.get("primary_model") != transaction["primary_after"]
             or job.get("primary_model_origin") != transaction["primary_origin_after"]

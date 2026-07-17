@@ -1,10 +1,13 @@
 """Executable and structural pressure for exact-model repair."""
 
+import base64
 import json
 import os
 import pathlib
 import re
 import subprocess
+
+import pytest
 
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
@@ -225,6 +228,12 @@ def test_repair_candidate_defaults_only_unavailable_slots(tmp_path):
     primary_registry.write_text(
         json.dumps(registry, indent=2, sort_keys=True) + "\n", encoding="utf-8"
     )
+    state_path = primary_dir / "host-state.json"
+    state = json.loads(state_path.read_text(encoding="utf-8"))
+    state["jobs"]["repair-job"]["primary_model_origin"] = "user_override"
+    state_path.write_text(
+        json.dumps(state, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+    )
     sidecar_path = primary_workspace / BINDING_PATH
     sidecar = json.loads(sidecar_path.read_text(encoding="utf-8"))
     sidecar["detail_model_origin"] = "repair"
@@ -253,6 +262,12 @@ def test_repair_candidate_defaults_only_unavailable_slots(tmp_path):
     registry["scheduling"]["primary_model_origin"] = "repair_session"
     detail_registry.write_text(
         json.dumps(registry, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+    )
+    state_path = detail_dir / "host-state.json"
+    state = json.loads(state_path.read_text(encoding="utf-8"))
+    state["jobs"]["repair-job"]["primary_model_origin"] = "repair_session"
+    state_path.write_text(
+        json.dumps(state, indent=2, sort_keys=True) + "\n", encoding="utf-8"
     )
     sidecar_path = detail_workspace / BINDING_PATH
     sidecar = json.loads(sidecar_path.read_text(encoding="utf-8"))
@@ -348,6 +363,9 @@ def test_same_id_primary_override_rebinds_user_origin_and_is_accepted(tmp_path):
         "origin_after": "user_override",
         "origin_before": "session_inheritance",
     }
+    assert candidate["confirmation"]["effects"]["scheduler"] == (
+        "update_exact_primary_keep_disabled_unverified"
+    )
     receipt_id = candidate["receipt_id"]
     _json_stdout(
         _run_host(
@@ -1285,6 +1303,12 @@ def test_repair_candidate_derives_origins_from_canonical_baseline(tmp_path):
     registry_path.write_text(
         json.dumps(registry, indent=2, sort_keys=True) + "\n", encoding="utf-8"
     )
+    state_path = tmp_path / "host-state.json"
+    state = json.loads(state_path.read_text(encoding="utf-8"))
+    state["jobs"]["repair-job"]["primary_model_origin"] = "user_override"
+    state_path.write_text(
+        json.dumps(state, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+    )
     sidecar_path = workspace / BINDING_PATH
     sidecar = json.loads(sidecar_path.read_text(encoding="utf-8"))
     sidecar["detail_model_origin"] = "repair"
@@ -1297,6 +1321,45 @@ def test_repair_candidate_derives_origins_from_canonical_baseline(tmp_path):
     assert (workspace / "config.yaml").read_bytes() == config_before
     assert sidecar_path.read_bytes() != binding_before
     assert registry_path.read_bytes() != registry_before
+
+
+@pytest.mark.parametrize(
+    ("field", "replacement"),
+    (
+        ("primary_model", "fake-primary-002"),
+        ("primary_model_origin", "user_override"),
+    ),
+)
+def test_repair_candidate_rejects_registry_job_primary_disagreement_before_preview(
+    tmp_path,
+    field,
+    replacement,
+):
+    workspace, registry_path, config_before, binding_before, registry_before = (
+        _seed_repair_state(tmp_path)
+    )
+    state_path = tmp_path / "host-state.json"
+    state = json.loads(state_path.read_text(encoding="utf-8"))
+    state["jobs"]["repair-job"][field] = replacement
+    state_path.write_text(
+        json.dumps(state, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+    )
+    state_before = state_path.read_bytes()
+    rejected = _run_host(
+        tmp_path,
+        "happy",
+        "repair-candidate",
+        str(workspace),
+        "repair-job",
+        "-",
+        "-",
+    )
+    assert _json_stderr(rejected) == {"error": "invalid_repair_state"}
+    assert state_path.read_bytes() == state_before
+    assert "repair_candidate_receipts" not in state
+    assert (workspace / "config.yaml").read_bytes() == config_before
+    assert (workspace / BINDING_PATH).read_bytes() == binding_before
+    assert registry_path.read_bytes() == registry_before
 
 
 def test_repair_candidate_rejects_unrecognized_canonical_origin(tmp_path):
@@ -1792,6 +1855,78 @@ def test_canary_rejects_semantic_equal_binding_with_different_staged_bytes(tmp_p
     )
 
 
+@pytest.mark.parametrize(
+    ("field", "replacement", "remove"),
+    (
+        ("staged_sidecar_b64", None, True),
+        ("staged_sidecar_b64", [], False),
+        ("staged_sidecar_b64", "not-base64!", False),
+        (
+            "staged_sidecar_b64",
+            base64.b64encode(b"malformed-staged-sidecar").decode("ascii"),
+            False,
+        ),
+        ("staged_registry_b64", None, True),
+        ("staged_registry_b64", {}, False),
+        ("staged_registry_b64", "not-base64!", False),
+        (
+            "staged_registry_b64",
+            base64.b64encode(b"malformed-staged-registry").decode("ascii"),
+            False,
+        ),
+        ("staged_detail_binding", [], False),
+        ("staged_registry", "malformed", False),
+        ("staged_job", ["malformed"], False),
+    ),
+)
+def test_malformed_staged_transaction_evidence_restores_consumes_and_cannot_resume(
+    tmp_path,
+    field,
+    replacement,
+    remove,
+):
+    workspace, registry_path, config_before, binding_before, registry_before = (
+        _activate_detail_repair(tmp_path)
+    )
+    state_path = tmp_path / "host-state.json"
+    state = json.loads(state_path.read_text(encoding="utf-8"))
+    transaction = state["repair_transactions"][str(workspace.resolve())]
+    if remove:
+        transaction.pop(field)
+    else:
+        transaction[field] = replacement
+    state_path.write_text(
+        json.dumps(state, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+    )
+    _assert_invalid_canary_restores_exact(
+        tmp_path,
+        "expired-detail",
+        workspace,
+        registry_path,
+        config_before,
+        binding_before,
+        registry_before,
+    )
+    state = json.loads(state_path.read_text(encoding="utf-8"))
+    assert state["jobs"]["repair-job"] == {
+        "primary_model": "fake-primary-001",
+        "primary_model_origin": "session_inheritance",
+        "state": "disabled",
+        "unrelated_job": "keep-exact",
+        "verified": False,
+    }
+    assert not state.get("repair_transactions")
+    resumed = _run_host(
+        tmp_path,
+        "expired-detail",
+        "repair-canary",
+        str(workspace),
+        str(registry_path),
+        "repair-job",
+    )
+    assert _json_stderr(resumed) == {"error": "fresh_repair_confirmation_required"}
+
+
 def test_headless_expiry_and_auto_substitution_bait_block_without_dispatch(tmp_path):
     for scenario, slots in (
         ("expired-primary", ["primary"]),
@@ -1966,6 +2101,12 @@ def test_exact_model_repair_contract_pins_defaults_transaction_and_consent():
         ),
         "user_override": ("exact_available_identifier_only",),
         "same_id_primary_user_override": ("allowed_origin_user_override",),
+        "candidate_registry_job_baseline": (
+            "exact_primary_model_and_origin_equality_or_reject_before_preview",
+        ),
+        "origin_only_change_preview": (
+            "update_exact_primary_scheduler_effect",
+        ),
         "unknown_unavailable_or_ambiguous": ("reject",),
         "roster_present_refused_slot": (
             "treat_as_unusable_for_that_slot_and_replace_exactly",
@@ -1999,6 +2140,9 @@ def test_exact_model_repair_contract_pins_defaults_transaction_and_consent():
         ),
         "staged_surface_derivatives": (
             "exact_config_sidecar_registry_bytes_and_job_value",
+        ),
+        "malformed_staged_evidence": (
+            "restore_cancel_and_consume_no_early_exit",
         ),
         "registry_location": (
             "owned_canonical_contract_never_caller_selected",
