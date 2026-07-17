@@ -145,6 +145,25 @@ when pagination metadata is untrustworthy. Do not write a cursor, decoded cursor
 to the run record, digest, scratch file, or diagnostic. Request IDs remain local diagnostic evidence; the
 user-facing recovery is the message in the table.
 
+## E-LIFECYCLE-INCOMPLETE compaction, restart, and non-resumable search
+
+[run-lifecycle.md](run-lifecycle.md) owns the close states and the safe-recovery map; this section is only how
+that outcome reaches the user. After context compaction or a process restart the coordinator trusts the folded
+ledger, not its recollection. If the run had reached `selection_settled`, it resumes the queued review and
+reconciles each `evaluating` posting from durable evidence — no restart, and no second metered call for an
+attempt that already resolved; a genuinely unresolved attempt is treated as a possibly-consumed call, not a
+free one. If selection had not settled, or a continuation could only continue by reusing a pagination cursor
+that compaction dropped or the source expired, the run closes `interrupted` and the next pass is a fresh
+search — a non-resumable cursor never resumes.
+
+That fresh search is a new run, so it earns fresh calls-first cost context before its first metered attempt
+(see [Agent-data usage decisions](internals.md#agent-data-usage-decisions)); it never assumes a prior,
+possibly-consumed call was free. Surface the plain outcome: the run stopped before finishing, every completed
+match was kept, and the next safe step is a fresh run (or an interactive diagnosis if it repeats). Never show
+the raw `E-LIFECYCLE-INCOMPLETE` code, a cursor, an opaque continuation token, or any resume checkpoint in
+chat, the digest, or the home view; cursors are never persisted in the lifecycle, run record, digest,
+registry, or jobs artifacts, so there is nothing to resume.
+
 ## E-QUOTA usage and recovery
 
 The billing link is the immediate recovery because access must be restored before the run can continue.

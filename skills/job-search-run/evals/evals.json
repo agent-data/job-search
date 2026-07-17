@@ -792,6 +792,45 @@
         "No in-flight attempt accounting is dropped or double-counted to satisfy the new revision, and the run still reaches a valid complete close with one evaluated event per (source, source_id)",
         "The runner does not perform full refinement routing here — it does not rewrite the brief, recheck already-shown matches, or render a retrieval-impact preview (a later task); it only settles in-flight work before the revision applies. Exits 0"
       ]
+    },
+    {
+      "id": 62,
+      "scenario": "compaction after selection_settled resumes review without cursor reuse or free-call assumption",
+      "coverage_kind": "structural_contract",
+      "executable_host_controls": false,
+      "prompt": "Structurally pin the runner's compaction/restart behavior once a run has reached selection_settled; the single-shot runner harness cannot inject a mid-run compaction, and the executable lifecycle-mechanics dimension already lives in the fake-run-lifecycle fixture (evals 47-51). Consider a run that appended selection_settled and then lost all in-memory state to context compaction, leaving one selected posting queued and one evaluating (its detail attempt was dispatched but its accounting/result is not yet reconciled).",
+      "expectations": [
+        "After compaction the coordinator trusts only the folded lifecycle ledger plus jobs.jsonl — never conversation recollection — and reconstructs phase, immutable source order, posting states, and attempt identities from the exact current run's ledger, per shared/references/run-lifecycle.md (Safe recovery and non-resumable search state)",
+        "Because the ledger is open_after_selection_settled, it resumes the queued posting with a fresh coordinator-owned attempt and preserves every already-settled judgment; it does not restart search or replay a producer call whose durable result already exists",
+        "The evaluating posting is reconciled explicitly: if the ledger already accounts that attempt or a durable jobs.jsonl result exists for its exact identity, it settles from that evidence with no re-dispatch; a genuinely unresolved attempt is treated as a possibly-consumed metered call — accounted honestly rather than as zero — and re-requested only with fresh cost awareness, never as a silent second dispatch",
+        "No cursor, opaque continuation token, or resume checkpoint is read or written during recovery; the run may reach a valid complete close only after every reconstructed queued/evaluating identity settles and all started attempts are accounted"
+      ]
+    },
+    {
+      "id": 63,
+      "scenario": "pre-selection compaction or non-resumable cursor closes interrupted and restarts with fresh cost context",
+      "coverage_kind": "structural_contract",
+      "executable_host_controls": false,
+      "prompt": "Structurally pin the runner's behavior when a compaction/restart leaves the run before selection_settled, or when the only way to continue a search would be to reuse an opaque or expired pagination cursor. The single-shot runner harness cannot inject a mid-run compaction; the executable pre-selection interruption mechanics live in the fake-run-lifecycle fixture (eval 48), and executable within-run cursor-restart behavior lives in the pagination evals (29, 35). This case fixes the runner + cost surfacing on top of them.",
+      "expectations": [
+        "An open_before_selection_settled ledger closes interrupted when the valid ledger prefix permits that append; the runner never infers a selected set from conversation memory or incomplete pagination scratch, per shared/references/run-lifecycle.md",
+        "A continuation that could only proceed by reusing a non-persisted, opaque, or expired cursor — including a cursor lost to compaction or one the source rejected/expired — never resumes; before selection_settled it closes interrupted rather than reconstructing or reusing the cursor",
+        "The next pass is a fresh search: a new run that re-establishes calls-first cost context (a new agent-data calls-first preview) before its first metered attempt and never assumes a prior, possibly-consumed call was free, per belief 2 / shared/references/internals.md#agent-data-usage-decisions",
+        "The user-facing surface renders the plain E-LIFECYCLE-INCOMPLETE outcome from shared/references/errors.md — stopped before finishing, completed matches kept, next safe step is a fresh run — with no raw error code, cursor, or continuation token shown"
+      ]
+    },
+    {
+      "id": 64,
+      "scenario": "non-resumable cursor boundary: stale scratch deleted and no cursor persisted across a restart",
+      "coverage_kind": "structural_contract",
+      "executable_host_controls": false,
+      "prompt": "Structurally pin the cross-artifact non-resumable-cursor boundary that spans a run boundary/restart; the executable single-run dimension (stale-scratch deletion, live scratch creation, durable-artifact cursor scans) is already exercised by the pagination evals (29, 35, 36, 37). This case fixes the rule that the boundary also holds across an interrupted close and a later fresh run.",
+      "expectations": [
+        "At the next run's preflight, any stale runs/.pagination-<run_id>.jsonl matching the exact conventions.md name shape is deleted without being read, replayed, or recovered from — scratch is never resumable state",
+        "No cursor, next_page_token/next_cursor field, decoded cursor payload, opaque continuation token, or resume checkpoint is ever persisted in the lifecycle ledger, run record, digest, registry, or jobs.jsonl — the ledger append/fold already reject cursor-shaped fields, and the same never-persisted rule holds for the other durable artifacts, per shared/references/run-lifecycle.md",
+        "Because cursors are never persisted, a restart after an interrupted close cannot resume a cursor; the affected search stream begins again from its ordinary first page (cursor:null), never mid-stream",
+        "A completion self-check confirms no cursor/token/resume state appears in any run record, digest, jobs log, config, registry, or scratch before the run reports completion"
+      ]
     }
   ]
 }

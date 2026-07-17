@@ -94,7 +94,11 @@ Before any completion claim, invoke `lifecycle-fold.sh LEDGER WORKSPACE` or exec
 Remaining or in-flight postings, an unaccounted attempt, missing artifacts, malformed/contradictory state,
 quota, worker failure, unsafe compaction recovery, or interruption makes completion false. After compaction,
 fold first and follow the canonical recovery map: reconcile an already-settled queue without replaying a
-producer, or close interrupted before selection and begin a later clean run. Preserve completed judgments
+producer, or close interrupted before selection and begin a later clean run. That later run re-establishes
+calls-first cost context before its first metered attempt and never assumes a prior, possibly-consumed call
+was free; a continuation that could only resume by reusing a non-persisted, opaque, or expired pagination
+cursor never resumes — before `selection_settled` it closes interrupted, and the next run restarts that search
+cleanly with fresh cost context rather than the cursor. Preserve completed judgments
 and producer evidence; never coerce posting state or synthesize accounting to satisfy the predicate.
 After compaction, discard all coordinator memory and reconstruct phase, posting states, and attempt identities only from the
 exact current run's validated ledger. Separately validate `jobs.jsonl` and accept only canonical current-run

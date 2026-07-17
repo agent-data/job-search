@@ -449,7 +449,11 @@ After compaction or process loss, read and fold the ledger before applying this 
   state.
 - For `open_after_selection_settled`, preserve settled results and resume queued review. Reconcile every
   evaluating item and its attempt record explicitly; never assume an unresolved call was free, silently
-  replay it, or mark it evaluated without evidence.
+  replay it, or mark it evaluated without evidence. An `evaluating` posting at compaction is a producer
+  attempt that was started but not yet reconciled. If the ledger already accounts that attempt, or a durable
+  `jobs.jsonl` result exists for its exact identity, settle from that evidence and do not re-dispatch. If it
+  is genuinely unresolved, treat it as a possibly-consumed metered call: account it honestly rather than as
+  zero, and re-request that detail only with fresh cost awareness, never as a silent second dispatch.
 - Recovery must discard all coordinator memory, including prior effects, task-local queues, and conversation
   state. Reconstruct phase, immutable source order, primary posting states, and attempt identities only from
   the exact current run's validated lifecycle ledger. Read `jobs.jsonl` as a separate append-only source:
@@ -471,8 +475,9 @@ After compaction or process loss, read and fold the ledger before applying this 
   set equality with the false primaries that have attempt history.
   Resume each reconstructed `queued` identity with a fresh coordinator-owned attempt start and dispatch.
 - For `open_before_selection_settled`, close the run `interrupted` when the valid ledger prefix permits that
-  append, then start a fresh search with fresh call context. Do not infer a selected set from conversation
-  memory or incomplete scratch.
+  append, then start a fresh search with fresh call context. That fresh search is a new run: it re-establishes
+  calls-first cost context before its first metered attempt and never assumes a prior, possibly-consumed call
+  was free. Do not infer a selected set from conversation memory or incomplete scratch.
 
 Opaque search state follows this contract:
 
@@ -488,9 +493,12 @@ Opaque search state follows this contract:
 
 Pagination cursors and other opaque API continuation tokens are non-resumable. Never persist, reconstruct,
 or reuse them from the lifecycle ledger, final run record, digest, registry, jobs log, metrics, or pagination
-scratch. A search that would require such a token restarts cleanly. The pagination scratch remains a separate,
-explicitly non-resumable bounded candidate handoff; follow its deletion rules in
-[conventions.md](conventions.md#pagination-scratch-lifecycle).
+scratch. A continuation that could only proceed by reusing such a token — one lost to compaction, or one the
+source has expired or rejected — never resumes: while the run is still before `selection_settled` it closes
+`interrupted`, and the next run restarts that search cleanly with fresh calls-first cost context rather than
+resuming the cursor. The pagination scratch remains a separate, explicitly non-resumable bounded candidate
+handoff; follow its deletion rules in [conventions.md](conventions.md#pagination-scratch-lifecycle), where a
+later run deletes stale scratch without reading or resuming it.
 
 ## Privacy boundary
 
