@@ -311,6 +311,13 @@ use only the digest derived by that fold. Do not present intended-complete files
 > then the strong matches (title — company — location — one-line reasoning — link), then
 > moderate. Include any "confirm" warning from the digest. Never collapse this to a title-only list.
 
+Presenting those strong and moderate matches is the payoff — **activation** as
+`../../../shared/references/run-lifecycle.md` → **Activation** defines it: a nonblocked run, at least one
+fully evaluated posting, and at least one relevant match shown with reasoning. It lands only once a relevant
+match is actually on screen with its reasoning — a blocked run, a run that found nothing relevant, or a match
+evaluated but not yet shown is **not** that moment, so don't frame it as one. Activation is delivered work you
+show, never a status you announce: never say "activated" and never store it.
+
 Handle whatever the run reports, in plain language:
 
 - **Blocked** → the run halts on a named error, surfaced through the run record (the run record is the
@@ -321,6 +328,14 @@ Handle whatever the run reports, in plain language:
   "No new postings — you've already seen all N of these."
 - **Zero results, literally empty** → actionable: offer to broaden the keywords in the query (and apply it
   conversationally).
+- **Results found, but none relevant** → the search ran and judged real postings, but none cleared the
+  brief. Follow `../../../shared/references/run-lifecycle.md` → **Zero-relevant recovery**: say plainly that
+  it ran and what it learned, don't claim the magical moment, and offer exactly **one** high-signal way to
+  broaden — the single most promising change, not a menu of levers. If the user takes it, that broader search
+  is a fresh run: give it new calls-first cost context before its calls (recompute `B` and render it as in
+  this step, per the [Agent-data usage
+  decisions](../../../shared/references/internals.md#agent-data-usage-decisions)), then apply it
+  conversationally. This isn't the empty-search case — postings came back and were judged.
 
 Don't show run internals or scores — just the matches and, if relevant, the named error.
 

@@ -116,7 +116,14 @@ scheduling—routes through the canonical **Version-1 staged migration** transac
   host-specific subagent setup your host needs (or show the exact path + content if the sandbox blocks
   the write). If `search.parallel_detail_reads: true`, include the authorization sentence your host requires
   in the invocation context. Then show the fresh digest's strong/moderate matches with each match's
-  reasoning line, link, and any "confirm" warning.
+  reasoning line, link, and any "confirm" warning — a relevant match shown with its reasoning is the
+  **activation** defined in `../../../shared/references/run-lifecycle.md` → **Activation** (a nonblocked run,
+  at least one fully evaluated posting, and at least one relevant match shown with reasoning); a blocked run
+  or a match not yet shown is not. If the run came back nonblocked and judged postings but surfaced **no
+  relevant match**, apply `../../../shared/references/run-lifecycle.md` → **Zero-relevant recovery** instead
+  of a matches list: say it ran and what it learned, don't imply a match landed, and offer exactly **one**
+  high-signal broadening suggestion (not a list); if the user takes it, that broader search is a fresh run and
+  gets new calls-first cost context before its calls.
 - **Add or edit a query** → append/modify a `queries[]` item
   (`{ id, keywords, location, limit, enabled }`); `limit` is the per-query feed size (its range and default live in `conventions.md`).
   Preserve comments and preserve the existing config major. If the user asks for another search without naming keywords,

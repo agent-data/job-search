@@ -831,6 +831,31 @@
         "Because cursors are never persisted, a restart after an interrupted close cannot resume a cursor; the affected search stream begins again from its ordinary first page (cursor:null), never mid-stream",
         "A completion self-check confirms no cursor/token/resume state appears in any run record, digest, jobs log, config, registry, or scratch before the run reports completion"
       ]
+    },
+    {
+      "id": 65,
+      "scenario": "quota before any full evaluation — a blocked run produces no activation evidence",
+      "prompt": "Same harness but JOBSEARCH_TEST_SCENARIO=quota (the first metered search-jobs is rejected for quota, retryable:false, before any posting is evaluated) and JOBSEARCH_TEST_CALL_LOG=<tmp>/calls.jsonl. Before the run, append a sentinel evaluated event to jobs.jsonl and snapshot the file bytes. Run job-search-run against <tmp>; show calls.jsonl, the blocked digest, runs/<id>.json, the lifecycle ledger, and the jobs.jsonl before/after comparison. This case is the activation lens on a blocked run: E-QUOTA halts before even one posting is fully evaluated, so the run carries none of the evidence shared/references/run-lifecycle.md -> Activation requires.",
+      "expectations": [
+        "E-QUOTA hits before any posting is fully evaluated: no selected posting reaches evaluated, the coordinator appends no presented transition, and the run closes blocked (run_health blocked) — per shared/references/run-lifecycle.md a blocked run is not activation",
+        "No activation-qualifying evidence exists: the folded lifecycle ledger has zero evaluated or presented postings and no valid presented transition, so none of the three activation clauses (nonblocked run, at least one fully evaluated posting, at least one relevant match shown with reasoning) can be satisfied",
+        "Surfaces E-QUOTA's cause+fix (the exact billing URL https://agent-data.motie.dev/settings/billing, that access must be restored before the run can continue, existing matches unaffected) with NO raw E-* code in any user-facing line; the immediate recovery does not offer lower frequency, fewer sources, or a reduced review target",
+        "calls.jsonl contains the quota-rejected attempt with outcome:quota_rejected and metered:false, has ZERO rows with metered:true, and shows no retry of the non-retryable rejection; runs/<id>.json records agent_data_usage.metered_calls:0 and diagnostics.quota_rejections:1 and carries build.version, build.content_hash, and build.git_sha",
+        "The jobs.jsonl byte snapshot is unchanged, including the sentinel existing match; output carries no numeric fit score, weights, or unlabeled actual-charge claim"
+      ]
+    },
+    {
+      "id": 66,
+      "scenario": "a relevant match found but not yet shown does not activate",
+      "coverage_kind": "structural_contract",
+      "executable_host_controls": false,
+      "prompt": "Structurally pin the activation gate that 'shown with reasoning' means PRESENTED, not merely evaluated-relevant; the single-shot runner harness cannot inject a mid-render display failure or a halt between evaluation and the early look, and the executable dimensions already live elsewhere (the fake-run-lifecycle display-failure arm, eval 50, and the scheduled/canary no-presentation arm, eval 59). Consider a run that evaluates a relevant posting with nonempty reasoning (a qualifying jobs.jsonl evaluated event) but never appends a valid presented transition for it — because the interactive render never succeeded, or the run is scheduled/canary and stays quiet, or it is interrupted/blocked before the early look.",
+      "expectations": [
+        "A relevant posting that is evaluated with nonempty reasoning but for which the coordinator never appends a valid presented transition does NOT satisfy activation's relevant_matches_shown_with_reasoning clause, per shared/references/run-lifecycle.md -> Activation (which requires at least one valid presented transition, not merely an evaluated-relevant posting)",
+        "'Shown with reasoning' means presented: reasoning that merely exists in jobs.jsonl, or a title-only render, is insufficient (per run-lifecycle.md presentation-transition — reasoning_available_only and title_only_render are insufficient); only a rendered relevant posting shown WITH its reasoning, followed by the appended presented state for that same run and posting, counts toward activation",
+        "first_relevant_match_ready_at may be recorded (the relevant match became ready), but early_results_shown_at is NOT written and no presented milestone/transition is appended when the match was never actually shown; the ready timestamp is not the shown timestamp (per run-lifecycle.md metric owners)",
+        "Because the found-but-unshown match makes no valid presented transition, the run does not activate setup even though a relevant match was evaluated; this holds for the executable display-failure arm (eval 50) and the scheduled/canary no-presentation arm (eval 59). This is structural contract coverage, not a behavioral pass"
+      ]
     }
   ]
 }

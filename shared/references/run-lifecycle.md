@@ -633,6 +633,8 @@ of clearing or overwriting the previous attempt. Each update reads the current J
 owner's absent field, preserves unknown root keys, unknown record keys, other owners' fields, and every
 historical record, then atomically replaces the whole file. Never stream or append a partial JSON update.
 
+### Activation
+
 Activation is a view over durable run evidence, not a metric field:
 
 <!-- lifecycle-contract:activation -->
@@ -654,6 +656,23 @@ a run with no fully evaluated posting, a zero-relevant run, reasoning that was n
 output, or a relevant match that has not made the valid transition does not activate setup. Do not persist
 an activation boolean, activation timestamp, matching posting identity, or reasoning in metrics.
 
+### Zero-relevant recovery
+
+A nonblocked run that fully evaluated at least one posting but made no valid `presented` transition — a
+zero-relevant run — does not meet activation's requirement that at least one relevant match be shown with
+reasoning, so it is honest diagnostic work, not activation. Do not claim activation, an early-look match, or
+the setup payoff for it, and do not present a matches list it does not have. Recover in a single move: say
+the search ran and what it learned (which sources and queries it covered, that nothing cleared the brief this
+pass), then offer exactly **one** high-signal broadening suggestion — the single change most likely to
+surface a real match, never a list of levers, which only fatigues the user into ignoring all of them. A fresh
+broader run the user accepts is a new run: it re-earns calls-first cost context before its first metered call
+(see [Agent-data usage decisions](internals.md#agent-data-usage-decisions)) and never assumes a prior,
+possibly-consumed call was free. This is distinct from the two zero-**result** outcomes in
+[errors.md](errors.md) (all already known; literally empty): here postings were returned and judged, and none
+was a relevant match.
+
+### Named durations
+
 The only named durations are derived per setup record:
 
 <!-- lifecycle-contract:derived-durations -->
@@ -667,6 +686,8 @@ The only named durations are derived per setup record:
 For each row, parse both timestamps as instants and subtract the start from the end. Report the duration as
 unavailable when either endpoint is absent or the end precedes the start. Never write these duration names
 or values into `metrics.json`.
+
+### Local-only, no telemetry
 
 Metrics are local-only, no-PII product evidence, not telemetry. Never transmit them automatically or store
 preferences, resumes, job or posting text, match content, credentials, auth material, environment dumps,

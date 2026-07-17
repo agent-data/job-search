@@ -480,6 +480,31 @@
         "config is a valid version: 2 document with an exact search.detail_model and a matching current runs/detail-model-binding.json; the registry records active_workspace = <tmp>/.job-search",
         "NO numeric score, NO weights, NO credit/dollar/budget math anywhere"
       ]
+    },
+    {
+      "id": 36,
+      "scenario": "first-run activation — a relevant match shown with reasoning is the payoff",
+      "prompt": "Fresh sandbox (setup-onboarding.sh), env as in harness, JOBSEARCH_TEST_SCENARIO=happy, and export JOBSEARCH_TEST_CALL_LOG=<tmp>/calls.jsonl. The user opens with 'Set up my job search — I'm a senior AI engineer, individual contributor not management, remote in the US; I build LLM products.' Discovery reports first_run:true, source:none; the agent derives the searches and runs the real shim-backed first live sample run. After results, Scheduling: 'no'. This case zooms on ACTIVATION as shared/references/run-lifecycle.md -> Activation defines it (a nonblocked run, at least one fully evaluated posting, and at least one relevant match shown with reasoning), not on the whole golden-path checklist. Show the transcript, the digest, jobs.jsonl, the lifecycle ledger, metrics.json (if a setup record is active), and runs/<id>.json.",
+      "expectations": [
+        "The first live run is nonblocked (run_health other than blocked) and fully evaluates at least one posting; the Acme 'Senior AI Engineer (Remote US)' is shown as a STRONG match with its one-line reasoning as normal message text (never a title-only list, never a code fence), framed as found seconds ago",
+        "That shown-with-reasoning relevant match IS the activation defined in shared/references/run-lifecycle.md -> Activation (nonblocked run + at least one fully evaluated posting + at least one relevant match shown with reasoning); the flow delivers it as the payoff and never gates it behind a numeric score",
+        "Activation is treated as delivered work surfaced from run evidence, not announced as a system state: no user-facing 'activation'/'activated setup' jargon reaches the user, and no activation boolean, activation timestamp, matched-posting identity, or reasoning is written into metrics.json (per run-lifecycle.md, activation is a view over durable run evidence, never a stored metric field)",
+        "The shown relevant match corresponds to a valid presented transition for the same run and posting (rendered with its reasoning, then the presented state appended) — not merely an evaluated-relevant posting — per shared/references/run-lifecycle.md -> Activation and its presentation-transition invariant",
+        "NO numeric score, NO category weights, NO credit/dollar/budget math anywhere in the output"
+      ]
+    },
+    {
+      "id": 37,
+      "scenario": "first-run zero-relevant recovery — search ran, nothing matched, exactly one broadening suggestion",
+      "prompt": "Fresh sandbox (setup-onboarding.sh), env as in harness, JOBSEARCH_TEST_SCENARIO=happy, and export JOBSEARCH_TEST_CALL_LOG=<tmp>/calls.jsonl. Invoke the job-search skill (first_run:true, source:none) with a brief the happy fixtures cannot satisfy: 'Set up my job search. I'm a senior AI engineer, IC not management, but I will ONLY take a fully-onsite role in New York City — remote is a dealbreaker and I won't relocate to Austin.' The agent derives AI-engineer searches (location New York City) and runs the real shim-backed sample run; the happy shim still returns its fixtures — Acme 'Senior AI Engineer (Remote US)' and the Globex onsite-Austin ML role — and the judge finds BOTH not relevant (Acme is remote; Globex is Austin and people-management), so the run is nonblocked but has zero relevant matches. When the recovery offers to broaden, the user ACCEPTS it once ('yes, open it up to remote in the US'); the agent applies the broadening and runs the fresh broader search. After that, Scheduling: 'no'. Show the transcript beside calls.jsonl so run boundaries and cost-context ordering can be checked.",
+      "expectations": [
+        "The first live run is nonblocked and fully evaluates the returned postings, but none is a relevant match (both fail the onsite-New-York-City dealbreaker) — a zero-relevant run, per shared/references/run-lifecycle.md -> Zero-relevant recovery",
+        "Does NOT claim the magical moment / activation / a found match on the zero-relevant run: it says plainly that the search ran and what it learned (which sources and queries it covered, that nothing cleared the brief this pass) instead of presenting a matches list or implying setup is activated",
+        "Offers EXACTLY ONE high-signal broadening suggestion — the single most promising change (e.g. relax the onsite-NYC location) — not a list or menu of broaden/tune levers that would fatigue the user into ignoring all of them",
+        "On the user accepting the broadening, the fresh broader search is treated as a NEW run: it gives new calls-first agent-data cost context (the same one-or-two-sentence calls-first context, per the Agent-data usage decisions) BEFORE its first metered call, and never assumes a prior, possibly-consumed call was free",
+        "The broadened run then surfaces the now-relevant Acme 'Senior AI Engineer (Remote US)' as a match with its reasoning — broadening delivered a real match; the zero-relevant recovery is NOT framed as an error and is NOT the empty-search 'broaden keywords in config.yaml' message (postings were returned and judged, just none relevant)",
+        "NO numeric score, NO weights, NO credit/dollar/budget math anywhere in the output"
+      ]
     }
   ]
 }
