@@ -236,12 +236,257 @@ def control_delta(guided_results, control_results):
 
 
 # ---------------------------------------------------------------------------
+# Opt-in developer modes (T6.1): artifact assertions + result aggregation over LOCAL,
+# UNTRACKED evidence.
+#
+# The off-CI live canary harness records two evidence files under docs-private/ (gitignored,
+# never shipped): current-artifacts.json (a workspace + assertions about the artifacts a real
+# scheduled-path fire produced) and current-results.json (per-scenario guided vs control reps).
+# These modes are invoked only with an explicit path, so the free, deterministic --root CI run
+# never requires either file. Both schema-validate their input (a malformed file is never
+# "clean") and reuse the same deterministic math as the live rep aggregation above.
+# ---------------------------------------------------------------------------
+ARTIFACT_KINDS = {
+    "file_exists": (),
+    "json_field_equals": ("field", "equals"),
+    "jsonl_event_sequence": ("sequence",),
+    "text_absent": ("pattern",),
+    "text_matches": ("pattern",),
+}
+
+
+def _read_text(path):
+    with open(path, encoding="utf-8") as f:
+        return f.read()
+
+
+def _dig(data, dotted):
+    """Traverse a dotted field path (e.g. 'lifecycle.close_state'); return (found, value)."""
+    cur = data
+    for part in dotted.split("."):
+        if not isinstance(cur, dict) or part not in cur:
+            return False, None
+        cur = cur[part]
+    return True, cur
+
+
+def _is_subsequence(expected, actual):
+    idx = 0
+    for value in actual:
+        if idx < len(expected) and value == expected[idx]:
+            idx += 1
+    return idx == len(expected)
+
+
+def _validate_artifacts_schema(evidence):
+    if not isinstance(evidence, dict):
+        raise ValueError("artifacts evidence must be a JSON object")
+    workspace = evidence.get("workspace")
+    if not _is_nonempty_str(workspace):
+        raise ValueError("artifacts evidence needs a non-empty 'workspace'")
+    assertions = evidence.get("assertions")
+    if not isinstance(assertions, list) or not assertions:
+        raise ValueError("artifacts evidence needs a non-empty 'assertions' list")
+    for i, a in enumerate(assertions):
+        where = f"assertion[{i}]"
+        if not isinstance(a, dict):
+            raise ValueError(f"{where} must be an object")
+        kind = a.get("kind")
+        if kind not in ARTIFACT_KINDS:
+            raise ValueError(
+                f"{where}: unknown kind {kind!r} (want one of {sorted(ARTIFACT_KINDS)})"
+            )
+        if not _is_nonempty_str(a.get("path")):
+            raise ValueError(f"{where}: needs a non-empty 'path'")
+        for key in ARTIFACT_KINDS[kind]:
+            if key not in a:
+                raise ValueError(f"{where} ({kind}): missing required {key!r}")
+        if kind in ("text_absent", "text_matches") and not _is_nonempty_str(a.get("pattern")):
+            raise ValueError(f"{where} ({kind}): 'pattern' must be a non-empty string")
+        if kind == "json_field_equals" and not _is_nonempty_str(a.get("field")):
+            raise ValueError(f"{where} (json_field_equals): 'field' must be a non-empty string")
+        if kind == "jsonl_event_sequence":
+            seq = a.get("sequence")
+            if not isinstance(seq, list) or not seq:
+                raise ValueError(
+                    f"{where} (jsonl_event_sequence): 'sequence' must be a non-empty list"
+                )
+    return workspace, assertions
+
+
+def check_artifacts(evidence):
+    """Evaluate an artifact-evidence object (a workspace plus assertions) and return a list of
+    failure hits (empty == clean). Schema-validates first (raising ValueError on a malformed
+    object). Assertion kinds: file_exists, json_field_equals (dotted field), jsonl_event_sequence
+    (an ordered subsequence of a per-line field, default 'event'), text_absent, text_matches."""
+    workspace, assertions = _validate_artifacts_schema(evidence)
+    hits = []
+    for a in assertions:
+        kind, rel = a["kind"], a["path"]
+        full = os.path.join(workspace, rel)
+        if kind == "file_exists":
+            if not os.path.isfile(full):
+                hits.append(f"file_exists: {rel} does not exist")
+            continue
+        if not os.path.isfile(full):
+            hits.append(f"{kind}: {rel} does not exist")
+            continue
+        if kind == "json_field_equals":
+            try:
+                data = json.loads(_read_text(full))
+            except ValueError:
+                hits.append(f"json_field_equals: {rel} is not valid JSON")
+                continue
+            found, value = _dig(data, a["field"])
+            if not found:
+                hits.append(f"json_field_equals: {rel} has no field {a['field']!r}")
+            elif value != a["equals"]:
+                hits.append(
+                    f"json_field_equals: {rel} {a['field']} = {value!r}, "
+                    f"expected {a['equals']!r}"
+                )
+        elif kind == "jsonl_event_sequence":
+            field = a.get("field", "event")
+            values, malformed = [], False
+            for line in _read_text(full).splitlines():
+                if not line.strip():
+                    continue
+                try:
+                    row = json.loads(line)
+                except ValueError:
+                    hits.append(f"jsonl_event_sequence: {rel} has a malformed JSON line")
+                    malformed = True
+                    break
+                if isinstance(row, dict) and field in row:
+                    values.append(row[field])
+            if not malformed and not _is_subsequence(a["sequence"], values):
+                hits.append(
+                    f"jsonl_event_sequence: {rel} {field} values {values} "
+                    f"do not contain {a['sequence']} in order"
+                )
+        elif kind == "text_absent":
+            if re.search(a["pattern"], _read_text(full)):
+                hits.append(f"text_absent: {rel} matches forbidden /{a['pattern']}/")
+        elif kind == "text_matches":
+            if not re.search(a["pattern"], _read_text(full)):
+                hits.append(f"text_matches: {rel} does not match /{a['pattern']}/")
+    return hits
+
+
+def _validate_results_schema(evidence):
+    if not isinstance(evidence, dict):
+        raise ValueError("results evidence must be a JSON object")
+    scenarios = evidence.get("scenarios")
+    if not isinstance(scenarios, list) or not scenarios:
+        raise ValueError("results evidence needs a non-empty 'scenarios' list")
+    for i, row in enumerate(scenarios):
+        where = f"scenario[{i}]"
+        if not isinstance(row, dict):
+            raise ValueError(f"{where} must be an object")
+        for key in ("skill", "exact_model"):
+            if not _is_nonempty_str(row.get(key)):
+                raise ValueError(f"{where}: '{key}' must be a non-empty string")
+        sid = row.get("scenario_id")
+        if not (_is_nonempty_str(sid) or (isinstance(sid, int) and not isinstance(sid, bool))):
+            raise ValueError(f"{where}: 'scenario_id' must be a non-empty string or int")
+        for arm in ("guided", "control"):
+            xs = row.get(arm)
+            if not isinstance(xs, list) or not xs or not all(
+                isinstance(x, bool) or x in (0, 1) for x in xs
+            ):
+                raise ValueError(f"{where}: '{arm}' must be a non-empty list of booleans")
+        delta = row.get("required_control_delta")
+        if isinstance(delta, bool) or not isinstance(delta, (int, float)):
+            raise ValueError(f"{where}: 'required_control_delta' must be a number")
+    return scenarios
+
+
+def aggregate_results(evidence):
+    """Aggregate scenario result rows (guided vs no-guidance control reps) into pass-rate,
+    variance, and control-delta, and check each row clears its required_control_delta with an
+    adequately powered guided arm (N>=MIN_REPS). Returns {ok, scenarios:[...]}. Raises
+    ValueError on a malformed object."""
+    scenarios = _validate_results_schema(evidence)
+    rows, overall_ok = [], True
+    for row in scenarios:
+        delta = control_delta(row["guided"], row["control"])
+        meets_delta = delta["delta"] >= row["required_control_delta"]
+        meets_reps = delta["guided"]["meets_min_reps"]
+        ok = bool(meets_delta and meets_reps)
+        overall_ok = overall_ok and ok
+        rows.append({
+            "skill": row["skill"],
+            "scenario_id": row["scenario_id"],
+            "exact_model": row["exact_model"],
+            "guided_rate": delta["guided_rate"],
+            "control_rate": delta["control_rate"],
+            "delta": delta["delta"],
+            "required_control_delta": row["required_control_delta"],
+            "variance": delta["guided"]["variance"],
+            "meets_required_delta": meets_delta,
+            "meets_min_reps": meets_reps,
+            "guided_beats_control": delta["guided_beats_control"],
+            "ok": ok,
+        })
+    return {"ok": overall_ok, "scenarios": rows}
+
+
+# ---------------------------------------------------------------------------
 # CLI
 # ---------------------------------------------------------------------------
+def _run_check_artifacts(path):
+    try:
+        hits = check_artifacts(json.loads(_read_text(path)))
+    except (OSError, ValueError) as e:
+        print(f"Artifact check FAILED — {e}")
+        return 1
+    if hits:
+        print(f"Artifact check FAILED — {len(hits)} assertion(s) failed:")
+        for h in hits:
+            print(f"- {h}")
+        return 1
+    print("Artifact check: all assertions passed.")
+    return 0
+
+
+def _run_aggregate_results(path):
+    try:
+        report = aggregate_results(json.loads(_read_text(path)))
+    except (OSError, ValueError) as e:
+        print(f"Results aggregation FAILED — {e}")
+        return 1
+    for row in report["scenarios"]:
+        status = "ok" if row["ok"] else "FAIL"
+        print(
+            f"[{status}] {row['skill']}#{row['scenario_id']} "
+            f"guided={row['guided_rate']:.2f} control={row['control_rate']:.2f} "
+            f"delta={row['delta']:+.2f} (need >={row['required_control_delta']:.2f})"
+        )
+    if not report["ok"]:
+        print("Results aggregation FAILED — a scenario did not clear its required control delta.")
+        return 1
+    print("Results aggregation: every scenario cleared its required control delta.")
+    return 0
+
+
 def main():
     ap = argparse.ArgumentParser(description="Validate the skill eval scenarios.")
     ap.add_argument("--root", default=".")
+    ap.add_argument(
+        "--check-artifacts", metavar="EVIDENCE_JSON",
+        help="opt-in: evaluate a local, untracked artifact-evidence file (workspace + assertions)",
+    )
+    ap.add_argument(
+        "--aggregate-results", metavar="EVIDENCE_JSON",
+        help="opt-in: aggregate a local, untracked scenario-results file (guided vs control reps)",
+    )
     args = ap.parse_args()
+
+    if args.check_artifacts:
+        return _run_check_artifacts(args.check_artifacts)
+    if args.aggregate_results:
+        return _run_aggregate_results(args.aggregate_results)
+
     try:
         hits = validate_evals(args.root) + validate_coverage(args.root)
     except ValueError as e:

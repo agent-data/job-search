@@ -1,0 +1,24 @@
+{
+  "scenario": "execution-pre-meter-failure",
+  "summary": "The canary fire fails during preflight, before any metered agent-data call, so it consumes no metered-retry consent.",
+  "probe": {
+    "mechanism": "native",
+    "mechanism_token": "harness-native",
+    "unattended": true,
+    "canary_testable": true,
+    "primary_model_preserving": true,
+    "local_access": true,
+    "reversible": true,
+    "session_bound": false
+  },
+  "register_disabled": {
+    "ok": true
+  },
+  "inspect": {
+    "registration": "current"
+  },
+  "fire": {
+    "outcome": "pre_meter_failure",
+    "internal_code": "E-SCHEDULE-CANARY"
+  }
+}

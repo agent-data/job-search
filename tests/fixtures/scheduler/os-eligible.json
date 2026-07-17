@@ -1,0 +1,24 @@
+{
+  "scenario": "os-eligible",
+  "summary": "Local OS scheduler (launchd) that passes every eligibility gate; the fallback chosen when no native mechanism qualifies.",
+  "probe": {
+    "mechanism": "os",
+    "mechanism_token": "launchd",
+    "unattended": true,
+    "canary_testable": true,
+    "primary_model_preserving": true,
+    "local_access": true,
+    "reversible": true,
+    "session_bound": false
+  },
+  "register_disabled": {
+    "ok": true
+  },
+  "inspect": {
+    "registration": "current"
+  },
+  "fire": {
+    "outcome": "success",
+    "metered_calls": 3
+  }
+}

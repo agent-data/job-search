@@ -1,0 +1,25 @@
+{
+  "scenario": "execution-metered-failure",
+  "summary": "The canary fire fails after at least one metered agent-data call, so an after-meter retry requires a fresh cost preview and confirmation.",
+  "probe": {
+    "mechanism": "native",
+    "mechanism_token": "harness-native",
+    "unattended": true,
+    "canary_testable": true,
+    "primary_model_preserving": true,
+    "local_access": true,
+    "reversible": true,
+    "session_bound": false
+  },
+  "register_disabled": {
+    "ok": true
+  },
+  "inspect": {
+    "registration": "current"
+  },
+  "fire": {
+    "outcome": "metered_failure",
+    "metered_calls": 1,
+    "internal_code": "E-SCHEDULE-CANARY"
+  }
+}

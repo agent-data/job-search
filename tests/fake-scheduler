@@ -1,0 +1,362 @@
+#!/usr/bin/env python3
+"""T6.1 deterministic, local-only scheduler shim for the recurring-setup and canary evals.
+
+This is development test infrastructure, not shipped runtime code. It emulates only the
+scheduler-facing effects the T6.2 eligibility/selection and T6.3 canary flows consume: a
+capability probe, staged disabled registration, inspection, a real-path canary fire, and the
+enable/disable/remove reversibility actions. Behavior is driven entirely by one scenario
+capability fixture under tests/fixtures/scheduler/. The shim never touches a real scheduler,
+cron, launchd, network, model, or agent-data account: it only reads its fixture and the staged
+job definition and writes state, a log, and (on a successful or blocked fire) the scheduled-path
+run artifacts into the temp workspace named by env vars.
+
+    export JOBSEARCH_TEST_SCHEDULER_STATE=STATE_JSON
+    export JOBSEARCH_TEST_SCHEDULER_LOG=LOG_JSONL
+    export JOBSEARCH_TEST_SCHEDULER_SCENARIO=SCENARIO
+    fake-scheduler probe
+    fake-scheduler register-disabled JOB_ID DEFINITION_JSON_FILE
+    fake-scheduler inspect JOB_ID
+    fake-scheduler fire JOB_ID
+    fake-scheduler enable JOB_ID
+    fake-scheduler disable JOB_ID
+    fake-scheduler remove JOB_ID
+"""
+import json
+import os
+import pathlib
+import sys
+import tempfile
+from datetime import datetime, timedelta, timezone
+
+
+SCENARIO = os.environ.get("JOBSEARCH_TEST_SCHEDULER_SCENARIO", "native-eligible")
+STATE_PATH = os.environ.get("JOBSEARCH_TEST_SCHEDULER_STATE")
+LOG_PATH = os.environ.get("JOBSEARCH_TEST_SCHEDULER_LOG")
+FIXTURES_DIR = pathlib.Path(__file__).resolve().parent / "fixtures" / "scheduler"
+
+# A deterministic clock: each fire advances one tick so repeated fires get distinct run ids,
+# while a fresh state reproduces the same first run id byte-for-byte.
+CLOCK_BASE = datetime(2026, 7, 17, 12, 0, 0, tzinfo=timezone.utc)
+
+# The quiet scheduled/canary phase path: monotonic and adjacent, traversing the presentation
+# phase without claiming its milestone (shared/references/run-lifecycle.md).
+HEALTHY_PHASES = (
+    "searching",
+    "selection_settled",
+    "reviewing_initial_batch",
+    "early_results_shown",
+    "reviewing_remaining",
+    "finalizing",
+)
+
+
+def emit(value, *, stream=sys.stdout, status=0):
+    print(json.dumps(value, sort_keys=True), file=stream)
+    raise SystemExit(status)
+
+
+def fail(error, **evidence):
+    emit({"error": error, **evidence}, stream=sys.stderr, status=1)
+
+
+def log(operation, arguments, outcome):
+    if not LOG_PATH:
+        return
+    path = pathlib.Path(LOG_PATH)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("a", encoding="utf-8") as handle:
+        handle.write(
+            json.dumps(
+                {
+                    "operation": operation,
+                    "arguments": arguments,
+                    "scenario": SCENARIO,
+                    "outcome": outcome,
+                },
+                sort_keys=True,
+            )
+            + "\n"
+        )
+
+
+def load_fixture():
+    path = FIXTURES_DIR / f"{SCENARIO}.json"
+    try:
+        fixture = json.loads(path.read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        fail("unknown_scenario", scenario=SCENARIO)
+    except ValueError:
+        fail("invalid_scenario_fixture", scenario=SCENARIO)
+    if not isinstance(fixture, dict) or not isinstance(fixture.get("probe"), dict):
+        fail("invalid_scenario_fixture", scenario=SCENARIO)
+    return fixture
+
+
+def read_state():
+    if not STATE_PATH or not pathlib.Path(STATE_PATH).exists():
+        return {"jobs": {}, "fire_tick": 0}
+    with pathlib.Path(STATE_PATH).open(encoding="utf-8") as handle:
+        state = json.load(handle)
+    if not isinstance(state, dict) or not isinstance(state.get("jobs"), dict):
+        fail("invalid_test_state")
+    state.setdefault("fire_tick", 0)
+    return state
+
+
+def write_state(state):
+    if not STATE_PATH:
+        fail("missing_test_state_path")
+    path = pathlib.Path(STATE_PATH)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd, temp_name = tempfile.mkstemp(prefix=path.name + ".", dir=str(path.parent))
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            json.dump(state, handle, indent=2, sort_keys=True)
+            handle.write("\n")
+        os.replace(temp_name, path)
+    except BaseException:
+        try:
+            os.unlink(temp_name)
+        except FileNotFoundError:
+            pass
+        raise
+
+
+def need_arg(args, index, label):
+    if len(args) <= index or not args[index]:
+        fail(f"missing_{label}")
+    return args[index]
+
+
+def require_job(state, job_id):
+    job = state["jobs"].get(job_id)
+    if not isinstance(job, dict):
+        fail("job_not_registered", job_id=job_id)
+    return job
+
+
+def write_text_artifact(path, text):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(text, encoding="utf-8")
+
+
+def canonical_digest(run_id, health, trigger, job_id):
+    health_label = "healthy" if health == "healthy" else "blocked (action needed)"
+    counts = (
+        "2 new postings · 1 strong · 1 moderate · 0 weak"
+        if health == "healthy"
+        else "0 new postings · run stopped before results"
+    )
+    # A quiet scheduled/canary artifact: no interactive presentation language.
+    return (
+        f"# Job search digest — {run_id[:10]}\n"
+        f"Run ID: {run_id}\n"
+        f"Run health: {health_label}\n"
+        f"Trigger: {trigger} (scheduler {job_id})\n"
+        f"{counts}\n"
+    )
+
+
+def write_fire_artifacts(job_id, definition, fixture, state):
+    """Simulate one real scheduled-path fire; write the run record, digest, and lifecycle
+    ledger into the staged workspace and return the outcome summary."""
+    fire = fixture.get("fire", {})
+    outcome = fire.get("outcome", "success")
+    workspace = pathlib.Path(definition["workspace"])
+    runs = workspace / "runs"
+
+    tick = state["fire_tick"]
+    state["fire_tick"] = tick + 1
+    instant = CLOCK_BASE + timedelta(minutes=tick)
+    run_id = instant.strftime("%Y-%m-%dT%H-%M-%SZ")
+    stamp = instant.isoformat(timespec="seconds")
+    trigger = definition.get("trigger", "scheduled")
+
+    configured_primary = definition.get("primary_model", "fixture-primary-exact")
+    primary_origin = definition.get("primary_model_origin", "session_inheritance")
+    primary_model = configured_primary
+    if outcome == "model_binding_lost":
+        primary_model = fire.get("substituted_primary_model", "harness-mutable-default")
+        primary_origin = "harness_default"
+    preserved = primary_model == configured_primary
+
+    if outcome in ("success", "model_binding_lost"):
+        health, close_state, phase = "healthy", "complete", "complete"
+        metered = int(fire.get("metered_calls", 3))
+        internal_code = None
+    elif outcome == "pre_meter_failure":
+        health, close_state, phase = "blocked", "blocked", "preflight"
+        metered = 0
+        internal_code = fire.get("internal_code", "E-SCHEDULE-CANARY")
+    elif outcome == "metered_failure":
+        health, close_state, phase = "blocked", "blocked", "searching"
+        metered = int(fire.get("metered_calls", 1))
+        internal_code = fire.get("internal_code", "E-SCHEDULE-CANARY")
+    else:
+        fail("invalid_scenario_fixture", scenario=SCENARIO, reason="unknown fire outcome")
+
+    # Lifecycle ledger — the same event schema the real coordinator emits, written directly
+    # (this shim reproduces no live run machinery). Failures stop at their last working phase.
+    rows = [{"event": "run_started", "run_id": run_id, "ts": stamp, "phase": "preflight",
+             "trigger": trigger, "scheduler_id": job_id, "source_order": "linkedin"}]
+    if close_state == "complete":
+        for reached in HEALTHY_PHASES:
+            rows.append({"event": "phase_changed", "run_id": run_id, "ts": stamp,
+                         "phase": reached})
+        rows.append({"event": "milestone", "run_id": run_id, "ts": stamp,
+                     "milestone": "final_run_record_written"})
+        rows.append({"event": "milestone", "run_id": run_id, "ts": stamp,
+                     "milestone": "final_digest_written"})
+    elif phase == "searching":
+        rows.append({"event": "phase_changed", "run_id": run_id, "ts": stamp,
+                     "phase": "searching"})
+        rows.append({"event": "attempt_started", "run_id": run_id, "ts": stamp,
+                     "attempt_id": "search-1", "operation": "initial_search",
+                     "logical_operation_id": "search-1", "attempt_number": 1})
+        rows.append({"event": "attempt_accounted", "run_id": run_id, "ts": stamp,
+                     "attempt_id": "search-1", "metered": True,
+                     "outcome": "terminal_failure", "request_id": "request-search-1"})
+    rows.append({"event": "run_closed", "run_id": run_id, "ts": stamp,
+                 "close_state": close_state, "internal_code": internal_code})
+
+    ledger = runs / f".lifecycle-{run_id}.jsonl"
+    write_text_artifact(
+        ledger,
+        "".join(json.dumps(row, sort_keys=True) + "\n" for row in rows),
+    )
+
+    record = {
+        "run_id": run_id,
+        "trigger": trigger,
+        "scheduler_id": job_id,
+        "started_at": stamp,
+        "completed_at": stamp,
+        "primary_model": primary_model,
+        "primary_model_origin": primary_origin,
+        "detail_model": definition.get("detail_model", "fixture-detail-exact"),
+        "detail_model_origin": definition.get("detail_model_origin", "configured_user"),
+        "agent_data_usage": {"metered_calls": metered},
+        "results_summary": {
+            "new_postings": 2 if health == "healthy" else 0,
+            "evaluated": 2 if health == "healthy" else 0,
+            "relevant": 1 if health == "healthy" else 0,
+        },
+        "lifecycle": {"phase": phase, "close_state": close_state, "health": health},
+        "run_health": health,
+        "error": None if internal_code is None else {"code": internal_code},
+    }
+    write_text_artifact(runs / f"{run_id}.json", json.dumps(record, indent=2, sort_keys=True) + "\n")
+    write_text_artifact(
+        runs / f"{run_id}-digest.md", canonical_digest(run_id, health, trigger, job_id)
+    )
+
+    job = state["jobs"][job_id]
+    job["fired"] = True
+    job["last_run_id"] = run_id
+
+    return {
+        "run_id": run_id,
+        "trigger": trigger,
+        "scheduler_id": job_id,
+        "run_health": health,
+        "close_state": close_state,
+        "metered_calls": metered,
+        "metered_consumed": metered > 0,
+        "primary_model": primary_model,
+        "primary_model_preserved": preserved,
+        "internal_code": internal_code,
+        "artifacts": {
+            "run_record": f"runs/{run_id}.json",
+            "digest": f"runs/{run_id}-digest.md",
+            "ledger": f"runs/.lifecycle-{run_id}.jsonl",
+        },
+    }
+
+
+def main(args):
+    operation = need_arg(args, 0, "operation")
+    arguments = args[1:]
+    fixture = load_fixture()
+
+    if operation == "probe":
+        log(operation, arguments, "probed")
+        emit(fixture["probe"])
+
+    if operation == "register-disabled":
+        job_id = need_arg(args, 1, "job_id")
+        definition_file = need_arg(args, 2, "definition_file")
+        register = fixture.get("register_disabled", {"ok": True})
+        if not register.get("ok", True):
+            log(operation, arguments, "registration_failed")
+            fail("registration_failed", internal_code=register.get("internal_code"))
+        try:
+            definition = json.loads(pathlib.Path(definition_file).read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            log(operation, arguments, "invalid_definition")
+            fail("invalid_definition", definition_file=definition_file)
+        if not isinstance(definition, dict) or not isinstance(definition.get("workspace"), str) \
+                or not definition["workspace"]:
+            log(operation, arguments, "invalid_definition")
+            fail("invalid_definition", definition_file=definition_file)
+        state = read_state()
+        # Staged registration never marks verified; only the post-canary flow (T6.3) does.
+        state["jobs"][job_id] = {
+            "state": "disabled",
+            "verified": False,
+            "fired": False,
+            "definition": definition,
+        }
+        write_state(state)
+        log(operation, arguments, "disabled")
+        emit({"job_id": job_id, "state": "disabled"})
+
+    if operation == "inspect":
+        job_id = need_arg(args, 1, "job_id")
+        state = read_state()
+        job = require_job(state, job_id)
+        inspect = fixture.get("inspect", {"registration": "current"})
+        registration = inspect.get("registration", "current")
+        definition = dict(job["definition"])
+        if registration == "stale":
+            definition.update(inspect.get("drift", {}))
+        log(operation, arguments, registration)
+        emit({
+            "job_id": job_id,
+            "state": job["state"],
+            "registration": registration,
+            "matches_expected": registration == "current",
+            "definition": definition,
+        })
+
+    if operation == "fire":
+        job_id = need_arg(args, 1, "job_id")
+        state = read_state()
+        job = require_job(state, job_id)
+        if fixture.get("fire", {}).get("outcome") == "unsupported":
+            log(operation, arguments, "fire_unsupported")
+            fail("fire_unsupported", reason="not_canary_testable")
+        summary = write_fire_artifacts(job_id, job["definition"], fixture, state)
+        write_state(state)
+        log(operation, arguments, f"fired_{summary['run_health']}")
+        emit(summary)
+
+    if operation in ("enable", "disable", "remove"):
+        job_id = need_arg(args, 1, "job_id")
+        state = read_state()
+        require_job(state, job_id)
+        if operation == "remove":
+            state["jobs"].pop(job_id, None)
+            rendered = "absent"
+        else:
+            rendered = "enabled" if operation == "enable" else "disabled"
+            state["jobs"][job_id]["state"] = rendered
+        write_state(state)
+        log(operation, arguments, rendered)
+        emit({"job_id": job_id, "state": rendered})
+
+    log(operation, arguments, "unsupported_operation")
+    fail("unsupported_operation", operation=operation)
+
+
+if __name__ == "__main__":
+    main(sys.argv[1:])

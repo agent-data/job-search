@@ -1,0 +1,27 @@
+{
+  "scenario": "stale-registration",
+  "summary": "Register succeeds, but the scheduler's own registry drifts from the definition we staged; inspect reports the registration as stale.",
+  "probe": {
+    "mechanism": "native",
+    "mechanism_token": "harness-native",
+    "unattended": true,
+    "canary_testable": true,
+    "primary_model_preserving": true,
+    "local_access": true,
+    "reversible": true,
+    "session_bound": false
+  },
+  "register_disabled": {
+    "ok": true
+  },
+  "inspect": {
+    "registration": "stale",
+    "drift": {
+      "invocation": "drifted-stale-invocation"
+    }
+  },
+  "fire": {
+    "outcome": "success",
+    "metered_calls": 3
+  }
+}

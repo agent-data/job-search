@@ -235,3 +235,205 @@ def test_control_delta_guided_beats_control():
 def test_control_delta_no_lift_is_flagged():
     d = eh.control_delta([1, 0, 1, 0, 0], [1, 1, 0, 1, 1])  # guided 0.4 < control 0.8
     assert d["guided_beats_control"] is False
+
+
+# ---------------------------------------------------------------------------
+# Opt-in dev mode: --check-artifacts (T6.1)
+#
+# A local, untracked evidence file names a workspace plus assertions the off-CI live
+# canary harness records. These are schema-validated and evaluated against real files;
+# the mode is invoked only with an explicit path, so CI's --root run never needs them.
+# ---------------------------------------------------------------------------
+def _artifacts_workspace(tmp_path):
+    ws = tmp_path / "ws"
+    (ws / "runs").mkdir(parents=True)
+    run_id = "2026-07-17T12-00-00Z"
+    record = {
+        "trigger": "scheduled",
+        "scheduler_id": "job-1",
+        "run_health": "healthy",
+        "lifecycle": {"close_state": "complete"},
+        "primary_model": "fixture-primary-exact",
+    }
+    (ws / "runs" / f"{run_id}.json").write_text(json.dumps(record), encoding="utf-8")
+    ledger = [
+        {"event": "run_started", "phase": "preflight"},
+        {"event": "phase_changed", "phase": "searching"},
+        {"event": "posting_state", "state": "queued"},
+        {"event": "phase_changed", "phase": "finalizing"},
+        {"event": "run_closed", "close_state": "complete"},
+    ]
+    (ws / "runs" / f".lifecycle-{run_id}.jsonl").write_text(
+        "\n".join(json.dumps(r) for r in ledger), encoding="utf-8"
+    )
+    (ws / "runs" / f"{run_id}-digest.md").write_text(
+        "# Job search digest\nRun health: healthy\n", encoding="utf-8"
+    )
+    (ws / "config.yaml").write_text(
+        'version: 2\nsearch:\n  detail_model: "fixture-detail-exact"\n', encoding="utf-8"
+    )
+    return ws, run_id
+
+
+def _all_kinds_evidence(ws, run_id):
+    return {
+        "workspace": str(ws),
+        "assertions": [
+            {"kind": "file_exists", "path": f"runs/{run_id}.json"},
+            {"kind": "json_field_equals", "path": f"runs/{run_id}.json",
+             "field": "trigger", "equals": "scheduled"},
+            {"kind": "json_field_equals", "path": f"runs/{run_id}.json",
+             "field": "lifecycle.close_state", "equals": "complete"},
+            {"kind": "jsonl_event_sequence", "path": f"runs/.lifecycle-{run_id}.jsonl",
+             "field": "phase", "sequence": ["preflight", "searching", "finalizing"]},
+            {"kind": "text_absent", "path": f"runs/{run_id}-digest.md",
+             "pattern": "Here's what I found so far"},
+            {"kind": "text_matches", "path": "config.yaml",
+             "pattern": r'detail_model:\s*"fixture-detail-exact"'},
+        ],
+    }
+
+
+def test_check_artifacts_all_five_kinds_pass(tmp_path):
+    ws, run_id = _artifacts_workspace(tmp_path)
+    assert eh.check_artifacts(_all_kinds_evidence(ws, run_id)) == []
+
+
+def test_check_artifacts_flags_json_field_mismatch(tmp_path):
+    ws, run_id = _artifacts_workspace(tmp_path)
+    evidence = {"workspace": str(ws), "assertions": [
+        {"kind": "json_field_equals", "path": f"runs/{run_id}.json",
+         "field": "run_health", "equals": "blocked"}]}
+    hits = eh.check_artifacts(evidence)
+    assert len(hits) == 1 and "run_health" in hits[0]
+
+
+def test_check_artifacts_flags_missing_file(tmp_path):
+    ws, _ = _artifacts_workspace(tmp_path)
+    evidence = {"workspace": str(ws), "assertions": [
+        {"kind": "file_exists", "path": "runs/nope.json"}]}
+    assert len(eh.check_artifacts(evidence)) == 1
+
+
+def test_check_artifacts_text_absent_catches_forbidden_surface(tmp_path):
+    ws, run_id = _artifacts_workspace(tmp_path)
+    (ws / "runs" / f"{run_id}-digest.md").write_text(
+        "Here's what I found so far", encoding="utf-8")
+    evidence = {"workspace": str(ws), "assertions": [
+        {"kind": "text_absent", "path": f"runs/{run_id}-digest.md",
+         "pattern": "Here's what I found so far"}]}
+    assert len(eh.check_artifacts(evidence)) == 1
+
+
+def test_check_artifacts_jsonl_sequence_out_of_order_fails(tmp_path):
+    ws, run_id = _artifacts_workspace(tmp_path)
+    evidence = {"workspace": str(ws), "assertions": [
+        {"kind": "jsonl_event_sequence", "path": f"runs/.lifecycle-{run_id}.jsonl",
+         "field": "phase", "sequence": ["finalizing", "preflight"]}]}
+    assert len(eh.check_artifacts(evidence)) == 1
+
+
+def test_check_artifacts_rejects_unknown_kind(tmp_path):
+    ws, _ = _artifacts_workspace(tmp_path)
+    with pytest.raises(ValueError):
+        eh.check_artifacts({"workspace": str(ws),
+                            "assertions": [{"kind": "telepathy", "path": "x"}]})
+
+
+def test_check_artifacts_rejects_malformed_schema(tmp_path):
+    ws, _ = _artifacts_workspace(tmp_path)
+    with pytest.raises(ValueError):
+        eh.check_artifacts({"assertions": []})           # no workspace
+    with pytest.raises(ValueError):
+        eh.check_artifacts({"workspace": str(ws)})       # no assertions
+    with pytest.raises(ValueError):
+        eh.check_artifacts({"workspace": str(ws), "assertions": [
+            {"kind": "json_field_equals", "path": "p"}]})  # missing field/equals
+
+
+# ---------------------------------------------------------------------------
+# Opt-in dev mode: --aggregate-results (T6.1)
+# ---------------------------------------------------------------------------
+def _results_row(**over):
+    row = {
+        "skill": "job-search-run",
+        "scenario_id": "scheduled-success",
+        "exact_model": "fixture-primary-exact",
+        "guided": [True, True, True, True, True],
+        "control": [True, False, False, False, False],
+        "required_control_delta": 0.4,
+    }
+    row.update(over)
+    return row
+
+
+def test_aggregate_results_row_meets_required_delta():
+    report = eh.aggregate_results({"scenarios": [_results_row()]})
+    row = report["scenarios"][0]
+    assert row["delta"] == pytest.approx(0.8)
+    assert row["meets_required_delta"] is True
+    assert row["meets_min_reps"] is True
+    assert row["ok"] is True
+    assert report["ok"] is True
+
+
+def test_aggregate_results_flags_insufficient_delta():
+    report = eh.aggregate_results({"scenarios": [
+        _results_row(guided=[1, 1, 0, 0, 0], control=[1, 1, 0, 0, 0],
+                     required_control_delta=0.3)]})
+    assert report["scenarios"][0]["meets_required_delta"] is False
+    assert report["ok"] is False
+
+
+def test_aggregate_results_flags_underpowered_guided_arm():
+    report = eh.aggregate_results({"scenarios": [
+        _results_row(guided=[1, 1, 1], control=[0, 0, 0])]})
+    assert report["scenarios"][0]["meets_min_reps"] is False
+    assert report["ok"] is False
+
+
+def test_aggregate_results_rejects_malformed_rows():
+    with pytest.raises(ValueError):
+        eh.aggregate_results({"scenarios": [{"skill": "s"}]})  # missing fields
+    with pytest.raises(ValueError):
+        eh.aggregate_results({"scenarios": []})                # empty
+    with pytest.raises(ValueError):
+        eh.aggregate_results({})                               # no scenarios key
+
+
+# ---------------------------------------------------------------------------
+# CLI: the two opt-in modes work, and neither is required by the free --root run
+# ---------------------------------------------------------------------------
+def test_cli_check_artifacts_mode_clean(tmp_path):
+    ws, run_id = _artifacts_workspace(tmp_path)
+    ep = tmp_path / "current-artifacts.json"
+    ep.write_text(json.dumps(_all_kinds_evidence(ws, run_id)), encoding="utf-8")
+    r = subprocess.run([sys.executable, str(MODULE), "--check-artifacts", str(ep)],
+                       capture_output=True, text=True)
+    assert r.returncode == 0, r.stdout + r.stderr
+
+
+def test_cli_check_artifacts_mode_reports_failure(tmp_path):
+    ws, _ = _artifacts_workspace(tmp_path)
+    ep = tmp_path / "current-artifacts.json"
+    ep.write_text(json.dumps({"workspace": str(ws), "assertions": [
+        {"kind": "file_exists", "path": "runs/missing.json"}]}), encoding="utf-8")
+    r = subprocess.run([sys.executable, str(MODULE), "--check-artifacts", str(ep)],
+                       capture_output=True, text=True)
+    assert r.returncode == 1
+
+
+def test_cli_aggregate_results_mode_clean(tmp_path):
+    ep = tmp_path / "current-results.json"
+    ep.write_text(json.dumps({"scenarios": [_results_row(control=[0, 0, 0, 0, 0],
+                  required_control_delta=0.5)]}), encoding="utf-8")
+    r = subprocess.run([sys.executable, str(MODULE), "--aggregate-results", str(ep)],
+                       capture_output=True, text=True)
+    assert r.returncode == 0, r.stdout + r.stderr
+
+
+def test_cli_root_run_needs_no_evidence_files():
+    # The CI path stays free and deterministic: --root must not require the untracked files.
+    r = subprocess.run([sys.executable, str(MODULE), "--root", str(ROOT)],
+                       capture_output=True, text=True)
+    assert r.returncode == 0 and "coherent" in r.stdout
