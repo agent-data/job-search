@@ -340,7 +340,7 @@
       "id": 25,
       "scenario": "primary-only exact-model repair preserves the detail pair",
       "coverage_kind": "executable_fixture",
-      "prompt": "PRE-SEED a version-2 workspace, canonical detail sidecar, unverified registry, and disabled fake scheduler job using the T3.3 fixture state. Set scenario expired-primary. Ask interactively to repair the scheduled search, accept the displayed defaults once, and drive repair-candidate, begin-repair, authorize-repair, activate-repair, and one repair-canary through fake-host-capabilities. Compare exact config/sidecar bytes and host state before and after.",
+      "prompt": "PRE-SEED a version-2 workspace, canonical detail sidecar, unverified registry, and disabled fake scheduler job using the T3.3 fixture state. Set scenario expired-primary. Ask interactively to repair the scheduled search, accept the displayed defaults once, and drive repair-candidate, authorize-repair, begin-repair, activate-repair, and one repair-canary through fake-host-capabilities. Compare exact config/sidecar bytes and host state before and after.",
       "expectations": [
         "The proposal preserves the available detail model exactly and changes only the primary to the repair session's observed exact model with origin repair_session",
         "One confirmation covers both exact before/after slots, scheduler effects, removal/rollback, and one calls-first canary",
@@ -395,6 +395,32 @@
         "The repaired job remains disabled and unverified after rollback",
         "A retry without fresh calls-first context and one fresh scoped confirmation is rejected",
         "User rendering states observed cause, restored state, next step, and exact conversational fix without a raw internal class"
+      ]
+    },
+    {
+      "id": 30,
+      "scenario": "one-use repair candidate receipt rejects direct, tampered, and stale begin",
+      "coverage_kind": "executable_fixture",
+      "prompt": "PRE-SEED isolated scheduled repair states. In DIRECT, call begin-repair with caller-selected model identifiers/origins and no repair-candidate receipt. In TAMPER, issue a candidate receipt, authorize it once, alter its stored payload without updating the deterministic digest, and call begin-repair. In STALE, issue and authorize a fresh receipt, drift exact config bytes, call begin-repair, externally restore the bytes, and try the same receipt again. In CLONE, copy the once-confirmed envelope under a new receipt key, consume the original in a transaction that rolls back, then try the cloned key. Inspect proposals, receipt state, exact files, job state, and logs; make no live call.",
+      "expectations": [
+        "The candidate receipt owns the single complete preview: exact before/after values and origins including unchanged slots, explicit overrides, actual enabled-query/source first-page quantity, uncertain additions, scheduler/config/binding/machine/removal/rollback effects, and exactly one canary",
+        "Direct begin cannot supply models or origins and is rejected before mutation; begin accepts only the once-confirmed receipt bound to the exact workspace, snapshots, scenario, roster, overrides, and resolved proposal",
+        "Tamper, staleness, and a confirmed-envelope clone under a different key all reject and consume because the receipt id itself is payload/digest-bound; restoring external bytes cannot revive authority, so recomputation and a fresh confirmation are required",
+        "The deterministic SHA-256 check is identified only as T3.3 development-fixture tamper evidence, never a shipped receipt format, security mechanism, or cryptographic trust claim",
+        "Every rejected arm preserves exact config, sidecar, canonical registry, and disabled/unverified job state and uses no scheduler, network, roster, or metered service"
+      ]
+    },
+    {
+      "id": 31,
+      "scenario": "interactive repair replaces roster-present refused primary detail and both slots",
+      "coverage_kind": "executable_fixture",
+      "prompt": "Create three isolated disabled/unverified scheduled repair states whose saved identifiers remain members of the fake roster but whose exact dispatch is refused for primary, detail, or both. Run repair-candidate, authorize its receipt once, begin, activate, and canary locally in each arm. In separate candidate arms, explicitly request reuse of the same refused primary or detail identifier. Inspect proposals, receipt payloads, exact files, jobs, registries, and logs.",
+      "expectations": [
+        "Candidate resolution treats roster-present refusal as unusable for that affected slot, preserves every unaffected slot and origin, and selects a different exact executable primary/detail default as applicable",
+        "The receipt binds refused-slot facts as well as the roster, and explicit reuse of the same refused exact identifier is rejected before confirmation or mutation",
+        "Activation and canary cannot enable or verify unless every refused slot changed to its resolved exact executable identifier with the correct repair-session or repair origin",
+        "Primary-only refusal preserves config/sidecar bytes; detail refusal writes exact fresh provenance; all jobs remain disabled/unverified until their one green local fixture canary",
+        "No host substitution, live roster, scheduler, network, account, or metered service is used"
       ]
     }
   ]

@@ -456,6 +456,9 @@ rebind only its origin to `user_override`; it does not turn into implicit sessio
 | `user_override` | `exact_available_identifier_only` |
 | `same_id_primary_user_override` | `allowed_origin_user_override` |
 | `unknown_unavailable_or_ambiguous` | `reject` |
+| `roster_present_refused_slot` | `treat_as_unusable_for_that_slot_and_replace_exactly` |
+| `transaction_authority` | `candidate_owned_one_use_exact_receipt_not_caller_models_or_origins` |
+| `receipt_staleness` | `reject_consume_recompute_and_reconfirm` |
 <!-- /exact-model-contract:exact-model-repair-candidate -->
 
 Snapshot every affected surface. For a scheduled repair that means the exact config, detail-binding sidecar,
@@ -466,6 +469,24 @@ and the exact rollback effect. Give the canonical calls-first context for one re
 canary. Model identity alone is neutral; the canary is the metered action. Ask one scoped confirmation that
 covers this whole scheduled candidate, machine change, and exactly one canary—never separate model, config,
 migration, scheduler, or canary prompts.
+
+Carry that one rendered proposal into execution as one-use candidate authority bound to its own receipt id,
+the workspace; exact slot values and origins; model availability; explicit overrides; scenario; config,
+sidecar, registry, and job
+snapshots; calls-first quantity and uncertainty; effects; rollback; and one canary. The candidate owns those
+facts: transaction setup does not accept replacement model identifiers or origins from its caller. Consume
+the authority only after the single confirmation. Any tamper or baseline/roster/scenario drift rejects and
+consumes it, so the proposal must be recomputed and reconfirmed. The deterministic T3.3 fake host represents
+this authority with a stateful one-use receipt and a deterministic SHA-256 payload check. That receipt is
+development-fixture transaction evidence only—not a shipped runtime file format, security mechanism, or
+cryptographic trust boundary.
+
+Roster membership does not override observed exact-dispatch refusal. For candidate resolution, remove the
+refused saved identifier from that slot's executable choices, preserve unaffected slots, reject explicit
+reuse of the refused identifier, and bind the refused-slot facts into the one-use candidate authority. A
+canary cannot commit unless every refused slot now carries a different exact executable identifier. The
+unscheduled detail path applies the same slot-specific executable set: it rejects fresh provenance around
+the same refused detail id and accepts only an exact executable alternate.
 
 Without a schedule, only a detail binding can require repair. The user's explicit interactive repair request
 is authority for this neutral model-only edit: show the exact detail before/after and pair-write effect, then
@@ -483,6 +504,8 @@ canary. Restore the exact pair if either replacement fails.
 | `primary_and_detail` | `exact_before_after_including_unchanged_slots` |
 | `state_effects` | `scheduler_config_binding_machine_change_removal_and_rollback` |
 | `canary_context` | `canonical_calls_first_preview` |
+| `single_surface` | `candidate_receipt_owns_only_rendered_confirmation_preview` |
+| `authority_consumption` | `after_one_confirmation_then_one_begin_attempt` |
 <!-- /exact-model-contract:exact-model-repair-confirmation -->
 
 After the scheduled-repair yes, stage the candidate while the scheduler remains disabled and the registry
@@ -504,6 +527,22 @@ retry instead needs a fresh explicit interactive repair request, but remains neu
 extra confirmation, or canary. The deterministic T3.3 fake-host flow tests these boundaries only and is not
 evidence of general scheduler fidelity.
 
+Post-confirmation setup, snapshot-baseline, activation, staged-evidence, or canary failure always restores
+the exact snapshot, cancels the transaction, and consumes its authority. External restoration cannot revive
+that transaction. For a detail write, store the exact newly generated binding id, timestamp, model, and
+`repair` origin in the transaction; the canary requires byte-equivalent staged binding evidence and proves
+both id and timestamp are fresh relative to the snapshot. Resolve the registry from the owned registry
+contract. In particular, the unscheduled detail operation never accepts a caller-selected registry path and
+rejects a missing owned location, malformed or ambiguous scheduling state, or any canonical installed
+registry/job. Fresh timestamp means valid UTC and strictly chronologically newer than the snapshot—not
+merely a different string—and the deterministic fixture generator remains monotonic across minute rollover.
+Generate and validate the complete config replacement and binding evidence before mutating registry or job
+state; malformed generator state or a parser/replacement mismatch takes the same restore/cancel/consume path.
+Copy the candidate-bound scenario into transaction state and require it at activation and canary, so phase
+behavior cannot change after confirmation. Store and validate exact staged config, sidecar, and registry
+bytes plus the exact staged job value; a semantic-equivalent byte rewrite is not the staged evidence that
+was authorized.
+
 <!-- exact-model-contract:exact-model-repair-transaction -->
 | Phase | Decision |
 |---|---|
@@ -515,11 +554,29 @@ evidence of general scheduler fidelity.
 | `no_schedule_confirmation` | `explicit_repair_request_is_neutral_authority` |
 | `during_repair` | `scheduler_disabled_and_registry_unverified` |
 | `setup_or_canary_failure` | `restore_exact_prior_transaction_state_no_proposed_model_active` |
+| `post_authorization_failure` | `restore_cancel_and_consume_authority_no_resume` |
+| `staged_binding_evidence` | `exact_generated_id_timestamp_model_origin_and_snapshot_freshness` |
+| `phase_continuity` | `receipt_scenario_revalidated_at_activation_and_canary` |
+| `staged_surface_derivatives` | `exact_config_sidecar_registry_bytes_and_job_value` |
+| `registry_location` | `owned_canonical_contract_never_caller_selected` |
 | `green_real_path_canary` | `only_commit_enable_and_verify` |
 | `scheduled_failed_retry` | `fresh_calls_first_context_and_scoped_confirmation` |
 | `unscheduled_failed_retry` | `fresh_explicit_request_no_calls_preview_or_confirmation` |
 | `fixture_scope` | `t3_3_only_not_general_scheduler_fidelity` |
 <!-- /exact-model-contract:exact-model-repair-transaction -->
+
+Headless execution treats exact-dispatch refusal as an invalid exact binding even when roster membership
+still lists the identifier. It blocks the affected primary, detail, or both slots, preserves completed
+attempt accounting, never substitutes, and hands the user to the same interactive repair flow.
+
+<!-- exact-model-contract:exact-model-repair-headless -->
+| Situation | Decision |
+|---|---|
+| `unavailable_exact_identifier` | `block_affected_slots_no_substitution` |
+| `roster_present_exact_dispatch_refused` | `block_primary_detail_or_both_no_substitution` |
+| `completed_attempt_accounting` | `preserve` |
+| `repair_owner` | `interactive_exact_model_repair` |
+<!-- /exact-model-contract:exact-model-repair-headless -->
 
 ## Scheduling setup
 **Advocate an unattended schedule** for the recurring run — one that keeps firing with **no interactive

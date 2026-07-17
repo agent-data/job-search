@@ -591,6 +591,18 @@
         "The only fixture log row is headless-model-check with blocked_no_substitute",
         "Normal rendering gives cause, preserved state, interactive next step, and exact conversational fix without a raw internal class"
       ]
+    },
+    {
+      "id": 46,
+      "scenario": "headless exact dispatch refusal blocks primary detail and both while roster membership remains",
+      "coverage_kind": "executable_fixture",
+      "prompt": "Create three isolated version-2 headless fixture states whose exact primary and detail identifiers remain present in the fake roster. Run headless-model-check with exact-dispatch-refused-primary, exact-dispatch-refused-detail, and exact-dispatch-refused-both. Inspect complete host logs, result accounting, and exact local state; do not invoke interactive repair.",
+      "expectations": [
+        "Each arm reaches executable exact-dispatch refusal despite roster membership and blocks exactly primary, detail, or both slots in canonical order",
+        "Every result reports substitution_attempted false, preserves completed attempt accounting, and never selects, guesses, prefixes, aliases, or dispatches an alternate model",
+        "The only fixture operation is headless-model-check with blocked_exact_dispatch_refused_no_substitute; no repair candidate, canary, network, or new metered operation begins",
+        "Config, binding, registry, and disabled/unverified job state remain exact, and normal output routes to interactive exact-model repair without exposing the internal class"
+      ]
     }
   ]
 }

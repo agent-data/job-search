@@ -9,6 +9,7 @@ touches a real host model roster, scheduler, network, or agent-data account.
 """
 
 import base64
+import hashlib
 import json
 import os
 import pathlib
@@ -295,7 +296,11 @@ def parse_candidate_config(text):
             return None
         if "enabled" in query and not isinstance(query["enabled"], bool):
             return None
-    return {"detail_model": nested[("search", "detail_model")]}
+    return {
+        "detail_model": nested[("search", "detail_model")],
+        "enabled_query_count": sum(query.get("enabled", True) for query in query_rows),
+        "enabled_source_count": len(sources),
+    }
 
 
 def valid_binding(binding, detail_model):
@@ -364,15 +369,21 @@ def valid_run_id(run_id):
     return True
 
 
-def valid_utc_timestamp(value):
+def parse_utc_timestamp(value):
     if not isinstance(value, str) or not UTC_TIMESTAMP_PATTERN.fullmatch(value):
-        return False
+        return None
     normalized = value[:-1] + "+00:00" if value.endswith("Z") else value
     try:
         timestamp = datetime.fromisoformat(normalized)
     except ValueError:
-        return False
-    return timestamp.utcoffset() == timedelta(0)
+        return None
+    if timestamp.utcoffset() != timedelta(0):
+        return None
+    return timestamp
+
+
+def valid_utc_timestamp(value):
+    return parse_utc_timestamp(value) is not None
 
 
 def available_repair_models():
@@ -387,6 +398,14 @@ def available_repair_models():
     if SCENARIO in {"expired-detail", "both-expired", "auto-substitution-bait"}:
         available.discard("fake-review-001")
     return available
+
+
+def exact_dispatch_refused_slots():
+    return {
+        "exact-dispatch-refused-primary": ["primary"],
+        "exact-dispatch-refused-detail": ["detail"],
+        "exact-dispatch-refused-both": ["primary", "detail"],
+    }.get(SCENARIO, [])
 
 
 def validate_repair_selection(selection, available):
@@ -423,14 +442,43 @@ def repair_key(workspace):
     return str(workspace.resolve())
 
 
+def canonical_registry_path():
+    value = os.environ.get("JOBSEARCH_OS_REGISTRY")
+    if not value:
+        fail("missing_test_registry_path")
+    return pathlib.Path(value).resolve()
+
+
+def payload_digest(payload):
+    encoded = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode(
+        "utf-8"
+    )
+    return hashlib.sha256(encoded).hexdigest()
+
+
+def fresh_repair_receipt_id(state):
+    tick = state.get("repair_receipt_tick", 1)
+    if not isinstance(tick, int) or tick < 1 or tick > 999999:
+        fail("invalid_test_state")
+    state["repair_receipt_tick"] = tick + 1
+    return f"repair-receipt-{tick:06d}"
+
+
 def fresh_repair_binding(state):
     tick = state.get("repair_binding_tick", 1)
     if not isinstance(tick, int) or tick < 1 or tick > 0xFFFFFFFFFFFF:
-        fail("invalid_test_state")
+        return None
+    try:
+        bound_at = (
+            datetime.fromisoformat("2026-07-16T13:00:00+00:00")
+            + timedelta(seconds=tick)
+        ).isoformat(timespec="seconds")
+    except OverflowError:
+        return None
     state["repair_binding_tick"] = tick + 1
     return {
         "binding_id": f"binding-00000000-0000-4000-8000-{tick:012x}",
-        "bound_at": f"2026-07-16T13:00:{tick % 60:02d}+00:00",
+        "bound_at": bound_at,
     }
 
 
@@ -438,16 +486,20 @@ def replace_detail_model(config_bytes, before, after):
     try:
         text = config_bytes.decode("utf-8")
     except UnicodeError:
-        fail("invalid_repair_state")
+        return None
     pattern = re.compile(
-        r'^(\s*detail_model:\s*)(["\'])' + re.escape(before) + r'\2(\s*(?:#.*)?)$',
+        r'^(\s*detail_model:\s*)(?:(?:["\'])'
+        + re.escape(before)
+        + r'["\']|'
+        + re.escape(before)
+        + r')(\s*(?:#.*)?)$',
         re.MULTILINE,
     )
     updated, count = pattern.subn(
-        lambda match: f'{match.group(1)}"{after}"{match.group(3)}', text
+        lambda match: f'{match.group(1)}"{after}"{match.group(2)}', text
     )
     if count != 1:
-        fail("invalid_repair_state")
+        return None
     return updated.encode("utf-8")
 
 
@@ -659,12 +711,46 @@ def main(args):
         emit({"exact_model": PRIMARY})
 
     if operation == "repair-candidate":
-        old_primary = need_arg(args, 1, "old_primary")
-        old_primary_origin = need_arg(args, 2, "old_primary_origin")
-        old_detail = need_arg(args, 3, "old_detail")
-        old_detail_origin = need_arg(args, 4, "old_detail_origin")
-        primary_override = args[5] if len(args) > 5 else None
-        detail_override = args[6] if len(args) > 6 else None
+        if len(args) != 5:
+            fail("invalid_repair_request")
+        workspace = pathlib.Path(need_arg(args, 1, "workspace")).resolve()
+        job_id = need_arg(args, 2, "job_id")
+        primary_override = need_arg(args, 3, "primary_override")
+        detail_override = need_arg(args, 4, "detail_override")
+        primary_override = None if primary_override == "-" else primary_override
+        detail_override = None if detail_override == "-" else detail_override
+        registry_path = canonical_registry_path()
+        config_path = workspace / "config.yaml"
+        sidecar_path = workspace / "runs" / "detail-model-binding.json"
+        try:
+            config_bytes = config_path.read_bytes()
+            sidecar_bytes = sidecar_path.read_bytes()
+            registry_bytes = registry_path.read_bytes()
+            config = parse_candidate_config(config_bytes.decode("utf-8"))
+            sidecar = parse_json_bytes(sidecar_bytes)
+            registry = parse_json_bytes(registry_bytes)
+        except (OSError, UnicodeError):
+            fail("invalid_repair_state")
+        state = read_state()
+        scheduling = registry.get("scheduling")
+        job_before = state["jobs"].get(job_id)
+        if (
+            config is None
+            or not valid_binding(sidecar, config["detail_model"])
+            or registry.get("active_workspace") != str(workspace)
+            or not isinstance(scheduling, dict)
+            or not isinstance(job_before, dict)
+            or scheduling.get("scheduler_id") != job_id
+            or scheduling.get("installed") is not True
+            or scheduling.get("verified") is not False
+            or job_before.get("state") != "disabled"
+            or job_before.get("verified") is not False
+        ):
+            fail("invalid_repair_state")
+        old_primary = scheduling.get("primary_model")
+        old_primary_origin = scheduling.get("primary_model_origin")
+        old_detail = config["detail_model"]
+        old_detail_origin = sidecar["detail_model_origin"]
         if old_primary_origin not in {
             "session_inheritance",
             "user_override",
@@ -672,26 +758,39 @@ def main(args):
         } or old_detail_origin not in {"configured_auto", "configured_user", "repair"}:
             fail("invalid_repair_state")
         available = available_repair_models()
+        refused_slots = exact_dispatch_refused_slots()
+        primary_available = set(available)
+        detail_available = set(available)
+        if "primary" in refused_slots:
+            primary_available.discard(old_primary)
+        if "detail" in refused_slots:
+            detail_available.discard(old_detail)
 
         if primary_override:
-            new_primary = validate_repair_selection(primary_override, available)
+            new_primary = validate_repair_selection(
+                primary_override, primary_available
+            )
             primary_origin = "user_override"
-        elif old_primary in available:
+        elif old_primary in primary_available:
             new_primary = old_primary
             primary_origin = old_primary_origin
         else:
             if SCENARIO == "expired-primary-session-unknown":
                 fail("repair_primary_exact_selection_required")
-            new_primary = validate_repair_selection(REPAIR_SESSION_PRIMARY, available)
+            new_primary = validate_repair_selection(
+                REPAIR_SESSION_PRIMARY, primary_available
+            )
             primary_origin = "repair_session"
 
         if detail_override:
-            new_detail = validate_repair_selection(detail_override, available)
-        elif old_detail in available:
+            new_detail = validate_repair_selection(detail_override, detail_available)
+        elif old_detail in detail_available:
             new_detail = old_detail
             detail_origin = old_detail_origin
         else:
-            new_detail = validate_repair_selection(REPAIR_DETAIL_DEFAULT, available)
+            new_detail = validate_repair_selection(
+                REPAIR_DETAIL_DEFAULT, detail_available
+            )
             detail_origin = "repair"
 
         primary_changed = new_primary != old_primary
@@ -699,29 +798,123 @@ def main(args):
         detail_write_required = detail_changed or detail_override is not None
         if detail_override:
             detail_origin = "repair"
+        primary_effect = (
+            "update_exact_primary_keep_disabled_unverified"
+            if primary_changed or primary_origin != old_primary_origin
+            else "preserve_exact_primary_keep_disabled_unverified"
+        )
+        enabled_queries = config["enabled_query_count"]
+        enabled_sources = config["enabled_source_count"]
+        proposal = {
+            "primary": {
+                "before": old_primary,
+                "after": new_primary,
+                "changed": primary_changed,
+                "origin_before": old_primary_origin,
+                "origin_after": primary_origin,
+            },
+            "detail": {
+                "before": old_detail,
+                "after": new_detail,
+                "changed": detail_changed,
+                "origin_before": old_detail_origin,
+                "origin_after": detail_origin,
+                "write_required": detail_write_required,
+            },
+            "confirmation": {
+                "required": True,
+                "count": 0,
+                "scope": "exact_candidate_machine_change_and_one_canary",
+                "canary_count": 1,
+                "usage_context": {
+                    "action": "metered_canary_retry_or_repair",
+                    "known_first_page_calls": enabled_queries * enabled_sources,
+                    "baseline_formula": (
+                        f"{enabled_queries}_enabled_"
+                        f"{'query' if enabled_queries == 1 else 'queries'}*"
+                        f"{enabled_sources}_enabled_"
+                        f"{'source' if enabled_sources == 1 else 'sources'}"
+                    ),
+                    "uncertain_additions": [
+                        "continuation_pages",
+                        "full_posting_detail_reads",
+                        "metered_failures_and_retries",
+                    ],
+                    "recurring_multiplier": "approved_canary_attempt_only",
+                },
+                "effects": {
+                    "config": (
+                        "replace_exact_detail_model"
+                        if detail_write_required
+                        else "preserve_bytes"
+                    ),
+                    "binding": (
+                        "write_fresh_canonical_repair_binding"
+                        if detail_write_required
+                        else "preserve_bytes"
+                    ),
+                    "scheduler": primary_effect,
+                    "machine_change": (
+                        "update_existing_registered_job_without_enabling"
+                    ),
+                    "removal": "stop_or_remove_job_and_clear_scheduling_marker",
+                    "rollback": (
+                        "restore_exact_config_sidecar_registry_and_job_snapshot"
+                    ),
+                },
+            },
+        }
+        receipt_id = fresh_repair_receipt_id(state)
+        payload = {
+            "fixture_scope": "t3_3_dev_fixture_transaction_evidence",
+            "receipt_id": receipt_id,
+            "workspace": str(workspace),
+            "registry_path": str(registry_path),
+            "job_id": job_id,
+            "scenario": SCENARIO,
+            "available_models": sorted(available),
+            "refused_slots": refused_slots,
+            "primary_override": primary_override,
+            "detail_override": detail_override,
+            "config_b64": encode_bytes(config_bytes),
+            "sidecar_b64": encode_bytes(sidecar_bytes),
+            "registry_b64": encode_bytes(registry_bytes),
+            "job_before": job_before,
+            "primary_before": old_primary,
+            "primary_origin_before": old_primary_origin,
+            "primary_after": new_primary,
+            "primary_origin_after": primary_origin,
+            "detail_before": old_detail,
+            "detail_origin_before": old_detail_origin,
+            "detail_after": new_detail,
+            "write_detail": detail_write_required,
+            "proposal": proposal,
+        }
+        receipts = state.setdefault("repair_candidate_receipts", {})
+        for prior_id, envelope in list(receipts.items()):
+            if envelope.get("payload", {}).get("workspace") == str(workspace):
+                receipts.pop(prior_id)
+        receipts[receipt_id] = {
+            "payload": payload,
+            "payload_sha256": payload_digest(payload),
+            "confirmation_count": 0,
+        }
+        write_state(state)
         log(operation, arguments, "candidate_resolved")
         emit(
             {
-                "primary": {
-                    "before": old_primary,
-                    "after": new_primary,
-                    "changed": primary_changed,
-                    "origin": primary_origin,
-                },
-                "detail": {
-                    "before": old_detail,
-                    "after": new_detail,
-                    "changed": detail_changed,
-                    "origin": detail_origin,
-                    "write_required": detail_write_required,
-                },
+                "receipt_id": receipt_id,
+                "receipt_integrity": "sha256_deterministic_tamper_detection_only",
+                **proposal,
             }
         )
 
     if operation == "repair-unscheduled-detail":
+        if len(args) != 3:
+            fail("invalid_repair_request")
         workspace = pathlib.Path(need_arg(args, 1, "workspace")).resolve()
-        registry_path = pathlib.Path(need_arg(args, 2, "registry"))
-        detail_after = need_arg(args, 3, "detail_after")
+        detail_after = need_arg(args, 2, "detail_after")
+        registry_path = canonical_registry_path()
         state = read_state()
         if registry_path.exists():
             try:
@@ -729,11 +922,35 @@ def main(args):
             except OSError:
                 fail("invalid_repair_state")
             scheduling = registry.get("scheduling")
-            if isinstance(scheduling, dict) and scheduling.get("installed") is True:
-                fail("scheduled_repair_required")
+            if scheduling is not None:
+                if (
+                    not isinstance(scheduling, dict)
+                    or not isinstance(scheduling.get("installed"), bool)
+                ):
+                    fail("invalid_repair_state")
+                if scheduling["installed"]:
+                    fail("scheduled_repair_required")
+                cleared_fields = {
+                    "installed",
+                    "mechanism",
+                    "set_at",
+                    "primary_model",
+                    "primary_model_origin",
+                }
+                if set(scheduling) != cleared_fields:
+                    fail("invalid_repair_state")
+                if any(
+                    scheduling.get(field) is not None
+                    for field in (
+                        "mechanism",
+                        "set_at",
+                        "primary_model",
+                        "primary_model_origin",
+                    )
+                ):
+                    fail("invalid_repair_state")
         if state["jobs"]:
             fail("scheduled_repair_required")
-        validate_repair_selection(detail_after, available_repair_models())
         config_path = workspace / "config.yaml"
         sidecar_path = workspace / "runs" / "detail-model-binding.json"
         try:
@@ -746,8 +963,16 @@ def main(args):
         if config is None or not valid_binding(sidecar, config["detail_model"]):
             fail("invalid_repair_state")
         detail_before = config["detail_model"]
+        detail_available = set(available_repair_models())
+        if "detail" in exact_dispatch_refused_slots():
+            detail_available.discard(detail_before)
+        validate_repair_selection(detail_after, detail_available)
         config_after = replace_detail_model(config_before, detail_before, detail_after)
+        if config_after is None:
+            fail("invalid_repair_state")
         binding_facts = fresh_repair_binding(state)
+        if binding_facts is None:
+            fail("invalid_test_state")
         binding_after = {
             "version": 1,
             "binding_id": binding_facts["binding_id"],
@@ -755,6 +980,21 @@ def main(args):
             "detail_model_origin": "repair",
             "bound_at": binding_facts["bound_at"],
         }
+        binding_before_time = parse_utc_timestamp(sidecar.get("bound_at"))
+        binding_after_time = parse_utc_timestamp(binding_after.get("bound_at"))
+        if (
+            binding_after["binding_id"] == sidecar.get("binding_id")
+            or binding_before_time is None
+            or binding_after_time is None
+            or binding_after_time <= binding_before_time
+        ):
+            write_state(state)
+            log(operation, arguments, "binding_freshness_failed_preserved_exact")
+            fail(
+                "repair_activation_failed",
+                config="restored_exact",
+                sidecar="restored_exact",
+            )
         atomic_write_bytes(config_path, config_after)
         if SCENARIO == "repair-unscheduled-partial-failure":
             atomic_write_bytes(config_path, config_before)
@@ -802,123 +1042,140 @@ def main(args):
                 slots=unavailable,
                 substitution_attempted=False,
             )
+        refused_slots = exact_dispatch_refused_slots()
+        if refused_slots:
+            log(
+                operation,
+                arguments,
+                "blocked_exact_dispatch_refused_no_substitute",
+            )
+            fail(
+                "exact_model_repair_required",
+                cause="exact_dispatch_refused",
+                slots=refused_slots,
+                substitution_attempted=False,
+                completed_attempt_accounting="preserved",
+            )
         log(operation, arguments, "exact_models_available")
         emit({"available": True, "substitution_attempted": False})
 
     if operation == "begin-repair":
+        if len(args) != 3:
+            fail("repair_candidate_receipt_required")
         workspace = pathlib.Path(need_arg(args, 1, "workspace")).resolve()
-        registry_path = pathlib.Path(need_arg(args, 2, "registry"))
-        job_id = need_arg(args, 3, "job_id")
-        primary_after = need_arg(args, 4, "primary_after")
-        primary_origin_after = need_arg(args, 5, "primary_origin_after")
-        detail_after = need_arg(args, 6, "detail_after")
-        write_detail_token = need_arg(args, 7, "write_detail")
-        if write_detail_token not in {"true", "false"}:
-            fail("invalid_repair_request")
-        write_detail = write_detail_token == "true"
-        if primary_origin_after not in {"repair_session", "user_override"}:
-            if primary_origin_after != "session_inheritance":
-                fail("invalid_repair_request")
-        available = available_repair_models()
-        validate_repair_selection(primary_after, available)
-        validate_repair_selection(detail_after, available)
-        config_path = workspace / "config.yaml"
-        sidecar_path = workspace / "runs" / "detail-model-binding.json"
-        try:
-            config_bytes = config_path.read_bytes()
-            sidecar_bytes = sidecar_path.read_bytes()
-            registry_bytes = registry_path.read_bytes()
-        except OSError:
-            fail("invalid_repair_state")
-        config = parse_candidate_config(config_bytes.decode("utf-8"))
-        sidecar = parse_json_bytes(sidecar_bytes)
-        registry = parse_json_bytes(registry_bytes)
+        receipt_id = need_arg(args, 2, "receipt_id")
         state = read_state()
-        job_before = state["jobs"].get(job_id)
-        scheduling = registry.get("scheduling")
+        receipts = state.get("repair_candidate_receipts", {})
+        envelope = receipts.pop(receipt_id, None)
+        if not isinstance(envelope, dict):
+            fail("repair_candidate_receipt_required")
+        payload = envelope.get("payload")
         if (
-            config is None
-            or not valid_binding(sidecar, config["detail_model"])
-            or not isinstance(scheduling, dict)
-            or not isinstance(job_before, dict)
-            or scheduling.get("scheduler_id") != job_id
-            or scheduling.get("installed") is not True
-            or scheduling.get("verified") is not False
-            or job_before.get("state") != "disabled"
-            or job_before.get("verified") is not False
+            not isinstance(payload, dict)
+            or envelope.get("payload_sha256") != payload_digest(payload)
+            or payload.get("receipt_id") != receipt_id
+            or envelope.get("confirmation_count") != 1
+            or payload.get("fixture_scope")
+            != "t3_3_dev_fixture_transaction_evidence"
+            or payload.get("workspace") != str(workspace)
+            or payload.get("scenario") != SCENARIO
+            or payload.get("available_models") != sorted(available_repair_models())
+            or payload.get("refused_slots") != exact_dispatch_refused_slots()
         ):
-            fail("invalid_repair_state")
-        primary_before = scheduling.get("primary_model")
-        primary_origin_before = scheduling.get("primary_model_origin")
-        detail_before = config["detail_model"]
-        if not all(
-            isinstance(value, str) and value
-            for value in (primary_before, primary_origin_before, detail_before)
-        ):
-            fail("invalid_repair_state")
-        if primary_after == primary_before:
-            if primary_origin_after not in {primary_origin_before, "user_override"}:
-                fail("invalid_repair_request")
-        elif primary_origin_after not in {"repair_session", "user_override"}:
-            fail("invalid_repair_request")
-        if not write_detail and detail_after != detail_before:
-            fail("invalid_repair_request")
+            write_state(state)
+            fail("repair_candidate_receipt_invalid")
+        registry_value = os.environ.get("JOBSEARCH_OS_REGISTRY")
+        if not registry_value:
+            write_state(state)
+            fail("repair_candidate_receipt_invalid")
+        registry_path = pathlib.Path(registry_value).resolve()
+        job_id = payload.get("job_id")
+        if payload.get("registry_path") != str(registry_path):
+            write_state(state)
+            fail("repair_candidate_receipt_invalid")
+        try:
+            stale = (
+                (workspace / "config.yaml").read_bytes()
+                != decode_bytes(payload["config_b64"])
+                or (workspace / "runs" / "detail-model-binding.json").read_bytes()
+                != decode_bytes(payload["sidecar_b64"])
+                or registry_path.read_bytes() != decode_bytes(payload["registry_b64"])
+                or state["jobs"].get(job_id) != payload.get("job_before")
+            )
+        except (KeyError, OSError):
+            stale = True
+        if stale:
+            write_state(state)
+            fail("repair_candidate_receipt_stale")
         key = repair_key(workspace)
         transactions = state.setdefault("repair_transactions", {})
         if key in transactions:
+            write_state(state)
             fail("repair_already_in_progress")
         transactions[key] = {
             "registry_path": str(registry_path),
             "job_id": job_id,
-            "config_b64": encode_bytes(config_bytes),
-            "sidecar_b64": encode_bytes(sidecar_bytes),
-            "registry_b64": encode_bytes(registry_bytes),
-            "job_before": job_before,
-            "primary_before": primary_before,
-            "primary_origin_before": primary_origin_before,
-            "primary_after": primary_after,
-            "primary_origin_after": primary_origin_after,
-            "detail_before": detail_before,
-            "detail_after": detail_after,
-            "write_detail": write_detail,
-            "confirmation_count": 0,
+            "receipt_id": receipt_id,
+            "scenario": payload["scenario"],
+            "config_b64": payload["config_b64"],
+            "sidecar_b64": payload["sidecar_b64"],
+            "registry_b64": payload["registry_b64"],
+            "job_before": payload["job_before"],
+            "primary_before": payload["primary_before"],
+            "primary_origin_before": payload["primary_origin_before"],
+            "primary_after": payload["primary_after"],
+            "primary_origin_after": payload["primary_origin_after"],
+            "detail_before": payload["detail_before"],
+            "detail_after": payload["detail_after"],
+            "write_detail": payload["write_detail"],
+            "refused_slots": payload["refused_slots"],
+            "confirmation_count": 1,
             "stage": "candidate",
         }
         write_state(state)
-        log(operation, arguments, "candidate_snapshotted")
+        log(operation, arguments, "authorized_receipt_consumed")
         emit(
             {
-                "primary": {
-                    "before": primary_before,
-                    "after": primary_after,
-                    "origin_before": primary_origin_before,
-                    "origin_after": primary_origin_after,
-                },
-                "detail": {
-                    "before": detail_before,
-                    "after": detail_after,
-                    "write_required": write_detail,
-                },
-                "confirmation_required": True,
-                "confirmation_count": 0,
-                "canary_action": "metered_canary_retry_or_repair",
+                "receipt_id": receipt_id,
+                "confirmation_count": 1,
+                "stage": "authorized_candidate_snapshotted",
                 "schedule_during_repair": "disabled_unverified",
             }
         )
 
     if operation == "authorize-repair":
+        if len(args) != 3:
+            fail("repair_candidate_receipt_required")
         workspace = pathlib.Path(need_arg(args, 1, "workspace")).resolve()
-        job_id = need_arg(args, 2, "job_id")
+        receipt_id = need_arg(args, 2, "receipt_id")
         state = read_state()
-        transaction = state.get("repair_transactions", {}).get(repair_key(workspace))
-        if not isinstance(transaction, dict) or transaction.get("job_id") != job_id:
-            fail("missing_repair_candidate")
-        if transaction.get("confirmation_count") != 0:
+        receipts = state.get("repair_candidate_receipts", {})
+        envelope = receipts.get(receipt_id)
+        if not isinstance(envelope, dict):
+            fail("repair_candidate_receipt_required")
+        payload = envelope.get("payload")
+        if (
+            not isinstance(payload, dict)
+            or envelope.get("payload_sha256") != payload_digest(payload)
+            or payload.get("receipt_id") != receipt_id
+            or payload.get("workspace") != str(workspace)
+            or payload.get("scenario") != SCENARIO
+        ):
+            receipts.pop(receipt_id, None)
+            write_state(state)
+            fail("repair_candidate_receipt_invalid")
+        if envelope.get("confirmation_count") != 0:
             fail("duplicate_repair_confirmation")
-        transaction["confirmation_count"] = 1
+        envelope["confirmation_count"] = 1
         write_state(state)
         log(operation, arguments, "authorized_once")
-        emit({"confirmation_count": 1, "scope": "one_repair_canary"})
+        emit(
+            {
+                "receipt_id": receipt_id,
+                "confirmation_count": 1,
+                "scope": "exact_candidate_and_one_repair_canary",
+            }
+        )
 
     if operation == "activate-repair":
         workspace = pathlib.Path(need_arg(args, 1, "workspace")).resolve()
@@ -927,40 +1184,63 @@ def main(args):
         state = read_state()
         key = repair_key(workspace)
         transaction = state.get("repair_transactions", {}).get(key)
-        if (
-            not isinstance(transaction, dict)
-            or transaction.get("job_id") != job_id
-            or transaction.get("registry_path") != str(registry_path)
-        ):
+        if not isinstance(transaction, dict):
             fail("missing_repair_candidate")
-        if transaction.get("confirmation_count") != 1:
-            fail("fresh_repair_confirmation_required")
-        if transaction.get("stage") != "candidate":
-            fail("invalid_repair_state")
+        bound_registry_path = pathlib.Path(transaction["registry_path"])
+        bound_job_id = transaction["job_id"]
+        if (
+            transaction.get("job_id") != job_id
+            or transaction.get("registry_path") != str(registry_path)
+            or transaction.get("scenario") != SCENARIO
+            or transaction.get("confirmation_count") != 1
+            or transaction.get("stage") != "candidate"
+        ):
+            restore_repair(
+                state,
+                workspace,
+                bound_registry_path,
+                bound_job_id,
+                transaction,
+            )
+            log(operation, arguments, "setup_invalid_restored_exact")
+            fail(
+                "repair_setup_invalid",
+                authorization_consumed=True,
+                registry="restored_exact",
+                config="restored_exact",
+                sidecar="restored_exact",
+                job="restored_exact",
+                verified=False,
+            )
         config_path = workspace / "config.yaml"
         sidecar_path = workspace / "runs" / "detail-model-binding.json"
-        if (
-            config_path.read_bytes() != decode_bytes(transaction["config_b64"])
-            or sidecar_path.read_bytes() != decode_bytes(transaction["sidecar_b64"])
-            or registry_path.read_bytes() != decode_bytes(transaction["registry_b64"])
-            or state["jobs"].get(job_id) != transaction["job_before"]
-        ):
-            fail("repair_baseline_changed")
+        try:
+            baseline_changed = (
+                config_path.read_bytes() != decode_bytes(transaction["config_b64"])
+                or sidecar_path.read_bytes()
+                != decode_bytes(transaction["sidecar_b64"])
+                or registry_path.read_bytes()
+                != decode_bytes(transaction["registry_b64"])
+                or state["jobs"].get(job_id) != transaction["job_before"]
+            )
+        except OSError:
+            baseline_changed = True
+        if baseline_changed:
+            restore_repair(state, workspace, registry_path, job_id, transaction)
+            log(operation, arguments, "baseline_changed_restored_exact")
+            fail(
+                "repair_baseline_changed",
+                authorization_consumed=True,
+                registry="restored_exact",
+                config="restored_exact",
+                sidecar="restored_exact",
+                job="restored_exact",
+                verified=False,
+            )
         registry = parse_json_bytes(registry_path.read_bytes())
-        registry["scheduling"]["primary_model"] = transaction["primary_after"]
-        registry["scheduling"]["primary_model_origin"] = transaction[
-            "primary_origin_after"
-        ]
-        registry["scheduling"]["verified"] = False
-        atomic_write_bytes(
-            registry_path,
-            (json.dumps(registry, indent=2, sort_keys=True) + "\n").encode("utf-8"),
-        )
-        job = state["jobs"][job_id]
-        job["primary_model"] = transaction["primary_after"]
-        job["primary_model_origin"] = transaction["primary_origin_after"]
-        job["state"] = "disabled"
-        job["verified"] = False
+        config_after = None
+        binding_after = None
+        binding_after_bytes = None
         if transaction["write_detail"]:
             config_after = replace_detail_model(
                 decode_bytes(transaction["config_b64"]),
@@ -968,19 +1248,74 @@ def main(args):
                 transaction["detail_after"],
             )
             binding_facts = fresh_repair_binding(state)
-            binding_after = {
-                "version": 1,
-                "binding_id": binding_facts["binding_id"],
-                "detail_model": transaction["detail_after"],
-                "detail_model_origin": "repair",
-                "bound_at": binding_facts["bound_at"],
-            }
+            if config_after is not None and binding_facts is not None:
+                binding_after = {
+                    "version": 1,
+                    "binding_id": binding_facts["binding_id"],
+                    "detail_model": transaction["detail_after"],
+                    "detail_model_origin": "repair",
+                    "bound_at": binding_facts["bound_at"],
+                }
+            binding_before = parse_json_bytes(
+                decode_bytes(transaction["sidecar_b64"])
+            )
+            binding_before_time = parse_utc_timestamp(binding_before.get("bound_at"))
+            binding_after_time = (
+                parse_utc_timestamp(binding_after.get("bound_at"))
+                if isinstance(binding_after, dict)
+                else None
+            )
+            if (
+                not isinstance(binding_after, dict)
+                or binding_after["binding_id"] == binding_before.get("binding_id")
+                or binding_before_time is None
+                or binding_after_time is None
+                or binding_after_time <= binding_before_time
+            ):
+                restore_repair(state, workspace, registry_path, job_id, transaction)
+                log(operation, arguments, "binding_freshness_failed_restored_exact")
+                fail(
+                    "repair_activation_failed",
+                    authorization_consumed=True,
+                    registry="restored_exact",
+                    config="restored_exact",
+                    sidecar="restored_exact",
+                    job="restored_exact",
+                    verified=False,
+                )
+            transaction["staged_detail_binding"] = binding_after
+            binding_after_bytes = (
+                json.dumps(binding_after, indent=2, sort_keys=True) + "\n"
+            ).encode("utf-8")
+            transaction["staged_sidecar_b64"] = encode_bytes(binding_after_bytes)
+        registry["scheduling"]["primary_model"] = transaction["primary_after"]
+        registry["scheduling"]["primary_model_origin"] = transaction[
+            "primary_origin_after"
+        ]
+        registry["scheduling"]["verified"] = False
+        registry_after_bytes = (
+            json.dumps(registry, indent=2, sort_keys=True) + "\n"
+        ).encode("utf-8")
+        transaction["staged_registry_b64"] = encode_bytes(registry_after_bytes)
+        atomic_write_bytes(
+            registry_path,
+            registry_after_bytes,
+        )
+        job = state["jobs"][job_id]
+        job["primary_model"] = transaction["primary_after"]
+        job["primary_model_origin"] = transaction["primary_origin_after"]
+        job["state"] = "disabled"
+        job["verified"] = False
+        transaction["staged_registry"] = json.loads(json.dumps(registry))
+        transaction["staged_job"] = json.loads(json.dumps(job))
+        if transaction["write_detail"]:
             atomic_write_bytes(config_path, config_after)
             if SCENARIO == "repair-partial-activation-failure":
                 restore_repair(state, workspace, registry_path, job_id, transaction)
                 log(operation, arguments, "activation_failed_restored_exact")
                 fail(
                     "repair_activation_failed",
+                    authorization_consumed=True,
                     registry="restored_exact",
                     config="restored_exact",
                     sidecar="restored_exact",
@@ -989,9 +1324,7 @@ def main(args):
                 )
             atomic_write_bytes(
                 sidecar_path,
-                (json.dumps(binding_after, indent=2, sort_keys=True) + "\n").encode(
-                    "utf-8"
-                ),
+                binding_after_bytes,
             )
         transaction["stage"] = "active_unverified"
         write_state(state)
@@ -1016,27 +1349,49 @@ def main(args):
         if (
             transaction.get("job_id") != job_id
             or transaction.get("registry_path") != str(registry_path)
+            or transaction.get("scenario") != SCENARIO
             or transaction.get("confirmation_count") != 1
             or transaction.get("stage") != "active_unverified"
         ):
-            fail("invalid_repair_state")
-        if SCENARIO == "repair-canary-failure":
-            restore_repair(state, workspace, registry_path, job_id, transaction)
-            log(operation, arguments, "failed_rolled_back")
+            restore_repair(
+                state,
+                workspace,
+                pathlib.Path(transaction["registry_path"]),
+                transaction["job_id"],
+                transaction,
+            )
+            log(operation, arguments, "canary_setup_invalid_restored_exact")
             fail(
-                "repair_canary_failed",
+                "repair_canary_evidence_invalid",
+                authorization_consumed=True,
                 registry="restored_exact",
                 config="restored_exact",
                 sidecar="restored_exact",
                 job="restored_exact",
                 verified=False,
             )
+        if SCENARIO == "repair-canary-failure":
+            restore_repair(state, workspace, registry_path, job_id, transaction)
+            log(operation, arguments, "failed_rolled_back")
+            fail(
+                "repair_canary_failed",
+                authorization_consumed=True,
+                registry="restored_exact",
+                config="restored_exact",
+                sidecar="restored_exact",
+                job="restored_exact",
+                verified=False,
+            )
+        config_bytes = b""
+        sidecar_bytes = b""
+        registry_bytes = b""
         try:
             config_bytes = (workspace / "config.yaml").read_bytes()
             sidecar_bytes = (
                 workspace / "runs" / "detail-model-binding.json"
             ).read_bytes()
-            registry = json.loads(registry_path.read_text(encoding="utf-8"))
+            registry_bytes = registry_path.read_bytes()
+            registry = json.loads(registry_bytes.decode("utf-8"))
             sidecar = json.loads(sidecar_bytes.decode("utf-8"))
             config = parse_candidate_config(config_bytes.decode("utf-8"))
         except (OSError, UnicodeError, ValueError):
@@ -1050,13 +1405,35 @@ def main(args):
                 transaction["detail_before"],
                 transaction["detail_after"],
             )
+            staged_binding = transaction.get("staged_detail_binding")
+            snapshot_binding = parse_json_bytes(
+                decode_bytes(transaction["sidecar_b64"])
+            )
+            staged_binding_time = (
+                parse_utc_timestamp(staged_binding.get("bound_at"))
+                if isinstance(staged_binding, dict)
+                else None
+            )
+            snapshot_binding_time = parse_utc_timestamp(
+                snapshot_binding.get("bound_at")
+            )
             detail_evidence_valid = (
                 config_bytes == expected_config
                 if isinstance(config, dict)
                 else False
-            ) and valid_binding(sidecar, transaction["detail_after"])
-            if detail_evidence_valid:
-                detail_evidence_valid = sidecar.get("detail_model_origin") == "repair"
+            ) and (
+                isinstance(staged_binding, dict)
+                and sidecar == staged_binding
+                and sidecar_bytes
+                == decode_bytes(transaction.get("staged_sidecar_b64"))
+                and valid_binding(staged_binding, transaction["detail_after"])
+                and staged_binding.get("detail_model_origin") == "repair"
+                and staged_binding.get("binding_id")
+                != snapshot_binding.get("binding_id")
+                and staged_binding_time is not None
+                and snapshot_binding_time is not None
+                and staged_binding_time > snapshot_binding_time
+            )
         else:
             detail_evidence_valid = (
                 config_bytes == decode_bytes(transaction["config_b64"])
@@ -1064,33 +1441,53 @@ def main(args):
                 if isinstance(config, dict)
                 else False
             )
+        refused_slots = transaction.get("refused_slots")
+        refusal_evidence_valid = (
+            isinstance(refused_slots, list)
+            and set(refused_slots) <= {"primary", "detail"}
+            and (
+                "primary" not in refused_slots
+                or transaction["primary_after"] != transaction["primary_before"]
+            )
+            and (
+                "detail" not in refused_slots
+                or transaction["detail_after"] != transaction["detail_before"]
+            )
+        )
+        scheduling = registry.get("scheduling") if isinstance(registry, dict) else None
         if (
             not isinstance(job, dict)
             or job.get("state") != "disabled"
             or job.get("verified") is not False
             or not isinstance(registry, dict)
-            or registry.get("scheduling", {}).get("verified") is not False
-            or registry["scheduling"].get("primary_model")
-            != transaction["primary_after"]
-            or registry["scheduling"].get("primary_model_origin")
+            or not isinstance(scheduling, dict)
+            or scheduling.get("verified") is not False
+            or scheduling.get("primary_model") != transaction["primary_after"]
+            or scheduling.get("primary_model_origin")
             != transaction["primary_origin_after"]
+            or registry != transaction.get("staged_registry")
+            or registry_bytes
+            != decode_bytes(transaction.get("staged_registry_b64"))
+            or job != transaction.get("staged_job")
             or job.get("primary_model") != transaction["primary_after"]
             or job.get("primary_model_origin") != transaction["primary_origin_after"]
             or not detail_evidence_valid
+            or not refusal_evidence_valid
         ):
             restore_repair(state, workspace, registry_path, job_id, transaction)
             log(operation, arguments, "invalid_evidence_restored_exact")
             fail(
                 "repair_canary_evidence_invalid",
+                authorization_consumed=True,
                 registry="restored_exact",
                 config="restored_exact",
                 sidecar="restored_exact",
                 job="restored_exact",
                 verified=False,
             )
-        registry["scheduling"]["verified"] = True
-        registry["scheduling"]["verified_at"] = "2026-07-16T13:30:00+00:00"
-        registry["scheduling"]["canary_run_id"] = "2026-07-16T13-30-00Z"
+        scheduling["verified"] = True
+        scheduling["verified_at"] = "2026-07-16T13:30:00+00:00"
+        scheduling["canary_run_id"] = "2026-07-16T13-30-00Z"
         atomic_write_bytes(
             registry_path,
             (json.dumps(registry, indent=2, sort_keys=True) + "\n").encode("utf-8"),
