@@ -2228,6 +2228,7 @@ def test_exact_model_repair_eval_matrix_is_structural_and_executable():
     agent = _evals("job-search-agent")
     runner = _evals("job-search-run")
     runner_repair = [case for case in runner if 42 <= case["id"] <= 46]
+    runner_lifecycle = [case for case in runner if 47 <= case["id"] <= 51]
     assert [case["id"] for case in home[-7:]] == [25, 26, 27, 28, 29, 30, 31]
     assert [case["id"] for case in agent[-7:]] == [15, 16, 17, 18, 19, 20, 21]
     assert [case["id"] for case in runner_repair] == [42, 43, 44, 45, 46]
@@ -2306,4 +2307,5 @@ def test_exact_model_repair_eval_matrix_is_structural_and_executable():
     assert "preserves completed attempt accounting" in refusal_text
     assert all(case.get("coverage_kind") == "executable_fixture" for case in home[-7:])
     assert all(case.get("coverage_kind") == "executable_fixture" for case in agent[-7:])
-    assert all(case.get("coverage_kind") == "executable_fixture" for case in runner[-5:])
+    assert [case["id"] for case in runner_lifecycle] == [47, 48, 49, 50, 51]
+    assert all(case.get("coverage_kind") == "executable_fixture" for case in runner_lifecycle)
