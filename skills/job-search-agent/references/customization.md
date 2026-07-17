@@ -180,6 +180,22 @@ sequential detail reads. Parallel approval, capacity, or refusal may change conc
 model. If that exact dispatch is unavailable or refused, block and route to interactive repair—never choose a
 replacement during the run.
 
+**Version-1 staged migration**
+
+Passive home reads, ordinary headless runs, and compatible ordinary edits stay on version 1, preserve the
+exact config bytes when read-only, and create no binding sidecar. Migrate only for an interactive action that
+requires a version-2 exact binding, such as selecting a new exact detail model or creating a verified
+schedule. Follow `../../../shared/references/internals.md` → **Version-1 staged migration** exactly; do not
+restate or improvise its transaction here.
+
+Resolve and observe the exact detail model before the decision. For scheduling, the single confirmation
+includes that exact detail model, exact primary model, version-2 config change, non-clobbering backup,
+machine change and removal path, calls-first canary context, and rollback behavior. Never add a separate
+migration prompt. After yes, treat config and the fresh matching binding sidecar as one transaction, perform
+the free preflight, and keep a new job disabled until the canary qualifies. A setup or canary failure before
+the canonical cutoff restores the exact version-1 transaction state and removes or disables the new job; a
+failure after the first qualifying complete nonblocked version-2 run never restores stale version 1.
+
 ---
 
 ## 5. Explaining agent-data usage

@@ -212,6 +212,68 @@
         "The second home reads the marker and does not repeat the nudge; later scheduled runs use the saved scope without another confirmation",
         "No budget, credits, or cost config field is added and no account balance or actual charge is inferred"
       ]
+    },
+    {
+      "id": 15,
+      "scenario": "passive version-1 home read preserves bytes and creates no binding",
+      "coverage_kind": "executable_fixture",
+      "prompt": "PRE-SEED a returning workspace with a valid version-1 config containing a balanced legacy selector, a sentinel comment, and an unrelated sentinel field. Seed preferences/jobs/digest plus registry active_workspace, a sentinel key, and a fresh update_check cache with checked_at equal to the current UTC ISO and status failed; leave runs/detail-model-binding.json absent. Snapshot exact config bytes, the complete runs directory, and registry bytes. Symlink <repo>/tests/fake-host-capabilities into <tmp>/_bin, prepend it to PATH, and invoke job-search only to render home; do not request a v2-required action.",
+      "expectations": [
+        "The passive home read renders the ordinary returning-user home without resolving a host model, migrating config, or prompting about migration",
+        "The fresh update_check cache suppresses an update fetch or cache write; config.yaml, registry, and every pre-existing artifact remain byte-for-byte unchanged, and the sentinel comment, config field, and registry key remain present",
+        "runs/detail-model-binding.json remains absent and no runs/config-backups directory is created",
+        "No fake-host-capabilities model, preflight, canary, or job operation occurs; passive compatibility is proved by the empty host log and artifact snapshots"
+      ]
+    },
+    {
+      "id": 16,
+      "scenario": "version-1 schedule request migrates transactionally in its single schedule confirmation",
+      "coverage_kind": "executable_fixture",
+      "prompt": "PRE-SEED a returning version-1 workspace as in case 15, with daily cadence, two enabled queries, two enabled sources, exact original-byte snapshot, no binding sidecar, and a registry sentinel. Symlink fake-host-capabilities into <tmp>/_bin, prepend it to PATH, set JOBSEARCH_TEST_HOST_SCENARIO=happy plus isolated host state/log, and ask to create the daily schedule. Use fake-host-capabilities utc-now; pre-create runs/config-backups/2026-07-16T12-00-00Z-config-v1.yaml with COLLISION-SENTINEL so exclusive-create collision handling is observable. Withhold yes until the complete single schedule confirmation, then approve. All host model, candidate-validation, free-preflight, disabled-job, canary, and remove/disable effects must use the fixture; all job data calls use fake-agent-data; never touch a real scheduler or network.",
+      "expectations": [
+        "Before yes, one single schedule confirmation names cadence and machine change, removal path, exact primary model and exact detail model returned by fake-host-capabilities, the version-1 to version-2 migration, backup, calls-first recurring/canary context, one canary, and rollback; there is no separate migration prompt or model-choice ceremony",
+        "Before yes config, binding, registry, scheduler fixture state, call log, and collision backup are unchanged",
+        "After yes the complete candidate preserves the sentinel comment and unrelated field, replaces only version and required model material, and validate-candidate passes before activation",
+        "The original bytes are exclusively saved under runs/config-backups with a fresh UTC-safe timestamp; the pre-existing COLLISION-SENTINEL backup is never overwritten, truncated, or reused",
+        "Config and a fresh matching runs/detail-model-binding.json activate as one validated transaction; free-preflight reports zero metered calls before register-disabled and canary",
+        "Only after fake-host-capabilities qualify-cutoff receives the eligible run record, exact final digest, active binding, and the canonical lifecycle fold's can_complete=true does the matching binding id/model establish the first successful version-2 run cutoff; the fixture job then becomes eligible for the later scheduling flow, while this T3.2 fixture claims no general scheduler fidelity",
+        "No raw migration class or invented E-* migration code appears in normal chat, home, or digest"
+      ]
+    },
+    {
+      "id": 17,
+      "scenario": "version-1 migration candidate validation failure leaves the baseline untouched",
+      "coverage_kind": "executable_fixture",
+      "prompt": "PRE-SEED the same version-1 schedule-request workspace and snapshots as case 16, with no sidecar. Set JOBSEARCH_TEST_HOST_SCENARIO=candidate-validation-failure and approve the complete single schedule confirmation. Drive validation through fake-host-capabilities validate-candidate. Inspect exact bytes, sidecar, backups, host state/log, registry, and fake agent-data call log.",
+      "expectations": [
+        "The deterministic validation failure occurs before backup, activation, free preflight, canary, registry schedule write, or any metered call",
+        "Original config bytes remain exact, runs/detail-model-binding.json remains absent, no new config-backups file is created, and no test job exists",
+        "Normal user output states the observed validation cause, that the version-1 workspace was preserved, the next step, and exact conversational fix without a raw internal class or E-* migration code"
+      ]
+    },
+    {
+      "id": 18,
+      "scenario": "version-1 migration canary failure rolls back the pair and removes the new test job",
+      "coverage_kind": "executable_fixture",
+      "prompt": "PRE-SEED and approve as in case 16, but set JOBSEARCH_TEST_HOST_SCENARIO=canary-failure. Let candidate validation, non-clobbering backup, pair activation, free-preflight, and register-disabled succeed; then drive the canary failure and cleanup through fake-host-capabilities. Require the flow to call remove-job (or disable-job only when removal reports unavailable). Inspect exact original-byte snapshot, active config/sidecar, backup, host state/log, registry, and call log.",
+      "expectations": [
+        "The canary failure is a blocked run and does not qualify as the first successful version-2 run cutoff",
+        "The migration transaction atomically restores exact original version-1 config bytes and prior sidecar absence, so the newly created runs/detail-model-binding.json is removed; the recovery backup remains and is byte-identical to v1",
+        "The host log proves remove-job removed the newly registered disabled test job (or disable-job left it disabled only if removal was unavailable); registry never claims an installed or verified schedule",
+        "No later operation guesses success from registration, process status, or a started/blocked run; user output states cause, restored work, next step, and fix without a raw migration code"
+      ]
+    },
+    {
+      "id": 19,
+      "scenario": "first successful version-2 run fixes the rollback cutoff against later failure",
+      "coverage_kind": "executable_fixture",
+      "prompt": "Complete the happy migration from case 16 and retain its exact v1 backup, active v2 config, matching binding id/model, complete nonblocked run record, exact final digest, host log, and registry. First show that a started-only fixture canary and a blocked fixture canary do not qualify. Fold the canonical lifecycle ledger and drive fake-host-capabilities qualify-cutoff with the eligible run record, exact digest, active binding, and can_complete value; exercise false before true. Then show the first successful version-2 run with non-null completed_at, nonblocked run_health, matching binding/model, and final artifacts. After that cutoff, inject a later preflight or canary failure and inspect every file.",
+      "expectations": [
+        "A merely started run, blocked run, missing completed_at, mismatched binding/model, missing exact final artifact, or lifecycle can_complete=false makes qualify-cutoff fail and never establishes the rollback cutoff",
+        "The first successful version-2 run qualifies only when qualify-cutoff observes lifecycle can_complete=true plus complete nonblocked written evidence whose detail_model_binding_id and exact detail model match the active migration pair",
+        "After that cutoff, the later failure preserves the active version-2 config and matching binding evidence and never restores the stale version-1 backup; repair remains a version-2 action",
+        "The backup stays immutable recovery history, the failed new test job is removed or disabled, and no normal user surface leaks a raw migration class or invented E-* code"
+      ]
     }
   ]
 }

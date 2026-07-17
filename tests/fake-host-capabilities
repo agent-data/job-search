@@ -1,0 +1,373 @@
+#!/usr/bin/env python3
+"""T3.2-only host-capability shim for exact-model migration evals.
+
+This is not a scheduler emulator. It exposes only the deterministic model facts and
+migration-stage effects needed to drive v1 resolution, free preflight, a disabled
+test-job canary, cleanup, and rollback-cutoff evidence. It never touches a real host
+model roster, scheduler, network, or agent-data account.
+"""
+
+import json
+import os
+import pathlib
+import re
+import sys
+import tempfile
+from datetime import datetime, timedelta, timezone
+
+
+SCENARIO = os.environ.get("JOBSEARCH_TEST_HOST_SCENARIO", "happy")
+LOG_PATH = os.environ.get("JOBSEARCH_TEST_HOST_LOG")
+STATE_PATH = os.environ.get("JOBSEARCH_TEST_HOST_STATE")
+ROSTER = {
+    "fast": "fake-fast-001",
+    "balanced": "fake-review-001",
+    "high": "fake-capable-001",
+}
+ALIASES = {"haiku": "fast", "sonnet": "balanced", "opus": "high"}
+PRIMARY = "fake-primary-001"
+BINDING_ID_PATTERN = re.compile(
+    r"binding-[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}"
+)
+
+
+def yaml_scalar(value):
+    value = value.split("#", 1)[0].strip()
+    if len(value) >= 2 and value[0] == value[-1] and value[0] in {"'", '"'}:
+        value = value[1:-1]
+    return value
+
+
+def parse_candidate_config(text):
+    """Parse only the canonical fields this deterministic fixture must validate."""
+    top = {}
+    nested = {}
+    query_rows = []
+    section = None
+    for raw_line in text.splitlines():
+        if not raw_line.strip() or raw_line.lstrip().startswith("#"):
+            continue
+        if raw_line == raw_line.lstrip() and ":" in raw_line:
+            key, value = raw_line.split(":", 1)
+            section = key.strip()
+            top[section] = yaml_scalar(value)
+            continue
+        if section == "queries" and raw_line.startswith("  - "):
+            query_rows.append(raw_line.strip())
+            continue
+        match = re.match(r"^  ([a-z_]+):\s*(.*)$", raw_line)
+        if match:
+            nested[(section, match.group(1))] = yaml_scalar(match.group(2))
+
+    required_nested = {
+        ("workspace", "preferences_path"),
+        ("workspace", "master_resume_path"),
+        ("search", "sources"),
+        ("search", "freshness"),
+        ("search", "detail_model"),
+        ("schedule", "frequency"),
+        ("schedule", "time"),
+        ("schedule", "timezone"),
+        ("notify", "digest_path_template"),
+        ("notify", "desktop_notify_on_block"),
+    }
+    required_query_tokens = {"id:", "keywords:", "location:", "limit:", "enabled:"}
+    if top.get("version") != "2":
+        return None
+    if not {"workspace", "queries", "search", "schedule", "notify"}.issubset(top):
+        return None
+    if not required_nested.issubset(nested):
+        return None
+    if any(not nested[field] for field in required_nested):
+        return None
+    if not query_rows or any(
+        not required_query_tokens.issubset(set(re.findall(r"[a-z_]+:", row)))
+        for row in query_rows
+    ):
+        return None
+    return {"detail_model": nested[("search", "detail_model")]}
+
+
+def valid_binding(binding, detail_model):
+    if not isinstance(binding, dict) or set(binding) != {
+        "version",
+        "binding_id",
+        "detail_model",
+        "detail_model_origin",
+        "bound_at",
+    }:
+        return False
+    if binding["version"] != 1:
+        return False
+    if not isinstance(binding["binding_id"], str) or not BINDING_ID_PATTERN.fullmatch(
+        binding["binding_id"]
+    ):
+        return False
+    if binding["detail_model"] != detail_model or detail_model not in {
+        *ROSTER.values(),
+        PRIMARY,
+    }:
+        return False
+    if binding["detail_model_origin"] not in {
+        "configured_auto",
+        "configured_user",
+        "repair",
+    }:
+        return False
+    try:
+        bound_at = datetime.fromisoformat(binding["bound_at"])
+    except (TypeError, ValueError):
+        return False
+    return bound_at.tzinfo is not None and bound_at.utcoffset() == timedelta(0)
+
+
+def regular_nonsymlink_file(path):
+    try:
+        return path.is_file() and not path.is_symlink()
+    except OSError:
+        return False
+
+
+def emit(value, *, stream=sys.stdout, status=0):
+    print(json.dumps(value, sort_keys=True), file=stream)
+    raise SystemExit(status)
+
+
+def fail(error, **evidence):
+    emit({"error": error, **evidence}, stream=sys.stderr, status=1)
+
+
+def log(operation, arguments, outcome):
+    if not LOG_PATH:
+        return
+    path = pathlib.Path(LOG_PATH)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("a", encoding="utf-8") as handle:
+        handle.write(
+            json.dumps(
+                {
+                    "operation": operation,
+                    "arguments": arguments,
+                    "scenario": SCENARIO,
+                    "outcome": outcome,
+                },
+                sort_keys=True,
+            )
+            + "\n"
+        )
+
+
+def read_state():
+    if not STATE_PATH or not pathlib.Path(STATE_PATH).exists():
+        return {"jobs": {}}
+    with pathlib.Path(STATE_PATH).open(encoding="utf-8") as handle:
+        state = json.load(handle)
+    if not isinstance(state, dict) or not isinstance(state.get("jobs"), dict):
+        fail("invalid_test_state")
+    return state
+
+
+def write_state(state):
+    if not STATE_PATH:
+        fail("missing_test_state_path")
+    path = pathlib.Path(STATE_PATH)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd, temp_name = tempfile.mkstemp(prefix=path.name + ".", dir=str(path.parent))
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            json.dump(state, handle, indent=2, sort_keys=True)
+            handle.write("\n")
+        os.replace(temp_name, path)
+    except BaseException:
+        try:
+            os.unlink(temp_name)
+        except FileNotFoundError:
+            pass
+        raise
+
+
+def need_arg(args, index, label):
+    if len(args) <= index or not args[index]:
+        fail(f"missing_{label}")
+    return args[index]
+
+
+def main(args):
+    operation = need_arg(args, 0, "operation")
+    arguments = args[1:]
+
+    if operation == "utc-now":
+        state = read_state()
+        tick = state.get("clock_tick", 0)
+        if not isinstance(tick, int) or tick < 0:
+            fail("invalid_test_clock")
+        instant = datetime(2026, 7, 16, 12, tzinfo=timezone.utc) + timedelta(seconds=tick)
+        state["clock_tick"] = tick + 1
+        write_state(state)
+        log(operation, arguments, "success")
+        emit(
+            {
+                "iso": instant.isoformat(timespec="seconds"),
+                "filename_safe": instant.strftime("%Y-%m-%dT%H-%M-%SZ"),
+            }
+        )
+
+    if operation == "model-roster":
+        if SCENARIO == "tier-roster-unavailable":
+            log(operation, arguments, "tier_roster_unavailable")
+            fail("tier_roster_unavailable")
+        log(operation, arguments, "success")
+        emit(ROSTER)
+
+    if operation == "resolve-detail":
+        selector = need_arg(args, 1, "selector")
+        selector = ALIASES.get(selector, selector)
+        if selector not in ROSTER:
+            log(operation, arguments, "invalid_selector")
+            fail("invalid_selector")
+        if SCENARIO == "tier-resolution-unavailable":
+            log(operation, arguments, "tier_resolution_unavailable")
+            fail("tier_resolution_unavailable")
+        log(operation, arguments, "success")
+        emit({"selector": arguments[0], "exact_model": ROSTER[selector]})
+
+    if operation == "primary-model":
+        if SCENARIO == "primary-unknown":
+            log(operation, arguments, "primary_unknown")
+            fail("primary_unknown")
+        log(operation, arguments, "success")
+        emit({"exact_model": PRIMARY})
+
+    if operation == "dispatch-exact":
+        model = need_arg(args, 1, "exact_model")
+        if model not in {*ROSTER.values(), PRIMARY}:
+            log(operation, arguments, "exact_model_unavailable")
+            fail("exact_model_unavailable")
+        if SCENARIO == "exact-dispatch-unsupported":
+            log(operation, arguments, "exact_dispatch_unsupported")
+            fail("exact_dispatch_unsupported")
+        if SCENARIO == "exact-dispatch-refused":
+            log(operation, arguments, "exact_dispatch_refused")
+            fail("exact_dispatch_refused")
+        log(operation, arguments, "success")
+        emit({"exact_model": model, "observed_executable": True})
+
+    if operation == "validate-candidate":
+        config_path = pathlib.Path(need_arg(args, 1, "candidate_config"))
+        binding_path = pathlib.Path(need_arg(args, 2, "candidate_binding"))
+        if SCENARIO == "candidate-validation-failure":
+            log(operation, arguments, "candidate_validation_failed")
+            fail("candidate_validation_failed")
+        try:
+            config_text = config_path.read_text(encoding="utf-8")
+            with binding_path.open(encoding="utf-8") as handle:
+                binding = json.load(handle)
+        except (OSError, ValueError):
+            log(operation, arguments, "candidate_unreadable")
+            fail("candidate_unreadable")
+        config = parse_candidate_config(config_text)
+        if config is None or not valid_binding(binding, config["detail_model"]):
+            log(operation, arguments, "candidate_validation_failed")
+            fail("candidate_validation_failed")
+        log(operation, arguments, "success")
+        emit({"candidate": "validated"})
+
+    if operation == "free-preflight":
+        if SCENARIO == "preflight-failure":
+            log(operation, arguments, "preflight_failed")
+            fail("preflight_failed", metered_calls=0)
+        log(operation, arguments, "success")
+        emit({"status": "ok", "metered_calls": 0})
+
+    if operation == "register-disabled":
+        job_id = need_arg(args, 1, "job_id")
+        state = read_state()
+        state["jobs"][job_id] = {"state": "disabled", "fixture_scope": "t3_2_migration"}
+        write_state(state)
+        log(operation, arguments, "disabled")
+        emit({"job_id": job_id, "state": "disabled"})
+
+    if operation == "canary":
+        job_id = need_arg(args, 1, "job_id")
+        state = read_state()
+        if state["jobs"].get(job_id, {}).get("state") != "disabled":
+            log(operation, arguments, "job_not_disabled")
+            fail("job_not_disabled")
+        if SCENARIO == "canary-failure":
+            log(operation, arguments, "canary_failed")
+            fail("canary_failed", run_state="blocked", completed_at=None)
+        if SCENARIO == "started-only":
+            log(operation, arguments, "started")
+            emit({"run_state": "started", "run_health": None, "completed_at": None})
+        log(operation, arguments, "complete")
+        emit(
+            {
+                "run_state": "complete",
+                "run_health": "healthy",
+                "completed_at": "2026-07-16T12:00:00+00:00",
+            }
+        )
+
+    if operation == "qualify-cutoff":
+        run_record_path = pathlib.Path(need_arg(args, 1, "run_record"))
+        digest_path = pathlib.Path(need_arg(args, 2, "final_digest"))
+        binding_path = pathlib.Path(need_arg(args, 3, "binding"))
+        can_complete = need_arg(args, 4, "can_complete")
+        try:
+            with run_record_path.open(encoding="utf-8") as handle:
+                run_record = json.load(handle)
+            with binding_path.open(encoding="utf-8") as handle:
+                binding = json.load(handle)
+        except (OSError, ValueError):
+            log(operation, arguments, "cutoff_not_qualified")
+            fail("cutoff_not_qualified")
+        detail_model = binding.get("detail_model") if isinstance(binding, dict) else None
+        binding_id = binding.get("binding_id") if isinstance(binding, dict) else None
+        completed_at = run_record.get("completed_at") if isinstance(run_record, dict) else None
+        run_health = run_record.get("run_health") if isinstance(run_record, dict) else None
+        run_binding_id = (
+            run_record.get("detail_model_binding_id")
+            if isinstance(run_record, dict)
+            else None
+        )
+        run_detail_model = (
+            run_record.get("detail_model") if isinstance(run_record, dict) else None
+        )
+        qualified = all(
+            (
+                regular_nonsymlink_file(run_record_path),
+                regular_nonsymlink_file(digest_path),
+                regular_nonsymlink_file(binding_path),
+                can_complete == "true",
+                isinstance(run_record, dict),
+                completed_at is not None,
+                run_health in {"healthy", "partial", "degraded"},
+                valid_binding(binding, detail_model),
+                run_binding_id == binding_id,
+                run_detail_model == detail_model,
+            )
+        )
+        if not qualified:
+            log(operation, arguments, "cutoff_not_qualified")
+            fail("cutoff_not_qualified")
+        log(operation, arguments, "qualified")
+        emit({"cutoff_qualifies": True})
+
+    if operation in {"remove-job", "disable-job"}:
+        job_id = need_arg(args, 1, "job_id")
+        state = read_state()
+        if operation == "remove-job":
+            state["jobs"].pop(job_id, None)
+            rendered_state = "absent"
+        else:
+            state["jobs"].setdefault(job_id, {})["state"] = "disabled"
+            rendered_state = "disabled"
+        write_state(state)
+        log(operation, arguments, rendered_state)
+        emit({"job_id": job_id, "state": rendered_state})
+
+    fail("unsupported_operation", operation=operation)
+
+
+if __name__ == "__main__":
+    main(sys.argv[1:])

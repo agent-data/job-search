@@ -323,6 +323,88 @@ pair-consistency rule to migration rollback; this is not the full migration proc
 - New workspaces are `version: 2`. Never change an existing version-1 workspace as an incidental edit;
   migration is a separate explicit flow. NEVER add a score or weight field (philosophy).
 
+## Version-1 staged migration
+
+Migration is an interactive transaction, never a passive read or an ordinary headless-run side effect. It
+starts only when the requested action requires a version-2 exact binding—especially creating a verified
+schedule or changing the detail model. Resolve the exact detail model through the setup policy above before
+asking. If resolution cannot produce an observed executable exact identifier, preserve the version-1 bytes,
+use the bounded model-binding block in `errors.md`, and stop without a backup, sidecar, scheduler job, or
+metered call. Never guess or substitute.
+
+Fold migration into the requested action's one scoped confirmation. For scheduling, that confirmation names
+the cadence and exact machine change, removal path, exact primary and detail model bindings, the version-1 to
+version-2 config change, backup path pattern, calls-first schedule/canary context, one canary, and rollback
+behavior. Do not add a separate migration prompt. A user override of the exact detail model uses
+`configured_user`; the automatic setup-policy resolution uses `configured_auto`.
+
+After confirmation, execute this transaction in order:
+
+1. Read and retain the exact original `config.yaml` bytes. Record whether
+   `runs/detail-model-binding.json` was absent; if an unexpected file exists, retain its exact bytes and
+   treat that prior state as part of rollback rather than deleting or silently accepting it as v1 evidence.
+2. Build the complete version-2 config candidate in memory. Preserve comments, ordering, formatting, and
+   every unrelated field; replace only the required schema material (`version: 1` to `version: 2`) and the
+   legacy selector with the resolved exact `search.detail_model`. Build a complete fresh matching binding
+   sidecar per `conventions.md`, with a fresh id, current UTC timestamp, and the observed origin. Validate the
+   complete parsed config, exact model value, complete sidecar shape, and exact equality before any active
+   file changes.
+3. Create `runs/config-backups/` if needed and save the exact original config bytes at
+   `runs/config-backups/<UTC-safe-timestamp>-config-v1.yaml`. The timestamp uses UTC with filename-safe
+   punctuation (hyphens rather than colons in its time component). Use an exclusive create. On collision,
+   choose a fresh UTC-safe timestamp and try another exclusive create; never truncate, replace, or reuse an
+   existing backup. If a distinct name cannot be allocated, stop before activation.
+4. Activate config plus binding as one transaction: write each complete candidate to a same-directory temp
+   file, atomically replace the two whole files, then immediately re-read and validate the active pair. A
+   partial replacement is transaction failure, not a runnable intermediate state.
+5. Perform the free preflight with the active candidate pair: local config/sidecar validation, CLI presence,
+   authentication, preferences, and service status only. Make no metered search or detail call during this
+   preflight. For schedule setup, register the new job disabled only after this preflight passes, then run the
+   one approved canary through the requested setup path; do not enable or record the schedule as verified
+   until its written run evidence qualifies below.
+6. If candidate validation, backup, activation, re-read, free preflight, setup, or canary fails before the
+   cutoff, roll back the whole migration transaction. Atomically restore the exact original version-1 config
+   bytes; restore an exact prior sidecar if one existed, otherwise remove the newly created binding sidecar;
+   and remove the new scheduler job or leave it disabled when removal is unavailable. Re-read the restored
+   state. Keep the non-clobbering backup as recovery evidence. Never report migration or scheduling success.
+
+<!-- exact-model-contract:legacy-v1-migration-transaction -->
+| Policy | Decision |
+|---|---|
+| `trigger` | `interactive_action_requires_version_2` |
+| `confirmation` | `single_action_confirmation_includes_migration_no_separate_prompt` |
+| `candidate` | `preserve_comments_and_unrelated_fields_replace_only_required_schema_and_model` |
+| `candidate_validation` | `complete_v2_config_and_fresh_matching_binding_before_activation` |
+| `backup_path` | `runs/config-backups/<utc-safe-timestamp>-config-v1.yaml` |
+| `backup_write` | `exclusive_create_retry_fresh_timestamp_never_overwrite` |
+| `activation` | `atomic_whole_file_replacements_one_config_binding_transaction` |
+| `preflight` | `free_after_activation_before_canary_or_enable` |
+| `setup_or_canary_failure` | `restore_exact_v1_bytes_and_prior_sidecar_state` |
+| `new_binding_on_rollback` | `remove` |
+| `new_scheduler_job_on_rollback` | `remove_or_disable` |
+| `post_cutoff_failure` | `never_restore_stale_v1` |
+<!-- /exact-model-contract:legacy-v1-migration-transaction -->
+
+The mechanically checkable rollback cutoff is the first complete, nonblocked run record whose
+`detail_model_binding_id` equals the fresh migration sidecar's binding id and whose `detail_model` equals the
+active version-2 config and sidecar. Fold the canonical lifecycle ledger from `run-lifecycle.md` and require
+`can_complete=true`; do not infer completion from a process exit or run-record field alone. The eligible,
+non-symlink complete run record and its exact required final digest must exist. A started run, blocked record,
+missing completion timestamp, mismatched binding, `can_complete=false`, or incomplete/missing final artifact
+does not qualify. Once qualifying evidence exists, the migration is committed: later failures may repair the
+active version-2 pair, but must never resurrect the stale version-1 backup automatically.
+
+<!-- exact-model-contract:legacy-v1-rollback-cutoff -->
+| Evidence | Decision |
+|---|---|
+| `qualifying_record` | `complete_nonblocked_run_with_matching_migration_binding_and_exact_model` |
+| `started_run` | `not_qualifying` |
+| `blocked_run` | `not_qualifying` |
+| `incomplete_or_missing_artifacts` | `not_qualifying` |
+| `lifecycle_gate` | `folded_run_ledger_can_complete_true` |
+| `effect` | `migration_committed_rollback_to_v1_forbidden` |
+<!-- /exact-model-contract:legacy-v1-rollback-cutoff -->
+
 ## Scheduling setup
 **Advocate an unattended schedule** for the recurring run — one that keeps firing with **no interactive
 session open** — on the host's or the OS's own scheduler that survives session-close (a `cron` or `launchd`

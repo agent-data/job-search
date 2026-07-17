@@ -516,6 +516,33 @@
         "The structural contract keeps raw internal classes and invented E-* codes out of normal chat and digest, routing instead to interactive model repair owned by T3.3",
         "This case is structural contract coverage, not a behavioral pass; deterministic executable v1 migration and repair pressure is reserved for T3.2"
       ]
+    },
+    {
+      "id": 40,
+      "scenario": "executable legacy version-1 exact-resolution and fail-closed arms",
+      "coverage_kind": "executable_fixture",
+      "executable_host_controls": true,
+      "prompt": "Build seven isolated version-1 workspaces with setup-workspace.sh. Prepend each <tmp>/_bin to PATH, set separate JOBSEARCH_TEST_HOST_LOG and JOBSEARCH_TEST_HOST_STATE paths, and drive host facts only through fake-host-capabilities; snapshot config bytes and binding-sidecar absence before each arm. MISSING SELECTOR removes search.detail_model. INVALID SELECTOR replaces it with bogus-tier. TIER ROSTER UNAVAILABLE sets JOBSEARCH_TEST_HOST_SCENARIO=tier-roster-unavailable. TIER RESOLUTION UNAVAILABLE uses tier-resolution-unavailable. INHERIT PRIMARY UNKNOWN sets selector inherit and scenario primary-unknown. EXACT DISPATCH UNSUPPORTED uses exact-dispatch-unsupported after a successful search. EXACT DISPATCH REFUSED uses exact-dispatch-refused after a successful search. Run job-search-run headlessly in every arm with fake agent-data and show host logs, call logs, pre/post config bytes, sidecar state, run record, and digest.",
+      "expectations": [
+        "The missing-selector and invalid-selector arms block before a host exact model or metered attempt is invented; config bytes are unchanged and runs/detail-model-binding.json remains absent",
+        "The tier-roster-unavailable, tier-resolution-unavailable, and primary-unknown scenarios are proved by nonzero fake-host-capabilities operations, block before metered calls, preserve config bytes, and remain passive with no binding sidecar",
+        "The exact-dispatch-unsupported and exact-dispatch-refused scenarios first resolve the saved selector to one observed exact model, preserve every completed fake agent-data attempt, then block without guessing or substituting another model",
+        "Every arm writes the bounded internal blocked record and digest when writable, keeps all three detail-model fields null until executable binding observation permits them, and leaks neither the internal class nor an invented E-* migration code to normal chat or digest",
+        "Case 39 remains structural-only; this separate case is executable pressure using deterministic host controls"
+      ]
+    },
+    {
+      "id": 41,
+      "scenario": "ordinary version-1 headless run stays passive and completes",
+      "coverage_kind": "executable_fixture",
+      "executable_host_controls": true,
+      "prompt": "Build a version-1 workspace with setup-workspace.sh, prepend <tmp>/_bin to PATH, set JOBSEARCH_TEST_HOST_SCENARIO=happy plus isolated host/call logs, and snapshot exact config bytes and the absence of runs/detail-model-binding.json. Run job-search-run headlessly. The saved balanced selector must be resolved and dispatched only through fake-host-capabilities; all agent-data calls use fake-agent-data.",
+      "expectations": [
+        "The ordinary version-1 headless run resolves balanced exactly once through the fake host roster, observes that exact model executable, uses it for every posting-detail judgment, and records detail_model_origin legacy_v1_selector with binding id null",
+        "The run completes with a nonblocked run record and digest using only fake agent-data; host and call logs are the executable evidence rather than a prose claim",
+        "After completion config.yaml is byte-for-byte identical to the snapshot and runs/detail-model-binding.json is still absent: passive v1 compatibility never migrates or creates v2 evidence",
+        "No guessed model, silent substitution, raw internal class, or invented migration E-* code reaches normal user output"
+      ]
     }
   ]
 }

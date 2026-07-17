@@ -26,6 +26,8 @@ Read just what the home view needs (all local):
 - **Config facts:** from `<ws>/config.yaml`, count enabled queries and read `search.sources` (using its
   documented default when absent), `schedule.frequency`, and whether `search.max_new_postings_per_run` is
   omitted, finite, or `"all"`. These facts drive review-depth previews; do not estimate from the last run.
+  This is a passive version-1 home read when the config major is 1: preserve `config.yaml` byte-for-byte,
+  do not create `runs/detail-model-binding.json`, and do not migrate merely to render the home.
 - **Last run health, usage, and depth evidence:** the newest `<ws>/runs/<run_id>.json` whose complete name
   matches the run-id format in `conventions.md`—its `run_health`,
   `review_scope`, `agent_data_usage`, and `pagination_metrics`—or fall back to the **Run health** line of the
@@ -101,7 +103,8 @@ Only a model-binding write refreshes that sidecar with a fresh binding id, even 
 unchanged. A version-1 workspace remains readable and runnable through bounded compatibility: compatible
 query, freshness, source, parallelism, schedule-field, and review-depth edits preserve version 1. Only an
 action that requires an exact version-2 binding—such as changing the detail model or creating verified
-scheduling—routes through the interactive migration flow owned by T3.2.
+scheduling—routes through the canonical **Version-1 staged migration** transaction in
+`../../../shared/references/internals.md`; ordinary edits do not.
 
 - **Run a search now** → disclose it makes live calls, then invoke `job-search-run` against `<ws>`. On a host
   that gates parallel detail reads behind approval, if
@@ -228,10 +231,12 @@ Current exact pricing and metering facts stay in `../../../shared/references/age
   the user can still ask for depth later. Scheduled runs write eligibility evidence only and never this
   shown/outcome marker.
 - **Last run blocked/failed.** If the newest run's `run_health` is `blocked` (or the latest digest shows a
-  blocked/failed run), name the specific **`E-*`** from `errors.md` with its cause + fix — e.g. `E-QUOTA`
+  blocked/failed run), use the specific established **`E-*`** from `errors.md` with its cause + fix — e.g. `E-QUOTA`
   (restore access at https://agent-data.motie.dev/settings/billing; existing matches are unaffected; discuss
   usage levers only if the user asks), `E-NO-AUTH` (re-export the key), `E-SERVICE-DOWN` (temporary; next run
-  retries). Don't bury a failure inside an otherwise-cheery home.
+  retries). For the bounded model-binding or version-1 migration classes, render only the observed cause,
+  preserved/restored work, next step, and exact conversational fix; never show the internal class or invent a
+  raw migration code. Don't bury a failure inside an otherwise-cheery home.
 
 ## Coming soon (Plan C)
 

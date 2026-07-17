@@ -35,6 +35,25 @@ that class token. Pre-meter failures record zero metered work; a refused/unsuppo
 completed-attempt accounting already observed. Full recommendation, confirmation, and rollback behavior
 remain T3.3 work.
 
+Version-1 migration failures use a separate bounded internal class because they describe the transaction,
+not the model-resolution failure above. Store the observed failed phase and safe diagnostic facts in the
+operator record. Normal chat, home, digest, and notification state the observed cause, what was preserved or
+restored, the next step, and the exact conversational fix; they never expose the internal class or invent an
+`E-*` migration code. The rollback and post-success cutoff are owned by `internals.md` under **Version-1
+staged migration**.
+
+<!-- exact-model-contract:config-v1-migration-block -->
+| Policy | Decision |
+|---|---|
+| `internal_class` | `config_v1_migration_failed` |
+| `applies` | `candidate_backup_activation_preflight_setup_or_canary_failure` |
+| `config_effect_before_cutoff` | `restore_exact_v1_transaction_state` |
+| `config_effect_after_cutoff` | `preserve_active_v2_never_restore_stale_v1` |
+| `run_effect` | `blocked_record_and_digest_when_workspace_writable` |
+| `user_rendering` | `observed_cause_preserved_work_next_step_exact_fix` |
+| `raw_user_code` | `none` |
+<!-- /exact-model-contract:config-v1-migration-block -->
+
 | Code | When | What the user sees (cause + fix) | Run effect |
 |---|---|---|---|
 | **E-NO-AGENT-DATA** | the `agent-data` CLI is not found on PATH (prereq check, before `whoami`) | "The agent-data CLI isn't installed. Install it (`npm install -g agent-data`), then run `agent-data whoami` to authenticate. Nothing was pulled." | HALT, exit 1 |

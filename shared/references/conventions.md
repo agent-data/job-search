@@ -125,6 +125,26 @@ canonical user rendering, so this compatibility contract does not invent a new u
 | `failure_route_owner` | `t3_3_interactive_model_repair_no_new_user_facing_code` |
 <!-- /exact-model-contract:legacy-v1-fail-closed -->
 
+Passive compatibility is intentionally narrower than migration. Reading a version-1 workspace for the home
+view and running an ordinary version-1 headless pass preserve the exact original `config.yaml` bytes and do
+not create `runs/detail-model-binding.json`. A headless pass may resolve the saved selector once through the
+bounded resolver above, but that observed exact runtime value is run evidence only; it is not permission to
+rewrite config, create version-2 provenance, or substitute another model.
+
+<!-- exact-model-contract:legacy-v1-passive-compatibility -->
+| Policy | Decision |
+|---|---|
+| `home_read` | `preserve_exact_config_bytes` |
+| `ordinary_headless_run` | `preserve_exact_config_bytes` |
+| `binding_sidecar` | `do_not_create` |
+| `runtime_resolution` | `resolve_once_to_observed_executable_exact_model` |
+| `failure_behavior` | `preserve_bytes_fail_closed_no_guess_or_substitute` |
+<!-- /exact-model-contract:legacy-v1-passive-compatibility -->
+
+A version-2-required interactive action is the only migration trigger. The transaction, backup, rollback,
+and commit-cutoff procedure is owned by `internals.md` under **Version-1 staged migration**; this file owns
+only the passive compatibility boundary and the resulting version-2 config/sidecar shapes.
+
 `parallel_detail_reads` is optional and records whether the user approved parallel subagents for detail
 reads on hosts that require explicit authorization. Unset means interactive front-door flows may ask; `true`
 means use parallel subagents where available; `false` means read details sequentially. The runner reads this

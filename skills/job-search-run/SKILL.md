@@ -128,8 +128,10 @@ fallback, and wording rules in `errors.md` rather than restating them here.
      config bytes, write the blocked run record and blocked digest when the workspace is writable, keep the
      three model fields `null`, and never expose that internal class as a raw user code.
 
-     For version 1, set `detail_model_binding_id:null`, preserve config bytes, and apply the canonical
-     compatibility resolver. A missing selector, invalid selector, unavailable tier roster, failed tier
+     An ordinary version-1 run is passive compatibility, never migration: set
+     `detail_model_binding_id:null`, preserve `config.yaml` byte-for-byte, and never create
+     `runs/detail-model-binding.json`. Apply the canonical compatibility resolver once for this run. A
+     missing selector, invalid selector, unavailable tier roster, failed tier
      resolution, or `inherit` when the exact primary model is unknown blocks before API calls and routes to
      interactive model repair. Never guess or substitute a model. Carry `legacy_v1_selector` only after the
      exact resolved model has been observed executable; an unsupported or refused exact dispatch blocks by
