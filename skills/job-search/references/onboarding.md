@@ -358,70 +358,86 @@ The unattended schedule is a real change to the user's machine, so the consent c
 exact line first, write it only on an explicit yes, and leave it user-removable** — never silent, never
 auto-installed.
 
-Ask it as a closed choice (`voice.md` → Asking questions). Header `Schedule`; question: "Want me to keep
-checking automatically? New matches will land in a digest without you having to ask."; options: **Yes, keep
-checking** — "runs on its own, on your chosen cadence" · **No, I'll run it myself** — "a one-off search
-stays one command away".
+Ask it as **one closed-choice decision** (`voice.md` → Asking questions) — the whole schedule handoff is one
+useful decision, not a yes/no followed by a separate frequency question. Check the scheduling marker first so
+you never re-ask a schedule that already reads verified or session-only. Header `Schedule`; question: "Want me
+to keep checking automatically? New matches will land in a digest without you having to ask."; options,
+recommended first:
 
-**On yes** — pick the cadence, then start it, prove it, and record it:
+- **Daily — recommended** — "runs on its own once a day; suits most searches"
+- **Different schedule** — "pick another cadence — hourly, every few hours, or weekly"
+- **Not now** — "turn it on later just by asking; a one-off search is always a request away"
 
-Before previewing the schedule, resolve the creating session's exact primary model per `internals.md`. Present
-the exact primary and detail bindings as facts, not choices; if the exact primary is unknown, require an
-explicit exact available selection before creating a verified schedule. After the canary, the scheduling
-registry write includes that exact `primary_model` and origin (`session_inheritance` for the default,
-`user_override` for an explicit choice) alongside the ordinary marker.
+**On "Not now" (decline):** leave it unscheduled — no machine change, no marker. Tell the user in one plain
+line that they can turn it on later just by asking and that a one-off search is always a request away. **Do
+not dump the recurring-run or one-off-run recipe blocks on a decline** — a wall of host commands the user
+didn't ask for is noise, not help. Ask no frequency question after a decline (there is no schedule to set a
+cadence for), then land them on the home view (§8).
 
-1. **Ask how often — now, as part of setting the schedule up.** This is the moment the cadence
-   actually matters, so ask it here, not before there's a schedule: a closed choice (`voice.md` →
-   Asking questions), the plain-language nudge carried by the recommended-first option. Header
-   `Frequency`; lead sentence yours to word (e.g. "How often should it check?"); options, recommended
-   first:
-   - **Daily (Recommended)** — "suits most searches"
-   - **Hourly** — "only for a fast-moving, active search"
-   - **Every 6 hours** — "a few times a day, without the firehose"
-   - **Weekly** — "a slow-burn watch"
+**On "Daily — recommended" or "Different schedule":** resolve the cadence, show **one** confirmation, prove it
+with the canary, then record it.
 
-   Resolve the proposed `schedule.frequency` to `hourly | every-2-hours | every-6-hours | daily | weekly`
-   — `every-2-hours` has no button, so map a typed answer ("every couple of hours") to the nearest allowed
-   value and say which one you propose. Hold the value for the preview; do not write it yet.
-2. **Compose the cadence** for the chosen frequency from `internals.md` → Scheduling setup (which
-   builds the cron time line with `schedule-line.sh` where a shell runtime exists); the host wraps it
-   with its own command / launchd / interval translation.
-3. **Preview, confirm once, then start.** Apply the `schedule_enable_with_canary` row in the canonical
+Before previewing, resolve the creating session's exact primary model per `internals.md`. Present the exact
+primary and detail bindings **as facts, not choices** ("primary: <exact id>; detail: <exact id>"); if the
+exact primary is unknown, require an explicit exact available selection before creating a verified schedule.
+After the canary, the scheduling registry write includes that exact `primary_model` and origin
+(`session_inheritance` for the inherited default, `user_override` for an explicit choice) alongside the
+ordinary marker.
+
+1. **Resolve the cadence.** On **Daily — recommended** the cadence is `daily` — no follow-up question. On
+   **Different schedule**, ask **one** cadence question (`voice.md` → Asking questions). Header `Frequency`;
+   options: **Hourly** — "only for a fast-moving, active search" · **Every 6 hours** — "a few times a day,
+   without the firehose" · **Weekly** — "a slow-burn watch" (Daily was already the recommended option).
+   Resolve the answer to `schedule.frequency` in `hourly | every-2-hours | every-6-hours | daily | weekly` —
+   `every-2-hours` has no button, so map a typed "every couple of hours" to the nearest allowed value and say
+   which one you propose. Hold the value for the preview; do not write it yet.
+2. **Compose the cadence** for the chosen frequency from `internals.md` → Scheduling setup (which builds the
+   cron time line with `schedule-line.sh` where a shell runtime exists); the host wraps it with its own
+   command / launchd / interval translation.
+3. **Show one scoped confirmation, then start.** Apply the `schedule_enable_with_canary` row in the canonical
    [Agent-data usage decisions](../../../shared/references/internals.md#agent-data-usage-decisions) and the
-   persistent preview in `../../../shared/references/voice.md`: show the current/proposed baseline, proposed
-   cadence comparison, uncertain continuation/detail work, one canary, and exact machine change. Ask one
-   scoped yes/no question covering the frequency write, that exact machine change, and exactly one real
-   scheduled-path canary. Before that yes, write neither config nor scheduler state. On yes, atomically save
-   the frequency and start the unattended schedule. This approval is not standing authority for another
+   persistent preview in `../../../shared/references/voice.md`. This **single** confirmation contains: the
+   **cadence**; the **exact machine change**; the **removal path**; the exact **primary and detail model
+   bindings as facts** (not a model choice); the **version-1 → version-2 migration** if the workspace needs
+   one (folded in per `internals.md` → Version-1 staged migration — never a separate migration prompt); the
+   **agent-data call preview** (current/proposed baseline, the cadence comparison, the uncertain
+   continuation/detail work); and **one canary**. Ask one scoped yes/no covering that whole change and exactly
+   one real scheduled-path canary — no separate model, migration, frequency, or canary prompts. Before that
+   yes, write neither config nor scheduler state. On yes, save the frequency and stage the unattended schedule
+   **disabled** (the registry marker is not written yet). This approval is not standing authority for another
    metered canary attempt.
 4. **Prove it works before you record it — run the canary.** Never tell the user it's scheduled until its
-   exact unattended invocation has succeeded end to end. Confirm the schedule is **registered** (it appears
-   in the host's scheduler), then trigger **one real run through that scheduled invocation** — its own
-   permissions and environment, **not this session's** (this session already holds the access the real run
-   must prove, so running the canary here would pass while the real scheduled run fails) — and confirm it
-   left a fresh record whose exact run_id passes that same `run-lifecycle.md` `lifecycle-fold.sh` authority
-   procedure with `closed=true`, matching lifecycle state, `can_complete=true`, and `run_health` other than
-   blocked; reached agent-data; and wrote the fold-derived digest in the workspace. An open intended-complete
-   record never verifies the canary. The user gets a live digest out of it. If the canary **fails**: diagnose the gap and propose the exact fix. Before every
-   metered repair or retry canary, apply the `metered_canary_retry_or_repair` row, give fresh calls-first
-   context for that attempt, and obtain a fresh scoped yes. The original schedule approval covered only the
-   machine change and first canary. Re-run only after the new consent — loop until green. If it genuinely
-   can't be made to work, **name the gap
-   plainly and do not claim it's scheduled.** Full flow, consent framing, and failure loop:
-   `../../../shared/references/internals.md` → Scheduling setup.
+   exact unattended invocation has succeeded end to end. **Register the job disabled**, **inspect** the
+   registration and compare it to what you staged, then **fire one real run through that scheduled
+   invocation** — its own permissions and environment, **not this session's** (this session already holds the
+   access the real run must prove, so running the canary here would pass while the real scheduled run fails).
+   Require a fresh attributable **nonblocked** run whose exact run_id passes that same `run-lifecycle.md`
+   `lifecycle-fold.sh` authority procedure with `closed=true`, matching lifecycle state, `can_complete=true`,
+   and `run_health` other than blocked; reached agent-data; and left the fold-derived **digest** and its
+   **workspace write**. An open intended-complete record never verifies the canary. The scheduled prompt states
+   the run is **headless** and must read `search.detail_model` from config and use that **exact model for
+   every posting-detail judgment**; a scheduler that silently swaps the exact primary model fails the canary —
+   reject it, do not record. The user gets a live digest out of a green canary.
+
+   **If the canary fails**, it **removes or disables** the newly created job, leaves `verified` false,
+   preserves the exact failure internally (the bounded `E-SCHEDULE-CANARY` class — never a raw code in a user
+   surface, per `errors.md`), and makes **no success claim**. A **pre-meter** failure (it blocked before any
+   metered agent-data call) spent none of the approved single-canary metered budget, so re-fire the one canary
+   after a **free** fix **without** a fresh cost confirmation (a new privileged machine change to fix the gap
+   still needs its own yes). An **after-meter** failure consumed that metered attempt, so any further canary
+   needs a **fresh** calls-first preview (`metered_canary_retry_or_repair`) and a fresh scoped yes — loop until
+   green. If it genuinely can't be made to work, **name the gap plainly and do not claim it's scheduled.** Full
+   flow, consent framing, and failure loop: `../../../shared/references/internals.md` → Scheduling setup.
 5. **Only after a green canary, record it** so you don't re-ask: set the scheduling marker (`internals.md` →
-   Registry write rules — recording the mechanism actually used).
+   Registry write rules — recording the mechanism actually used, the exact `canary_run_id`, and the exact
+   primary-model binding). That single atomic write sets `installed` and `verified` together.
 
-**On no:** leave it unscheduled — tell them they can turn it on later by just asking, and that a one-off run
-is always one command away (the composed one-off recipe below).
-
-**Either way, compose the recurring-run and one-off-run recipes for the host and show both to the user**, so
-they can re-run the search on demand and restart or remove the schedule themselves. If
-`search.parallel_detail_reads: true` and your host gates parallel subagents behind approval, the scheduled
-prompt must include the exact subagent-authorization sentence your host requires — the saved config records
-the user's preference, and that sentence is the scheduled run's explicit authorization. This pack has no
-per-host adapter, so you compose that sentence, and the recipes, for your host yourself.
+**On the recorded (scheduled) path, compose the recurring-run and one-off-run recipes for the host and show
+both to the user verbatim**, so they can re-run the search on demand and restart or remove the schedule
+themselves. If `search.parallel_detail_reads: true` and your host gates parallel subagents behind approval,
+the scheduled prompt must include the exact subagent-authorization sentence your host requires — the saved
+config records the user's preference, and that sentence is the scheduled run's explicit authorization. This
+pack has no per-host adapter, so you compose that sentence, and the recipes, for your host yourself.
 
 ## 8. Home
 
@@ -463,18 +479,21 @@ runs", "update my preferences", "show the latest digest").
       verified), then ran without a redundant confirmation; strong/moderate matches shown — or the named
       error if blocked
 - [ ] shown matches include the digest reasoning and any "confirm" warning, not just titles/companies
-- [ ] scheduling offered with the **unattended** schedule advocated as default (in-session loop the named
-      fallback — "runs only while a session is open"); on yes the frequency was asked, then one scoped preview
-      and confirmation covered the frequency write, exact machine change, and first canary; every later
-      metered repair/retry canary got fresh context and a fresh scoped yes; the **canary green (registration
-      + one real scheduled run) before** the marker was set — or the gap named and NOT claimed scheduled;
-      recurring + one-off recipes composed for
-      the host and shown either way; if parallel detail reads were approved on an approval-gating host, the
-      scheduled prompt carries the host's required subagent-authorization sentence
+- [ ] scheduling offered as **one decision** (Daily — recommended / Different schedule / Not now) with the
+      **unattended** schedule advocated as default (in-session loop the named fallback — "runs only while a
+      session is open"); a **Different schedule** choice asked exactly one cadence question; a scheduled choice
+      got **one scoped confirmation** covering the cadence, exact machine change, removal path, exact
+      primary/detail bindings as facts, migration if needed, call preview, and one canary; a **pre-meter**
+      canary failure reused the single-canary consent while an **after-meter** failure got fresh context and a
+      fresh scoped yes; the **canary green (registration + one real scheduled run) before** the marker was set
+      — or the gap named and NOT claimed scheduled; recurring + one-off recipes composed for the host and shown
+      on the **recorded path only** (NOT dumped on a **Not now** decline); if parallel detail reads were
+      approved on an approval-gating host, the scheduled prompt carries the host's required
+      subagent-authorization sentence
 - [ ] the workspace location and interview depth were **not** asked before results (silent default;
       provisional sketch); the model was setup-selected silently (never a question); the single "what are you
-      looking for?" question was **free-form inline**, not a box; the scheduling and frequency closed choices
-      came **after** results (the one host-specific exception is the approval-gating subagent question above);
-      every ask carried one line of plain-English context; no internal vocabulary reached the user
-      (`voice.md`)
+      looking for?" question was **free-form inline**, not a box; the one schedule decision (and, for a
+      Different schedule, the cadence) came **after** results (the one host-specific exception is the
+      approval-gating subagent question above); every ask carried one line of plain-English context; no
+      internal vocabulary reached the user (`voice.md`)
 - [ ] home view printed

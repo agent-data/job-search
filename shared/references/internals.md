@@ -711,13 +711,19 @@ command/launchd or interval translation. **Fallback (no shell runtime) — compo
 `daily HH:MM → <m> <h> * * *`; `weekly HH:MM → <m> <h> * * 1` (**weekly day-of-week = Monday, `1`**).
 `schedule.time` (`HH:MM`) is honored for daily/weekly and its **default is `08:00`**; strip a single leading
 zero so cron gets `8`/`5`, not `08`/`05`. (Both soft-defaults — Monday for weekly, `08:00` for the time —
-match the script and are pinned by `tests/test_mechanics_scripts.py`.) Offer scheduling as a yes/no; check
-the scheduling marker first so you never re-ask. Before that choice, give the
-`schedule_enable_with_canary` calls-first context from **Agent-data usage decisions**. On yes — after showing
-the user the exact machine change — the scoped consent covers that change and one real scheduled-path
-canary. Start the **unattended schedule** (the in-session loop only as the fallback above). ALWAYS also **compose the
-recurring-run recipe and the one-off-run recipe for the host** and show both to the user verbatim, so they
-can re-run the search on demand and stop or restart the schedule themselves.
+match the script and are pinned by `tests/test_mechanics_scripts.py`.) The whole handoff is **one decision,
+not a yes/no plus a separate frequency question**: offer **Daily — recommended / Different schedule / Not
+now** (the operator manual's `scheduling-and-consent.md` → The handoff owns that option UX and the single
+confirmation's contents); check the scheduling marker first so you never re-ask. **Daily** fixes the cadence
+at `daily`; **Different schedule** asks one cadence question; **Not now** declines with **no machine change,
+no marker, and no recipe dump**. On a scheduled choice, give the `schedule_enable_with_canary` calls-first
+context from **Agent-data usage decisions** and show the user the exact machine change inside **one scoped
+confirmation** (cadence, machine change, removal path, exact primary/detail bindings as facts, version-1
+migration if needed, call preview, one canary). The single yes covers that exact change and **exactly one**
+real scheduled-path canary — not a second metered attempt. Start the **unattended schedule** (the in-session
+loop only as the fallback above). **On the recorded (scheduled) path**, also **compose the recurring-run
+recipe and the one-off-run recipe for the host** and show both to the user verbatim, so they can re-run the
+search on demand and stop or restart the schedule themselves — but **not on a decline**.
 
 Before creating the recurring job, resolve the creating session's exact primary model. The default binding
 captures that exact value with origin `session_inheritance`; an explicit exact available model selected by
@@ -728,13 +734,25 @@ the local scheduling metadata both carry the same exact primary-model binding; w
 to own only the exact posting-detail model.
 
 **Verify before recording — the canary (mandatory).** Before recording the scheduling marker, verify the
-schedule works. For the **unattended schedule**, use the **config-time canary**: **registration** (it appears
-in the host scheduler's job list) + one **real run through the exact scheduled invocation** (its own
-permissions/env, not this session's) proving a fresh record passes the exact run_id `lifecycle-fold.sh`
-authority procedure above with `closed=true`, `can_complete=true`, and `run_health` ≠ `blocked`; agent-data
-was reached; and the fold-derived digest was written. On failure, diagnose and show the fix, then get fresh scoped confirmation
-before any metered repair or retry canary; **never record the marker until the canary is green**. The
-**in-session-loop fallback** (`mechanism: loop`) can satisfy neither canary
+schedule works. For the **unattended schedule**, use the **config-time canary**: **register the job disabled**
+(staging never writes `installed`/`verified`), confirm it appears in the host scheduler's job list, **inspect
+the registration** and compare it to exactly what you staged, then fire one **real run through the exact
+scheduled invocation** (its own permissions/env, not this session's) proving a fresh record passes the exact
+run_id `lifecycle-fold.sh` authority procedure above with `closed=true`, `can_complete=true`, and `run_health`
+≠ `blocked`; agent-data was reached; and the fold-derived digest **and its workspace write** exist. The
+scheduled prompt states the run is **headless** and must read `search.detail_model` from config and use that
+**exact model for every posting-detail judgment**; the canary also confirms the exact **primary model was
+preserved** — a scheduler that silently swaps the exact recurring primary model for a host default (the run
+may still complete healthy) is **not** primary-model-preserving in practice, so it **fails the canary** and is
+rejected. **A failed canary removes or disables the newly created job, leaves `verified` false and writes no
+`installed` marker, preserves the exact failure internally as the bounded `E-SCHEDULE-CANARY` class
+(`errors.md` — never a raw user-facing code), and claims no success.** Retry consent depends on where it
+failed: a **pre-meter** failure (blocked before any metered call, `metered_calls` 0) spent none of the
+approved single-canary metered budget, so re-fire after a **free** fix **without** a fresh cost confirmation (a
+new privileged machine change to close the gap still needs its own yes); an **after-meter** failure
+(`metered_calls` ≥ 1) consumed the approved attempt, so any further canary needs a fresh
+`metered_canary_retry_or_repair` calls-first preview and a fresh scoped yes. **Never record the marker until
+the canary is green.** The **in-session-loop fallback** (`mechanism: loop`) can satisfy neither canary
 layer — it registers in no scheduler job list and its run *is* this session — so verify it differently:
 confirm its **first in-session fire** leaves a fresh run that passes the same exact run_id,
 `lifecycle-fold.sh`, matching `closed=true` authority gate, then record the marker. Full consent-framed

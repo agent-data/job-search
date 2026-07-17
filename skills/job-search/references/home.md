@@ -150,12 +150,15 @@ scheduling—routes through the canonical **Version-1 staged migration** transac
   refreshing `updated_at`).
 - **Show your preferences brief** → print `<ws>/preferences.md`'s body in your reply as normal message text
   (wherever the user is reading it — no code fence, skip the front-matter lines, never just the path).
-- **Change or turn off the schedule** → re-run the scheduling flow in `onboarding.md` with the new cadence,
-  then update the scheduling marker. Show the **recurring-run recipe** composed for the host verbatim —
-  copy exactly, do not reconstruct the tokens; when `search.parallel_detail_reads: true`, the composed
-  recipe must carry whatever authorization the host's unattended parallel fan-out needs. To turn it
-  off, stop the active schedule, then clear the scheduling marker (`internals.md` → Registry write rules)
-  so it reads `installed: false`, and tell the user it's off.
+- **Change or turn off the schedule** → an explicit ask to (re)schedule re-runs the **one-decision handoff**
+  in `onboarding.md` §7 (**Daily — recommended / Different schedule / Not now** → one scoped confirmation →
+  the config-time canary), then updates the scheduling marker. Record the marker (and re-render the schedule
+  as on) only **after the green canary**; on a scheduled choice, show the **recurring-run recipe** composed for
+  the host verbatim — copy exactly, do not reconstruct the tokens; when `search.parallel_detail_reads: true`,
+  the composed recipe must carry whatever authorization the host's unattended parallel fan-out needs. On **Not
+  now**, leave it unscheduled and **do not dump the recipe blocks**. To turn it off, stop the active schedule,
+  then clear the scheduling marker (`internals.md` → Registry write rules) so it reads `installed: false`, and
+  tell the user it's off.
 - **Show the latest digest** → print the exact fold-derived digest for the newest authorized closed run (strong → moderate → weak →
   filtered-out) unchanged, as normal message text in your reply (wherever the user is reading it — never
   inside a code fence, never just the file path).

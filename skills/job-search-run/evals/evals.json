@@ -856,6 +856,20 @@
         "first_relevant_match_ready_at may be recorded (the relevant match became ready), but early_results_shown_at is NOT written and no presented milestone/transition is appended when the match was never actually shown; the ready timestamp is not the shown timestamp (per run-lifecycle.md metric owners)",
         "Because the found-but-unshown match makes no valid presented transition, the run does not activate setup even though a relevant match was evaluated; this holds for the executable display-failure arm (eval 50) and the scheduled/canary no-presentation arm (eval 59). This is structural contract coverage, not a behavioral pass"
       ]
+    },
+    {
+      "id": 67,
+      "scenario": "scheduled/headless run reads search.detail_model and uses that exact model for every posting-detail judgment",
+      "coverage_kind": "structural_contract",
+      "executable_host_controls": false,
+      "prompt": "Structurally pin that a scheduled or otherwise headless job-search-run reads search.detail_model from config and uses that exact model for every full-posting detail judgment, never substituting. The single-shot runner harness cannot vary the host's model selector — the collaboration API exposes no model selector (a known harness limitation) — so this pins the read-and-obey contract that the scheduling handoff's scheduled prompt depends on (composed by shared/references/internals.md -> Scheduling setup and skills/job-search-agent/references/scheduling-and-consent.md), while the silent-model-substitution rejection is the config-time canary's job (job-search-agent case 33) and the exact-model authority/repair lives in shared/references/internals.md -> Exact-model repair.",
+      "expectations": [
+        "The scheduled prompt states the run is headless and must read search.detail_model from config and use that exact model for every posting-detail judgment; the runner reads that exact identifier and never picks a model, edits config, or accepts a host default substitution",
+        "Every full-posting detail judgment in the run uses the exact configured search.detail_model — there is no silent model substitution; an unavailable or exact-dispatch-refused detail model blocks the affected slot and routes to interactive repair per shared/references/internals.md -> Exact-model repair rather than substituting",
+        "The exact-model authority is config.yaml search.detail_model (shared/references/conventions.md); runs/detail-model-binding.json is provenance only. The headless runner reads both and changes neither (it never writes config or the sidecar)",
+        "The recurring primary model is the exact creating-session model, or an explicit user override, carried by the scheduler binding — not chosen by the run; a scheduler that silently changes that exact model is caught by the config-time canary (job-search-agent), while the runner itself never substitutes",
+        "structural contract coverage, not a behavioral model-variance pass; output carries no numeric fit score, weights, or unlabeled charge claim"
+      ]
     }
   ]
 }

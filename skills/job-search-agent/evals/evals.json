@@ -1,6 +1,6 @@
 {
   "skill_name": "job-search-agent",
-  "harness": "Cases that need a workspace: run skills/job-search-run/evals/files/setup-workspace.sh <tmp> to build a workspace + _bin/agent-data shim symlink. Prepend <tmp>/_bin to PATH and set JOBSEARCH_TEST_SCENARIO=happy (or the per-case scenario) so all agent-data calls hit the fake shim (no real credits). Export JOBSEARCH_OS_REGISTRY=<tmp>/registry.json and write that file as {\"version\":1,\"active_workspace\":\"<tmp>\"} so discovery returns the temp workspace. Pre-seed jobs.jsonl where required with `printf '%s\\n' '<event json>' >> <tmp>/jobs.jsonl` (one single-line JSON object per line). Cases without a workspace (e.g. capabilities overview) need no harness setup. HARNESS CAPABILITIES (P7): a DISCOVERY scenario (discovery:true) plants this skill among the siblings it names and drives a NAIVE prompt (no skill named); it passes only if the runner SELECTS must_select and not any must_not_select sibling. Scenarios marked stochastic:true are behavioral (a discipline bait or routing) — run each `reps` times against the shim, record pass-RATE + variance (scripts/eval_harness.py aggregate_reps), and run the no-guidance control arm so the green result is attributable to the skill's guidance, not the base model (control_delta). Tier assertions name the portable tier (fast/balanced/high/inherit) resolved from the Codex adapter's Model-tiers table (shared/references/platform/codex.md), NEVER a literal model id. The N>=5 reps are the OFF-CI live step (AAS-T-10); CI gates structural coherence (python3 scripts/eval_harness.py --root .). SCHEDULER ELIGIBILITY CASES (P6/T6.2, coverage_kind executable_fixture): drive the deterministic local-only tests/fake-scheduler shim with JOBSEARCH_TEST_SCHEDULER_SCENARIO=<one of tests/fixtures/scheduler/*.json>, JOBSEARCH_TEST_SCHEDULER_STATE=<tmp>/sched-state.json, and JOBSEARCH_TEST_SCHEDULER_LOG=<tmp>/sched-log.jsonl, with the registry at JOBSEARCH_OS_REGISTRY=<tmp>/registry.json. The shim probes the six eligibility gates, stages a DISABLED registration, fires a real-path canary that writes the scheduled-path run artifacts, and exposes enable/disable/remove — it never touches a real scheduler, cron, launchd, network, model, or agent-data account. Assert the resulting registry scheduling object + workspace artifacts with the eval-harness assertion mechanism (scripts/eval_harness.py check_artifacts: file_exists/json_field_equals/jsonl_event_sequence/text_absent/text_matches).",
+  "harness": "Cases that need a workspace: run skills/job-search-run/evals/files/setup-workspace.sh <tmp> to build a workspace + _bin/agent-data shim symlink. Prepend <tmp>/_bin to PATH and set JOBSEARCH_TEST_SCENARIO=happy (or the per-case scenario) so all agent-data calls hit the fake shim (no real credits). Export JOBSEARCH_OS_REGISTRY=<tmp>/registry.json and write that file as {\"version\":1,\"active_workspace\":\"<tmp>\"} so discovery returns the temp workspace. Pre-seed jobs.jsonl where required with `printf '%s\\n' '<event json>' >> <tmp>/jobs.jsonl` (one single-line JSON object per line). Cases without a workspace (e.g. capabilities overview) need no harness setup. HARNESS CAPABILITIES (P7): a DISCOVERY scenario (discovery:true) plants this skill among the siblings it names and drives a NAIVE prompt (no skill named); it passes only if the runner SELECTS must_select and not any must_not_select sibling. Scenarios marked stochastic:true are behavioral (a discipline bait or routing) — run each `reps` times against the shim, record pass-RATE + variance (scripts/eval_harness.py aggregate_reps), and run the no-guidance control arm so the green result is attributable to the skill's guidance, not the base model (control_delta). Tier assertions name the portable tier (fast/balanced/high/inherit) resolved from the Codex adapter's Model-tiers table (shared/references/platform/codex.md), NEVER a literal model id. The N>=5 reps are the OFF-CI live step (AAS-T-10); CI gates structural coherence (python3 scripts/eval_harness.py --root .). SCHEDULER ELIGIBILITY CASES (P6/T6.2, coverage_kind executable_fixture): drive the deterministic local-only tests/fake-scheduler shim with JOBSEARCH_TEST_SCHEDULER_SCENARIO=<one of tests/fixtures/scheduler/*.json>, JOBSEARCH_TEST_SCHEDULER_STATE=<tmp>/sched-state.json, and JOBSEARCH_TEST_SCHEDULER_LOG=<tmp>/sched-log.jsonl, with the registry at JOBSEARCH_OS_REGISTRY=<tmp>/registry.json. The shim probes the six eligibility gates, stages a DISABLED registration, fires a real-path canary that writes the scheduled-path run artifacts, and exposes enable/disable/remove — it never touches a real scheduler, cron, launchd, network, model, or agent-data account. Assert the resulting registry scheduling object + workspace artifacts with the eval-harness assertion mechanism (scripts/eval_harness.py check_artifacts: file_exists/json_field_equals/jsonl_event_sequence/text_absent/text_matches). SCHEDULER CANARY + CONSENT CASES (P6/T6.3, coverage_kind executable_fixture, ids 28-33): the same fake-scheduler shim drives the config-time canary — register-disabled, inspect, fire (the real scheduled-path run), then enable — across the execution-pre-meter-failure, execution-metered-failure, model-binding-lost, and scheduled-success fixtures. Assert that installed/verified appear only after a GREEN canary; that a failed canary leaves no marker and removes/disables the newly staged job; that a pre-meter failure (metered_calls 0) consumes no metered-retry consent while an after-meter failure (metered_calls >= 1) needs a fresh calls-first confirmation; that the exact primary/detail bindings are stated as facts and carry the right origin (session_inheritance vs user_override); and that the model-binding-lost fire (primary_model_preserved false) is REJECTED. The raw E-SCHEDULE-CANARY class is internal only and never shown as a user-facing code.",
   "evals": [
     {
       "id": 1,
@@ -351,6 +351,84 @@
         "The agent does not silently clobber the unowned job; it surfaces the drift and asks to adopt-or-replace before any write",
         "No installed/verified marker is recorded on the basis of a foreign job; only a green canary through a job the agent controls verifies a schedule",
         "Deterministic and local against the fixture, temp registry, and temp workspace, with no live scheduler or agent-data effect"
+      ]
+    },
+    {
+      "id": 28,
+      "scenario": "pre-meter canary failure preserves the single-canary metered consent",
+      "coverage_kind": "executable_fixture",
+      "prompt": "Drive the config-time canary against the execution-pre-meter-failure fixture (JOBSEARCH_TEST_SCHEDULER_SCENARIO=execution-pre-meter-failure, tests/fake-scheduler) with JOBSEARCH_OS_REGISTRY at a temp registry. Probe the native mechanism (every gate passes), render the one scoped schedule confirmation, and approve it once — that approval covers the exact machine change and exactly one real scheduled-path canary. register-disabled the job, inspect it (current), then fire the canary: it blocks during preflight before any metered agent-data call. Capture the registry and the fake-scheduler state/log after the failed fire and diagnose the observed gap. Then, with a FREE preflight fix applied (no new metered budget requested), re-fire the one canary WITHOUT asking for a fresh metered confirmation — this time under scheduled-success — and inspect the registry and state.",
+      "expectations": [
+        "The pre-meter canary is a blocked run: the fire outcome is pre_meter_failure with run_health blocked, metered_calls 0, and metered_consumed false — it failed during preflight before any metered agent-data call",
+        "The failed canary writes NO installed/verified marker (the registry scheduling object stays uninstalled and unverified) and removes or disables the newly staged job; it makes no success claim and prints no 'all set'",
+        "Because no metered call was spent, the pre-meter failure does NOT consume the approved single-canary metered consent: after a free preflight fix the agent re-fires the one canary WITHOUT a fresh calls-first cost confirmation (a NEW privileged machine change to fix the gap would still need its own yes)",
+        "Only the green re-fired canary's fold-authoritative nonblocked run (closed=true, run_health other than blocked, digest written) flips the registry to installed=true and verified=true together; the internal E-SCHEDULE-CANARY class is never shown as a raw code in any user surface, though a blocked canary run record may carry it internally",
+        "Deterministic and local: only the fake-scheduler fixture, the temp registry, and the temp workspace — no live scheduler, cron, launchd, network, model, or agent-data account"
+      ]
+    },
+    {
+      "id": 29,
+      "scenario": "after-meter canary failure consumes the approved canary and needs fresh consent",
+      "coverage_kind": "executable_fixture",
+      "prompt": "Drive the config-time canary against the execution-metered-failure fixture (JOBSEARCH_TEST_SCHEDULER_SCENARIO=execution-metered-failure) with JOBSEARCH_OS_REGISTRY at a temp registry. Approve the one scoped schedule confirmation once (machine change plus exactly one canary), register-disabled the job, then fire the canary: it blocks AFTER at least one metered agent-data call. Snapshot the registry and fake-scheduler state after the failed fire, diagnose the gap, and WITHHOLD any new yes. Then supply a fresh scoped confirmation for a second attempt, re-fire under scheduled-success, and inspect the registry.",
+      "expectations": [
+        "The metered canary is a blocked run after at least one metered agent-data call: the fire outcome is metered_failure with run_health blocked, metered_calls >= 1, and metered_consumed true",
+        "The failed canary writes NO installed/verified marker and removes or disables the newly staged job; it never claims the search is scheduled",
+        "Because the attempt spent metered budget, the approved single-canary metered consent IS consumed: before a second canary the agent gives fresh calls-first context (the metered_canary_retry_or_repair row) and asks a NEW scoped confirmation; while that yes is withheld, no second-attempt fire occurs and the registry stays uninstalled/unverified",
+        "Only after the fresh second yes does another canary fire; only its green fold-authoritative nonblocked run flips installed=true and verified=true; the raw E-SCHEDULE-CANARY token never appears in a user-facing line",
+        "Deterministic and local against the fixtures, temp registry, and temp workspace — no live scheduler or agent-data account"
+      ]
+    },
+    {
+      "id": 30,
+      "scenario": "failed canary rolls back the schedule setup and leaves no installed marker",
+      "coverage_kind": "executable_fixture",
+      "prompt": "Drive a schedule setup whose one confirmation folds a version-1 to version-2 migration (per shared/references/internals.md) against a failing canary fixture (JOBSEARCH_TEST_SCHEDULER_SCENARIO=execution-pre-meter-failure). Approve the single confirmation once, register-disabled the job, fire the canary (it blocks), then drive the rollback: remove or disable the job through the fake-scheduler and confirm the schedule setup left nothing installed. Inspect the registry, the fake-scheduler state/log, and confirm the config-pair rollback path.",
+      "expectations": [
+        "A failed schedule canary leaves NO newly installed marker: after rollback the registry scheduling object is neither installed nor verified (the state machine's canary_failure -> leaves_no_newly_installed_marker)",
+        "The newly created scheduler job is removed, or disabled where removal is unavailable, through the fake-scheduler remove/disable operations; no foreign or pre-existing job is clobbered",
+        "The config change staged for this setup is rolled back: when the setup folded a version-1 to version-2 migration, the workspace is restored to version 1 with no new binding sidecar per shared/references/internals.md -> Version-1 staged migration (that owned transaction is the config-pair rollback; this fixture pins the schedule-state rollback and points one hop to it, never restating it)",
+        "No success claim is made and the raw E-SCHEDULE-CANARY class never appears in chat, home, or a digest; the user sees only the observed gap and the honest state that it is not scheduled",
+        "Deterministic and local: fake-scheduler plus temp registry/workspace only, with no live scheduler, network, or agent-data effect"
+      ]
+    },
+    {
+      "id": 31,
+      "scenario": "exact primary inheritance binds the creating-session model with session_inheritance",
+      "coverage_kind": "executable_fixture",
+      "prompt": "Drive the config-time canary against the scheduled-success fixture with a staged definition that carries the creating session's exact primary_model and primary_model_origin session_inheritance (the default — no explicit user override). Render the one scoped confirmation, approve it once, register-disabled, and fire the green canary. Inspect the fire summary and the post-canary registry scheduling object.",
+      "expectations": [
+        "The one scoped confirmation states the exact primary and detail model bindings as FACTS (primary: <exact id>; detail: <exact id>), not as a model choice; the primary defaults to the creating session's exact model with origin session_inheritance and no model-selection question is asked",
+        "The staged disabled job duplicates that exact primary_model and session_inheritance origin, and the canary fire preserves it (primary_model_preserved true, run-record primary_model equal to the staged binding) — the scheduler did not substitute a host default",
+        "Only the green canary's atomic commit writes primary_model = the exact creating-session id and primary_model_origin = session_inheritance into the registry scheduling object alongside verified=true and canary_run_id (one hop to the registry contract in internals.md; the field schema is not restated here)",
+        "No numeric fit score, category weights, or credit/budget math appears anywhere",
+        "Deterministic and local: fake-scheduler plus temp registry/workspace, with no live scheduler, model roster, or agent-data account"
+      ]
+    },
+    {
+      "id": 32,
+      "scenario": "explicit primary override binds user_override, unknown/ambiguous is rejected",
+      "coverage_kind": "executable_fixture",
+      "prompt": "Drive the scheduled-success canary, but before the confirmation the user explicitly selects a different exact available primary model. Render the one confirmation showing that exact primary as a fact, approve once, register-disabled, and fire the green canary. In separate arms, select the SAME exact primary identifier as an explicit choice, and independently request an unknown identifier and an ambiguous prefix. Inspect the staged binding origin, the fire summary, and the post-canary registry; authorize no transaction for a rejected arm.",
+      "expectations": [
+        "An explicit exact available user primary selection replaces the inherited default; the one confirmation shows it as a fact and the staged binding records primary_model_origin user_override",
+        "Selecting the same exact identifier as an explicit choice is still a user override — origin user_override, never implicit session_inheritance",
+        "The canary preserves the exact chosen primary (primary_model_preserved true); only the green canary commits primary_model plus user_override to the registry",
+        "An unknown, unavailable, or ambiguous-prefix primary is rejected before the confirmation or any mutation (no guessing what the user meant); no rejected arm writes a registry marker or stages a job",
+        "Deterministic and local: fake-scheduler plus temp registry/workspace, with no live model roster or agent-data account"
+      ]
+    },
+    {
+      "id": 33,
+      "scenario": "a scheduler that silently changes the model fails the canary and is not verified",
+      "coverage_kind": "executable_fixture",
+      "prompt": "Drive the config-time canary against the model-binding-lost fixture (JOBSEARCH_TEST_SCHEDULER_SCENARIO=model-binding-lost). Probe (every gate passes, including primary_model_preserving at probe), register-disabled, inspect (current), then fire the canary. The real fire silently substitutes an unrelated host default for the exact recurring primary model even though the run itself completes healthy. Inspect the fire summary, the run record, the registry, and the fake-scheduler state.",
+      "expectations": [
+        "The silent model substitution is invisible at probe (all six gates report pass) and only the real scheduled-path canary fire catches it: the fire completes healthy but primary_model_preserved is false and the run record's primary_model differs from the exact staged binding",
+        "The canary REJECTS the schedule: a scheduler that silently swaps the exact recurring primary model for a host default fails the exact-primary-model-preserving requirement in practice, so NO installed/verified marker is written and verified stays false",
+        "The newly created job is removed or disabled and no success claim is made; a run merely completing healthy (nonblocked) is NOT sufficient — model preservation is a canary requirement, and no silent host substitution is ever accepted as the recurring primary",
+        "The internal failure class is not shown as a raw user-facing code; the user learns the exact observed gap and that it is not scheduled",
+        "Deterministic and local: fake-scheduler model-binding-lost fixture plus temp registry/workspace, with no live scheduler, model, or agent-data account"
       ]
     }
   ]
