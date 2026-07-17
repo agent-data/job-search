@@ -505,14 +505,16 @@
     },
     {
       "id": 39,
-      "scenario": "legacy version-1 exact-model resolution fails closed",
-      "prompt": "Create seven isolated workspaces with setup-workspace.sh and snapshot each config byte-for-byte. MISSING SELECTOR arm: remove search.detail_model. INVALID SELECTOR arm: replace balanced with bogus-tier. TIER ROSTER UNAVAILABLE arm: keep balanced but run on a host context that exposes no executable tier roster. TIER RESOLUTION UNAVAILABLE arm: expose a roster but make the balanced-to-exact mapping fail. INHERIT PRIMARY UNKNOWN arm: set detail_model: inherit while the exact primary model is unavailable to the runner. EXACT DISPATCH UNSUPPORTED arm: resolve balanced to an observed exact model, allow ordinary search selection, then run where explicit exact detail dispatch is unsupported. EXACT DISPATCH REFUSED arm: resolve balanced to an observed exact model, allow ordinary search selection, then make the host refuse that exact detail dispatch. Run job-search-run headlessly in every arm and inspect call logs, config snapshots, blocked run records, and blocked digests.",
+      "scenario": "structural contract for legacy version-1 exact-model fail-closed matrix",
+      "coverage_kind": "structural_contract",
+      "executable_host_controls": false,
+      "prompt": "Structurally inspect and pin seven version-1 fail-closed conditions; this fixture does not provide executable fake host-capability controls. MISSING SELECTOR: search.detail_model is absent. INVALID SELECTOR: the saved selector is bogus-tier. TIER ROSTER UNAVAILABLE: the host exposes no executable tier roster. TIER RESOLUTION UNAVAILABLE: the host tier roles exist but the selector-to-exact mapping fails. INHERIT PRIMARY UNKNOWN: detail_model is inherit while the exact primary model is unavailable. EXACT DISPATCH UNSUPPORTED: the selector resolves to an observed exact model but explicit exact detail dispatch is unsupported. EXACT DISPATCH REFUSED: the selector resolves to an observed exact model but the host refuses that exact detail dispatch. Reserve deterministic executable migration and repair pressure for T3.2, where fake host-capability controls can drive these arms.",
       "expectations": [
-        "Missing selector, invalid selector, tier roster unavailable, tier resolution unavailable, and inherit primary unknown all block in preflight before agent-data calls; each preserves config bytes and records zero metered calls",
-        "Exact dispatch unsupported and exact dispatch refused preserve completed search attempt accounting, block without launching a replacement detail worker, and never substitute or guess another model",
-        "Every writable arm writes a blocked run record with error.class detail_model_binding_unavailable plus a blocked digest; the three detail-model fields are null until an exact executable binding is observed",
-        "Normal chat and digest expose no raw internal class or invented E-* code; they route to interactive model repair owned by T3.3",
-        "No arm writes legacy_v1_selector origin before exact executable resolution, changes config bytes, migrates to version 2, or drops already-accounted work"
+        "The structural contract names missing selector, invalid selector, tier roster unavailable, tier resolution unavailable, and inherit primary unknown as preflight failures; it preserves config bytes and requires zero metered calls",
+        "The structural contract names exact dispatch unsupported and exact dispatch refused as post-search failures that preserve completed search attempt accounting and never substitute or guess another model",
+        "The structurally pinned blocked-artifact contract uses error.class detail_model_binding_unavailable plus a blocked digest; the three detail-model fields remain null until an exact executable binding is observed",
+        "The structural contract keeps raw internal classes and invented E-* codes out of normal chat and digest, routing instead to interactive model repair owned by T3.3",
+        "This case is structural contract coverage, not a behavioral pass; deterministic executable v1 migration and repair pressure is reserved for T3.2"
       ]
     }
   ]

@@ -237,16 +237,20 @@ the required key because it cannot know the live roster.
 | `creating_session_primary_unknown` | `block_verified_schedule_until_user_selects_exact_available_model` |
 <!-- /exact-model-contract:setup-policy -->
 
-Every supported version-2 config writer also replaces the active workspace's private
-`runs/detail-model-binding.json` using the canonical schema and policy in `conventions.md`. Treat config as
-the sole exact-model authority and the sidecar as provenance evidence only. Before writing, build and
-validate both complete candidates in memory; generate a fresh local binding id and timestamp even when the
-model literal is unchanged. For a non-model config edit, carry forward the origin only from the valid
-current sidecar. For setup or an explicit user model choice use `configured_auto` or `configured_user`; a
-repair uses `repair`. Serialize the two whole-file atomic replacements, and if either replacement fails,
-restore the prior pair (or leave a new workspace non-runnable) and do not run. Missing, malformed, or
-mismatched current evidence is not a writable baseline: route to interactive model repair. T3.2 must apply
-the same pair-consistency rule to migration rollback; this is not the full migration procedure.
+A version-2 write that establishes or changes the exact model binding also replaces the active workspace's
+private `runs/detail-model-binding.json` using the canonical schema and policy in `conventions.md`. Treat
+config as the sole exact-model authority and the sidecar as provenance evidence only. Before a model-binding
+write, build and validate both complete candidates in memory; generate a fresh local binding id and
+timestamp even when the model literal is unchanged. For setup or an explicit user model choice use
+`configured_auto` or `configured_user`; a repair uses `repair`. Serialize the two whole-file atomic
+replacements, and if either replacement fails, restore the prior pair (or leave a new workspace
+non-runnable) and do not run.
+
+An unrelated version-2 config edit, including a depth-only edit, does not write model-binding provenance.
+Require the current sidecar to be valid, then preserve it byte-for-byte while atomically writing only the
+config. Missing, malformed, or mismatched current evidence is not a writable baseline: route to interactive
+model repair. Compatible version-1 edits preserve version 1 and do not create a sidecar. T3.2 must apply the
+pair-consistency rule to migration rollback; this is not the full migration procedure.
 
 - **Add a query:** append to `queries:` an item like
   `  - { id: "ml-platform-sf", keywords: "ML platform engineer", location: "San Francisco Bay Area", limit: 25, enabled: true }`

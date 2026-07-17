@@ -265,9 +265,9 @@ Before the first live run, finish the template-copy-to-runnable integration:
 4. Only after both files are valid and present, record the workspace as active in the registry
    (`internals.md` → Registry write rules).
 
-This establishes a fresh binding before the first live run. Later supported config, migration, and repair
-writes replace the whole sidecar—even when the literal model is unchanged—under the canonical
-`conventions.md` policy.
+This establishes a fresh binding before the first live run. Later model-binding writes replace the whole
+sidecar—even when the literal model is unchanged—under the canonical `conventions.md` policy. Ordinary
+config edits do not write it.
 
 ## 6. First live sample run — the magical moment
 

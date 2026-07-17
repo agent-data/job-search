@@ -2,8 +2,8 @@
 support math (rep aggregation, control-delta).
 
 Two jobs: (1) prove the REAL five evals.json are coherent, carry a discovery scenario per skill,
-mark the named judgment-heavy scenarios stochastic with a control arm, and hold no host model-id
-literal; (2) unit-test the deterministic helpers the off-CI live harness feeds observed pass/fail
+mark the named judgment-heavy scenarios stochastic with a control arm, and hold no pack-authored literal
+model ID; (2) unit-test the deterministic helpers the off-CI live harness feeds observed pass/fail
 into (aggregate_reps / control_delta).
 """
 import json
@@ -54,7 +54,10 @@ def test_no_gpt5_literal_in_any_eval():
     for path in sorted(ROOT.glob("skills/*/evals/evals.json")):
         if eh.MODEL_ID_LITERAL.search(path.read_text(encoding="utf-8")):
             offenders.append(path.relative_to(ROOT).as_posix())
-    assert offenders == [], f"literal model ids in evals: {offenders} (assert the tier binding instead)"
+    assert offenders == [], (
+        f"pack-authored literal model ids in evals: {offenders} "
+        "(legacy v1 may use host tier roles; v2 injects an exact host-resolved id at runtime)"
+    )
 
 
 def test_every_skill_has_a_discovery_scenario():
@@ -149,7 +152,12 @@ def test_validator_flags_gpt5_literal(tmp_path):
     data["evals"][0]["expectations"] = ["uses gpt-5.4 by default"]
     _write(tmp_path, "evaluate-job-fit", data)
     hits = eh.validate_evals(str(tmp_path))
-    assert any("literal model id" in h for h in hits)
+    assert any(
+        "pack-authored literal model id" in h
+        and "legacy v1 may name selectors" in h
+        and "v2 must inject an exact host-resolved id at runtime" in h
+        for h in hits
+    )
 
 
 def test_validator_flags_noncontiguous_ids(tmp_path):

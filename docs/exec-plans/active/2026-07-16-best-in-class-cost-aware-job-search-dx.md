@@ -514,6 +514,8 @@ Rules: AAS-AUTO-02/07/11; AAS-LANG-03/04/08; PSG-SUB-02/03/04/09/13; PSG-COMM-09
   - skills/job-search-agent/references/customization.md
   - skills/job-search/evals/evals.json
   - TESTING.md
+  - scripts/eval_harness.py
+  - tests/test_eval_harness.py
   - tests/test_usage_context_contract.py
 
   Version 2 stores search.detail_model as an exact model identifier, never fast, balanced, high, or inherit.
@@ -558,6 +560,9 @@ Rules: AAS-AUTO-02/07/11; AAS-LANG-03/04/08; PSG-SUB-02/03/04/09/13; PSG-COMM-09
 
   Contract:
 
+  - deterministic executable version-1 model-resolution, migration, and repair pressure belongs here and
+    requires fake host-capability controls; T3.1 case 39 pins the seven failure conditions structurally but
+    is not a behavioral pass;
   - passive home reads version 1 and does not write;
   - version-1 headless runs remain compatible and do not migrate;
   - an action requiring version 2, especially scheduling, resolves an exact detail model and folds migration
@@ -1356,8 +1361,17 @@ AAS-DIST-03/05/06.
   `runs/*.json` reader; complete timestamp-shaped filename filtering fixed it. Cumulative review then drove
   a three-test integration RED for blocked artifact semantics, stale shipped tier/version guidance, and the
   incomplete runner fixture. Final GREEN reported `60 passed` focused and `282 passed` full, with a valid
-  legacy-v1 runner fixture and seven-arm behavioral fail-closed eval; eval validation, doc lint, philosophy
-  guard, and diff whitespace were clean.
+  legacy-v1 runner fixture and a seven-condition structural fail-closed contract; executable migration and
+  repair pressure remains in T3.2. Eval validation, doc lint, philosophy guard, and diff whitespace were
+  clean.
+- 2026-07-16 — T3.1 re-review alignment RED reported `5 failed, 44 passed` for complete Review-depth
+  write effects, model-binding-only sidecar rotation, honest eval-39 classification, and v1/v2 test guidance.
+  A semantic-review RED then reported `2 failed, 26 deselected` for the remaining one-off multiplier/
+  confirmation leak and initial-setup wording. Final GREEN reported `85 passed` focused and `285 passed`
+  full. Eval 39 retains all seven failure conditions as structural coverage only; deterministic executable
+  migration/repair pressure remains in T3.2. Eval validation, doc lint, philosophy guard, shell syntax,
+  deterministic build `sha256:dd6ddce33758`, and diff whitespace were clean; focused semantic re-review
+  found no remaining Critical, Important, or Minor issues.
 
 ## Decision log
 

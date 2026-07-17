@@ -95,12 +95,13 @@ Notes on each part:
 ## Quick actions (conversational — never make the user edit a file)
 
 Offer these and apply each by **chatting**, editing `config.yaml` per the `internals.md` recipes. Preserve the
-existing config major on ordinary edits. For version 2, every supported write atomically refreshes
-`runs/detail-model-binding.json` with a fresh binding id even when the exact model is unchanged. A version-1
-workspace remains readable and runnable through bounded compatibility: compatible query, freshness, source,
-parallelism, schedule-field, and review-depth edits preserve version 1. Only an action that requires an exact
-version-2 binding—such as changing the detail model or creating verified scheduling—routes through the
-interactive migration flow owned by T3.2.
+existing config major on ordinary edits. For version 2, an ordinary edit does not write model-binding
+provenance: require the current `runs/detail-model-binding.json` to be valid and preserve it byte-for-byte.
+Only a model-binding write refreshes that sidecar with a fresh binding id, even when the exact model is
+unchanged. A version-1 workspace remains readable and runnable through bounded compatibility: compatible
+query, freshness, source, parallelism, schedule-field, and review-depth edits preserve version 1. Only an
+action that requires an exact version-2 binding—such as changing the detail model or creating verified
+scheduling—routes through the interactive migration flow owned by T3.2.
 
 - **Run a search now** → disclose it makes live calls, then invoke `job-search-run` against `<ws>`. On a host
   that gates parallel detail reads behind approval, if
@@ -155,24 +156,34 @@ For any enablement or increase—first-page coverage to finite, a larger finite 
 
 1. Count current enabled queries and enabled sources. State the exact first-page baseline as
    `<enabled queries> × <enabled sources> = <metered search calls per run>`.
-2. Load the exact saved-cadence comparison window and run count from
+2. For a saved request, load the exact saved-cadence comparison window and run count from
    `../../../shared/references/internals.md` → “Choose one-off or saved review depth”; do not substitute
-   another period. Multiply the first-page baseline by that run count and label the result approximate. For
-   a one-off request, say the schedule does not multiply this run, then give the canonical saved-cadence
-   comparison as context. If scheduling is off, say there is no recurring multiplier.
+   another period. Multiply the first-page baseline by that run count and label the result approximate. If
+   scheduling is off, say there is no recurring multiplier. For a one-off request, say the run does not
+   change the recurring schedule and do not attach a recurring multiplier.
 3. State the additions that cannot be known in advance: every continuation page on one company-board
    stream adds one metered search call, and every full-posting read adds one metered detail call. A finite
    target limits unique roles reviewed, not page calls; `"all"` has no reliable call ceiling. LinkedIn
    remains one page.
-4. Ask a closed yes/no for the exact target and exact one-off or saved scope. Before yes, do not invoke the
-   runner and do not change config. After yes, either pass the one-off scope to `job-search-run` without a
-   config write or atomically write the saved value, then take the requested action.
+4. Apply the resolved scope:
+   - A one-off request is scoped consent after the concise preview: run it once without a second confirmation
+     question and apply the one-off write effect below.
+   - For a saved request, ask a closed yes/no for the exact target. Before yes, do not invoke the runner and
+     do not change config. After yes, apply the matching saved write effect below, then take the requested
+     action.
+
+- **Saved version-2 depth-only edit:** atomically update only the depth value, preserve the existing config
+  major, and leave a valid `runs/detail-model-binding.json` byte-for-byte unchanged.
+- **Saved version-1 depth-only edit:** atomically update only the depth value, preserve version 1, and write
+  no sidecar.
+- **One-off:** pass the scope to `job-search-run` and write neither config nor sidecar.
 
 Load any current metering or rate fact from
 `../../../shared/references/agent-data-contract.md`; do not copy it here. A saved value is durable consent,
 so scheduled runs use it without asking again. A smaller finite target, `all` to finite, removal, or a
-one-off first-page override is reversible: apply it immediately without confirmation, preserve `version: 1`,
-and never add a `budget`, `credits`, or `cost` config field.
+one-off first-page override is reversible: apply it immediately without confirmation using the same
+version-2, version-1, or one-off write effect above, and never add a `budget`, `credits`, or `cost` config
+field.
 
 ### Usage help
 

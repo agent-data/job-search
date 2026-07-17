@@ -21,6 +21,8 @@ CUSTOMIZATION = ROOT / "skills" / "job-search-agent" / "references" / "customiza
 RUNNER = ROOT / "skills" / "job-search-run" / "SKILL.md"
 OPERATOR = ROOT / "skills" / "job-search-agent" / "SKILL.md"
 RUNNER_SETUP = ROOT / "skills" / "job-search-run" / "evals" / "files" / "setup-workspace.sh"
+TESTING_DOC = ROOT / "TESTING.md"
+EVAL_HARNESS = ROOT / "scripts" / "eval_harness.py"
 
 APPROVED_CONNECTED_BASELINE = (
     "Agent-data offers a 100-call monthly free tier. This search starts with 4 calls; "
@@ -216,7 +218,7 @@ DETAIL_MODEL_BINDING_POLICY = {
     "path": ("runs/detail-model-binding.json",),
     "authority": ("config_search.detail_model",),
     "write_mode": ("atomic_whole_file_replace",),
-    "write_on": ("every_setup_config_migration_repair_write_even_same_model",),
+    "write_on": ("every_model_binding_write_even_same_model",),
     "binding_id": ("fresh_on_every_write",),
     "history": ("current_only_not_append_history",),
     "pii": ("none",),
@@ -597,7 +599,7 @@ def test_shipped_v2_surfaces_use_exact_ids_and_preserve_the_current_major():
     assert "detail_model: high" not in detail_text
 
 
-def test_runner_eval_fixture_is_valid_legacy_v1_and_covers_fail_closed_behavior():
+def test_runner_eval_fixture_is_valid_and_eval_39_structurally_pins_fail_closed_matrix():
     setup = RUNNER_SETUP.read_text(encoding="utf-8")
     assert "version: 2/version: 1" in setup
     assert 'detail_model: "balanced"' in setup
@@ -607,6 +609,10 @@ def test_runner_eval_fixture_is_valid_legacy_v1_and_covers_fail_closed_behavior(
     assert "version: 1/version: 3" in newer["prompt"]
 
     fail_closed = next(case for case in evals if case["id"] == 39)
+    assert fail_closed["coverage_kind"] == "structural_contract"
+    assert fail_closed["executable_host_controls"] is False
+    assert "structural" in fail_closed["scenario"].lower()
+    assert "run job-search-run headlessly in every arm" not in fail_closed["prompt"].lower()
     scenario = (fail_closed["prompt"] + " " + " ".join(fail_closed["expectations"])).lower()
     for branch in (
         "missing selector",
@@ -621,6 +627,49 @@ def test_runner_eval_fixture_is_valid_legacy_v1_and_covers_fail_closed_behavior(
         "detail_model_binding_unavailable",
     ):
         assert branch in scenario
+
+
+def test_review_depth_changes_pin_write_effects_for_v1_v2_and_one_off():
+    text = HOME.read_text(encoding="utf-8")
+    match = re.search(r"(?ms)^### Review-depth changes.*?(?=^### Usage help)", text)
+    assert match, "home.md is missing the complete Review-depth changes section"
+    section = " ".join(match.group(0).lower().split())
+
+    assert "saved version-2 depth-only edit" in section
+    assert "preserve the existing config major" in section
+    assert "valid `runs/detail-model-binding.json` byte-for-byte unchanged" in section
+    assert "saved version-1 depth-only edit" in section
+    assert "preserve version 1" in section
+    assert "write no sidecar" in section
+    assert "one-off" in section
+    assert "write neither config nor sidecar" in section
+    assert "do not attach a recurring multiplier" in section
+    assert "run it once without a second confirmation question" in section
+    assert "then give the canonical saved-cadence comparison as context" not in section
+    assert "apply it immediately without confirmation, preserve `version: 1`" not in section
+
+
+def test_parallel_choice_is_folded_into_initial_model_binding_not_a_later_refresh():
+    evals = _eval("job-search")["evals"]
+    parallel = next(case for case in evals if case["id"] == 8)
+    contract = " ".join(" ".join(parallel["expectations"]).lower().split())
+    assert "as part of initial setup finalization" in contract
+    assert "atomically writes the matching current runs/detail-model-binding.json" in contract
+
+    onboarding = _normalized_prose(ONBOARDING).lower()
+    assert "later model-binding writes replace the whole sidecar" in onboarding
+    assert "later supported config, migration, and repair writes" not in onboarding
+
+
+def test_exact_model_test_guidance_distinguishes_legacy_selectors_from_v2_runtime_ids():
+    testing = _normalized_prose(TESTING_DOC).lower()
+    harness = _normalized_prose(EVAL_HARNESS).lower()
+    for text in (testing, harness):
+        assert "legacy version-1 selectors" in text
+        assert "host tier roles" in text
+        assert "version-2" in text
+        assert "exact host-resolved" in text
+        assert "pack-authored literal model id" in text
 
 
 def test_model_setup_is_one_time_and_unknown_primary_blocks_verified_scheduling():

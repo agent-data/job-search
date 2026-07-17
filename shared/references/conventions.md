@@ -192,7 +192,7 @@ the active config's `search.detail_model`.
 | `path` | `runs/detail-model-binding.json` |
 | `authority` | `config_search.detail_model` |
 | `write_mode` | `atomic_whole_file_replace` |
-| `write_on` | `every_setup_config_migration_repair_write_even_same_model` |
+| `write_on` | `every_model_binding_write_even_same_model` |
 | `binding_id` | `fresh_on_every_write` |
 | `history` | `current_only_not_append_history` |
 | `pii` | `none` |
@@ -203,11 +203,13 @@ the active config's `search.detail_model`.
 | `t3_2_rollback` | `restore_config_and_sidecar_consistently` |
 <!-- /exact-model-contract:binding-sidecar-policy -->
 
-Every supported setup, config update, migration, or repair builds a complete replacement sidecar with a
-fresh locally generated `binding_id` and `bound_at`, even when the exact model literal did not change, then
-atomically replaces the whole file. A setup/config write is not runnable until both candidate files are
-valid and the replacements succeed. T3.2 migration rollback must restore config and its matching sidecar
-consistently; this task does not define the full migration flow.
+Every model-binding write—new setup, explicit user model selection, migration, or repair—builds a complete
+replacement sidecar with a fresh locally generated `binding_id` and `bound_at`, even when the exact model
+literal did not change, then atomically replaces the whole file. An unrelated config edit does not write the
+sidecar: when the current sidecar is valid, preserve it byte-for-byte. A setup, migration, or other
+model-binding config write is not runnable until both candidate files are valid and the replacements
+succeed. T3.2 migration rollback must restore config and its matching sidecar consistently; this task does
+not define the full migration flow.
 
 `run_id` format: UTC timestamp `YYYY-MM-DDTHH-MM-SSZ` (hyphens, not colons, in the time component — safe as a filename on every platform). `<date>` for digests: `YYYY-MM-DD` (local tz).
 
