@@ -920,7 +920,7 @@ AAS-FORM-07/09; PSG-COMM-09/10/18/20.
       python3 -m pytest -q tests/test_fake_scheduler.py tests/test_eval_harness.py
       python3 scripts/eval_harness.py --root .
 
-- [ ] **T6.2 [BLOCKS, L] Implement eligibility, selection, and exact schedule state.**
+- [x] **T6.2 [BLOCKS, L] Implement eligibility, selection, and exact schedule state.**
 
   **Modify:**
   - shared/references/internals.md
@@ -1677,6 +1677,35 @@ AAS-DIST-03/05/06.
   release version-sync clean, two deterministic builds with the build stamp unchanged at file SHA-256
   `89d18bd0…e5d5f67a`, and `git diff --check` clean. The plugin version stays `0.6.0`. No live agent-data,
   model, scheduler, network, or billable effect occurred and no branch or worktree changed. **T6.1 is
+  complete.**
+- 2026-07-17 — T6.2 eligible scheduler selection: implemented the eligibility gates, native-first/OS-fallback
+  selection, and the expanded registry state machine — all single-homed in internals.md with the skills
+  pointing one hop. A candidate qualifies only when it passes all SIX gates (unattended, canary-testable,
+  primary-model-preserving, local-access, inspectable, reversible); the agent probes the native mechanism
+  first, falls back to an eligible OS mechanism, and otherwise creates nothing verified (a session loop may be
+  offered, labeled session-only; cloud always fails the local-access gate). The scheduling registry object
+  gained installed/verified booleans, mechanism, scheduler_id, absolute workspace, cadence, set_at,
+  verified_at, canary_run_id, and exact primary_model + primary_model_origin, written whole-file-atomically with
+  unknown keys preserved; a legacy loop marker reads session-only and an old installed-only marker reads
+  unverified — never verified. `installed=true`/`verified=true` are reachable ONLY via the single post-canary
+  atomic write; staging never writes them and a canary failure leaves no newly installed marker. An existing
+  unowned job requires inspect then adopt-or-replace, never a silent clobber. The pinned
+  `exact-model-contract:scheduler-fields` table (T3.1) is byte-for-byte unchanged; the nine new fields live in
+  separate `scheduling-registry-contract:*` tables. Committed as `ae81eee`
+  (`feat: select only eligible recurring schedulers`) — the seven contract files plus the regenerated build
+  stamp, and three flagged out-of-brief additions: the six required RED behavioral evals in
+  job-search-agent/evals/evals.json (ids 22-27, executable_fixture; the brief named no evals file), the
+  brief-predicted `agent[-7:]`→`agent_repair` (ids 15-21) fix in test_exact_model_repair.py, and a new
+  tests/test_scheduling_eligibility.py that drives the T6.1 fake-scheduler shim (all controller- and
+  reviewer-verified correct). No T6.3 canary-run/handoff-UX logic leaked. TDD RED→GREEN. A fresh Opus task
+  review returned **Approved** — no Critical or Important; two Minor notes in the new test file (a comment
+  saying "six gates the probe exposes" where only five are probe flags — inspectability is proven via the
+  separate inspect op — and a missing positive-inspect coverage assertion; recorded in the SDD ledger, no fix).
+  Controller re-verify on the committed tree: full pytest `551 passed` (531→551), the scheduling test files
+  `50 passed`, eval harness coherent, doc lint / philosophy guard / release version-sync clean, two
+  deterministic builds byte-identical (build-stamp file SHA-256 `783f0482…54ebaca7`, content hash
+  `sha256:feb3c285aafe`), and `git diff --check` clean. The plugin version stays `0.6.0`. No live agent-data,
+  model, scheduler, network, or billable effect occurred and no branch or worktree changed. **T6.2 is
   complete.**
 
 ## Decision log
