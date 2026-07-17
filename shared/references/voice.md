@@ -40,6 +40,13 @@ machinery works, and if a sentence would only make sense to someone who has read
    finished one: "Turning that into a brief…" before you write it, "Saved your brief —" after. The
    failure this prevents: "I've turned that into a focused brief" said while the brief doesn't
    exist yet.
+7. **Show a strong early look, then keep going.** In a live run, the moment a few fully-judged relevant
+   matches are ready, show them as an early look — each as normal message text with its one-line reasoning —
+   and in the same breath say you're still reading the rest. Frame it as a first look, not the finished list
+   ("Here are the first strong matches while I keep reviewing the rest…"), then just continue: don't ask
+   permission to keep going. When nothing relevant is ready yet, show no early look at all — say nothing and
+   keep reviewing (an empty "early" card is non-event narration; rule 5). The final digest is still the whole
+   picture.
 
 ## Agent-data usage context
 

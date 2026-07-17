@@ -93,7 +93,13 @@ The event vocabulary is closed:
   non-latest retry, or any later retry. Recovery and artifact authority also enforce the reverse join:
   every resolution's deterministic logical identity must name that durable false primary, and the set of
   resolved logical identities must equal the false-primary identities that have attempt history.
-- `brief_revision` records a revision identifier, never the preferences text itself.
+- `brief_revision` records a revision identifier, never the preferences text itself. A posting already
+  `evaluating` settles under the brief revision its `posting_state` recorded at evaluation start; a newly
+  recorded `brief_revision` governs only evaluations that begin after it. An in-flight producer attempt and
+  its judgment are never cancelled, replaced, or re-attributed to satisfy a later revision — they finish and
+  account under the revision they began under, and only then does the next revision apply to subsequent
+  selection review. This ordering is the whole of the mid-run revision contract here; rechecking already
+  shown matches, editing the brief, and retrieval-impact previews are a separate later concern.
 - `milestone` records a closed milestone token, never user-facing result content.
 - `run_closed` is the final line and carries exactly one close state.
 

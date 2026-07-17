@@ -452,6 +452,33 @@ fallback, and wording rules in `errors.md` rather than restating them here.
    Per-posting errors stay local to that posting:
    `400 validation_error` (not retryable — a `posting_id`/`source_url` pair mismatch) → judge from summary, note "detail link expired"; `503 upstream_unavailable` (retryable) → retry/backoff, then summary-only + note. **No product cap** — every queued posting gets evaluated;
    the scan (relevance), not a count, decides how many.
+
+   **Show a small relevant set early, then keep reviewing — interactive runs only.** In a live interactive
+   run, present fully-judged relevant matches as soon as they are ready, drawn only from the ordered selected
+   queue after `selection_settled` so pagination correctness holds (never present before selection settles).
+   Target **three** relevant matches (`relevant:true` with nonempty reasoning). Present fewer — one or two
+   ready relevant matches — only at a natural tranche boundary when the feed is sparse: the first rolling
+   parallel batch completes (parallel fan-out) or five sequential judgments finish (sequential fallback), per
+   `../../shared/references/parallelism.md`. If none are relevant in that first tranche, show no early card —
+   keep reviewing with no early output. Render the ready matches through `../../shared/references/voice.md`
+   (the early/first-look wording, each match with its one-line reasoning); then, per
+   `../../shared/references/run-lifecycle.md`, record the `early_results_shown` milestone only for that actual
+   qualifying interactive display, immediately advance to `reviewing_remaining`, and keep reviewing the rest
+   without asking permission. The early look is nonterminal — the completion predicate still requires the
+   whole selected queue settled, so it can never end the run. Record the three distinct runner-owned metric
+   timestamps at their three distinct moments per `run-lifecycle.md`: `first_relevant_match_ready_at` (the
+   first fully-evaluated relevant posting with nonempty reasoning) separately from `early_results_shown_at`
+   (early results actually shown) and `run_completed_at` (valid complete close). A scheduled or canary run
+   emits no partial presentation: it stays quiet, advances past the inapplicable presentation phase without
+   the milestone, and publishes only at finalization.
+
+   **Feedback while workers are in flight.** If the user changes the brief mid-run, let every already-started
+   detail worker settle under the brief revision its `posting_state` recorded at evaluation start before the
+   new revision applies — never cancel an authorized attempt or re-attribute its judgment (see
+   `../../shared/references/run-lifecycle.md`, `brief_revision`). Record the new `brief_revision` only once
+   the in-flight batch has settled; only selections whose review begins after it judge under the new
+   revision. Full refinement routing — editing the brief, rechecking already-shown matches, retrieval-impact
+   previews — is a later task, not this settling step.
 5. **Consolidate + persist + report.** Collect every parallel worker's single authorized-attempt return envelope;
    before accounting a return or appending any posting state, validate its identity (`run_id`/`source`/`source_id`
    equal the dispatched posting) and schema per `../../shared/references/parallelism.md` — a wrong-identity or
@@ -582,7 +609,9 @@ files, skill names — never reaches the user; say the outcome, not the mechanis
 **Scheduled/headless invocations stay quiet** until the 6-line summary + digest. But when this skill runs
 inside a live conversation (onboarding's first run, "run a search now"), narrate progress sparsely per
 `../../shared/references/voice.md`: one short line per stage, in user outcomes — "Searching for '<keywords>'…" → "Found N
-postings — M are new." → "Reading the M promising ones in full…" → then the matches as normal message text
+postings — M are new." → "Reading the M promising ones in full…" → a small relevant set shown early while you
+keep reviewing (the interactive early look in step 4; its wording owned by `../../shared/references/voice.md`)
+→ then the matches as normal message text
 (never a code fence, never just the digest's path, never a title-only list — each match carries its one-line
 reasoning and any ⚠ confirm, per conventions.md → Digest format).
 
