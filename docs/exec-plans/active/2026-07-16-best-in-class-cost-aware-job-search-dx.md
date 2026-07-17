@@ -586,7 +586,7 @@ Rules: AAS-AUTO-02/07/11; AAS-LANG-03/04/08; PSG-SUB-02/03/04/09/13; PSG-COMM-09
       python3 scripts/eval_harness.py --root .
       python3 -m pytest -q
 
-- [ ] **T3.3 [BLOCKS, M] Define exact-model expiry and one-confirmation repair.**
+- [x] **T3.3 [BLOCKS, M] Define exact-model expiry and one-confirmation repair.**
 
   **Modify:**
   - shared/references/errors.md
@@ -1394,6 +1394,19 @@ AAS-DIST-03/05/06.
   Controller verification on the committed tree reported `55 passed` focused, `231 passed` cumulative, and
   `340 passed` full; eval, doc, philosophy, syntax, compilation, diff, and deterministic build checks were
   clean. No live agent-data call, scheduler write, network operation, or spend occurred.
+- 2026-07-17 — T3.3 landed across `cda9ab2`, `53f1bf2`, and `dbcf6de` after repeated semantic and formal
+  adversarial review. Headless unavailable/refused exact models now block without substitution; interactive
+  scheduled repair preserves valid slots, resolves only failed slots, binds one complete calls-first
+  confirmation to a one-use candidate receipt, keeps the job disabled/unverified, and commits only after a
+  green canary. Manual-only detail repair remains a neutral atomic config/binding write and cannot bypass an
+  installed schedule. Review-driven RED/GREEN cycles closed direct-begin, receipt replay/staleness, scenario
+  drift, reusable consent, registry/job provenance contradictions, refused-slot reuse, generator rollover,
+  stale or malformed binding evidence, activation-order mutation, path injection, and semantic-equal byte
+  rewrite paths. The deterministic receipt digest remains explicitly development-fixture integrity evidence,
+  not a shipped format or security boundary. Controller verification on the committed tree reported
+  `65 passed` focused, `296 passed` cumulative, and `405 passed` full; release integrity, eval, doc, philosophy,
+  syntax, compilation, diff, and deterministic build checks were clean. P3 is complete; no live agent-data,
+  network, or real scheduler effect occurred.
 
 ## Decision log
 
@@ -1410,6 +1423,9 @@ AAS-DIST-03/05/06.
 - 2026-07-17 — Treat v1-to-v2 config plus current binding evidence as one migration transaction. Bind the
   rollback cutoff to the exact activated pair and derive it only from canonical complete-run evidence;
   persisted cutoff state is an index/guard, never a substitute for revalidation.
+- 2026-07-17 — Preserve valid exact model slots during repair and resolve only unavailable/refused slots.
+  Scheduled repair uses one receipt-bound confirmation and restores verified status only after a green
+  canary; unscheduled detail-only repair is neutral and may not invent or bypass scheduler state.
 - 2026-07-16 — Define verified recurring as unattended plus real-path canary; a session loop is never
   verified recurring.
 - 2026-07-16 — Scope cost context to agent-data calls, mention the available 100-call monthly free tier, and
