@@ -825,7 +825,7 @@ AAS-BOUND-03; PSG-TOOL-15.
       python3 scripts/eval_harness.py --root .
       python3 scripts/doc_lint.py --root .
 
-- [ ] **T5.3 [BLOCKS, L] Add immediate, scoped iterative refinement.**
+- [x] **T5.3 [BLOCKS, L] Add immediate, scoped iterative refinement.**
 
   **Modify:**
   - skills/job-search/SKILL.md
@@ -1627,6 +1627,31 @@ AAS-DIST-03/05/06.
   `sha256:538e3d9da8cd`), and `git diff --check` clean. The plugin version stays `0.6.0`. No live agent-data,
   model, scheduler, network, or billable effect occurred and no branch or worktree changed. **T5.2 is
   complete.**
+- 2026-07-17 — T5.3 iterative refinement (P5 complete): routed user feedback into immediate, correctly-scoped
+  refinement with a single-homed routing table in `home.md → Applying your feedback` and pointer-only surfaces
+  in the front-door SKILL, the interview skill, and job-search-agent customization. Six rules: (1) clear general
+  preference feedback updates preferences.md immediately, increments the brief revision, appends one
+  `brief_revision` event to the active run's coordinator-written ledger, and confirms in one line; (2)
+  posting-specific feedback changes only that posting's pipeline `status` unless the user generalizes it (no
+  silent brief promotion); (3) ambiguous feedback gets one clarification only when the interpretation would
+  change the result; (4) preference-only changes apply to the remaining queue and recheck an already-shown job
+  only when the edit could move its verdict — both directions encoded and the "don't re-evaluate shown postings
+  when the outcome cannot change" non-goal honored; (5) retrieval-changing feedback previews agent-data impact
+  (one hop to internals.md's usage table) before a new search or persistent write; (6) in-flight evaluations
+  settle under their recorded brief revision first (the T4.3 rule, preserved verbatim in run-lifecycle.md and
+  routed to, not re-implemented). Seven RED evals added (38-44). Committed as `5216c60`
+  (`feat: apply iterative job-search feedback`) — the six brief files plus the regenerated build stamp; appends
+  only, no ID-anchored test shifted, no out-of-brief edit. A mid-course portability correction converted an
+  initial cross-skill file-path pointer to the codebase's conceptual skill-name form after the 8-host
+  `test_reference_resolution.py` rejected it. A fresh Opus task review returned **Approved** — no Critical or
+  Important; two Minor cosmetic notes (home.md's recheck example 2 conflates a "shown" with a "previously
+  excluded" posting on a loosening edit — a sensible but untested loosening→re-admit path; and an evals-harness
+  summary says "ONE feedback turn" while eval 39 drives two — recorded in the SDD ledger, no fix). Controller
+  re-verify on the committed tree: full pytest `486 passed`, eval harness coherent, doc lint / philosophy guard
+  / release version-sync clean, two deterministic builds byte-identical (build-stamp file SHA-256
+  `89d18bd0…e5d5f67a`), and `git diff --check` clean. The plugin version stays `0.6.0`. No live agent-data,
+  model, scheduler, network, or billable effect occurred and no branch or worktree changed. **T5.3 is complete,
+  and P5 (quick onboarding, activation, and iterative refinement) is complete.**
 
 ## Decision log
 
