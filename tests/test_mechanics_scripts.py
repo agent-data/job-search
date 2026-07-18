@@ -10,7 +10,9 @@ Scripts are invoked through `sh` (and, where present, strict `dash`) — never `
 construct fails the suite. The prose contracts these scripts mirror remain in place as the D10 fallback;
 these tests pin the scripted form to that same behavior.
 """
+import os
 import pathlib
+import re
 import shutil
 import subprocess
 
@@ -24,9 +26,11 @@ SCHEDULE = MECH / "schedule-line.sh"
 DISCOVERY = MECH / "workspace-discovery.sh"
 LIFECYCLE_APPEND = MECH / "lifecycle-append.sh"
 LIFECYCLE_FOLD = MECH / "lifecycle-fold.sh"
+SUPPORT = MECH / "support-summary.sh"
 LIFECYCLE_REFERENCE = ROOT / "shared" / "references" / "run-lifecycle.md"
+INTERNALS_REFERENCE = ROOT / "shared" / "references" / "internals.md"
 
-ALL_SCRIPTS = [DEDUP, APPEND, SCHEDULE, DISCOVERY, LIFECYCLE_APPEND, LIFECYCLE_FOLD]
+ALL_SCRIPTS = [DEDUP, APPEND, SCHEDULE, DISCOVERY, LIFECYCLE_APPEND, LIFECYCLE_FOLD, SUPPORT]
 
 RUN_ID = "2026-07-16T14-30-00Z"
 RUN_STARTED = "2026-07-16T10:30:00-04:00"
@@ -1422,6 +1426,221 @@ def test_lifecycle_reference_pins_complete_no_shell_fallback():
     ]
     for fragment in required:
         assert fragment in text, "run-lifecycle.md fallback is missing: %s" % fragment
+
+
+# --------------------------------------------------------------- support summary
+#
+# support-summary.sh emits, on the user's explicit request, a WHITELIST-ONLY local diagnostic
+# (internals.md §"Local support summary"). It is built by extracting ONLY the allowed nonsecret
+# fields — build stamp, host-reported harness/version, OS/arch, schedule state, latest run health,
+# internal error code, aggregate agent-data calls, and nonsecret request IDs — never by dumping and
+# filtering. These tests seed EVERY forbidden secret/PII/cursor/preference/description value beside
+# the allowed fields and prove the output carries the whitelist and NONE of the bait, under sh + dash.
+
+SUPPORT_RUN_ID = "2026-07-16T14-30-00Z"
+
+# Every forbidden value the whitelist must NEVER emit, each a unique sentinel so a single substring
+# hit is a definitive leak. None contains an `E-<CAPS>` operator-code shape, so a hit could only come
+# from dumping the value's home field rather than from the deliberately whitelisted internal code.
+SUPPORT_BAIT = [
+    "PREFERENCESBAIT_remote_only_must_have",      # preferences.md prose
+    "JOBDESCBAIT_full_posting_description_text",   # full job description (jobs.jsonl)
+    "MATCHPROSEBAIT_owns_the_roadmap_strong",      # match reasoning prose (jobs.jsonl)
+    "sk-APIKEYBAITroute0000000000",                # API key seeded in the run record
+    "sk-CONFIGAPIKEYBAIT111111111",                # API key seeded in config.yaml
+    "sk-REGISTRYKEYBAIT2222222222",                # API key seeded in the registry
+    "AUTHBAIT_bearer_header_value",                # auth header (run record)
+    "CURSORBAIT_opaque_pagination_cursor",         # pagination cursor (run record)
+    "NEXTPAGEBAIT_next_page_token_value",          # next_page_token (run record)
+    "ENVDUMPBAIT_PATH_SECRET_dump",                # environment dump (run record)
+    "KEYWORDBAIT_senior_staff_designer",           # search keywords (not whitelisted)
+    "SCHEDIDBAIT_com_example_jobsearch",           # scheduler_id neighbor in the scheduling object
+    "PRIMARYMODELBAIT_exact_model_id",             # primary_model neighbor in the scheduling object
+]
+
+
+def run_support(workspace, registry, harness="Claude Code", version="2.1.7", shell="sh"):
+    """Run support-summary.sh through a POSIX shell; the whitelist-only summary is on stdout."""
+    return subprocess.run(
+        [shell, str(SUPPORT), str(workspace), str(registry), harness, version],
+        capture_output=True,
+        text=True,
+    )
+
+
+def _write_support_fixture(tmp_path):
+    """A workspace + registry carrying EVERY whitelist field and EVERY forbidden value side by side.
+
+    The run record is pretty-printed (multi-line) on purpose, so the mechanic must tolerate a
+    formatted record and still extract by exact key rather than by dumping lines.
+    """
+    workspace = tmp_path / "ws"
+    runs = workspace / "runs"
+    (workspace / "reports").mkdir(parents=True)
+    runs.mkdir(parents=True)
+
+    # config.yaml — bait only; the mechanic must never read it.
+    (workspace / "config.yaml").write_text(
+        "version: 2\n"
+        'search: { detail_model: "x", api_key: "sk-CONFIGAPIKEYBAIT111111111" }\n'
+        'queries: [ { id: "q", keywords: "KEYWORDBAIT_senior_staff_designer" } ]\n'
+    )
+    # preferences.md — pure PII prose bait.
+    (workspace / "preferences.md").write_text(
+        "# Brief\nMust-have: PREFERENCESBAIT_remote_only_must_have.\n"
+    )
+    # jobs.jsonl — job-description + match-prose bait.
+    (workspace / "jobs.jsonl").write_text(
+        '{"event":"evaluated","source":"linkedin","source_id":"1",'
+        '"reasoning":"MATCHPROSEBAIT_owns_the_roadmap_strong",'
+        '"description":"JOBDESCBAIT_full_posting_description_text"}\n'
+    )
+
+    # The latest run record: blocked, whitelist fields AND forbidden neighbors, pretty-printed.
+    record = (
+        "{\n"
+        '  "run_id": "%s",\n' % SUPPORT_RUN_ID
+        + '  "run_health": "blocked",\n'
+        '  "error": { "code": "E-NO-AUTH" },\n'
+        '  "api_key": "sk-APIKEYBAITroute0000000000",\n'
+        '  "authorization": "AUTHBAIT_bearer_header_value",\n'
+        '  "environment": "ENVDUMPBAIT_PATH_SECRET_dump",\n'
+        '  "queries": [\n'
+        '    { "query_id": "q", "source": "linkedin",\n'
+        '      "keywords": "KEYWORDBAIT_senior_staff_designer",\n'
+        '      "cursor": "CURSORBAIT_opaque_pagination_cursor",\n'
+        '      "next_page_token": "NEXTPAGEBAIT_next_page_token_value",\n'
+        '      "request_ids": ["req_whitelist_alpha", "req_whitelist_bravo"] }\n'
+        "  ],\n"
+        '  "errors": [\n'
+        '    { "stage": "get-posting", "code": "upstream_unavailable",\n'
+        '      "request_id": "req_whitelist_charlie" }\n'
+        "  ],\n"
+        '  "agent_data_usage": { "metered_calls": 9,\n'
+        '    "by_operation": { "initial_search": 4, "continuation_search": 2, "detail_read": 3 } },\n'
+        '  "lifecycle": { "phase": "searching", "close_state": "blocked", "health": "blocked" }\n'
+        "}\n"
+    )
+    (runs / ("%s.json" % SUPPORT_RUN_ID)).write_text(record)
+    # An older run record and a non-run file — neither may be chosen as "latest".
+    (runs / "2026-07-01T09-00-00Z.json").write_text('{"run_health":"healthy","error":null}\n')
+    (runs / "detail-model-binding.json").write_text('{"detail_model":"x"}\n')
+
+    registry = tmp_path / "config.json"
+    registry.write_text(
+        "{\n"
+        '  "version": 1,\n'
+        '  "active_workspace": "%s",\n' % workspace
+        + '  "api_key": "sk-REGISTRYKEYBAIT2222222222",\n'
+        '  "scheduling": {\n'
+        '    "installed": true, "verified": true,\n'
+        '    "mechanism": "launchd", "cadence": "daily",\n'
+        '    "scheduler_id": "SCHEDIDBAIT_com_example_jobsearch",\n'
+        '    "primary_model": "PRIMARYMODELBAIT_exact_model_id",\n'
+        '    "canary_run_id": "%s"\n' % SUPPORT_RUN_ID
+        + "  }\n"
+        "}\n"
+    )
+    return workspace, registry
+
+
+def _build_stamp_fields():
+    stamp = (ROOT / "shared" / "references" / "build-stamp.md").read_text()
+    fields = {}
+    for line in stamp.splitlines():
+        if line.startswith("version:"):
+            fields["version"] = line.split(":", 1)[1].strip()
+        elif line.startswith("content_hash:"):
+            fields["content_hash"] = line.split(":", 1)[1].strip()
+    return fields
+
+
+@pytest.mark.parametrize("shell", ["sh"] + (["dash"] if shutil.which("dash") else []))
+def test_support_summary_is_whitelist_only_under_posix_shells(tmp_path, shell):
+    """Whitelist present, EVERY forbidden value absent — the safety-critical property — under sh+dash."""
+    workspace, registry = _write_support_fixture(tmp_path)
+    stamp = _build_stamp_fields()
+
+    r = run_support(workspace, registry, harness="Claude Code", version="2.1.7", shell=shell)
+    assert r.returncode == 0, r.stderr
+    out = r.stdout
+
+    # --- whitelist present ---
+    assert stamp["version"] in out                      # build stamp version
+    assert stamp["content_hash"] in out                 # build stamp content hash
+    assert "Claude Code" in out and "2.1.7" in out       # host-reported harness/version
+    assert os.uname().sysname in out and os.uname().machine in out  # OS / architecture
+    assert "launchd" in out and "daily" in out           # schedule state (mechanism + cadence)
+    assert "installed=true" in out and "verified=true" in out
+    assert "blocked" in out                              # latest run health
+    assert "E-NO-AUTH" in out                            # internal error code — DELIBERATELY included
+    assert "9 metered" in out                            # aggregate agent-data calls
+    for rid in ("req_whitelist_alpha", "req_whitelist_bravo", "req_whitelist_charlie"):
+        assert rid in out                                # nonsecret request IDs
+    assert "https://github.com/agent-data/job-search/issues" in out
+
+    # --- none of the forbidden values leaked ---
+    for bait in SUPPORT_BAIT:
+        assert bait not in out, "LEAKED forbidden value %r under %s" % (bait, shell)
+
+
+def test_support_summary_selects_the_newest_run_record_only(tmp_path):
+    """Only the newest run_id-shaped record supplies health/code/calls; the sidecar is never read."""
+    workspace, registry = _write_support_fixture(tmp_path)
+    r = run_support(workspace, registry)
+    assert r.returncode == 0, r.stderr
+    assert SUPPORT_RUN_ID in r.stdout            # the 2026-07-16 record, not the 2026-07-01 one
+    assert "blocked" in r.stdout                 # its health, not the older record's "healthy"
+
+
+def test_support_summary_graceful_when_no_workspace_or_registry(tmp_path):
+    """A first-run user with no runs and no registry still gets build/harness/OS + the issues link."""
+    workspace = tmp_path / "empty-ws"    # never created
+    registry = tmp_path / "absent.json"  # never created
+    r = run_support(workspace, registry, harness="Codex", version="9.9")
+    assert r.returncode == 0, r.stderr
+    out = r.stdout
+    assert "Codex" in out and "9.9" in out
+    assert os.uname().sysname in out
+    assert "not configured" in out       # no scheduling object
+    assert "none recorded" in out        # no latest run record
+    assert "https://github.com/agent-data/job-search/issues" in out
+
+
+def test_support_summary_healthy_run_fabricates_no_error_code(tmp_path):
+    """A healthy run (error null) reports no operator code — the code is read, never invented."""
+    workspace = tmp_path / "ws"
+    runs = workspace / "runs"
+    runs.mkdir(parents=True)
+    (runs / ("%s.json" % SUPPORT_RUN_ID)).write_text(
+        '{ "run_id": "%s", "run_health": "healthy", "error": null,\n'
+        '  "agent_data_usage": { "metered_calls": 3 },\n'
+        '  "queries": [ { "request_ids": ["req_ok_one"] } ] }\n' % SUPPORT_RUN_ID
+    )
+    registry = tmp_path / "config.json"
+    registry.write_text('{ "version": 1, "scheduling": { "installed": false, "verified": false } }\n')
+    r = run_support(workspace, registry, harness="Cursor", version="1.0")
+    assert r.returncode == 0, r.stderr
+    out = r.stdout
+    assert "healthy" in out
+    assert "3 metered" in out
+    assert "req_ok_one" in out
+    assert "installed=false" in out and "verified=false" in out
+    assert re.search(r"E-[A-Z0-9]", out) is None   # no operator code fabricated when error is null
+
+
+def test_support_summary_reference_pins_interface_and_prose_fallback():
+    """The interface and its no-runtime prose fallback stay single-homed in internals.md."""
+    text = INTERNALS_REFERENCE.read_text()
+    required = [
+        "support-summary.sh WORKSPACE REGISTRY HARNESS_NAME HARNESS_VERSION",
+        "support-summary.txt",
+        "https://github.com/agent-data/job-search/issues",
+        "whitelist",
+        "never",  # never upload / open an issue / launch a browser
+    ]
+    for fragment in required:
+        assert fragment in text, "internals.md support-summary contract is missing: %s" % fragment
 
 
 # ------------------------------------------------------------------- POSIX portability

@@ -811,3 +811,57 @@ These checks are **local and unmetered**; a repair or retry **canary** is a sepa
 [Agent-data usage decisions](#agent-data-usage-decisions) (`metered_canary_retry_or_repair`). This section
 **derives and labels** the state only; the user-safe cause-and-fix rendering of a `blocked` or failed run is
 owned by `errors.md` (one hop), and is not restated here.
+
+## Local support summary
+
+On the user's **explicit request only**, produce a **whitelist-only** local support diagnostic the user can
+review and optionally attach to a GitHub issue. It is a privacy-safe operator artifact: it carries **only**
+nonsecret diagnostic fields, is shown to the user in full first, and is **never** uploaded on its own. **Run
+the shared script where a POSIX shell runtime exists; otherwise build the same summary in-model from the
+prose contract below.** Both accept the same fixed interface and write the summary to stdout:
+
+```text
+support-summary.sh WORKSPACE REGISTRY HARNESS_NAME HARNESS_VERSION
+```
+
+`WORKSPACE` is the active workspace; `REGISTRY` is the resolved `$REG`; `HARNESS_NAME`/`HARNESS_VERSION` are
+the host-reported harness identity. The **caller** then atomically writes the stdout to
+`{workspace}/support-summary.txt` (the whole-file write rules above), **displays the entire file**, and asks
+nothing further **unless the user explicitly wants help attaching it**. The mechanic and its caller make
+**no** network, upload, browser, or issue-API call: on an explicit request the user is only ever shown the
+local file plus the link `https://github.com/agent-data/job-search/issues`; opening an issue, uploading, or
+launching a browser **never** happens automatically.
+
+Build it as a **whitelist by extraction** — read each field below by exact key, scoped to its object, and
+**never** dump a file and filter it — so that even a workspace full of secrets yields a summary carrying
+none of them. Include **only**:
+
+<!-- support-summary-contract:whitelist -->
+| Field | Exact source |
+|---|---|
+| build stamp (version + content hash) | the bundled `shared/references/build-stamp.md` (`version:` and `content_hash:` lines) |
+| harness / version | the host-reported `HARNESS_NAME` and `HARNESS_VERSION` arguments |
+| OS / architecture | `uname -s` and `uname -m` |
+| schedule state | the registry `scheduling` object's `installed`, `verified`, `mechanism`, and `cadence` **only** |
+| latest run health | the newest `runs/<run_id>.json` (complete run_id-shaped filename only) top-level `run_health` |
+| internal error code | that same record's `error.code` (validated `E-[A-Z0-9]+(-[A-Z0-9]+)*`) or bounded `error.class`; `none` when the run carried no error |
+| aggregate agent-data calls | that record's `agent_data_usage.metered_calls` |
+| nonsecret request IDs | that record's `request_id` / `request_ids` values only |
+<!-- /support-summary-contract:whitelist -->
+
+**Exclude — never emit, even when present in the workspace or registry:** preferences, job descriptions,
+match details, API keys, auth headers, pagination cursors and opaque continuation tokens, and environment
+dumps. Read none of `config.yaml`, `preferences.md`, or `jobs.jsonl`; from the registry read only the four
+scheduling keys above (never `scheduler_id`, `primary_model`, `canary_run_id`, or any other field); from the
+run record read only the whitelisted keys above.
+
+The internal error code is **deliberately whitelisted here.** This artifact is an operator/support
+diagnostic like `runs/<id>.json`, reviewed in full by the user before they choose to share it, so the raw
+`E-*` boundary that governs chat, digest, home, and notification surfaces (`errors.md`) does not strip it;
+the bounded-secret and PII fields above still stay out. Select the newest run record by its complete
+`YYYY-MM-DDTHH-MM-SSZ.json` filename — the binding sidecar and the hidden lifecycle/pagination files are
+excluded — and report that record's fields as-is: this diagnostic does not need the closed-ledger
+artifact-authority procedure a completion reader applies. When the registry has no `scheduling` object the
+schedule reads `not configured`; when no run record exists the latest-run fields read `none recorded`; a
+missing `build-stamp.md`, `uname`, or field reads `unknown`. The script is the scripted form of this prose
+contract; this prose remains the no-runtime fallback.

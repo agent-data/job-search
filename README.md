@@ -92,6 +92,8 @@ Notes, honestly:
 - **Scheduler.** The advocated default is an *unattended* machine schedule that fires with no session open, gated on your explicit consent and recorded only after a config-time canary passes; the in-session loop is the named fallback. Cloud schedulers do not qualify (they can't see your local workspace or auth). See [`docs/SECURITY.md`](docs/SECURITY.md) and [`ARCHITECTURE.md`](ARCHITECTURE.md).
 - **Live vs. structural.** A green structural gate is not a passed behavioral run. Live verification per host is the deferred T9.4 lane.
 
+**Hit a snag?** Ask the agent for a support summary and it writes a local, whitelist-only diagnostic — build stamp, harness and version, OS and architecture, schedule state, and the latest run's health, internal error code, agent-data call count, and request IDs. It deliberately leaves out your preferences, the postings, match details, API keys, auth headers, and cursors. The agent shows you the whole file first; nothing is uploaded automatically. Review it, then attach it yourself to a new issue at [github.com/agent-data/job-search/issues](https://github.com/agent-data/job-search/issues) if you want to share it.
+
 ## Installation
 
 Installation differs by harness. If you use more than one, install Job Search separately for each. After installing, start with the natural-language golden path above (or the `/job-search` shortcut).

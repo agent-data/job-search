@@ -26,10 +26,13 @@ digest "Run health" line).
 Every named failure has two audiences kept strictly apart.
 
 **Internal — retains the canonical code.** The `runs/<id>.json` blocked record stores the exact `E-*` code
-(or the bounded internal class) in `error.code`/`error.class`, and the **job-search-agent** operator manual
-may name codes when troubleshooting. Those are the only two places a raw code legitimately appears — for
-whoever operates the agent, and for the durable record the home view reads. Classification must never
-silently disappear from the record: a blocked record with no code is itself a failure.
+(or the bounded internal class) in `error.code`/`error.class`; the **job-search-agent** operator manual may
+name codes when troubleshooting; and the explicitly-requested, whitelist-only **local support summary**
+([internals.md](internals.md#local-support-summary)) may include that same internal code, because it is an
+operator/support diagnostic the user reviews in full before choosing to share it — not a normal chat,
+digest, home, or notification surface. Those are the only places a raw code legitimately appears — for
+whoever operates or diagnoses the agent, and for the durable record the home view reads. Classification must
+never silently disappear from the record: a blocked record with no code is itself a failure.
 
 **User-facing — structured, never the code.** Normal chat, the **digest**, a **desktop notification**, and
 the **home** view render the same four-part structure and never the raw `E-*` code or an internal class
