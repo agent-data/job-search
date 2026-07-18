@@ -959,7 +959,7 @@ AAS-FORM-07/09; PSG-COMM-09/10/18/20.
       python3 scripts/eval_harness.py --root .
       python3 scripts/doc_lint.py --root .
 
-- [ ] **T6.3 [BLOCKS, L] Consolidate the schedule handoff into one useful decision and one canary.**
+- [x] **T6.3 [BLOCKS, L] Consolidate the schedule handoff into one useful decision and one canary.**
 
   **Modify:**
   - skills/job-search/references/onboarding.md
@@ -1706,6 +1706,36 @@ AAS-DIST-03/05/06.
   deterministic builds byte-identical (build-stamp file SHA-256 `783f0482…54ebaca7`, content hash
   `sha256:feb3c285aafe`), and `git diff --check` clean. The plugin version stays `0.6.0`. No live agent-data,
   model, scheduler, network, or billable effect occurred and no branch or worktree changed. **T6.2 is
+  complete.**
+- 2026-07-17 — T6.3 canary-verified scheduling (P6 complete): consolidated the schedule handoff into one
+  decision and one canary. After activation (or on an explicit schedule request) the agent asks a single
+  question-box choice — Daily (recommended) / Different schedule / Not now — and dumps no recipe on a decline.
+  On yes it shows ONE scoped confirmation bundling the cadence, the exact machine change, the removal path, the
+  exact primary/detail bindings as facts (never a model choice), a version-1 migration if needed, the agent-data
+  call preview, and one canary — contractually a single yes, "never a chain of separate model, migration,
+  frequency, and canary prompts." The canary registers disabled, inspects, fires through the scheduler's real
+  path, requires a fresh attributable nonblocked run plus digest and workspace write, and only then enables and
+  marks verified (driving T6.2's post-canary state machine, which stays untouched). The composed scheduled
+  prompt states the run is headless and must read `search.detail_model` from config and use that exact model for
+  every posting-detail judgment; the primary is the exact creating-session model unless explicitly overridden; a
+  scheduler that silently changes the model fails the canary and is rejected. A failed canary removes/disables
+  the new job, leaves verified=false with no installed marker, preserves the exact failure as the internal-only
+  `E-SCHEDULE-CANARY` (no raw code in user surfaces), and never claims success; a pre-meter failure consumes no
+  metered retry consent while an after-meter retry gets a fresh cost preview and confirmation. Ten RED evals
+  (job-search 45-47, job-search-agent 28-33, job-search-run 67). Committed as `e4582b2`
+  (`feat: canary-verify recurring schedules`) — the seven brief files plus the regenerated build stamp; no
+  out-of-brief files. One flagged in-scope reconciliation updated existing job-search eval cases 1 & 8 (and a
+  harness note plus one onboarding bullet) to the one-question flow, preserving case 1's load-bearing P3 tokens
+  (`version:2`, `primary_model`, `session_inheritance`) with `test_usage_context_contract.py` green. A fresh
+  Opus task review returned **Approved** — no Critical or Important; one Minor (procedural prose is triplicated
+  across onboarding/scheduling-consent/internals — the registry schema is properly one-hopped, so this is a
+  pre-existing procedure-text drift risk that T6.3 updated consistently; recorded in the SDD ledger, no fix).
+  Controller re-verify on the committed tree: full pytest `551 passed`, the scheduling shim tests `50 passed`
+  (they CI-drive the fixtures the pre/after-meter evals reference), eval harness coherent, doc lint / philosophy
+  guard / release version-sync clean, two deterministic builds byte-identical (build-stamp file SHA-256
+  `afd4c1dc…f9b15a74`, content hash `sha256:f5e3468fd39e`), and `git diff --check` clean. The plugin version
+  stays `0.6.0`. No live agent-data, model, scheduler, network, or billable effect occurred and no branch or
+  worktree changed. **T6.3 is complete, and P6 (capability-gated recurring setup and real canary) is
   complete.**
 
 ## Decision log
