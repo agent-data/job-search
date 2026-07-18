@@ -295,13 +295,21 @@ first-run results.
   every later automatic nudge for that workspace, including after an unanswered display, decline, or deferral;
   the user can still ask for depth later. Scheduled runs write eligibility evidence only and never this
   shown/outcome marker.
-- **Last run blocked/failed.** If the newest authorized closed run's `run_health` is `blocked`, use the
-  specific established **`E-*`** from `errors.md` with its cause + fix — e.g. `E-QUOTA`
-  (restore access at https://agent-data.motie.dev/settings/billing; existing matches are unaffected; discuss
-  usage levers only if the user asks), `E-NO-AUTH` (re-export the key), `E-SERVICE-DOWN` (temporary; next run
-  retries). For the bounded model-binding or version-1 migration classes, render only the observed cause,
-  preserved/restored work, next step, and exact conversational fix; never show the internal class or invent a
-  raw migration code. Don't bury a failure inside an otherwise-cheery home.
+- **Last run blocked/failed.** If the newest authorized closed run's `run_health` is `blocked`, select the
+  rendering by the record's internal `E-*`/class but render only the structured **cause · preserved work ·
+  next step · exact fix** — the home view is user-facing, so the raw `E-*` code never appears
+  (`../../../shared/references/errors.md` → Internal classification vs. user rendering). Examples: `E-QUOTA` →
+  restore access at https://agent-data.motie.dev/settings/billing, existing matches unaffected (discuss usage
+  levers only if the user asks); `E-NO-AUTH` → re-export the key; `E-SERVICE-DOWN` → temporary. For a
+  **temporary** failure (service down, upstream stretch, incomplete pagination) render the retry clause for
+  the **derived Schedule health** state gathered above (`errors.md` → Retry language by verified schedule
+  state): a verified schedule names its next run, an `absent` schedule offers a **manual** retry ("run a
+  search now"), and an `unverified`/`session_only`/`registration_drift` schedule says it can't be relied on
+  and names the repair path — never promise an automatic scheduled retry when none is verified. For the
+  bounded model-binding or version-1 migration classes, render only the observed cause, preserved/restored
+  work, next step, and exact conversational fix; never show the internal class or invent a raw migration code.
+  Recovery is conversational — the quick actions perform the safe fix in chat, never a required file edit.
+  Don't bury a failure inside an otherwise-cheery home.
 
 ## Coming soon (Plan C)
 

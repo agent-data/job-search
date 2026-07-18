@@ -550,6 +550,28 @@
         "Arm C derives 'absent' — no schedule is installed",
         "Each read preserves the registry byte-for-byte, is local and unmetered, and carries no numeric score or budget/credit math"
       ]
+    },
+    {
+      "id": 44,
+      "scenario": "operator manual may name the code while user surfaces render cause+fix without it, and the record retains it",
+      "prompt": "In a job-search-agent (operator manual) session the user asks why the last run failed. Seed a workspace + a lifecycle-authoritative CLOSED newest run with run_health blocked and the internal record error.code E-QUOTA. Drive the operator explanation; contrast it with what a user-facing surface would show.",
+      "expectations": [
+        "The operator manual MAY name the canonical code (E-QUOTA) when troubleshooting — it is one of the two internal homes for the code, alongside the runs/<id>.json record (error.code) — per shared/references/voice.md (the verbatim exception) and skills/job-search-agent/SKILL.md -> Internal code vs. user rendering",
+        "Every user-facing surface (normal chat, the digest, the home view, a desktop notification) instead renders the structured cause · preserved work · next step · exact fix and never the raw code — the separation this operator manual documents",
+        "The internal record RETAINS the classification (runs/<id>.json error.code E-QUOTA, run_health blocked); classification never silently disappears from the record",
+        "The read is local and unmetered; no agent-data call, no config/registry write; no numeric score or budget math"
+      ]
+    },
+    {
+      "id": 45,
+      "scenario": "an unverified schedule canary surfaces the honest not-scheduled state and the session-only fallback without the raw token",
+      "prompt": "Attempt to set up a recurring schedule where the real scheduled-path canary is NOT green (no probed mechanism passes every eligibility gate, or the disabled registration or the canary is blocked). Seed the workspace; drive the scheduling handoff; inspect what is written to the registry and what the user is told.",
+      "expectations": [
+        "Fail-closed: NO installed or verified marker is written and no schedule is recorded, so nothing claims the search is scheduled (shared/references/errors.md -> unverified-schedule; the E-SCHEDULE-CANARY internal class)",
+        "The user is told the exact observed gap (which eligibility gate failed / registration failed / the canary was blocked) and the honest state — it is NOT scheduled — with NO raw E-SCHEDULE-CANARY token in the user-facing text; the code may appear only internally (a blocked canary run record) or in this operator manual",
+        "Where a mechanism runs but cannot be unattended-verified, the session-only in-session loop is offered as the named fallback; recovery is conversational, not a required file edit",
+        "No numeric score or budget/credit math; the honest not-scheduled state is not dressed up as a verified schedule"
+      ]
     }
   ]
 }

@@ -168,6 +168,14 @@ full — no detail-read cap, relevance decides (see **job-search-run**).
 
 **How failures surface:** a blocked run writes two durable artifacts — a `runs/<id>.json` record with `run_health:"blocked"`, and a `reports/<date>-digest.md` whose body is the named error + fix. The **home view** the next time you open the **job-search** skill reads `runs/<id>.json` and shows the error there. An attention-pull alert is capability-gated: if your host has an attention-pull surface, fire one alert on a blocked run when `notify.desktop_notify_on_block` is set; otherwise the two file channels carry the failure. **The written record is the primary signal on every harness** — surface every outcome through it (`../../shared/references/errors.md`); where your host provides a trustworthy exit code, that is an additional signal only, never a replacement.
 
+**Internal code vs. user rendering.** The canonical `E-*` code (or bounded internal class) lives in exactly
+two internal places — the `runs/<id>.json` record (`error.code`/`error.class`) and this operator manual, both
+for whoever configures the agent. Every **user-facing** surface — normal chat, the digest, the home view, and
+a desktop notification — renders the structured **cause · preserved work · next step · exact fix** and never
+the raw code; a temporary failure's retry line follows the verified schedule state, and recovery is
+conversational (`../../shared/references/errors.md` → Internal classification vs. user rendering / Retry
+language by verified schedule state; `../../shared/references/voice.md`).
+
 For the full `E-*` table with exact cause and fix wording: see `../../shared/references/errors.md`.
 
 **Symptom → fix quick lookup:**

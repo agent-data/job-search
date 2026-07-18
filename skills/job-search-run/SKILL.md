@@ -633,6 +633,15 @@ When a writable workspace exists, a HALT also writes the blocked `reports/<date>
 error + fix as the body). If your host has an attention-pull surface, fire one alert on a blocked run when
 `notify.desktop_notify_on_block` is set; otherwise the two file channels carry the failure.
 
+The blocked digest and any desktop notification are **user-facing**: render the structured cause · preserved
+work · next step · exact fix from `../../shared/references/errors.md` / `../../shared/references/voice.md`
+with **NO raw `E-*` code** — while the `runs/<id>.json` record keeps the canonical `E-*`/class in
+`error.code`/`error.class` (`errors.md` → Internal classification vs. user rendering). For a temporary
+failure (service down, upstream stretch, incomplete pagination) render the retry clause for the schedule
+state observed at run time (`errors.md` → Retry language by verified schedule state): a verified schedule
+names its next run, no schedule offers a manual retry, an unverified/session-only/drifted one names the
+repair path — never promise an automatic scheduled retry when no verified schedule is set.
+
 The durable guarantee is two file-backed channels (the blocked digest + the home-view run record);
 the alert supplements them and is capability-gated. **Surfacing is the written record — NOT the process
 exit code.** The record is primary on every harness — surface every blocked outcome through it. Where your host

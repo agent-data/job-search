@@ -148,3 +148,20 @@ ever appears in your message text. This changes how to ask, never whether — a 
 - **Things the user types.** The run recipe and the commands the user types are shown verbatim (composed for the host).
 - **Where data lives, when asked.** `config.yaml` / `preferences.md` may be named when the user
   asks where something is stored. "Digest" and "brief" are product vocabulary — fine everywhere.
+
+## Named errors — structured, never the code
+
+A blocked run reaches the user through four surfaces — normal **chat**, the **digest**, a **desktop
+notification**, and the **home** view — and every one renders the same four parts and never the raw `E-*`
+code or an internal class token: the **cause** in plain words, the **preserved work**, the **next step**, and
+the **exact fix**. The internal `E-*`/class stays in the run record and the operator manual only
+(`errors.md` → Internal classification vs. user rendering); the plain cause+fix wording is the verbatim part
+above, the code never is.
+
+- **Retry language keys off the verified schedule state.** Don't promise an automatic retry that won't
+  happen: a verified schedule names when its next run retries, no schedule offers a manual retry, and an
+  unverified/session-only/drifted schedule says it can't be relied on and names the repair path. The exact
+  branches live in `errors.md` → Retry language by verified schedule state — render the one that matches.
+- **Recovery is conversational.** Perform the safe fix in the conversation ("repair the job-search models",
+  "set up job search", "run a search now") rather than telling the user to hand-edit a file; hand-editing is
+  an escape hatch, never the instruction.

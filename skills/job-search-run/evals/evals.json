@@ -870,6 +870,50 @@
         "The recurring primary model is the exact creating-session model, or an explicit user override, carried by the scheduler binding — not chosen by the run; a scheduler that silently changes that exact model is caught by the config-time canary (job-search-agent), while the runner itself never substitutes",
         "structural contract coverage, not a behavioral model-variance pass; output carries no numeric fit score, weights, or unlabeled charge claim"
       ]
+    },
+    {
+      "id": 68,
+      "scenario": "blocked auth run separates the digest from the internal record — cause+fix without the code, record keeps it",
+      "prompt": "Same harness, JOBSEARCH_TEST_SCENARIO=happy but also export JOBSEARCH_TEST_NOAUTH=1 (whoami reports unauthenticated) against a writable workspace with NO scheduling marker. Run job-search-run; show the blocked reports/<date>-digest.md and runs/<id>.json. This is the belief-4 lens on E-NO-AUTH: the internal record keeps the code, the user-facing digest never shows it.",
+      "expectations": [
+        "The blocked digest renders the E-NO-AUTH cause+fix as a STRUCTURED surface — cause (agent-data isn't authenticated), preserved work (nothing was pulled; existing matches untouched), next step, and the exact fix (agent-data init --api-key <KEY> -y, then agent-data whoami) — with NO raw E-* code in any user-facing line (shared/references/errors.md -> Internal classification vs. user rendering)",
+        "runs/<id>.json is the internal record and RETAINS the classification: error.code is E-NO-AUTH and run_health is blocked, with build.version/content_hash/git_sha present — the code never disappears from the record even though it never appears in the digest",
+        "No search-jobs call is made and jobs.jsonl is unchanged; the home view surfaces this on the next job-search visit by reading the record's code and rendering the same structured cause+fix without the code",
+        "Output carries no numeric fit score, weights, or unlabeled charge claim"
+      ]
+    },
+    {
+      "id": 69,
+      "scenario": "upstream stretch on an unscheduled workspace offers a manual retry, never a scheduled one",
+      "prompt": "Same harness but JOBSEARCH_TEST_SCENARIO=stretch (every search-jobs returns a retryable 503) against a writable workspace with NO scheduling marker installed. Run job-search-run and show the blocked/partial digest and runs/<id>.json. This pins the no-schedule branch of the retry clause.",
+      "expectations": [
+        "The digest states job sources were unreachable this run (repeated upstream errors) as the structured cause+preserved-work, with NO raw E-* code in any user-facing line",
+        "Because no verified schedule exists, the retry clause offers a MANUAL retry ('run a search now') and NEVER promises the next scheduled run will retry (shared/references/errors.md -> Retry language by verified schedule state, the `absent` branch)",
+        "runs/<id>.json RETAINS the internal classification (error.code E-UPSTREAM-STRETCH) and run_health partial (all sources unavailable); the code stays in the record only",
+        "No numeric fit score, weights, or unlabeled charge claim"
+      ]
+    },
+    {
+      "id": 70,
+      "scenario": "temporary failure on a verified schedule names when the next scheduled run retries",
+      "prompt": "Same harness but JOBSEARCH_TEST_SCENARIO=stretch (retryable 503s stretch every source) against a workspace whose registry records an installed AND verified daily schedule (verified=true, mechanism launchd, canary_run_id naming a green canary) with schedule.frequency daily. Run job-search-run as a scheduled fire; show the digest and runs/<id>.json.",
+      "expectations": [
+        "The digest renders the upstream-stretch cause+fix structurally with NO raw E-* code, and because a verified schedule exists the retry clause NAMES when the next verified run retries ('the next scheduled run will retry automatically') per shared/references/errors.md -> Retry language by verified schedule state (the `verified_running` branch)",
+        "runs/<id>.json RETAINS error.code E-UPSTREAM-STRETCH internally with run_health partial; the code appears only in the record, never in the digest",
+        "The retry branch is chosen from the schedule state observed at run time, not assumed; the same run on an unscheduled workspace would instead offer a manual retry",
+        "No numeric fit score, weights, or unlabeled charge claim"
+      ]
+    },
+    {
+      "id": 71,
+      "scenario": "headless model-binding block renders structured repair route without the internal class, record keeps the class",
+      "prompt": "PRE-SEED a version-2 workspace whose scheduled exact detail model is unavailable so the model check blocks before any API call, against a workspace whose registry records an installed schedule. Run the headless model check (expired-detail via fake-host-capabilities); inspect the durable blocked digest and runs/<id>.json.",
+      "expectations": [
+        "The blocked digest renders the observed cause (the exact unavailable/refused detail slot), the preserved work (valid slots and files kept, config bytes unchanged, the three model fields null before binding), the next step (route to interactive exact-model repair), and the exact conversational fix — WITHOUT the internal class token detail_model_binding_unavailable and without an invented E-* code (shared/references/errors.md -> model-binding-block / model-repair-rendering)",
+        "runs/<id>.json is the internal record and RETAINS the classification internally: error.class is detail_model_binding_unavailable and run_health blocked; the class token stays in the record only, never in the digest",
+        "The schedule is left disabled and unverified, so the retry clause says it cannot be relied on until repaired and names the exact repair path (the unverified/drifted branch) — never a promise of an automatic scheduled retry",
+        "No completed-attempt accounting is lost; no numeric fit score, weights, or unlabeled charge claim"
+      ]
     }
   ]
 }

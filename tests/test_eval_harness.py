@@ -352,6 +352,101 @@ def test_check_artifacts_rejects_malformed_schema(tmp_path):
 
 
 # ---------------------------------------------------------------------------
+# T7.2: surface enforcement — belief 4's internal/user separation is checkable.
+# A user-facing artifact (chat/digest/home/notification) must never carry a raw
+# E-* code; the internal record must retain it. The `surface` flag makes the
+# harness enforce the correct direction, extending --check-artifacts additively.
+# ---------------------------------------------------------------------------
+STRUCTURED_DIGEST = (
+    "# Job search digest\n"
+    "Run health: blocked (action needed)\n\n"
+    "agent-data's API allowance has been reached, so this run cannot continue until "
+    "calls are available. Check your account at "
+    "https://agent-data.motie.dev/settings/billing. Your existing matches are "
+    "unaffected.\n"
+)
+LEAKED_CODE_DIGEST = STRUCTURED_DIGEST + "\n(internal classification: E-QUOTA)\n"
+RECORD_WITH_CODE = {"run_health": "blocked", "error": {"code": "E-QUOTA"}}
+RECORD_WITHOUT_CODE = {"run_health": "blocked", "error": {"reason": "quota rejected"}}
+
+
+def _belief4_workspace(base, digest_body, record):
+    ws = base / "ws"
+    (ws / "runs").mkdir(parents=True)
+    (ws / "reports").mkdir(parents=True)
+    run_id = "2026-07-17T12-00-00Z"
+    (ws / "runs" / f"{run_id}.json").write_text(json.dumps(record), encoding="utf-8")
+    (ws / "reports" / "2026-07-17-digest.md").write_text(digest_body, encoding="utf-8")
+    return ws, run_id
+
+
+def test_check_artifacts_user_facing_surface_rejects_a_raw_error_code(tmp_path):
+    ws, _ = _belief4_workspace(tmp_path, LEAKED_CODE_DIGEST, RECORD_WITH_CODE)
+    evidence = {"workspace": str(ws), "assertions": [
+        {"kind": "file_exists", "path": "reports/2026-07-17-digest.md",
+         "surface": "user_facing"}]}
+    hits = eh.check_artifacts(evidence)
+    assert len(hits) == 1 and "E-QUOTA" in hits[0] and "user_facing" in hits[0]
+
+
+def test_check_artifacts_user_facing_surface_passes_when_structured(tmp_path):
+    ws, _ = _belief4_workspace(tmp_path, STRUCTURED_DIGEST, RECORD_WITH_CODE)
+    evidence = {"workspace": str(ws), "assertions": [
+        {"kind": "file_exists", "path": "reports/2026-07-17-digest.md",
+         "surface": "user_facing"}]}
+    assert eh.check_artifacts(evidence) == []
+
+
+def test_check_artifacts_internal_record_surface_requires_the_code(tmp_path):
+    ws, run_id = _belief4_workspace(tmp_path, STRUCTURED_DIGEST, RECORD_WITHOUT_CODE)
+    evidence = {"workspace": str(ws), "assertions": [
+        {"kind": "file_exists", "path": f"runs/{run_id}.json",
+         "surface": "internal_record"}]}
+    hits = eh.check_artifacts(evidence)
+    assert len(hits) == 1 and "internal_record" in hits[0]
+
+
+def test_check_artifacts_internal_record_surface_passes_with_the_code(tmp_path):
+    ws, run_id = _belief4_workspace(tmp_path, STRUCTURED_DIGEST, RECORD_WITH_CODE)
+    evidence = {"workspace": str(ws), "assertions": [
+        {"kind": "json_field_equals", "path": f"runs/{run_id}.json",
+         "field": "error.code", "equals": "E-QUOTA", "surface": "internal_record"}]}
+    assert eh.check_artifacts(evidence) == []
+
+
+def test_check_artifacts_surface_enforces_both_directions_at_once(tmp_path):
+    good_ws, gid = _belief4_workspace(tmp_path / "good", STRUCTURED_DIGEST, RECORD_WITH_CODE)
+    good = {"workspace": str(good_ws), "assertions": [
+        {"kind": "file_exists", "path": "reports/2026-07-17-digest.md", "surface": "user_facing"},
+        {"kind": "file_exists", "path": f"runs/{gid}.json", "surface": "internal_record"}]}
+    assert eh.check_artifacts(good) == []
+    # Inverted separation: the code leaked to the digest AND vanished from the record -> both fail.
+    bad_ws, bid = _belief4_workspace(tmp_path / "bad", LEAKED_CODE_DIGEST, RECORD_WITHOUT_CODE)
+    bad = {"workspace": str(bad_ws), "assertions": [
+        {"kind": "file_exists", "path": "reports/2026-07-17-digest.md", "surface": "user_facing"},
+        {"kind": "file_exists", "path": f"runs/{bid}.json", "surface": "internal_record"}]}
+    assert len(eh.check_artifacts(bad)) == 2
+
+
+def test_check_artifacts_rejects_an_unknown_surface(tmp_path):
+    ws, run_id = _belief4_workspace(tmp_path, STRUCTURED_DIGEST, RECORD_WITH_CODE)
+    with pytest.raises(ValueError):
+        eh.check_artifacts({"workspace": str(ws), "assertions": [
+            {"kind": "file_exists", "path": f"runs/{run_id}.json", "surface": "operator"}]})
+
+
+def test_cli_check_artifacts_flags_a_user_facing_code_leak(tmp_path):
+    ws, _ = _belief4_workspace(tmp_path, LEAKED_CODE_DIGEST, RECORD_WITH_CODE)
+    ep = tmp_path / "current-artifacts.json"
+    ep.write_text(json.dumps({"workspace": str(ws), "assertions": [
+        {"kind": "file_exists", "path": "reports/2026-07-17-digest.md",
+         "surface": "user_facing"}]}), encoding="utf-8")
+    r = subprocess.run([sys.executable, str(MODULE), "--check-artifacts", str(ep)],
+                       capture_output=True, text=True)
+    assert r.returncode == 1 and "user_facing" in r.stdout
+
+
+# ---------------------------------------------------------------------------
 # Opt-in dev mode: --aggregate-results (T6.1)
 # ---------------------------------------------------------------------------
 def _results_row(**over):

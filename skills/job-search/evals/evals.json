@@ -639,6 +639,61 @@
         "The health derivation is LOCAL and UNMETERED: it fires no scheduler and makes no agent-data call, does not start a repair canary merely to check health, and leaves registry.json byte-for-byte unchanged including the sentinel key",
         "NO numeric fit score, NO category weights, NO credit/dollar/budget math anywhere in the output"
       ]
+    },
+    {
+      "id": 49,
+      "scenario": "home surfaces a blocked scheduled run as structured cause+fix, never the raw code",
+      "prompt": "PRE-SEED a returning workspace as in case 4 with a verified daily schedule in the registry and a lifecycle-authoritative CLOSED newest run: trigger scheduled, run_health blocked, and the internal record error.code E-QUOTA. Drive the home; inspect the rendered home output and registry.json after.",
+      "expectations": [
+        "The home selects the rendering by the record's internal error.code (E-QUOTA) but renders ONLY the structured cause · preserved work · next step · exact fix — restore access at https://agent-data.motie.dev/settings/billing, existing matches unaffected — with NO raw E-* code in the home output (references/home.md -> Last run blocked/failed; shared/references/errors.md -> Internal classification vs. user rendering)",
+        "The failure is not buried inside an otherwise-cheery home; usage levers (frequency/sources/depth) are offered only if the user asks, and E-QUOTA takes no schedule-state retry clause (access must be restored first)",
+        "The blocked run is read only through lifecycle artifact authority (closed=true, matching folded state); an open intended-complete artifact is excluded",
+        "The read is local and unmetered — no agent-data call, no config/registry write, registry byte-for-byte unchanged; no numeric score or budget/credit math"
+      ]
+    },
+    {
+      "id": 50,
+      "scenario": "home surfaces a drifted schedule as unreliable and names the exact repair path",
+      "prompt": "PRE-SEED a returning workspace where the registry records an installed AND verified daily schedule but the scheduler's own local registration read back NO LONGER matches what the registry recorded (three-source drift); the newest closed scheduled run is healthy. Drive the home at a fixed reference now; inspect the status line and any last-run nudge.",
+      "expectations": [
+        "The derived schedule state is registration_drift (references/home.md -> Schedule health, one hop to shared/references/internals.md); the status line shows 'daily · schedule registration drifted', never a bare 'daily' or 'on'",
+        "Because a drifted schedule cannot be relied on to retry automatically, the home SAYS so and names the EXACT repair path (re-verify / set up the schedule) rather than promising an automatic next run — the unverified/session-only/drifted branch in shared/references/errors.md -> Retry language by verified schedule state",
+        "Recovery is conversational: the repair is offered as a chat action ('set up a schedule'), never a required file edit; no raw E-* code or internal token appears in the home output",
+        "The derivation is local and unmetered — no scheduler fire, no agent-data call — and leaves the registry byte-for-byte unchanged; no numeric score or budget math"
+      ]
+    },
+    {
+      "id": 51,
+      "scenario": "home retry line for a temporary failure matches the derived schedule state — verified, absent, or unverified",
+      "prompt": "Run THREE isolated returning workspaces whose newest lifecycle-authoritative CLOSED run is blocked with the internal record error.code E-SERVICE-DOWN (a temporary failure). Arm A: an installed+verified daily schedule with today's fire not yet due. Arm B: NO scheduling marker (absent). Arm C: an installed-but-unverified marker (verified absent). Drive the home in each; compare the retry wording.",
+      "expectations": [
+        "Arm A (verified schedule) names WHEN the next verified run retries — 'the next scheduled run will retry automatically' — per shared/references/errors.md -> Retry language by verified schedule state",
+        "Arm B (no schedule) offers a MANUAL retry, never a scheduled one — 'run a search now' — and does not imply anything retries on its own",
+        "Arm C (unverified) says the schedule cannot be relied on to retry automatically and names the exact repair path to verify it",
+        "In all three arms the E-SERVICE-DOWN cause+fix is structured and carries NO raw E-* code; each read is local and unmetered with no config/registry write and no numeric/budget math"
+      ]
+    },
+    {
+      "id": 52,
+      "scenario": "interactive model-repair recovery is conversational and never exposes the internal class",
+      "prompt": "PRE-SEED a version-2 returning workspace whose scheduled exact detail model is unavailable, so the last run blocked on the bounded model-binding class and the schedule is disabled/unverified. In an interactive job-search session the user asks to fix it. Drive the conversation; inspect what is said and what is written.",
+      "expectations": [
+        "The home/chat renders the observed cause (the exact unavailable/refused slot), the preserved/restored work (valid slots and files kept, config bytes unchanged), the next step, and the exact conversational fix — 'repair the job-search models' to accept the displayed exact defaults or name one exact available model — never the internal class token detail_model_binding_unavailable and never an invented E-* code (shared/references/errors.md -> model-repair-rendering)",
+        "The safe fix is performed CONVERSATIONALLY in the session (the interactive repair), not by telling the user to hand-edit config.yaml or the binding sidecar; hand-editing stays an escape hatch",
+        "The schedule stays disabled and unverified until a green real scheduled-path canary; the retry line says the schedule cannot be relied on until repaired (the unverified branch)",
+        "No numeric fit score, weights, or unlabeled charge claim; no raw internal class or code reaches the user"
+      ]
+    },
+    {
+      "id": 53,
+      "scenario": "a version-1 migration failure surfaces structured cause+fix without the internal class or an invented code",
+      "prompt": "PRE-SEED a version-1 returning workspace where a staged migration (triggered by an action that needs a version-2 binding) failed at an observed phase, restored the exact v1 transaction state, and left the schedule disabled/unverified. In an interactive session the user asks what happened and to retry. Drive it; inspect the rendering.",
+      "expectations": [
+        "Normal chat and the home render the observed failed phase as cause, what was preserved or restored (exact v1 config/sidecar/registry restored, no proposed model active), the next step, and the exact conversational fix — never the internal class config_v1_migration_failed and never an invented migration code (shared/references/errors.md -> config-v1-migration-block)",
+        "Recovery is conversational — retry the migration by chatting (the same single scheduled confirmation), not by hand-editing YAML",
+        "The retry line follows the schedule state (disabled/unverified after rollback -> the schedule cannot be relied on until re-verified), never a promise of an automatic scheduled retry",
+        "No numeric score or budget/credit math; no raw internal class or code reaches the user"
+      ]
     }
   ]
 }

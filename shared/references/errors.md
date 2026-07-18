@@ -21,6 +21,30 @@ additional signal only, never a replacement. The digest's "Run health" line carr
 run-health states; their names, meanings, and the `<why>` breakdown are defined in `conventions.md` (the
 digest "Run health" line).
 
+## Internal classification vs. user rendering
+
+Every named failure has two audiences kept strictly apart.
+
+**Internal — retains the canonical code.** The `runs/<id>.json` blocked record stores the exact `E-*` code
+(or the bounded internal class) in `error.code`/`error.class`, and the **job-search-agent** operator manual
+may name codes when troubleshooting. Those are the only two places a raw code legitimately appears — for
+whoever operates the agent, and for the durable record the home view reads. Classification must never
+silently disappear from the record: a blocked record with no code is itself a failure.
+
+**User-facing — structured, never the code.** Normal chat, the **digest**, a **desktop notification**, and
+the **home** view render the same four-part structure and never the raw `E-*` code or an internal class
+token:
+
+1. **Cause** — the observed reason, in plain words (the "What the user sees" wording below).
+2. **Preserved work** — what stayed unchanged or was restored (existing matches, completed judgments, config bytes).
+3. **Next step** — what happens next, including the retry clause by verified schedule state below.
+4. **Exact fix** — the concrete command, file, or conversational repair that clears it.
+
+Interactive recovery performs the safe fix **conversationally** — the agent runs the repair in the
+conversation (e.g. "repair the job-search models", "set up job search") rather than telling the user to
+hand-edit a config file; hand-editing stays an always-available escape hatch, never a required step. The raw
+`E-*` string never reaches any of these four surfaces — surface the plain cause+fix instead (`voice.md`).
+
 <!-- exact-model-contract:model-binding-block -->
 | Policy | Decision |
 |---|---|
@@ -116,13 +140,33 @@ guarantee.
 | **E-FINAL-ARTIFACT** | the exact run record or digest cannot be written/read back/validated, or the final complete-close append fails | State that final results could not be safely finalized, that completed matches remain preserved, and that the next run or diagnosis can retry. Do not expose the internal file/ledger mechanism. | On this failure, never publish or display a completed state. Close `blocked` when the ledger remains appendable; after a failed complete-close append, first rewrite and revalidate both artifacts to truthful noncomplete lifecycle evidence, then attempt the noncomplete close. |
 | **E-BAD-REGISTRY** | the machine-state registry (`$REG`, the `config.json` in `internals.md`) exists but is **not valid JSON**, so workspace discovery can't be trusted — the grep-extract that reads `active_workspace` can't detect a corrupt-but-non-grepable file | "Your job-search settings file is corrupted, so the active workspace can't be determined safely. Run the job-search skill (say 'set up job search') to repair it from your known workspace. Nothing was pulled." | HALT, exit 1; **NEVER** fall through to a default/legacy workspace (guessing could silently switch workspaces). Write the blocked record when a workspace is independently writable; when the corrupt registry leaves no trusted workspace, name the error and stop (as with E-NO-CONFIG / first_run) |
 | **E-NO-PREFERENCES** | `preferences.md` missing/empty (the no-preferences run path) | "No Job Preferences Brief found. Run the job-preference-interview skill to build one, or point `config.yaml:workspace.preferences_path` at your own prose brief. Nothing was pulled." | HALT, exit 1 |
-| **E-SERVICE-DOWN** | `status` route unreachable / non-200 | "The job-search service is unreachable right now. This is usually temporary — the next scheduled run will retry." | HALT, exit 1, write "service down" digest |
+| **E-SERVICE-DOWN** | `status` route unreachable / non-200 | "The job-search service is unreachable right now. This is usually temporary." + the retry clause by verified schedule state (below). | HALT, exit 1, write "service down" digest |
 | **E-BAD-QUERY** | `422 validation_error` / `400 validation_error` on a search (a bad param or `fields=`; `error.param` / `details[].loc` names it) | "Query '<id>' is invalid: <param from details[].loc>. Fix it in `config.yaml` under `queries`." | skip that query, continue |
-| **E-UPSTREAM-STRETCH** | 2 consecutive retryable `503 upstream_unavailable`s on `search-jobs` **against the same source** (all retries exhausted) | "\<Source\> was unreachable this run (repeated upstream errors) — results from the other sources only; the next scheduled run will retry." / all enabled sources stretched: "Job sources were unreachable this run (repeated upstream errors). Partial or no results; the next scheduled run will retry." | stop searching that source, others continue; all stretched → stop searching, partial digest; Run health `partial (<lost source(s) unavailable — each named in search.sources order>)` / `partial (all sources unavailable)` when every enabled source is lost |
+| **E-UPSTREAM-STRETCH** | 2 consecutive retryable `503 upstream_unavailable`s on `search-jobs` **against the same source** (all retries exhausted) | "\<Source\> was unreachable this run (repeated upstream errors) — results from the other sources only." / all enabled sources stretched: "Job sources were unreachable this run (repeated upstream errors). Partial or no results." Both take the retry clause by verified schedule state (below). | stop searching that source, others continue; all stretched → stop searching, partial digest; Run health `partial (<lost source(s) unavailable — each named in search.sources order>)` / `partial (all sources unavailable)` when every enabled source is lost |
 | **E-SOURCE-UNSUPPORTED** | the service answers `400 validation_error` with `error.param:"source"` (its message names the allowed sources), or preflight finds a `search.sources` token outside the contract's source enum (a config typo) | "This agent-data service doesn't recognize the '<source>' job source — searched <the others>. Remove it from `search.sources` in `config.yaml`, or update the agent-data service." | non-retryable; drop that source for the run, continue; Run health `partial (<source> unavailable)` |
 | **E-SOURCE-IGNORED** | a 200 search response whose echoed `data.query.source` ≠ the requested source (an ABSENT echo counts as `linkedin`) — a legacy server silently ignoring `--source` | "The agent-data service predates source selection — only LinkedIn was searched. Update the service, or set `search.sources: ["linkedin"]` to match it." | skip that source's remaining queries this run; keep returned rows under their row-level `source` (they dedup against the genuine calls — no event poisoning); Run health `partial (<source> unavailable)` |
-| **E-PAGINATION-INCOMPLETE** | a cursor-capable stream cannot continue through a trustworthy pagination-contract branch | "<Source>'s deeper results stopped early; <rows> postings already scanned were kept. The next run retries automatically. If this repeats, ask me to diagnose it." | keep trustworthy rows; stop only the affected stream; continue the others; Run health is partial because depth is incomplete |
+| **E-PAGINATION-INCOMPLETE** | a cursor-capable stream cannot continue through a trustworthy pagination-contract branch | "<Source>'s deeper results stopped early; <rows> postings already scanned were kept. The next run scans it again from the start (retry clause by verified schedule state below). If this repeats, ask me to diagnose it." | keep trustworthy rows; stop only the affected stream; continue the others; Run health is partial because depth is incomplete |
 | **E-QUOTA** | agent-data rejects a call for quota/payment | "agent-data's API allowance has been reached, so this run cannot continue until calls are available. Check your account at https://agent-data.motie.dev/settings/billing. Your existing matches are unaffected." Then append exactly one run-usage branch defined below. | global HALT, exit 1; the rejected attempt is unmetered and prior trustworthy work remains intact |
+
+## Retry language by verified schedule state
+
+A temporary failure recovers on a later run, so its **next-step / retry clause** must say HOW that retry
+happens — and that depends on the schedule's derived health
+([internals.md](internals.md#schedule-health)), never an unchecked assumption that a schedule exists. It
+applies to the recovering errors — **E-SERVICE-DOWN**, **E-UPSTREAM-STRETCH**, **E-PAGINATION-INCOMPLETE** —
+and to any home/chat rendering of a recovering blocked run.
+
+| Derived schedule state | Retry clause the user sees |
+|---|---|
+| **verified schedule** (`verified_running`) | name WHEN the next verified run retries — "the next scheduled run (\<cadence/time\>) will retry automatically." |
+| **no schedule** (`absent`) | offer a **manual** retry, never a scheduled one — "no schedule is set, so run a search again whenever you like (say 'run a search now') and the next run will retry." |
+| **unverified / session-only / drifted** (`unverified` · `session_only` · `registration_drift`) | say it **cannot be relied on** to retry on its own, then give the **exact repair path** — "your schedule isn't verified, so it can't be relied on to retry this automatically; say 'set up a schedule' to verify it (or 'run a search now' to retry now)." |
+
+The reader that holds the derived state selects the branch: the **home** view and interactive **chat** derive
+Schedule health live; a headless **digest** renders the branch for the schedule state observed at run time.
+**Never promise an automatic scheduled retry when no verified schedule exists** — that is the failure this
+clause prevents. **E-QUOTA** is not a temporary retry case: access must be restored first (its billing
+recovery stands), so it takes no schedule-state retry clause.
 
 ## E-BAD-CONFIG value rendering and preflight
 

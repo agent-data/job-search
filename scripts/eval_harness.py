@@ -254,6 +254,17 @@ ARTIFACT_KINDS = {
     "text_matches": ("pattern",),
 }
 
+# T7.2 belief-4 separation, made checkable. An optional `surface` on any assertion declares
+# whether the artifact is shown to the user or is an internal record, and the harness enforces
+# the matching direction: a user-facing surface (chat/digest/home/notification) must carry NO
+# raw canonical error code; an internal record MUST retain one. This is additive — an assertion
+# without `surface` behaves exactly as before, so --root and the T6.1 kinds are untouched.
+SURFACES = ("user_facing", "internal_record")
+# A canonical E-* code: E- then an uppercase-alnum segment, optionally more hyphen-joined
+# segments (E-QUOTA, E-NO-AUTH, E-UPSTREAM-STRETCH, E-SCHEDULE-CANARY). Bounded lowercase
+# internal classes are asserted by field, not by this token.
+RAW_ERROR_CODE = re.compile(r"\bE-[A-Z][A-Z0-9]*(?:-[A-Z0-9]+)*\b")
+
 
 def _read_text(path):
     with open(path, encoding="utf-8") as f:
@@ -311,6 +322,11 @@ def _validate_artifacts_schema(evidence):
                 raise ValueError(
                     f"{where} (jsonl_event_sequence): 'sequence' must be a non-empty list"
                 )
+        surface = a.get("surface")
+        if surface is not None and surface not in SURFACES:
+            raise ValueError(
+                f"{where}: unknown surface {surface!r} (want one of {list(SURFACES)})"
+            )
     return workspace, assertions
 
 
@@ -318,7 +334,12 @@ def check_artifacts(evidence):
     """Evaluate an artifact-evidence object (a workspace plus assertions) and return a list of
     failure hits (empty == clean). Schema-validates first (raising ValueError on a malformed
     object). Assertion kinds: file_exists, json_field_equals (dotted field), jsonl_event_sequence
-    (an ordered subsequence of a per-line field, default 'event'), text_absent, text_matches."""
+    (an ordered subsequence of a per-line field, default 'event'), text_absent, text_matches.
+
+    An assertion may also carry a `surface` (T7.2): `user_facing` fails if the file contains a raw
+    canonical E-* code (chat/digest/home/notification must render cause+fix, never the code);
+    `internal_record` fails if the file contains none (the record must retain its classification).
+    """
     workspace, assertions = _validate_artifacts_schema(evidence)
     hits = []
     for a in assertions:
@@ -370,6 +391,33 @@ def check_artifacts(evidence):
         elif kind == "text_matches":
             if not re.search(a["pattern"], _read_text(full)):
                 hits.append(f"text_matches: {rel} does not match /{a['pattern']}/")
+    hits += _surface_hits(workspace, assertions)
+    return hits
+
+
+def _surface_hits(workspace, assertions):
+    """Enforce the belief-4 separation for any assertion that declares a `surface`. A missing
+    file is left to the assertion's own kind to flag, so this never double-reports existence."""
+    hits = []
+    for a in assertions:
+        surface = a.get("surface")
+        if not surface:
+            continue
+        rel = a["path"]
+        full = os.path.join(workspace, rel)
+        if not os.path.isfile(full):
+            continue
+        match = RAW_ERROR_CODE.search(_read_text(full))
+        if surface == "user_facing" and match:
+            hits.append(
+                f"user_facing: {rel} exposes raw error code {match.group(0)!r} "
+                "(user-facing surfaces render cause+fix, never the code)"
+            )
+        elif surface == "internal_record" and not match:
+            hits.append(
+                f"internal_record: {rel} retains no canonical E-* classification code "
+                "(the internal record must keep the code)"
+            )
     return hits
 
 
