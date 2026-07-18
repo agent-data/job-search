@@ -532,3 +532,213 @@ def test_cli_root_run_needs_no_evidence_files():
     r = subprocess.run([sys.executable, str(MODULE), "--root", str(ROOT)],
                        capture_output=True, text=True)
     assert r.returncode == 0 and "coherent" in r.stdout
+
+
+# ---------------------------------------------------------------------------
+# T9.1: fixed-time fixtures (deterministic clocks) for milestone/liveness checks
+#
+# A scenario may declare a `fixed_time` object pinning the reference clock so a
+# milestone-timestamp or schedule-liveness check is deterministic (never wall-clock).
+# validate_evals gates its coherence when present; it is additive (no fixed_time ->
+# unchanged) so --root and the T6.1/T7.2 modes are untouched.
+# ---------------------------------------------------------------------------
+def _write_pair(tmp_path, data):
+    """Write a fixture evaluate-job-fit file plus the sibling its discovery scenario names,
+    so validate_evals resolves cleanly and only the case under test can produce a hit."""
+    _write(tmp_path, "evaluate-job-fit", data)
+    _write(tmp_path, "job-search-run",
+           {"skill_name": "job-search-run", "evals": [{"id": 1, "prompt": "p", "expectations": ["e"]}]})
+
+
+def _fixed_time_file(now="2026-06-10T09:00:00-07:00", checks=("liveness",)):
+    data = _good_file()
+    data["evals"][0]["fixed_time"] = {"now": now, "checks": list(checks)}
+    return data
+
+
+def test_validator_accepts_a_coherent_fixed_time(tmp_path):
+    _write_pair(tmp_path, _fixed_time_file())
+    assert eh.validate_evals(str(tmp_path)) == []
+
+
+def test_validator_accepts_a_multi_instant_fixed_time(tmp_path):
+    # A DST-boundary liveness fixture pins two reference instants (before/after grace).
+    data = _fixed_time_file(now=["2026-11-01T09:20:00-05:00", "2026-11-01T09:45:00-05:00"])
+    _write_pair(tmp_path, data)
+    assert eh.validate_evals(str(tmp_path)) == []
+
+
+def test_validator_accepts_a_milestone_fixed_time(tmp_path):
+    _write_pair(tmp_path, _fixed_time_file(checks=["milestone"]))
+    assert eh.validate_evals(str(tmp_path)) == []
+
+
+def test_validator_flags_fixed_time_that_is_not_an_object(tmp_path):
+    data = _good_file()
+    data["evals"][0]["fixed_time"] = "2026-06-10T09:00:00-07:00"
+    _write_pair(tmp_path, data)
+    hits = eh.validate_evals(str(tmp_path))
+    assert any("fixed_time must be an object" in h for h in hits)
+
+
+def test_validator_flags_fixed_time_non_iso_now(tmp_path):
+    _write_pair(tmp_path, _fixed_time_file(now="today at 9am"))
+    hits = eh.validate_evals(str(tmp_path))
+    assert any("fixed_time.now" in h for h in hits)
+
+
+def test_validator_flags_fixed_time_empty_now_list(tmp_path):
+    _write_pair(tmp_path, _fixed_time_file(now=[]))
+    hits = eh.validate_evals(str(tmp_path))
+    assert any("fixed_time.now" in h for h in hits)
+
+
+def test_validator_flags_fixed_time_unknown_check(tmp_path):
+    _write_pair(tmp_path, _fixed_time_file(checks=["telemetry"]))
+    hits = eh.validate_evals(str(tmp_path))
+    assert any("fixed_time.checks" in h for h in hits)
+
+
+def test_validator_flags_fixed_time_empty_checks(tmp_path):
+    _write_pair(tmp_path, _fixed_time_file(checks=[]))
+    hits = eh.validate_evals(str(tmp_path))
+    assert any("fixed_time.checks" in h for h in hits)
+
+
+def test_real_suite_schedule_health_scenarios_carry_a_liveness_fixed_time():
+    """Every schedule-health (liveness) scenario pins a deterministic clock so its missed-fire /
+    grace / DST derivation is reproducible — not wall-clock."""
+    loaded = eh.load_evals(str(ROOT))
+    liveness = []
+    for skill in ("job-search-agent", "job-search"):
+        for e in loaded[skill][1]["evals"]:
+            if "schedule health" in e.get("scenario", "").lower():
+                liveness.append((skill, e))
+    assert liveness, "expected schedule-health liveness scenarios"
+    for skill, e in liveness:
+        ft = e.get("fixed_time")
+        assert isinstance(ft, dict), f"{skill}#{e['id']} schedule-health scenario needs a fixed_time"
+        assert "liveness" in ft.get("checks", []), f"{skill}#{e['id']} fixed_time must check liveness"
+
+
+def test_real_suite_has_milestone_fixed_time_fixtures():
+    """The run-lifecycle milestone-timestamp scenarios pin a deterministic clock."""
+    loaded = eh.load_evals(str(ROOT))
+    milestone = [
+        e for e in loaded["job-search-run"][1]["evals"]
+        if isinstance(e.get("fixed_time"), dict) and "milestone" in e["fixed_time"].get("checks", [])
+    ]
+    assert milestone, "job-search-run must carry milestone fixed-time fixtures"
+
+
+# ---------------------------------------------------------------------------
+# T9.1: unique run marker — a stale artifact cannot create a false pass
+#
+# An artifact-evidence object may carry a top-level `run_marker` (a unique per-run
+# nonce). Any assertion may set `run_marked: true`, and the harness then also requires
+# the asserted file to CONTAIN that marker — so a leftover artifact from a prior run
+# (which carries a different marker, or none) fails even a file_exists assertion.
+# Additive: no run_marker / no run_marked -> identical to before.
+# ---------------------------------------------------------------------------
+def _stamped_workspace(tmp_path, marker):
+    ws, run_id = _artifacts_workspace(tmp_path)
+    # Stamp THIS run's marker into the run-specific artifacts.
+    (ws / "runs" / f"{run_id}.json").write_text(
+        json.dumps({"trigger": "scheduled", "run_marker": marker,
+                    "lifecycle": {"close_state": "complete"}}), encoding="utf-8")
+    (ws / "runs" / f"{run_id}-digest.md").write_text(
+        f"# Job search digest\nRun health: healthy\n<!-- run: {marker} -->\n", encoding="utf-8")
+    return ws, run_id
+
+
+def test_check_artifacts_run_marker_passes_when_the_artifact_carries_it(tmp_path):
+    marker = "runmark-2026-07-17-abc123"
+    ws, run_id = _stamped_workspace(tmp_path, marker)
+    evidence = {"workspace": str(ws), "run_marker": marker, "assertions": [
+        {"kind": "file_exists", "path": f"runs/{run_id}.json", "run_marked": True},
+        {"kind": "file_exists", "path": f"runs/{run_id}-digest.md", "run_marked": True}]}
+    assert eh.check_artifacts(evidence) == []
+
+
+def test_check_artifacts_run_marker_fails_on_a_stale_artifact(tmp_path):
+    # The digest exists (file_exists alone would PASS) but predates this run: it carries no
+    # fresh marker, so run_marked catches the stale artifact and fails.
+    ws, run_id = _artifacts_workspace(tmp_path)  # unstamped digest from a prior run
+    fresh = "runmark-fresh-XYZ-999"
+    evidence = {"workspace": str(ws), "run_marker": fresh, "assertions": [
+        {"kind": "file_exists", "path": f"runs/{run_id}-digest.md", "run_marked": True}]}
+    hits = eh.check_artifacts(evidence)
+    assert len(hits) == 1 and "run_marker" in hits[0] and fresh in hits[0]
+
+
+def test_check_artifacts_run_marker_defeats_a_stale_false_pass_end_to_end(tmp_path):
+    # Run A stamped its marker; Run B (a distinct nonce) reuses the workspace. B's assertions
+    # would falsely pass on A's leftover digest without the marker check.
+    marker_a = "runmark-A-111"
+    ws, run_id = _stamped_workspace(tmp_path, marker_a)
+    marker_b = "runmark-B-222"
+    evidence_b = {"workspace": str(ws), "run_marker": marker_b, "assertions": [
+        {"kind": "file_exists", "path": f"runs/{run_id}-digest.md", "run_marked": True}]}
+    hits = eh.check_artifacts(evidence_b)
+    assert len(hits) == 1 and marker_b in hits[0]
+
+
+def test_check_artifacts_run_marker_is_ignored_without_the_flag(tmp_path):
+    # Additive: a run_marker present but no run_marked assertion behaves exactly as before.
+    ws, run_id = _artifacts_workspace(tmp_path)
+    evidence = {"workspace": str(ws), "run_marker": "runmark-unused", "assertions": [
+        {"kind": "file_exists", "path": f"runs/{run_id}.json"}]}
+    assert eh.check_artifacts(evidence) == []
+
+
+def test_check_artifacts_run_marked_requires_a_top_level_run_marker(tmp_path):
+    ws, run_id = _artifacts_workspace(tmp_path)
+    with pytest.raises(ValueError):
+        eh.check_artifacts({"workspace": str(ws), "assertions": [
+            {"kind": "file_exists", "path": f"runs/{run_id}.json", "run_marked": True}]})
+
+
+def test_check_artifacts_rejects_a_non_bool_run_marked(tmp_path):
+    ws, run_id = _artifacts_workspace(tmp_path)
+    with pytest.raises(ValueError):
+        eh.check_artifacts({"workspace": str(ws), "run_marker": "m", "assertions": [
+            {"kind": "file_exists", "path": f"runs/{run_id}.json", "run_marked": "yes"}]})
+
+
+def test_check_artifacts_rejects_an_empty_run_marker(tmp_path):
+    ws, run_id = _artifacts_workspace(tmp_path)
+    with pytest.raises(ValueError):
+        eh.check_artifacts({"workspace": str(ws), "run_marker": "", "assertions": [
+            {"kind": "file_exists", "path": f"runs/{run_id}.json"}]})
+
+
+def test_cli_check_artifacts_flags_a_stale_run_marker(tmp_path):
+    ws, run_id = _artifacts_workspace(tmp_path)
+    ep = tmp_path / "current-artifacts.json"
+    ep.write_text(json.dumps({"workspace": str(ws), "run_marker": "runmark-fresh", "assertions": [
+        {"kind": "file_exists", "path": f"runs/{run_id}-digest.md", "run_marked": True}]}),
+        encoding="utf-8")
+    r = subprocess.run([sys.executable, str(MODULE), "--check-artifacts", str(ep)],
+                       capture_output=True, text=True)
+    assert r.returncode == 1 and "run_marker" in r.stdout
+
+
+# ---------------------------------------------------------------------------
+# T9.1: the crown-jewel judgment-heavy set stays stochastic (reps>=5 + control)
+# ---------------------------------------------------------------------------
+def test_crown_jewel_judgment_scenarios_are_marked_stochastic():
+    """The baited-shortcut resistance scenarios whose verdict is model-judgment (fair-share
+    selection, stop-after-first-match resistance) must be repped + controlled, alongside the
+    fit-verdict / injection / merge set already locked above (AAS-TEST-08)."""
+    loaded = eh.load_evals(str(ROOT))
+
+    def scenario(skill, sid):
+        return next(e for e in loaded[skill][1]["evals"] if e["id"] == sid)
+
+    for skill, sid in [("job-search-run", 34), ("job-search-run", 60)]:
+        e = scenario(skill, sid)
+        assert e.get("stochastic") is True, f"{skill}#{sid} should be stochastic"
+        assert e.get("reps", 0) >= eh.MIN_REPS, f"{skill}#{sid} reps < {eh.MIN_REPS}"
+        c = e.get("control")
+        assert isinstance(c, dict) and all(c.get(k) for k in ("arm", "strip", "expectation")), \
+            f"{skill}#{sid} missing a no-guidance control arm"

@@ -33,6 +33,13 @@ OVERLAP_PAIRS = (
     ("evaluate-job-fit", "job-search-run"),            # fit -> run
 )
 MODEL_ID_LITERAL = re.compile(r"gpt-5", re.I)  # AAS-TEST-04 / finding #24: pinned literal regression.
+# T9.1: a scenario may pin a deterministic reference clock (a fixed-time fixture) for a
+# milestone-timestamp or schedule-liveness check, so the derivation is reproducible and never
+# reads the wall clock. `checks` names which deterministic reads the fixture powers.
+FIXED_TIME_CHECKS = ("milestone", "liveness")
+_ISO_INSTANT = re.compile(
+    r"^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}(:\d{2})?(\.\d+)?(Z|[+-]\d{2}:?\d{2})?$"
+)
 
 
 # ---------------------------------------------------------------------------
@@ -68,7 +75,8 @@ def validate_evals(root="."):
     """Return a list of coherence hits (empty == clean). Validates every evals.json:
     ids contiguous-from-1 + unique; prompt/expectations well-formed; no `gpt-5` literal;
     discovery scenarios name their siblings + routing target; stochastic scenarios carry
-    reps>=5 + a no-guidance control arm."""
+    reps>=5 + a no-guidance control arm; a `fixed_time` fixture (deterministic clock for a
+    milestone/liveness check) names a valid ISO `now` and a non-empty `checks` subset."""
     loaded = load_evals(root)
     known_skills = set(loaded.keys())
     hits = []
@@ -114,6 +122,8 @@ def validate_evals(root="."):
                 hits += _validate_discovery(where, name, e, known_skills)
             if e.get("stochastic"):
                 hits += _validate_stochastic(where, e)
+            if "fixed_time" in e:
+                hits += _validate_fixed_time(where, e)
 
     return hits
 
@@ -156,6 +166,32 @@ def _validate_stochastic(where, e):
     for key in ("arm", "strip", "expectation"):
         if not _is_nonempty_str(control.get(key)):
             hits.append(f"{where}: control arm missing non-empty {key!r}")
+    return hits
+
+
+def _validate_fixed_time(where, e):
+    """Fixed-time fixture (T9.1): a deterministic reference clock for a milestone or liveness
+    check, so the derivation is reproducible (never wall-clock). `now` is one ISO instant, or a
+    non-empty list of them (e.g. the two sides of a DST grace boundary); `checks` is a non-empty
+    subset of FIXED_TIME_CHECKS naming what the fixed clock powers."""
+    hits = []
+    ft = e.get("fixed_time")
+    if not isinstance(ft, dict):
+        hits.append(f"{where}: fixed_time must be an object")
+        return hits
+    now = ft.get("now")
+    instants = now if isinstance(now, list) else [now]
+    if isinstance(now, list) and not now:
+        hits.append(f"{where}: fixed_time.now must be a non-empty list of ISO instants")
+        instants = []
+    for inst in instants:
+        if not _is_nonempty_str(inst) or not _ISO_INSTANT.match(inst.strip()):
+            hits.append(f"{where}: fixed_time.now has a non-ISO instant {inst!r}")
+    checks = ft.get("checks")
+    if not isinstance(checks, list) or not checks or not all(c in FIXED_TIME_CHECKS for c in checks):
+        hits.append(
+            f"{where}: fixed_time.checks must be a non-empty list from {list(FIXED_TIME_CHECKS)}"
+        )
     return hits
 
 
@@ -298,6 +334,9 @@ def _validate_artifacts_schema(evidence):
     assertions = evidence.get("assertions")
     if not isinstance(assertions, list) or not assertions:
         raise ValueError("artifacts evidence needs a non-empty 'assertions' list")
+    run_marker = evidence.get("run_marker")
+    if run_marker is not None and not _is_nonempty_str(run_marker):
+        raise ValueError("artifacts evidence 'run_marker' must be a non-empty string")
     for i, a in enumerate(assertions):
         where = f"assertion[{i}]"
         if not isinstance(a, dict):
@@ -327,6 +366,13 @@ def _validate_artifacts_schema(evidence):
             raise ValueError(
                 f"{where}: unknown surface {surface!r} (want one of {list(SURFACES)})"
             )
+        marked = a.get("run_marked")
+        if marked is not None and not isinstance(marked, bool):
+            raise ValueError(f"{where}: 'run_marked' must be a boolean")
+        if marked and not _is_nonempty_str(run_marker):
+            raise ValueError(
+                f"{where}: 'run_marked' requires a non-empty top-level 'run_marker'"
+            )
     return workspace, assertions
 
 
@@ -339,6 +385,10 @@ def check_artifacts(evidence):
     An assertion may also carry a `surface` (T7.2): `user_facing` fails if the file contains a raw
     canonical E-* code (chat/digest/home/notification must render cause+fix, never the code);
     `internal_record` fails if the file contains none (the record must retain its classification).
+
+    An assertion may also carry `run_marked: true` (T9.1): when the evidence declares a unique
+    top-level `run_marker`, the asserted file must CONTAIN that marker, so a stale artifact left
+    over from a prior run (which carries a different marker, or none) cannot create a false pass.
     """
     workspace, assertions = _validate_artifacts_schema(evidence)
     hits = []
@@ -392,6 +442,29 @@ def check_artifacts(evidence):
             if not re.search(a["pattern"], _read_text(full)):
                 hits.append(f"text_matches: {rel} does not match /{a['pattern']}/")
     hits += _surface_hits(workspace, assertions)
+    hits += _run_marker_hits(workspace, evidence.get("run_marker"), assertions)
+    return hits
+
+
+def _run_marker_hits(workspace, run_marker, assertions):
+    """Enforce the unique run marker (T9.1): a `run_marked` assertion also requires the file to
+    carry this run's marker, so a stale artifact from a prior run cannot create a false pass. A
+    missing file is left to the assertion's own kind to flag, so this never double-reports it."""
+    hits = []
+    if not run_marker:
+        return hits
+    for a in assertions:
+        if not a.get("run_marked"):
+            continue
+        rel = a["path"]
+        full = os.path.join(workspace, rel)
+        if not os.path.isfile(full):
+            continue
+        if run_marker not in _read_text(full):
+            hits.append(
+                f"run_marker: {rel} does not carry this run's marker {run_marker!r} "
+                "(stale artifact from a prior run?)"
+            )
     return hits
 
 

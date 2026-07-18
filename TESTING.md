@@ -22,7 +22,7 @@ it reports; a few checks are pure shell or visual.
 The terminal state (per the AAS-T-10 ruling) is **a structural gate + automated lanes + a shrinking, honestly-labeled manual residual** — not a manual cross-host ritual. What is now **automated** (⚙️, runs in `pytest` / a CLI, host-independent — no manual driving):
 
 - **Scripted mechanics** — `tests/test_mechanics_scripts.py`: the deterministic state operations (jobs.jsonl append/fold, schedule-line composition, workspace discovery) that the skills call out to, unit-tested directly.
-- **Hardened skill evals** — `python3 scripts/eval_harness.py --root .` validates every `skills/*/evals/evals.json` for structural coherence (contiguous ids, well-formed scenarios, a **discovery** scenario per skill for the four overlap pairs, and **stochastic** scenarios carrying `reps ≥ 5` + a **no-guidance control** arm) and rejects the pinned pack-authored `gpt-5*` literal regression family. Legacy version-1 selectors may resolve through host tier roles; version-2 test and runtime setup injects an exact host-resolved identifier. Pack-authored fixtures and prose never hard-code that identifier. `tests/test_eval_harness.py` unit-tests the rep-aggregation (pass-rate + variance) and the control-delta.
+- **Hardened skill evals** — `python3 scripts/eval_harness.py --root .` validates every `skills/*/evals/evals.json` for structural coherence (contiguous ids, well-formed scenarios, a **discovery** scenario per skill for the four overlap pairs, **stochastic** scenarios carrying `reps ≥ 5` + a **no-guidance control** arm, and — on milestone/liveness scenarios — a **fixed-time fixture** (`fixed_time`: a deterministic reference clock with a valid ISO `now` and a `checks` subset of `milestone`/`liveness`) so those derivations never read the wall clock) and rejects the pinned pack-authored `gpt-5*` literal regression family. Legacy version-1 selectors may resolve through host tier roles; version-2 test and runtime setup injects an exact host-resolved identifier. Pack-authored fixtures and prose never hard-code that identifier. `tests/test_eval_harness.py` unit-tests the rep-aggregation (pass-rate + variance), the control-delta, the fixed-time-fixture validation, and the **unique run marker** enforcement — the off-CI artifact check (`scripts/eval_harness.py --check-artifacts`) accepts a per-run `run_marker` and, for any `run_marked` assertion, requires the artifact to carry it, so a stale artifact left in a reused workspace can never create a false pass.
 - **Release integrity** — `scripts/check_release_integrity.py`: version-sync across the 6 manifests.
 
 Verifying a host-specific action such as scheduling is now a **runtime config-time canary** check, replacing the deleted per-host **structural adapter validation**.
@@ -86,7 +86,7 @@ in `-p` commands anyway so the skill is invoked deterministically.
 ```bash
 cd "$JSOS" && python3 -m pytest -q
 ```
-**Expected:** `184 passed` **and `0 failed`** — treat **`0 failed`** as the real gate (the exact count grows as
+**Expected:** `603 passed` **and `0 failed`** — treat **`0 failed`** as the real gate (the exact count grows as
 tests are added; bump this number when it does). Covers the doc linter, the philosophy guard, the release-integrity checks, the scripted-mechanics unit tests, the **eval-scenario validator +
 harness math** (`test_eval_harness.py`), and the fake-shim self-tests (incl. the `bad-query` scenario behind
 T7.12) — dev tooling only; the runtime state procedures are exercised by the live tests below and the skill evals.
@@ -726,15 +726,19 @@ cd "$JSOS" && python3 scripts/eval_harness.py --root .   # "Eval harness: eval s
 ```
 
 Then ask Claude, for each skill, to **run its evals** (the `harness` in `skills/<skill>/evals/evals.json`; they use the
-fake-agent-data shim, so zero real credits) — **71 scenarios**:
-- `evaluate-job-fit` (4) · `job-search-run` (38) · `job-preference-interview` (4) · `job-search` (14) · `job-search-agent` (11).
+fake-agent-data shim, so zero real credits) — **179 scenarios**:
+- `evaluate-job-fit` (5) · `job-search-run` (71) · `job-preference-interview` (5) · `job-search` (53) · `job-search-agent` (45).
 
 Each suite now includes a **discovery** scenario (plant the skill among its siblings, drive a naive prompt, assert the
 right skill is selected and the confusable sibling is not — the four overlap pairs). The judgment-heavy **stochastic**
-scenarios (fit verdicts, injection-resistance, cross-source merge, and every discovery scenario) are marked to run at
-**N ≥ 5** with a **no-guidance control** arm — that behavioral rep loop is the **off-CI live-harness step** (record
-pass-rate + variance + the control delta with `scripts/eval_harness.py` `aggregate_reps` / `control_delta`); a single
-driven pass here is the smoke check.
+scenarios (fit verdicts, injection-resistance, cross-source merge, weighted fair-share selection, baited stop-after-first-match
+resistance, and every discovery scenario) are marked to run at **N ≥ 5** with a **no-guidance control** arm — that behavioral
+rep loop is the **off-CI live-harness step** (record pass-rate + variance + the control delta with `scripts/eval_harness.py`
+`aggregate_reps` / `control_delta`); a single driven pass here is the smoke check. Every **crown-jewel** scenario carries a
+baited shortcut **and** the opposite-direction control (e.g. stop-after-early-results vs. complete-the-queue, resume-a-cursor
+vs. close-interrupted-and-research, silently-migrate-v1 vs. passive-compat), and asserts on **effects** rather than exact prose.
+Milestone/liveness scenarios pin a **fixed-time fixture** (a deterministic clock), and each driven run stamps a **unique run
+marker** into its artifacts (checked with `--check-artifacts`) so a stale artifact can never create a false pass.
 **Expected:** the structural gate is clean; every driven scenario passes; outputs are philosophy-clean.
 **Result:** ⬜
 
@@ -816,7 +820,7 @@ entries carry a date mark; the first-Ashby-pass footnote is present.
 - ⬜ Scheduling correct (the composed `/loop <interval>` matches the pinned table per frequency; `/loop` sets `mechanism:loop`; **zero-Python user path** proven with python3 masked) (§9)
 - ⬜ **No numeric scores/weights, budget config, or invented charge** in files or unsolicited chat; accurate calls-first usage context is labeled, and users control frequency, sources, and review depth (§10)
 - ⬜ Docs match reality (install commands, error table, sample digest) (§11)
-- ⬜ Full regression green: `pytest` (**184**; gate on `0 failed`) + the eval structural gate (`eval_harness.py`) + all five skills' evals (**71** scenarios) (§0.3, §12)
+- ⬜ Full regression green: `pytest` (**603**; gate on `0 failed`) + the eval structural gate (`eval_harness.py`) + all five skills' evals (**179** scenarios) (§0.3, §12)
 - ⬜ Planned config slash-command tests are marked **N/A (pending build)**, not green (§13)
 - ⬜ Multi-source: live Ashby/Greenhouse/Lever rows; shim multi-source run shows per-source counts + first-pass footnote; one source down never blanks the run (§14)
 
