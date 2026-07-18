@@ -1048,7 +1048,7 @@ AAS-LANG-08; AAS-TEST-04/06/12.
       python3 scripts/eval_harness.py --root .
       python3 scripts/doc_lint.py --root .
 
-- [ ] **T7.2 [BLOCKS, L] Separate internal classification from user rendering.**
+- [x] **T7.2 [BLOCKS, L] Separate internal classification from user rendering.**
 
   **Modify:**
   - shared/references/errors.md
@@ -1765,6 +1765,33 @@ AAS-DIST-03/05/06.
   existing interruption coverage in test_run_lifecycle_pressure.py. The plugin version stays `0.6.0`. No live
   agent-data, model, scheduler, network, or billable effect occurred and no branch or worktree changed.
   **T7.1 is complete.**
+- 2026-07-17 — T7.2 user-safe error rendering (P7 complete): separated internal E-* classification from user
+  rendering and made the separation machine-checkable. Canonical E-* codes stay in `runs/<id>.json`
+  (`error.code`/`error.class`) and the operator manual; the four user surfaces — chat, digest, desktop
+  notification, and home — render a structured cause, preserved work, next step, and exact fix with no raw code,
+  and interactive recovery performs safe fixes conversationally (hand-editing is only an escape hatch). Retry
+  language keys off T7.1's verified state: a verified schedule names when the next verified run retries, no
+  schedule offers a manual retry (never a scheduled one), and unverified/session-only/drifted says it cannot be
+  relied on and offers the exact repair path (E-QUOTA is excluded — access must be restored first). The
+  separation contract and retry table are single-homed in errors.md with voice.md and the three skills pointing
+  one hop. The eval harness gained an additive `surface` flag on `--check-artifacts` assertions: a `user_facing`
+  artifact carrying a raw E-* token FAILS, and an `internal_record` assertion FAILS when the code is absent —
+  both directions proven RED→GREEN with a well-constrained E-* regex (no false positives on `E-mail`, bounded
+  lowercase classes, URLs, or the content hash); the `--root` structural CLI and the T6.1 assertion kinds are
+  untouched. Eight error types (auth, quota, upstream stretch, model unavailable, config-migration failure,
+  canary failure, drift, blocked scheduled run) are covered across chat/digest/home/internal-record as pure eval
+  appends (no existing scenario modified). Committed as `ffde50a` (`feat: render user-safe job-search failures`)
+  — the eleven brief files (including the regenerated build stamp); no out-of-brief edits, no ID-anchored test
+  fix needed. A fresh Opus task review returned **Approved** — no Critical or Important; three Minor notes (an
+  `internal_record` docstring clarification for bounded-class records, retry-wording summarized across four
+  surfaces, and an informational note that shipped-doc E-* leak prevention rests on review; recorded in the SDD
+  ledger, no fix). The reviewer directly verified `--root` (exit 0) and that no raw E-* reaches any user-facing
+  string. Controller re-verify on the committed tree: full pytest `578 passed` (571→578), test_eval_harness.py
+  `44 passed`, eval harness coherent, doc lint / philosophy guard / release version-sync clean, two
+  deterministic builds byte-identical (content hash `sha256:c635b880e619`), and `git diff --check` clean. The
+  plugin version stays `0.6.0`. No live agent-data, model, scheduler, network, or billable effect occurred and
+  no branch or worktree changed. **T7.2 is complete, and P7 (schedule health and canonical user-safe errors) is
+  complete.**
 
 ## Decision log
 
