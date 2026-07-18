@@ -23,6 +23,16 @@ Read just what the home view needs (all local):
   read semantics there: an absent `verified` reads `false`, a legacy `mechanism: loop` marker reads
   **session-only**, and a legacy installed-only marker (no `verified`/`verified_at`/`canary_run_id`) reads
   **unverified** — never verified. Reading never rewrites the marker.
+- **Schedule health (derived — local + unmetered):** for an installed schedule, derive its ongoing health per
+  `../../../shared/references/internals.md` → **Schedule health**. This is a local, unmetered read (never a
+  scheduler trigger or a metered call) that compares the registry marker, the scheduler's own local
+  registration (read it back and compare it to what the registry recorded), and the **latest
+  scheduled-attributable run** — the newest `trigger: scheduled` run per
+  `../../../shared/references/conventions.md` → Latest scheduled-attributable run, with the `canary_run_id`
+  canary excluded — using the configured cadence/time/timezone and the documented 30-minute post-fire grace
+  period. It resolves to **exactly one** state in that precedence: registration drift · latest scheduled run
+  blocked · needs attention (two or more missed fires) · not recently observed (one missed fire) ·
+  verified/running · unverified · session-only · absent.
 - **Update status:** follow `../../../shared/references/update.md` (it self-gates on the cached update
   signal) using the bundled `../../../shared/references/build-stamp.md` and the registry `update_check`
   cache. The result is either `update_available` with the local/remote build ids, or no signal.
@@ -67,7 +77,7 @@ Keep it tight. A good shape:
 
 ```
 Job search — <ws path>
-Brief: updated <date> (<N months ago>)   ·   Sources: LinkedIn + Ashby   ·   Schedule: <on, daily | off>   ·   Last run: <run health>
+Brief: updated <date> (<N months ago>)   ·   Sources: LinkedIn + Ashby   ·   Schedule: <daily | daily · not recently observed | session-only | off>   ·   Last run: <run health>
 
 Latest digest — <date>
   <N> new postings · <S> strong · <M> moderate · <W> weak · <F> filtered out · <n> searches · <m> detail reads
@@ -86,11 +96,16 @@ What next? Just tell me:
 Notes on each part:
 
 - **Status line.** Workspace path; brief age from `preferences.md:updated_at` (fallback `created_at`); sources from `config.yaml` `search.sources` (absent → the default pair); render any additional sources (e.g. `+ Greenhouse`, `+ Lever`) when listed; schedule from
-  the registry's scheduling marker — render the cadence (from `config.yaml:schedule.frequency`, e.g. "daily")
-  when the marker reads a **verified** schedule, "session-only" when it reads a session-only loop, and "off"
-  when not installed (a legacy installed-only/unverified marker is not a verified schedule — don't render it
-  as "on"); the mechanism token itself is not surfaced in the status line;
-  last-run health from the newest lifecycle-authorized closed `runs/<run_id>.json` `run_health`. Run
+  the **derived Schedule health** state (`internals.md` → Schedule health) gathered above — render the cadence
+  (from `config.yaml:schedule.frequency`, e.g. "daily") for a **verified/running** schedule, and for a live
+  but degraded schedule append the derived label: "daily · not recently observed" after one missed fire,
+  "daily · needs attention (overdue)" after two or more, "daily · last scheduled run blocked", or "daily ·
+  schedule registration drifted"; "session-only" for a session-only loop; "unverified" for an
+  installed-but-unverified marker; and "off" when not installed (a legacy installed-only/unverified marker is
+  not a verified schedule — don't render it as "on"); the mechanism token itself is not surfaced in the status
+  line. This label only names the derived state; the cause-and-fix for a **blocked** run is the "Last run
+  blocked/failed" nudge below (owned by `errors.md`), not re-rendered here.
+  Last-run health comes from the newest lifecycle-authorized closed `runs/<run_id>.json` `run_health`. Run
   health is one of the four run-health states defined in `conventions.md` (the digest "Run health" line).
 - **Latest digest.** Read the exact fold-derived digest for that same authorized run; show its date and reproduce its **counts
   line** (the `N new · S strong · M moderate · W weak · F filtered out · n searches · m detail reads` line —

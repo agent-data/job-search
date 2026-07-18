@@ -48,13 +48,30 @@ misreports — cost, not correctness.
 postings") that writes a new file and never edits in place. Do not build preemptively.
 **Linked tests:** none (watch item).
 
-## P3 — untested config fields & edges
-**What:** `notify.desktop_notify_on_block` (blocked-run desktop alert), `schedule.timezone` runtime behavior, and
-concurrency / interrupted-run recovery (two overlapping runs; a hard-kill mid-run).
-**Why:** Each is environment-dependent or an edge for v0.1; `jobs.jsonl` is append-only so corruption risk is low.
-**Impact:** verified all three carry **zero tests** (no hit in `tests/` for `desktop_notify_on_block`, `schedule.timezone`, or any concurrency/interrupted-run case; `schedule.timezone` is informational-only under `/loop` per the scheduling section of [`../../shared/references/internals.md`](../../shared/references/internals.md)) — a regression in any of them ships silently and only surfaces in the field; blast radius stays low because the append-only `jobs.jsonl` contract ([`../../shared/references/conventions.md`](../../shared/references/conventions.md)) bounds the corruption risk.
-**How to apply:** Add targeted tests when these surfaces are exercised in the field.
-**Linked tests:** none yet.
+## P3 — untested config fields & edges (partially resolved)
+**Resolved 2026-07-17 — `schedule.timezone` runtime behavior + interrupted-run recovery.** `schedule.timezone`
+now carries a runtime contract and CI-executable coverage: the schedule-health derivation in
+[`../../shared/references/internals.md`](../../shared/references/internals.md) (§ Schedule health) computes the
+expected fire instants **in the configured timezone** (DST-aware via stdlib `zoneinfo`), and
+[`tests/test_schedule_health.py`](../../tests/test_schedule_health.py) pins the 30-minute grace boundary, the
+one-vs-two missed-fire thresholds, and a daily fire across a daylight-saving transition against fixed clocks —
+so it is no longer informational-only. Interrupted-run recovery (a hard-kill mid-run) is likewise contracted
+and tested: the recovery map in
+[`../../shared/references/run-lifecycle.md`](../../shared/references/run-lifecycle.md)
+(`open_before_selection_settled` → close `interrupted` and restart cleanly) is exercised by
+`tests/test_run_lifecycle_pressure.py`.
+**What (still open):** `notify.desktop_notify_on_block` (blocked-run desktop alert) and the CONCURRENCY edge
+(two overlapping runs racing the same workspace) remain untested.
+**Why:** Both are environment-dependent edges; `jobs.jsonl` is append-only so corruption risk is low.
+**Impact:** the two open surfaces carry **zero tests** (no hit in `tests/` for `desktop_notify_on_block` or any
+two-overlapping-run case) — a regression ships silently and only surfaces in the field; blast radius stays low
+because the append-only `jobs.jsonl` contract
+([`../../shared/references/conventions.md`](../../shared/references/conventions.md)) bounds the corruption risk.
+**How to apply:** Add a targeted test for the desktop-notify path and an overlapping-run guard when those
+surfaces are exercised in the field.
+**Linked tests:** resolved portions — [`tests/test_schedule_health.py`](../../tests/test_schedule_health.py)
+(timezone/DST + grace) and `tests/test_run_lifecycle_pressure.py` (interrupted recovery); none yet for the two
+open surfaces.
 
 ## P3 — schedule-line accepts an out-of-range --time (`TODO-TIME-RANGE`) — ✅ resolved (obsolete)
 **Resolved 2026-06-08 by removal.** The cron/launchd generators no longer exist — scheduling is native `/loop` (see [`../../shared/references/internals.md`](../../shared/references/internals.md)). The `/loop` line is composed from `schedule.frequency` alone (no `--time`), so there is no time value to range-check. No action needed.

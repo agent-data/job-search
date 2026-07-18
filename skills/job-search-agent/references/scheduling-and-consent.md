@@ -170,6 +170,22 @@ commits the repair, enables the job, and marks the registry verified. Render eit
 failure or the later setup/activation/canary phase through `../../../shared/references/errors.md` →
 `model-repair-rendering`; normal chat and digests never show the raw internal failure token.
 
+## Schedule health (local, unmetered)
+
+Once a schedule is recorded, the home view keeps **deriving its ongoing health** from local evidence. This is
+a **local, unmetered** read — never a scheduler trigger, a canary, or a metered agent-data call. It compares
+three sources: the local registry marker, the scheduler's **own local registration** (read back and compared
+to what was recorded), and the **latest scheduled-attributable run**. The **canary proves setup but is not
+counted as an ordinary scheduled fire**, so a freshly verified schedule whose only run is its canary reads
+healthy rather than missed. Using the configured cadence/time/timezone and a documented 30-minute post-fire
+grace period, one missed expected fire reads **"not recently observed"** and two or more reads **"needs
+attention."** The full eight-state precedence (registration drift · latest scheduled run blocked · overdue ·
+not recently observed · verified/running · unverified · session-only · absent) and the timezone/DST-aware
+missed-fire math are single-homed in `../../../shared/references/internals.md` → **Schedule health**, with the
+run-record selection in `../../../shared/references/conventions.md` → Latest scheduled-attributable run. These
+health checks stay **unmetered**; a **repair or retry canary** is the separately costed, separately consented
+metered action described above, never a passive liveness read.
+
 ## Actions
 
 The steps are the same whichever scheduler is active; the agent binds each to its own host. The one step

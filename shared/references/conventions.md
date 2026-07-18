@@ -419,6 +419,19 @@ existing narrow pre-binding blocked-artifact exception in `errors.md` may keep t
 null because no exact executable detail binding was established; it does not permit guessing. Outside that
 bounded exception, all model fields are required.
 
+### Latest scheduled-attributable run
+
+The **latest scheduled-attributable run** is the one run record a schedule-health reader selects for liveness
+and for "the latest scheduled fire." It is the newest run whose `trigger` is exactly `scheduled` — an ordinary
+scheduled fire — among the lifecycle-authoritative closed records: apply
+[run-lifecycle.md](run-lifecycle.md#artifact-authority-for-every-reader) first (exact `run_id`, `closed=true`,
+matching folded state; an open intended-complete artifact never qualifies). A **canary is excluded** — a run
+whose `trigger` is `canary`, or whose `run_id` equals the registry `canary_run_id`, proves setup but is not an
+ordinary scheduled fire — and a `manual` run is not scheduled-attributable at all; neither one resets liveness
+or masks a stalled schedule. The schedule-health precedence, the 30-minute grace period, and the
+timezone/DST-aware missed-fire math that consume this selected run are single-homed in
+[internals.md](internals.md#schedule-health); this file owns only which run record that reader picks.
+
 Final artifact validation is strict and fail-closed: require every documented top-level and nested field,
 its exact JSON type, every closed enum, canonical timestamp/build structure, nonnegative integer metrics,
 and all documented cross-field invariants. In particular trigger/scheduler pairing, detail binding/origin,

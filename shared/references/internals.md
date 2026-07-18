@@ -763,3 +763,51 @@ does not satisfy that procedure.
 
 To turn scheduling off, stop the active schedule, then clear the scheduling marker (write rules above — no
 more stale `installed: true`).
+
+## Schedule health
+
+The home view **derives** the ongoing health of a recurring schedule from **local evidence only**. This is a
+**local, unmetered** read — never a scheduler trigger, a canary, or a metered agent-data call. It compares
+**three sources**: the **registry** scheduling marker (Registry above); the **scheduler's own local
+registration** (read it back — `crontab -l`, `launchctl list`, or the native scheduler's inspect — and
+compare it to what the registry recorded, the same inspect-don't-clobber read used at setup); and the
+**latest scheduled-attributable run** (its reader selection is owned by
+[conventions.md](conventions.md#latest-scheduled-attributable-run) — apply
+[run-lifecycle.md](run-lifecycle.md#artifact-authority-for-every-reader) first, so an open intended-complete
+artifact never qualifies). A **canary proves setup but is not counted as an ordinary scheduled fire** (it is
+the registry `canary_run_id`, and a run whose `trigger` is `canary` rather than `scheduled`); liveness counts
+ordinary scheduled fires only, so a fresh canary with no ordinary fire yet due reads healthy, not missed.
+
+**Liveness (missed-fire) math — deterministic.** From `schedule.frequency`, `schedule.time`, and
+`schedule.timezone`, compute the expected fire instants **in the configured timezone**. A daily or weekly fire
+keeps its local `HH:MM` across a daylight-saving transition, so its UTC offset shifts by an hour while its
+wall-clock time does not — never derive the next fire by adding a fixed 24h in UTC, which places a fire across
+the fall-back/spring-forward boundary an hour off and spuriously flags it. The baseline "last observed fire"
+is the latest scheduled-attributable run's start, or the `verified_at` canary instant when no ordinary
+scheduled run exists yet. Apply a documented **30-minute post-fire grace period**: an expected fire counts as
+**missed** only once `now` is at or past `fire + 30 minutes` with no observed run since the baseline — a fire
+still inside its grace window is imminent, not missed. **One** missed expected fire is **"not recently
+observed"**; **two or more** is **"needs attention."**
+
+Render **exactly one** state, highest precedence first. The anomaly states (ranks 1–4) apply only to an
+installed, **verified** unattended schedule; a marker that is not verified reads `unverified`, a legacy
+`mechanism: loop` marker reads `session_only`, and an uninstalled marker reads `absent`.
+
+<!-- schedule-health-contract:precedence -->
+| Rank | State | Wins when |
+|---|---|---|
+| 1 | `registration_drift` | the scheduler's own local registration no longer matches the registry (three-source drift) |
+| 2 | `latest_run_blocked` | the latest scheduled-attributable run closed with `run_health` `blocked` |
+| 3 | `needs_attention` | two or more expected fires are overdue — grace elapsed, none observed ("needs attention") |
+| 4 | `not_recently_observed` | exactly one expected fire is overdue ("not recently observed") |
+| 5 | `verified_running` | installed and verified, no drift, latest scheduled run healthy, zero overdue fires |
+| 6 | `unverified` | installed but never verified by a green canary |
+| 7 | `session_only` | a session-only loop marker (`mechanism: loop`) |
+| 8 | `absent` | no schedule installed |
+<!-- /schedule-health-contract:precedence -->
+
+These checks are **local and unmetered**; a repair or retry **canary** is a separate metered action that is
+**separately costed and consented** — see **Exact-model repair** above and
+[Agent-data usage decisions](#agent-data-usage-decisions) (`metered_canary_retry_or_repair`). This section
+**derives and labels** the state only; the user-safe cause-and-fix rendering of a `blocked` or failed run is
+owned by `errors.md` (one hop), and is not restated here.
