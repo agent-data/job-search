@@ -1215,7 +1215,7 @@ AAS-DIST-03/05/06.
       python3 scripts/eval_harness.py --root .
       python3 -m pytest -q tests/test_eval_harness.py
 
-- [ ] **T9.2 [BLOCKS, M] Run the free deterministic gate and fix every regression.**
+- [x] **T9.2 [BLOCKS, M] Run the free deterministic gate and fix every regression.**
 
   **Verify:**
 
@@ -1878,6 +1878,24 @@ AAS-DIST-03/05/06.
   porcelain — the implementer's report of `1a6194a4` was an inaccurate figure, corrected here. The plugin
   version stays `0.6.0`. No live agent-data, model, scheduler, network, or billable effect occurred, no
   behavioral model reps were run, and no branch or worktree changed. **T9.1 is complete.**
+- 2026-07-17 — T9.2 free deterministic release gate: ran the complete free deterministic gate on the committed
+  tree — doc lint clean, philosophy guard clean, eval harness coherent (179 scenarios), full pytest `603
+  passed`, `git diff --check` clean, and two deterministic builds byte-identical (`sha256:1e0a7cf6de49`). The
+  T9.2-specific audits: `rg docs-private/ skills shared templates` returns ZERO hits; every remaining raw `E-*`
+  hit in the shipped skills is an internal-contract reference (e.g. home.md "errors.md → Internal classification
+  vs. user rendering. Examples: `E-QUOTA` → …"), none a user-facing rendering (consistent with T7.2's surface
+  enforcement); and every detail-model tier token (`fast`/`balanced`/`high`) sits only in version-1
+  legacy-compat contracts (conventions.md v1 selectors/aliases), test/eval fixtures, or historical design docs —
+  none in user-facing runtime copy or version-2 config. No regression was found, so per the plan's commit map
+  T9.2 produced no code commit. One PRE-EXISTING, non-shipping test-drift finding recorded for the whole-branch
+  review: skills/job-search-agent/evals/evals.json (the harness note + eval 55) reference a Codex-adapter
+  Model-tiers table at the non-existent `shared/references/platform/codex.md` and a portable-tier detail-model
+  mechanism that this plan's exact-model contract (T3.1) and ARCHITECTURE's "no per-host adapter" superseded;
+  the references predate the plan (unchanged 2→2 since base f217128, introduced by the 2026-06-22 multi-harness
+  work in commit 070479e), do not ship (evals are excluded from the package), fail no deterministic gate, and
+  eval 55 is not stochastic-marked so T9.3 will not run it — doc-drift cleanup, not a release blocker. The
+  plugin version stays `0.6.0`. No live agent-data, model, scheduler, network, or billable effect occurred and
+  no branch or worktree changed. **T9.2 is complete (gate clean, no code commit).**
 
 ## Decision log
 
