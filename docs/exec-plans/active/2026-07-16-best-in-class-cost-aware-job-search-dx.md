@@ -1090,7 +1090,7 @@ AAS-LANG-08; AAS-TEST-04/06/12.
 Rules: PSG-COMM-04/05/06/07/13/15/20; AAS-LANG-01/03; AAS-DIST-03/06;
 PSG-SAFE-13/14/17.
 
-- [ ] **T8.1 [BLOCKS, L] Rebuild README around the natural-language golden path.**
+- [x] **T8.1 [BLOCKS, L] Rebuild README around the natural-language golden path.**
 
   **Modify:**
   - README.md
@@ -1792,6 +1792,35 @@ AAS-DIST-03/05/06.
   plugin version stays `0.6.0`. No live agent-data, model, scheduler, network, or billable effect occurred and
   no branch or worktree changed. **T7.2 is complete, and P7 (schedule health and canonical user-safe errors) is
   complete.**
+- 2026-07-17 — T8.1 README golden path and support truth (P8 opens): rebuilt the README around the
+  natural-language golden path in the exact seven-section order (outcome + privacy promise → the "Set up my job
+  search. I'm looking for…" Quickstart → agent-data npm preflight + install/auth recovery + the 100-call monthly
+  free tier → one compact early-output-plus-automatic-continuation example → "What you can ask" (setup, refine,
+  run now, schedule, explain usage, why a match, pause/stop) → a dated support matrix → installation and
+  contributor internals). Commands are demoted to deterministic fallbacks ("the sentence is the interface"); new
+  users are told to share relevant material (a resume/cover letter/notes) rather than an existing brief; and
+  `~/.job-search/` is stated as a private deny-all default, not a choice. The product/reliability/interface docs
+  and TESTING were updated to match the current P4–P7 contracts, and stale language was removed — loop-as-
+  recurring (schedules are canary-verified; `/loop` survives only as the labeled in-session fallback), tier
+  tokens (`fast`/`balanced`), version-1-only framing, and per-host-adapter pointers are gone, and the
+  user-facing raw-`E-*` example was removed from INTERFACE (internal-only code references remain, labeled). The
+  support matrix is honest: it leads with "no live end-to-end coverage has been recorded yet" (deferred to
+  T9.4), dates every structural·expected-to-work row 2026-07-17, and implies no live verification. Committed as
+  `d374d6e` (`docs: make the job-search golden path obvious`) — six docs (README, TESTING, INTERFACE,
+  PRODUCT_SENSE, RELIABILITY, and the real docs/product-specs/new-user-onboarding.md — the brief's
+  `onboarding.md` name was reconciled); SECURITY/QUALITY_SCORE/CONTRIBUTING already matched and were left
+  untouched (YAGNI). Docs only — no build-stamp, runtime surface, or evals in the commit. This review doubled as
+  the docs/PLANS.md doc-reviewer protocol: a fresh Opus reviewer verified every load-bearing claim (free tier,
+  exact-model/no-tier-tokens, canary-verified scheduling, config v2, calls-first cost, internal-only E-*, no
+  per-host adapter) against the shipped shared/references contracts. Verdict **Approved** — no Critical or
+  Important; three Minor cosmetic notes (a searched-vs-result-sources mismatch in the illustrative transcript;
+  the verdict counts not summing, inherited verbatim from the canonical examples/sample-digest.md and out of
+  scope; and the "tested model IDs" matrix column correctly deferred to T9.4 rather than pinned — recorded in
+  the SDD ledger, no fix). Controller re-verify on the committed tree: full pytest `578 passed`, all four README
+  markers present, RED audit clean/classified, eval harness coherent, doc lint / philosophy guard / release
+  version-sync clean, and the build stamp unchanged (`sha256:c635b880e619`). The plugin version stays `0.6.0`.
+  No live agent-data, model, scheduler, network, or billable effect occurred and no branch or worktree changed.
+  **T8.1 is complete.**
 
 ## Decision log
 
