@@ -1138,7 +1138,7 @@ PSG-SAFE-13/14/17.
       python3 scripts/philosophy_guard.py --root .
       rg -n "Set up my job search|What you can ask|100-call|Support matrix" README.md
 
-- [ ] **T8.2 [TUNE, M] Add a local whitelist-only support summary.**
+- [x] **T8.2 [TUNE, M] Add a local whitelist-only support summary.**
 
   **Create:** shared/scripts/mechanics/support-summary.sh
 
@@ -1821,6 +1821,36 @@ AAS-DIST-03/05/06.
   version-sync clean, and the build stamp unchanged (`sha256:c635b880e619`). The plugin version stays `0.6.0`.
   No live agent-data, model, scheduler, network, or billable effect occurred and no branch or worktree changed.
   **T8.1 is complete.**
+- 2026-07-17 — T8.2 privacy-safe support diagnostics (P8 complete): added `shared/scripts/mechanics/
+  support-summary.sh`, a portable `#!/bin/sh` mechanic that emits — on explicit request, to stdout only — a
+  whitelist-only local support summary (build stamp, harness/version, OS/architecture, schedule state,
+  latest-run health, the internal E-* code, aggregate agent-data calls, and nonsecret request IDs) for the user
+  to review and optionally attach to a GitHub issue themselves; it never uploads, opens an issue, or launches a
+  browser, and it links to https://github.com/agent-data/job-search/issues. It is a strict whitelist BY
+  EXTRACTION — every field is read by exact key scoped to its object (the scheduling read reaches only
+  installed/verified/mechanism/cadence, never scheduler_id/primary_model/workspace-path; the E-* code is scoped
+  to the singular `error` object and validated against an anchored `E-*` grammar plus a closed class set;
+  request IDs come only from `request_id`/`request_ids`) and reads none of config.yaml/preferences.md/jobs.jsonl
+  — so preferences, job descriptions, match prose, API keys, auth headers, cursors, and environment dumps can
+  never appear. The internal E-* code is deliberately included (this is an operator diagnostic like
+  `runs/<id>.json`, not a normal user surface, so T7.2's no-raw-code rule does not apply) and documented as such
+  in internals.md and errors.md; the prose fallback is single-homed in internals.md. RED/GREEN tests seed 13
+  bait sentinels beside the allowed fields and assert every sentinel absent under both `sh` and `dash`. Committed
+  as `c60a5bf` (`feat: add privacy-safe support diagnostics`) — the created script plus internals.md, errors.md,
+  README.md, tests/test_mechanics_scripts.py, and the regenerated build stamp; no out-of-brief edits. The
+  controller generated the bait fixture and read the whole summary — it contained exactly the whitelist and
+  leaked nothing (fixture output at scratchpad/bait-fixture/support-summary.txt). A fresh, deliberately
+  adversarial Opus review returned **Approved** — no Critical or Important; it confirmed per-category that no
+  forbidden field can leak, that `sh -n`/`dash -n` are clean, and that the 13-sentinel test runs under both
+  shells. One Minor (a test-fidelity gap: the absolute-workspace-path bait is not seeded inside the scheduling
+  object nor asserted absent — the code provably cannot emit it, and the existing scheduler_id/primary_model
+  assertions already prove key-scoping; flagged in the SDD ledger as a priority hardening for the whole-branch
+  fix-wave, no fix now). Controller re-verify on the committed tree: full pytest `584 passed` (578→584),
+  mechanics `116 passed`, `sh -n support-summary.sh` clean, eval harness coherent, doc lint / philosophy guard /
+  release version-sync clean, two deterministic builds byte-identical (content hash `sha256:1e0a7cf6de49`), and
+  `git diff --check` clean. The plugin version stays `0.6.0`. No live agent-data, model, scheduler, network, or
+  billable effect occurred and no branch or worktree changed. **T8.2 is complete, and P8 (Quickstart, cookbook,
+  support truth, and privacy-safe help) is complete.**
 
 ## Decision log
 
