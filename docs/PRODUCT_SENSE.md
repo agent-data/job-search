@@ -122,8 +122,9 @@ decision.
   enough matches and an established workflow; building it now would be premature.
 
 - **Cloud sync, hosted dashboard, email/Slack notifications.** The product's identity is
-  local-first: the workspace lives on the user's machine, runs are driven by Claude Code's native
-  `/loop`, and the digest is a file. Adding cloud infrastructure inverts that identity and
+  local-first: the workspace lives on the user's machine, runs fire from a schedule on that same
+  machine (an unattended `cron`/`launchd` or host scheduler, with an in-session loop as the
+  fallback), and the digest is a file. Adding cloud infrastructure inverts that identity and
   introduces data-custody questions for sensitive job-search PII. A desktop notification on a
   blocked run (when action is needed) is the narrow exception — configured locally.
 

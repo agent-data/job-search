@@ -34,7 +34,7 @@ The mechanics that must never improvise — workspace discovery, registry writes
 line, dedup, the event-log fold — are **pinned written contracts**: exact precedence rules,
 portable shell one-liners, and byte-level write rules that Claude Code executes natively with
 no runtime dependency (no Python on the user's machine). The *specification* is deterministic —
-the same frequency always maps to the same `/loop` command, and the same event log always folds
+the same frequency always composes the same schedule line, and the same event log always folds
 to the same current state — while the *executor* is the model following the contract verbatim.
 The named tradeoff: the runtime mechanics are verified by the skill evals and the TESTING.md
 matrix (artifact assertions on registry bytes and event lines), no longer by a unit-test suite.
@@ -141,7 +141,7 @@ enforces all of this is [../skills/job-search-run/SKILL.md](../skills/job-search
 ## 5. Headless-first — the scheduled run never blocks on a human
 
 The scheduled pass is strictly **non-interactive**: it never prompts, because there is no human
-watching when the `/loop` run fires. Anything that would need a decision is instead resolved by the
+watching when the scheduled run fires. Anything that would need a decision is instead resolved by the
 contract (retry vs. skip vs. halt) and recorded. All user-facing output is **records-based** —
 the digest file, the run audit log, the desktop notification — never an interactive prompt the
 scheduler can't answer. This is what makes the system safe to run unattended: a headless run

@@ -615,8 +615,11 @@ line?"** (or read it off the scheduling offers in T2.1/T4.3).
 **Result:** ⬜
 
 ### T9.3 `/loop` scheduling — nothing installed on the machine — 🤖 + 👤
-Onboarding's scheduling step (or "set it up to run automatically") uses Claude Code's native `/loop`. Say:
-**"yes, keep it running automatically."**
+This drives the **in-session `/loop` fallback** — the path taken when the host has no unattended
+scheduler or the user declines the machine change (the suite never writes a real crontab). When you
+decline the unattended schedule (or ask to keep it in-session), onboarding's scheduling step uses the
+in-session `/loop`. Say:
+**"keep it running automatically, but just in this session."**
 **Expected:** Claude shows the loop line **`/loop <interval> /job-search:job-search-run`** (the suite runs
 as the plugin, so the target is namespaced; matching your configured frequency — `24h` for daily) and records
 the mechanism — **without** writing any crontab line or launchd plist.
