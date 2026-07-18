@@ -1180,7 +1180,7 @@ PSG-SAFE-13/14/17.
 Rules: AAS-TEST-02/03/04/06/07/08/09/10/11/12/13/15; PSG-F-09/10/11;
 AAS-DIST-03/05/06.
 
-- [ ] **T9.1 [BLOCKS, L] Complete effect-based eval coverage.**
+- [x] **T9.1 [BLOCKS, L] Complete effect-based eval coverage.**
 
   **Modify:**
   - skills/job-search/evals/evals.json
@@ -1851,6 +1851,33 @@ AAS-DIST-03/05/06.
   `git diff --check` clean. The plugin version stays `0.6.0`. No live agent-data, model, scheduler, network, or
   billable effect occurred and no branch or worktree changed. **T8.2 is complete, and P8 (Quickstart, cookbook,
   support truth, and privacy-safe help) is complete.**
+- 2026-07-17 — T9.1 effect-based pressure coverage (P9 opens): completed the effect-based eval coverage
+  deterministically (no behavioral model runs — those are T9.3). All ten crown-jewel scenarios already carried
+  both a baited shortcut and the opposite-direction control asserting on EFFECTS (registry installed/verified,
+  ledger close-state, milestone presence/absence, preferences.md bytes, sources_failed sets) rather than exact
+  prose, so none were added. Consolidation was deliberately NOT performed: the repeated scenario names in
+  job-search-run (`many-promising` ×7, `multi-source` ×4, `one-source-down` ×2, `recency` ×2) are shared
+  fixtures that each assert a DISTINCT effect (tie-breaks, source-down sets, honor-vs-client-filter), so they
+  are not true duplicates and merging would both lose coverage and shift the eval IDs the tests anchor on — the
+  reviewer independently confirmed the judgment. New work: 17 deterministic fixed-time fixtures (milestone
+  checks on run 56-59, liveness checks on agent 34-43 + search 48/50/51, including the DST list case) validated
+  by `_validate_fixed_time`; a `run_marker`/`run_marked` mechanism in `check_artifacts` so a stale artifact
+  FAILS a file_exists-style check instead of false-passing (proven end-to-end); and a regression lock that the
+  judgment-heavy scenarios stay marked stochastic (reps=5 + a no-guidance control) as metadata for T9.3. The
+  harness additions are purely additive — `--root`, the T6.1 assertion kinds, and the T7.2 `surface` flag are
+  literally unchanged. TESTING.md's stale counts were corrected (71→179 evals, 184→603 pytest). Committed as
+  `6fb9df3` (`test: cover cost and scheduling pressure paths`) — the three eval JSONs (add-keys only, no
+  renumber), eval_harness.py, test_eval_harness.py, and TESTING.md; no build-stamp (evals/harness/TESTING are
+  not packaged), no anchor-test edit, no out-of-brief edit. Every test-referenced/ID-anchored block is
+  unshifted. A fresh Opus task review returned **Approved** — no Critical or Important; one Minor (search 32/35
+  resume-as-evidence / questionnaire baits verified via deterministic file/count effects rather than reps — a
+  defensible choice since the variance-prone judgment cores are repped; recorded in the SDD ledger, no fix).
+  Controller re-verify on the committed tree: full pytest `603 passed` (584→603), eval harness coherent (179
+  scenarios), doc lint / philosophy guard / release version-sync clean, and `git diff --check` clean; the build
+  stamp is unchanged (`sha256:1e0a7cf6de49`) and `./scripts/build.sh` twice leaves it byte-identical with empty
+  porcelain — the implementer's report of `1a6194a4` was an inaccurate figure, corrected here. The plugin
+  version stays `0.6.0`. No live agent-data, model, scheduler, network, or billable effect occurred, no
+  behavioral model reps were run, and no branch or worktree changed. **T9.1 is complete.**
 
 ## Decision log
 
