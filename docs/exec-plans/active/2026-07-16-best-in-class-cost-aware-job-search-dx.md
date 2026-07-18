@@ -1005,7 +1005,7 @@ AAS-FORM-07/09; PSG-COMM-09/10/18/20.
 Rules: PSG-F-09/10/11/14; PSG-COMM-04/09/20; PSG-SAFE-02/08/11/17;
 AAS-LANG-08; AAS-TEST-04/06/12.
 
-- [ ] **T7.1 [BLOCKS, L] Derive ongoing schedule health from local evidence.**
+- [x] **T7.1 [BLOCKS, L] Derive ongoing schedule health from local evidence.**
 
   **Modify:**
   - shared/references/internals.md
@@ -1737,6 +1737,34 @@ AAS-DIST-03/05/06.
   stays `0.6.0`. No live agent-data, model, scheduler, network, or billable effect occurred and no branch or
   worktree changed. **T6.3 is complete, and P6 (capability-gated recurring setup and real canary) is
   complete.**
+- 2026-07-17 — T7.1 ongoing schedule health (P7 opens): derived recurring-schedule health from local evidence,
+  single-homed in internals.md's `schedule-health-contract:precedence` table + Schedule health section. Home
+  compares three sources — the registry marker, the scheduler's own local registration read back, and the
+  latest scheduled-attributable run (a run whose trigger is `canary`/`manual`, or whose id equals
+  `canary_run_id`, is excluded from that selection) — against the configured cadence/time/timezone and a
+  documented 30-minute post-fire grace period: one missed expected fire reads "not recently observed", two or
+  more "needs attention". Exactly ONE of eight states renders by strict precedence (registration drift > latest
+  scheduled run blocked > overdue-by-two-or-more > not-recently-observed-after-one > verified/running >
+  unverified > session-only > absent); the four anomaly states apply only to an installed+verified schedule. A
+  canary proves setup but is not an ordinary fire, and all health checks are local and unmetered (a repair
+  canary is separately costed and consented). The DST-boundary case derives the next fire in the configured
+  timezone (stdlib zoneinfo), never by adding a fixed 24h in UTC, so a daily fire across a fall-back (25-hour)
+  or spring-forward (23-hour) day is not spuriously flagged missed. The tech-debt tracker marks the
+  `schedule.timezone` and interrupted-run portions RESOLVED and leaves the unrelated notification and
+  overlapping-run debt OPEN. Nine fake-clock RED scenarios; committed as `34a8e9d`
+  (`feat: derive recurring schedule health`) — the seven brief files plus the regenerated build stamp and one
+  flagged out-of-brief addition, tests/test_schedule_health.py (the CI-executable deterministic reference for
+  the precedence + grace + DST, per the test_scheduling_eligibility.py precedent). A fresh Opus task review
+  returned **Approved** — no Critical or Important; three Minor test-hardening nits in the new test file (a
+  `verified_at` subscript a `.get()` would harden, a weaker spring-forward arm, and a manual-exclusion that
+  could feed a mixed list; recorded in the SDD ledger, no fix). The reviewer independently reproduced the
+  25-hour/23-hour DST days and confirmed the naive-`+24h` trap is avoided. Controller re-verify on the committed
+  tree: full pytest `571 passed` (551→571), the schedule-health test `20 passed`, eval harness coherent, doc
+  lint / philosophy guard / release version-sync clean, two deterministic builds byte-identical (content hash
+  `sha256:51a0feba04c5`), and `git diff --check` clean; the interrupted-run tech-debt resolution is backed by
+  existing interruption coverage in test_run_lifecycle_pressure.py. The plugin version stays `0.6.0`. No live
+  agent-data, model, scheduler, network, or billable effect occurred and no branch or worktree changed.
+  **T7.1 is complete.**
 
 ## Decision log
 
@@ -1797,6 +1825,11 @@ AAS-DIST-03/05/06.
   to a results row's `exact_model`: that gate keeps runtime-resolved model IDs out of pack-authored, shipped
   eval prose, whereas `exact_model` here is a runtime-resolved value deliberately recorded in local, untracked
   eval-evidence — so it is validated only as a non-empty string, not gated.
+- 2026-07-17 — Schedule-health precedence: the four anomaly states (registration drift, latest run blocked,
+  overdue-by-two-or-more, not-recently-observed) apply only to an installed+verified unattended schedule — an
+  absent/session-only/unverified schedule has no expected fires to miss — so the flat eight-state precedence
+  still yields exactly one state. Derive the next expected fire in the configured timezone (stdlib zoneinfo),
+  never by adding a fixed 24h in UTC, so a daily fire across a DST transition is not spuriously flagged missed.
 
 ## Self-review
 
