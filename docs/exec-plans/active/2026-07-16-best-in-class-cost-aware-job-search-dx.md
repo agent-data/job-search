@@ -1896,6 +1896,41 @@ AAS-DIST-03/05/06.
   eval 55 is not stochastic-marked so T9.3 will not run it — doc-drift cleanup, not a release blocker. The
   plugin version stays `0.6.0`. No live agent-data, model, scheduler, network, or billable effect occurred and
   no branch or worktree changed. **T9.2 is complete (gate clean, no code commit).**
+- 2026-07-19 — SDD whole-branch review + fix-wave: dispatched the broad final Opus review over the whole
+  branch's P4–P9.2 delta (bb71e91..b1652e4, 33 commits, ~1 MB) focused on cross-task coherence and Minor
+  triage. Verdict: the seven shared contracts and five skills cohere end-to-end — every shared enum/table is
+  consistent, all invariants hold across the assembled feature (exact-model everywhere, no user-facing raw
+  E-*, installed/verified only post-canary, completion only via the fold predicate, cursors never persisted),
+  and every cross-reference resolves — with NO Critical and no blocking Important, so the branch is merge- and
+  release-ready. The review surfaced one Important non-blocking coherence gap and corrected one prior finding:
+  (a) the local-metrics subsystem is contract-specified in run-lifecycle.md (the front door owns
+  onboarding_started_at/agent_data_ready_at and must create the per-attempt setup record; schedule setup owns
+  schedule_verified_at) but NO shipped skill/script wires those writes, so metrics.json is never created and
+  the three derived time-to-help durations are permanently unavailable — zero user/gate impact (no shipped
+  consumer; activation is a view over run evidence), recorded as tech-debt (TODO-METRICS-WIRING) rather than
+  wired, since wiring is a scoped follow-up that gates T9.4's time-to-help measurement; and (b) the earlier
+  T8.1 concern that the sample-digest verdict counts "do not sum" is WITHDRAWN — "10 new postings" vs the
+  9-in-bands is correct alias-collapse (N counts jobs.jsonl rows, the bands count roles; one cross-source merge
+  = 10 rows / 9 roles) per conventions.md, so examples/sample-digest.md is correct as-is. The Minor triage
+  yielded four FIX-NOW items plus one new Minor, all applied in commit `0d281c2` (`fix: apply whole-branch
+  review fixes`, 7 files): T8.2 (seed the absolute workspace path inside the fixture's scheduling object +
+  assert it is absent from the support summary — the privacy-critical coverage gap, verified no leak under
+  sh+dash); T6.1 (three fail-closed eval-harness tests — negative text_matches, malformed JSONL, invalid-JSON
+  evidence); T8.1a (README transcript search line reconciled to "Searching LinkedIn and Ashby"; counts and
+  sample-digest untouched); T9.2 (removed the non-existent `platform/codex.md` Codex-adapter portable-tier
+  reference from the job-search-agent harness note and rewrote eval id 4's detail-read-model expectation to the
+  exact `search.detail_model` contract — `platform/codex` is now zero in the tree); and a new errors.md
+  retry-clause honesty row so a verified-but-anomalous schedule (latest_run_blocked / needs_attention /
+  not_recently_observed) no longer promises an automatic next-run retry and instead points to the
+  schedule-health repair path. The remaining Minors were confirmed NO-ACTION (house-style single-homing
+  surfacings, provably-safe) or NICE-TO-HAVE (T6.2/T6.3/T7.1 optional test-hardening/prose-thinning). Controller
+  re-verify on the committed tree: full pytest `606 passed` (603→606), named suites `182 passed`, eval harness
+  coherent, doc lint / philosophy guard / release version-sync clean, and two deterministic builds
+  byte-identical (errors.md moved the content hash `1e0a7cf6de49 → sha256:eb4a22be2dfa`; the second build is a
+  no-op), `git diff --check` clean. The plugin version stays `0.6.0`. No live agent-data, model, scheduler,
+  network, or billable effect occurred and no branch or worktree changed. **The branch is at its best verified
+  deterministic state; the intentionally deferred T9.3 (behavioral) / T9.4 (live) / T9.5 (0.7.0 release)
+  endgame awaits the user's go.**
 
 ## Decision log
 
@@ -1961,6 +1996,13 @@ AAS-DIST-03/05/06.
   absent/session-only/unverified schedule has no expected fires to miss — so the flat eight-state precedence
   still yields exactly one state. Derive the next expected fire in the configured timezone (stdlib zoneinfo),
   never by adding a fixed 24h in UTC, so a daily fire across a DST transition is not spuriously flagged missed.
+- 2026-07-19 — Defer wiring the local-metrics writes (metrics.json setup-record creation +
+  onboarding_started_at / agent_data_ready_at / schedule_verified_at) rather than adding them in the
+  whole-branch fix-wave: the subsystem is contract-specified but has no shipped consumer, breaks no flow, and
+  fails no gate, so it is recorded as tech-debt (TODO-METRICS-WIRING) with the wiring left as a scoped follow-up
+  that must land before T9.4's time-to-help live measurement. The whole-branch review also confirmed the
+  sample-digest "N jobs vs fewer role-bands" is correct alias-collapse (rows vs roles), not an arithmetic error
+  to fix.
 
 ## Self-review
 
