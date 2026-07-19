@@ -336,3 +336,34 @@ interpreted in comparable-history calculations.
 **Linked tests:** [`tests/test_fake_agent_data.py`](../../tests/test_fake_agent_data.py) attempt-accounting
 cases and [`job-search-run` evals](../../skills/job-search-run/evals/evals.json) cases 1, 6, 30, 31, and 38
 pin current metering, quota, retry, and comparable-history effects.
+
+## Local metrics wiring (2026-07-19 whole-branch review)
+
+### P2 — metrics.json is contract-specified but no shipped surface writes it (`TODO-METRICS-WIRING`)
+**What:** Wire the `{workspace}/metrics.json` writes the local-metrics contract in
+[`../../shared/references/run-lifecycle.md`](../../shared/references/run-lifecycle.md) (§ Local metrics)
+already specifies: the **front door** must create the per-attempt `setups[]` record and write
+`onboarding_started_at` + `agent_data_ready_at`, and **schedule setup** must write `schedule_verified_at`
+after its green canary. The runner's four milestone writes (`first_live_call_at`,
+`first_relevant_match_ready_at`, `early_results_shown_at`, `run_completed_at`) already have guarded prose,
+but they target a file the front door never creates.
+**Why:** T1.3 landed the metrics contract as prose only, and T5.1 rewrote onboarding without a metric-write
+step, so no shipped skill/script/template ever creates `metrics.json` or appends a setup record — a `grep`
+across `skills/**` and `shared/scripts/**` finds the timestamp keys only in eval *expectations*, never in a
+SKILL.md, reference, template, or mechanic that performs the write.
+**Impact:** `metrics.json` is never created, so the runner's own guarded writes no-op against an absent file
+and all three derived durations — `time_to_help`, `first_match_review_latency`, `total_run_time` — are
+permanently reported "unavailable" (their absent-endpoint contract). Non-blocking: it breaks no flow and
+fails no gate (the durations degrade to "unavailable" exactly as specified), but release **time-to-help
+evidence — relevant to T9.4 — cannot be measured** until the front-door and schedule-setup writes are wired.
+**How to apply:** Add the front-door create-attempt + `onboarding_started_at`/`agent_data_ready_at` writes
+and the schedule-setup `schedule_verified_at` write per the owner table and write rules in
+[`../../shared/references/run-lifecycle.md`](../../shared/references/run-lifecycle.md) (§ Local metrics —
+atomic whole-file, write-once, append-new-setup-record, never overwrite history). Classify this as **the
+priority to wire before the live / T9.4 measurement lane**, distinct from and ahead of the pre-existing P3
+credential/backoff debt above. Do **not** wire it as part of this review — this entry is the conscious
+deferral; the wiring is a separate follow-up decision.
+**Linked tests:** none yet (there is no shipped writer to exercise). The runner-side milestone timestamps
+are described by [`job-search-run` evals](../../skills/job-search-run/evals/evals.json) and the activation
+view by [`job-search` evals](../../skills/job-search/evals/evals.json); add front-door and schedule-setup
+metric-write coverage when the writes land.

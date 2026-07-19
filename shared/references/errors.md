@@ -155,20 +155,22 @@ guarantee.
 
 A temporary failure recovers on a later run, so its **next-step / retry clause** must say HOW that retry
 happens — and that depends on the schedule's derived health
-([internals.md](internals.md#schedule-health)), never an unchecked assumption that a schedule exists. It
+([internals.md](internals.md#schedule-health)), never an unchecked assumption that a schedule exists or is
+firing as expected. It
 applies to the recovering errors — **E-SERVICE-DOWN**, **E-UPSTREAM-STRETCH**, **E-PAGINATION-INCOMPLETE** —
 and to any home/chat rendering of a recovering blocked run.
 
 | Derived schedule state | Retry clause the user sees |
 |---|---|
 | **verified schedule** (`verified_running`) | name WHEN the next verified run retries — "the next scheduled run (\<cadence/time\>) will retry automatically." |
+| **verified but not firing as expected** (`latest_run_blocked` · `needs_attention` · `not_recently_observed`) | do **not** promise an automatic next-run retry — the schedule is verified but is **not currently firing as expected**; name that plainly and point to the schedule-health repair path ([internals.md](internals.md#schedule-health)), e.g. "your schedule is verified but hasn't been firing as expected lately, so I can't promise the next run will retry on its own — check your schedule's health (say 'check my schedule') or run a search now to retry now." |
 | **no schedule** (`absent`) | offer a **manual** retry, never a scheduled one — "no schedule is set, so run a search again whenever you like (say 'run a search now') and the next run will retry." |
 | **unverified / session-only / drifted** (`unverified` · `session_only` · `registration_drift`) | say it **cannot be relied on** to retry on its own, then give the **exact repair path** — "your schedule isn't verified, so it can't be relied on to retry this automatically; say 'set up a schedule' to verify it (or 'run a search now' to retry now)." |
 
 The reader that holds the derived state selects the branch: the **home** view and interactive **chat** derive
 Schedule health live; a headless **digest** renders the branch for the schedule state observed at run time.
-**Never promise an automatic scheduled retry when no verified schedule exists** — that is the failure this
-clause prevents. **E-QUOTA** is not a temporary retry case: access must be restored first (its billing
+**Never promise an automatic scheduled retry when no verified schedule exists, or when a verified schedule
+is not currently firing as expected** — that is the failure this clause prevents. **E-QUOTA** is not a temporary retry case: access must be restored first (its billing
 recovery stands), so it takes no schedule-state retry clause.
 
 ## E-BAD-CONFIG value rendering and preflight

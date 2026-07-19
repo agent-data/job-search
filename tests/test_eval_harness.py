@@ -352,6 +352,47 @@ def test_check_artifacts_rejects_malformed_schema(tmp_path):
 
 
 # ---------------------------------------------------------------------------
+# T6.1 fail-closed coverage: the paths a false green would hide. A required pattern that is ABSENT,
+# a malformed line in a jsonl sequence target, and an unparseable JSON target must each produce a
+# HIT — never a silent pass. These pin the current (correct) behavior so a regression can't loosen it.
+# ---------------------------------------------------------------------------
+def test_check_artifacts_text_matches_absent_pattern_fails_closed(tmp_path):
+    # A user-declared REQUIRED pattern that is absent must fail (a hit), not pass by omission.
+    ws, _ = _artifacts_workspace(tmp_path)
+    evidence = {"workspace": str(ws), "assertions": [
+        {"kind": "text_matches", "path": "config.yaml",
+         "pattern": r'detail_model:\s*"never-configured-this-exact-model"'}]}
+    hits = eh.check_artifacts(evidence)
+    assert len(hits) == 1 and "text_matches" in hits[0] and "config.yaml" in hits[0]
+
+
+def test_check_artifacts_jsonl_malformed_line_fails_closed(tmp_path):
+    # A malformed JSONL line in a jsonl_event_sequence target fails closed — the sequence would
+    # otherwise match, so the malformed line (not an ordering miss) is what must trip the hit.
+    ws, run_id = _artifacts_workspace(tmp_path)
+    (ws / "runs" / f".lifecycle-{run_id}.jsonl").write_text(
+        '{"event": "run_started", "phase": "preflight"}\n'
+        "{not valid json here\n"
+        '{"event": "run_closed", "phase": "finalizing"}\n', encoding="utf-8")
+    evidence = {"workspace": str(ws), "assertions": [
+        {"kind": "jsonl_event_sequence", "path": f"runs/.lifecycle-{run_id}.jsonl",
+         "field": "phase", "sequence": ["preflight", "finalizing"]}]}
+    hits = eh.check_artifacts(evidence)
+    assert len(hits) == 1 and "malformed" in hits[0]
+
+
+def test_check_artifacts_invalid_json_target_fails_closed(tmp_path):
+    # A json_field_equals target that is not valid JSON fails closed (a hit), never a silent pass.
+    ws, run_id = _artifacts_workspace(tmp_path)
+    (ws / "runs" / f"{run_id}.json").write_text("{not: valid json,", encoding="utf-8")
+    evidence = {"workspace": str(ws), "assertions": [
+        {"kind": "json_field_equals", "path": f"runs/{run_id}.json",
+         "field": "run_health", "equals": "healthy"}]}
+    hits = eh.check_artifacts(evidence)
+    assert len(hits) == 1 and "not valid JSON" in hits[0]
+
+
+# ---------------------------------------------------------------------------
 # T7.2: surface enforcement — belief 4's internal/user separation is checkable.
 # A user-facing artifact (chat/digest/home/notification) must never carry a raw
 # E-* code; the internal record must retain it. The `surface` flag makes the

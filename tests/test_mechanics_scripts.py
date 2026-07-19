@@ -1458,6 +1458,12 @@ SUPPORT_BAIT = [
     "PRIMARYMODELBAIT_exact_model_id",             # primary_model neighbor in the scheduling object
 ]
 
+# The most PII-sensitive field of all — the absolute workspace path — lives as a flat `workspace` key
+# INSIDE the scheduling object in the real registry schema (internals.md). It is NOT one of the four
+# scheduling fields support-summary.sh reads (installed/verified/mechanism/cadence), so it must never
+# reach the summary. Seeded where it actually lives and asserted absent below.
+SUPPORT_WORKSPACE_PATH_BAIT = "/Users/pii-sentinel/PRIVATE-WORKSPACEPATHBAIT"
+
 
 def run_support(workspace, registry, harness="Claude Code", version="2.1.7", shell="sh"):
     """Run support-summary.sh through a POSIX shell; the whitelist-only summary is on stdout."""
@@ -1535,7 +1541,8 @@ def _write_support_fixture(tmp_path):
         '  "scheduling": {\n'
         '    "installed": true, "verified": true,\n'
         '    "mechanism": "launchd", "cadence": "daily",\n'
-        '    "scheduler_id": "SCHEDIDBAIT_com_example_jobsearch",\n'
+        '    "workspace": "%s",\n' % SUPPORT_WORKSPACE_PATH_BAIT
+        + '    "scheduler_id": "SCHEDIDBAIT_com_example_jobsearch",\n'
         '    "primary_model": "PRIMARYMODELBAIT_exact_model_id",\n'
         '    "canary_run_id": "%s"\n' % SUPPORT_RUN_ID
         + "  }\n"
@@ -1582,6 +1589,9 @@ def test_support_summary_is_whitelist_only_under_posix_shells(tmp_path, shell):
     # --- none of the forbidden values leaked ---
     for bait in SUPPORT_BAIT:
         assert bait not in out, "LEAKED forbidden value %r under %s" % (bait, shell)
+    # The flat scheduling `workspace` absolute path — the most PII-sensitive field, and the one the real
+    # registry schema keeps in the scheduling object — is read for none of the whitelist fields.
+    assert SUPPORT_WORKSPACE_PATH_BAIT not in out, "LEAKED workspace path"
 
 
 def test_support_summary_selects_the_newest_run_record_only(tmp_path):
