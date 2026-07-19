@@ -1,142 +1,140 @@
 # Job Search
 
-Turn your coding agent into an automated job-search assistant. Tell it what you want in plain English — it pulls fresh postings from LinkedIn, Ashby, Greenhouse, and Lever, judges each one against your preferences, and writes a filtered digest of the matches. On demand, or on a schedule.
+Turn your coding agent into a job-search assistant. Describe what you want in plain English. Job Search finds postings from LinkedIn, Ashby, Greenhouse, and Lever, judges each role against your preferences, and writes a filtered digest. Run it on demand or on a schedule.
 
-<img width="3182" height="2160" alt="job-search-demo-screenshot" src="https://github.com/user-attachments/assets/a3c45a7e-6a93-4afa-86f0-f522c8f8d53c" />
-
-**Private by default.** Your preferences, the postings you've seen, run logs, and every digest live in a private workspace on your own machine — `~/.job-search/` — that ships with a deny-all `.gitignore`, so none of it is ever committed to a repository or uploaded anywhere. No cloud, no hosted dashboard, no service holding your search history. Your machine, your data.
-
-Instead of keyword alerts, you get judgment: each posting is weighed against a plain-English brief of your must-haves, dealbreakers, and preferences, and every shown match carries a one-line reason so you can see why it landed where it did.
+Your preferences, reviewed postings, run logs, and digests stay in `~/.job-search/` by default. The workspace starts with a deny-all `.gitignore`, which keeps those files out of ordinary Git commits. See [Security & Privacy](docs/SECURITY.md) for the threat model and limits.
 
 ## Quickstart
 
-1. **Install the plugin** for your coding agent — see [Installation](#installation) (one-time, per agent).
-2. **Just say what you're after.** In your agent, type:
+1. [Install Job Search](#installation) for your coding agent.
+2. Start a conversation with:
 
    > **Set up my job search. I'm looking for** a senior product-design role, remote in the US, at a mission-driven company.
 
-That's the whole golden path. The agent takes it from there: it checks a couple of prerequisites, creates your private workspace, learns what you want, saves your first searches, and pulls live postings — ending on real matches, usually within about five minutes.
+The agent checks its prerequisites, creates `~/.job-search/`, turns your description into an initial preference brief, and searches live postings. If useful roles are available, it shows the first fully reviewed matches while it continues through the rest.
 
-You **don't** need a preferences document to begin. If you have relevant material — a resume, a cover letter, or notes from past applications — share it and the agent will draw on it as background; if you don't, a sentence or two about what you want is enough to start.
+**Checkpoint:** setup worked when the agent summarizes what it understood and either shows a reviewed match or explains why the search returned none. It then writes the complete digest to your local workspace.
 
-> Prefer to drive with commands? `/job-search` kicks off the same onboarding. Slash commands are deterministic shortcuts and fallbacks — never a separate track from the conversation.
+A sentence or two is enough to begin. You can also share relevant material, such as a resume, cover letter, or notes from previous applications. Refine the search after you see the first results.
 
-## Before your first search: agent-data
+<img width="3182" height="2160" alt="Job Search digest showing reviewed matches in an agent conversation" src="https://github.com/user-attachments/assets/a3c45a7e-6a93-4afa-86f0-f522c8f8d53c" />
 
-Job Search reads live postings through the [agent-data](https://agent-data.motie.dev) marketplace CLI, so that's the one prerequisite. You don't set it up by hand — during onboarding the agent handles it and recovers if something's missing:
+## Before the first search: agent-data
 
-- **Install.** If the CLI isn't on your `PATH`, the agent installs it for you (`npm install -g agent-data`). If your permissions block a global install, that's a one-line handoff, not a dead end: the agent gives you the exact command to run yourself (`! npm install -g agent-data`) and continues once it lands.
-- **Authenticate.** The agent walks you through generating an API key, connects with `agent-data init --api-key <KEY> -y`, and confirms it with `agent-data whoami`. Your key is only asked for at this step, and it's stored by agent-data's own CLI — never in this repo.
+Job Search gets live postings through the [agent-data](https://agent-data.motie.dev) command-line tool. Onboarding handles the setup:
 
-**Agent-data offers a 100-call monthly free tier** — enough to get started with your first searches. A first search starts with a handful of calls; reading promising postings in full may add a few detail calls. Job Search previews any added work before it runs and reports the actual calls after every run — calls first, never a hidden charge. Current pricing and metering are single-sourced in [`shared/references/agent-data-contract.md`](shared/references/agent-data-contract.md) and your [account billing page](https://agent-data.motie.dev/settings/billing).
+1. If the CLI is missing, the agent offers to install it with `npm install -g agent-data`. If a global install needs different permissions, it gives you the exact command to run.
+2. If authentication is missing, the agent helps you create an API key, runs `agent-data init --api-key <KEY> -y`, and verifies it with `agent-data whoami`. The agent-data CLI stores the key in its own config, outside this repository.
+
+Agent-data offers a 100-call monthly free tier; the example below uses 9 metered calls. Before a choice increases expected usage, Job Search previews the change. After each run, it reports actual attempts. Any dollar amount is labeled as a pay-as-you-go equivalent, not an account charge. See the [agent-data contract](shared/references/agent-data-contract.md) or your [billing page](https://agent-data.motie.dev/settings/billing) for current details.
 
 ## What a run looks like
-
-In a live run, the agent shows a **strong early look** the moment a few fully-judged matches are ready — then keeps going on its own, no second confirmation, and finishes with the full digest:
 
 ```text
 You: Run a search now.
 
-Job Search: Searching LinkedIn and Ashby for "senior product designer"…
-Found 42 postings — 10 are new. Reading the promising ones in full…
+Job Search: Searching LinkedIn and Ashby for "senior product designer"...
+Found 42 postings. 9 are new. Reading the promising ones in full...
 
 Here are the first strong matches while I keep reviewing the rest:
 
 • Senior Product Designer — Tidewater Health — Remote (US)
   Owns a care-navigation area end to end; the healthcare mission you're after.
 
-…still reading the remaining postings…
+...still reviewing the remaining postings...
 
 Job search digest — 2026-06-05
-10 new postings (7 LinkedIn · 3 Ashby) · 2 strong · 2 moderate · 2 weak · 3 filtered out
+9 new postings (6 LinkedIn · 3 Ashby) · 2 strong · 2 moderate · 2 weak · 3 filtered out
 Agent-data usage: 9 metered calls this run · about $0.072 pay-as-you-go equivalent
 ```
 
-The early look is a first look, not the finished list — the agent continues automatically and the digest is the whole picture. See a complete example in [`examples/sample-digest.md`](examples/sample-digest.md).
+See the [complete sample digest](examples/sample-digest.md).
 
 ## What you can ask
 
-Everything is conversational — you say it in plain English, and the agent does it. A few of the things you can ask:
-
-| You want to… | Say something like |
+| Goal | Example |
 |---|---|
-| **Set up / start** | "Set up my job search. I'm looking for a staff backend role in Europe." |
-| **Refine what you want** | "Add remote-US as a must-have," or "make my preferences more thorough." |
-| **Run now** | "Run a search now," or "check for new jobs." |
-| **Schedule it** | "Run my search every morning." The agent proposes an unattended schedule on your machine, shows you the exact change first, and records it only after a **canary run proves it actually works** — it never claims a search is scheduled until that's verified. |
-| **Explain usage** | "Explain my agent-data usage." |
-| **Understand a match** | "Why is this a strong match?" — or paste a posting: "Does this job fit what I want?" |
-| **Pause / stop** | "Pause my schedule," or "stop scheduling." |
+| Start | “Set up my job search. I'm looking for a staff backend role in Europe.” |
+| Refine preferences | “Make remote US a must-have,” or “also include fintech roles.” |
+| Search now | “Run a search now,” or “check for new jobs.” |
+| Schedule searches | “Run my search every morning.” The agent shows the local change, asks for approval, tests the real scheduled path, and only then marks it active. The default runs without an open agent session. |
+| Explain usage | “Explain my agent-data usage.” |
+| Review a match | “Why is this a strong match?” or “Does this posting fit what I want?” |
+| Pause or stop | “Pause my schedule,” or “stop scheduling.” |
 
-The home view (`/job-search`) and the other skills are there as shortcuts; the sentence is the interface.
+Natural language is the main interface. Commands such as `/job-search` and `$job-search` are shortcuts when your agent supports them.
 
 ## Support matrix
 
-Job Search runs on eight agent harnesses from one shared skill tree. **No live end-to-end coverage has been recorded yet** — the live support matrix is tracked as a separate task (T9.4) and has not been run. Every row below is **structural** (its manifest parses and the skills resolve their shared references in place) and **expected-to-work** from today's contracts; treat the model and live columns as *pending verification*, not as proven live results.
+Automated checks confirmed the plugin package and its internal file links on 2026-07-17. Live end-to-end runs have not yet been recorded, so the table below shows structural coverage rather than behavioral test results.
 
-_Verified (structural / expected-to-work): 2026-07-17._
+<details>
+<summary>Compatibility details</summary>
 
-| Harness | Version | OS / arch | Scheduler | Modes | Models (primary / detail) | Status |
-|---|---|---|---|---|---|---|
-| Claude Code | ≥ 2.1.x | macOS, Linux (arm64, x86_64) | unattended `cron`/`launchd`; in-session `/loop` fallback | interactive + headless | session-inherited / exact `search.detail_model` (host-resolved at setup) | structural · expected-to-work |
-| Codex | current | macOS, Linux (arm64, x86_64) | unattended `cron`/`launchd`; in-session loop fallback | interactive + headless | session-inherited / host-resolved exact model | structural · expected-to-work |
-| Cursor | current | macOS, Linux (arm64, x86_64) | unattended `cron`/`launchd`; in-session loop fallback | interactive + headless | session-inherited / host-resolved exact model | structural · expected-to-work |
-| opencode | current | macOS, Linux (arm64, x86_64) | unattended `cron`/`launchd`; in-session loop fallback | interactive + headless | session-inherited / host-resolved exact model | structural · expected-to-work |
-| Gemini CLI | current | macOS, Linux (arm64, x86_64) | unattended `cron`/`launchd`; in-session loop fallback | interactive + headless | session-inherited / host-resolved exact model | structural · expected-to-work |
-| GitHub Copilot CLI | current | macOS, Linux (arm64, x86_64) | unattended `cron`/`launchd`; in-session loop fallback | interactive + headless | session-inherited / host-resolved exact model | structural · expected-to-work |
-| Factory Droid | current | macOS, Linux (arm64, x86_64) | unattended `cron`/`launchd`; in-session loop fallback | interactive + headless | session-inherited / host-resolved exact model | structural · expected-to-work |
-| Pi | current | macOS, Linux (arm64, x86_64) | unattended `cron`/`launchd`; in-session loop fallback | interactive + headless | session-inherited / host-resolved exact model | structural · expected-to-work |
+These expectations apply to every listed agent:
 
-Notes, honestly:
-- **Models.** No model selector is exposed to set the *primary* model (a known harness limitation), so the primary is the model the session already runs on; the *detail-read* model is the exact `search.detail_model` the agent picks at setup (the least-powerful model on the host that can judge fit well, host-resolved). The specific tested model IDs per host are what the live matrix (T9.4) will record; they are not pinned here.
-- **Scheduler.** The advocated default is an *unattended* machine schedule that fires with no session open, gated on your explicit consent and recorded only after a config-time canary passes; the in-session loop is the named fallback. Cloud schedulers do not qualify (they can't see your local workspace or auth). See [`docs/SECURITY.md`](docs/SECURITY.md) and [`ARCHITECTURE.md`](ARCHITECTURE.md).
-- **Live vs. structural.** A green structural gate is not a passed behavioral run. Live verification per host is the deferred T9.4 lane.
+| Field | Expected support |
+|---|---|
+| OS / architecture | macOS and Linux; arm64 and x86_64 |
+| Recurring scheduler | `cron` or `launchd`, with a session loop fallback |
+| Modes | interactive and background (headless) |
+| Tested primary / detail model IDs | not recorded / not recorded |
 
-**Hit a snag?** Ask the agent for a support summary and it writes a local, whitelist-only diagnostic — build stamp, harness and version, OS and architecture, schedule state, and the latest run's health, internal error code, agent-data call count, and request IDs. It deliberately leaves out your preferences, the postings, match details, API keys, auth headers, and cursors. The agent shows you the whole file first; nothing is uploaded automatically. Review it, then attach it yourself to a new issue at [github.com/agent-data/job-search/issues](https://github.com/agent-data/job-search/issues) if you want to share it.
+| Agent | Version record | Structural check | Live run |
+|---|---|---|---|
+| Claude Code | ≥ 2.1.x | verified | not recorded |
+| Codex | not recorded | verified | not recorded |
+| Cursor | not recorded | verified | not recorded |
+| opencode | not recorded | verified | not recorded |
+| Gemini CLI | not recorded | verified | not recorded |
+| GitHub Copilot CLI | not recorded | verified | not recorded |
+| Factory Droid | not recorded | verified | not recorded |
+| Pi | not recorded | verified | not recorded |
+
+The primary model inherits the session that creates the job. Setup records an exact detail-review model, and scheduled runs reuse it. A recurring schedule is recorded only after the agent tests the actual invocation and confirms that it can reach agent-data and write the workspace.
+
+</details>
+
+If something fails, ask the agent to “create a support summary.” It shows you a local diagnostic containing system and run-health metadata, without preferences, posting content, match details, credentials, cursors, or environment dumps. Nothing is uploaded automatically. You can review the file and attach it to a [GitHub issue](https://github.com/agent-data/job-search/issues).
 
 ## Installation
 
-Installation differs by harness. If you use more than one, install Job Search separately for each. After installing, start with the natural-language golden path above (or the `/job-search` shortcut).
+Choose your coding agent below. After installation, use the [Quickstart](#quickstart) sentence. Installation succeeded when Job Search opens onboarding and begins the agent-data check.
 
 ### Claude Code
 
-Register the marketplace, then install:
+Run these commands inside Claude Code:
 
-```
+```text
 /plugin marketplace add agent-data/job-search
 /plugin install job-search@agent-data
 ```
 
-Then run `/job-search` — or just say "set up my job search" — to start.
+Use `/job-search` if you need the command shortcut.
 
 ### Codex
 
-Register the marketplace, install the plugin, and launch Codex:
+Run in your shell, then launch or restart Codex:
 
 ```bash
-# Run in the normal shell
 codex plugin marketplace add agent-data/job-search
 codex plugin add job-search@agent-data
-
-# Then launch or restart Codex
 codex
 ```
 
-Then run `$job-search` to start.
+Use `$job-search` if you need the skill shortcut.
 
 ### Cursor
 
-Clone the repo and open it in Cursor — it loads the bundled skills from the repo's `.cursor-plugin/` manifest:
+Clone the repository, then open the cloned folder in Cursor. Cursor loads the bundled skills from `.cursor-plugin/`.
 
 ```bash
 git clone https://github.com/agent-data/job-search
 ```
 
-Then tell Cursor to run the **job-search** skill.
-
 ### opencode
 
-Add Job Search to the `plugin` array in your `opencode.json` (global or project-level):
+Add the plugin to the `plugin` array in your global or project-level `opencode.json`, then restart opencode:
 
 ```json
 {
@@ -144,68 +142,40 @@ Add Job Search to the `plugin` array in your `opencode.json` (global or project-
 }
 ```
 
-Restart opencode — it installs the plugin and registers the skills. Details and troubleshooting: [`.opencode/INSTALL.md`](.opencode/INSTALL.md). (Or run from a local clone: `cd /path/to/job-search && opencode`.)
-
-Then tell opencode to run the **job-search** skill.
+See [`.opencode/INSTALL.md`](.opencode/INSTALL.md) for local development and troubleshooting.
 
 ### Gemini CLI
-
-Install the extension straight from git:
 
 ```bash
 gemini extensions install https://github.com/agent-data/job-search
 ```
 
-Then tell Gemini to run the **job-search** skill.
-
 ### GitHub Copilot CLI
-
-Register the marketplace, then install:
 
 ```bash
 copilot plugin marketplace add agent-data/job-search
 copilot plugin install job-search@agent-data
 ```
 
-Then tell Copilot to run the **job-search** skill.
-
 ### Factory Droid
-
-Register the marketplace, then install:
 
 ```bash
 droid plugin marketplace add https://github.com/agent-data/job-search
 droid plugin install job-search@agent-data
 ```
 
-Then tell Droid to run the **job-search** skill.
-
 ### Pi
-
-Install from git:
 
 ```bash
 pi install git:github.com/agent-data/job-search
 ```
 
-For an editable/development install, point Pi at a local clone: `pi -e /path/to/job-search`.
+For an editable local install, run `pi -e /path/to/job-search`.
 
-Then tell Pi to run the **job-search** skill.
+## For contributors
 
-## What's inside
-
-Five skills make up the plugin — you mostly touch the first one:
-
-- **job-search** — the front door: onboarding, status, and your home view.
-- **job-preference-interview** — builds your plain-English preferences brief.
-- **job-search-run** — one headless search pass; this is what a schedule runs.
-- **evaluate-job-fit** — judges a single posting you paste in.
-- **job-search-agent** — the operator manual the agent reaches for to configure, extend, or troubleshoot the system.
-
-## Contributing
-
-Building on or exploring the repo with an AI agent? Start at [AGENTS.md](AGENTS.md) — the map of the architecture, design beliefs, and plans, including how one `skills/` tree runs across every supported agent, and the single-source-of-truth runtime contracts under [`shared/references/`](shared/references/). See [ARCHITECTURE.md](ARCHITECTURE.md) for the structural map, [CONTRIBUTING.md](CONTRIBUTING.md) for the dev workflow, and [TESTING.md](TESTING.md) for the test harness.
+Start with [AGENTS.md](AGENTS.md). It points to the [architecture](ARCHITECTURE.md), [contributor workflow](CONTRIBUTING.md), [test guide](TESTING.md), and canonical runtime contracts in [`shared/references/`](shared/references/).
 
 ## License
 
-MIT — see [`LICENSE`](LICENSE).
+[MIT](LICENSE)
