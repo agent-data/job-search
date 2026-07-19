@@ -167,8 +167,8 @@ date +%s > "$JSOS_TEST/.tthw_start"    # run this the moment you send the first 
 - Creates `$JSOS_TEST/.job-search/` with `config.yaml`, a prose `preferences.md`, empty `jobs.jsonl`,
   deny-all `.gitignore`, `runs/`, `reports/`.
 - Writes the registry at `$JSOS_TEST/registry.json` → `active_workspace` = that workspace.
-- Runs a **live** sample search and shows **real, current** postings judged relevant/weak/moderate/strong with
-  reasoning — "found seconds ago." **No numeric scores, budget config, or invented actual charge;** an accurate
+- Runs a **live** sample search and shows real postings judged relevant/weak/moderate/strong with
+  reasoning. **No numeric scores, budget config, or invented actual charge;** an accurate
   calls-first usage line and clearly labeled equivalent are allowed. (0 results → apply the §0.4
   sparse-data fallback before calling this a ❌.)
 - Prints the `/loop` scheduling recipe and the home view.

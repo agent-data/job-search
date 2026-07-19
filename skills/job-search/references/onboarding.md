@@ -1,7 +1,7 @@
 # Onboarding — the first-run playbook
 
 You routed here because the Discovery procedure (`internals.md`) reported `first_run: true`. Your job: take
-the user from nothing to **real job matches found seconds ago**, in a few minutes, end-to-end. Be warm and
+the user from nothing to **real job matches judged against their brief**, in a few minutes, end-to-end. Be warm and
 brisk — this should feel magical, not like filling out a form.
 
 Follow `../../../shared/references/internals.md`, including its canonical
@@ -307,7 +307,7 @@ Before reading or presenting that record/digest, apply
 `lifecycle-fold.sh` for the candidate's exact run_id, require `closed=true` and matching folded state, and
 use only the digest derived by that fold. Do not present intended-complete files while the ledger is open.
 
-> e.g. "Here are **N jobs matching your brief**, found seconds ago:"
+> e.g. "Here are **N jobs matching your brief**:"
 > then the strong matches (title — company — location — one-line reasoning — link), then
 > moderate. Include any "confirm" warning from the digest. Never collapse this to a title-only list.
 

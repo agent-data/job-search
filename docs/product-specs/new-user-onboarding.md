@@ -2,7 +2,7 @@
 title: New-User Onboarding
 status: current
 verified: partial
-last_reviewed: 2026-06-22
+last_reviewed: 2026-07-19
 code_refs: [skills/job-search/SKILL.md, skills/job-search/references/onboarding.md, shared/references/internals.md]
 ---
 
@@ -12,9 +12,8 @@ code_refs: [skills/job-search/SKILL.md, skills/job-search/references/onboarding.
 
 Within approximately five minutes of installing Job Search, a new user sees real, live job
 postings judged against their own stated preferences — strong, moderate, or weak matches with
-plain-language reasoning — without writing a single file by hand. That first digest, produced
-seconds after the interview ends, is the **magical moment**: the system is no longer abstract; it
-works, and it works on their actual search.
+plain-language reasoning — without writing a single file by hand. Seeing that first digest is the
+**magical moment**: the system is no longer abstract; it works, and it works on their actual search.
 
 The five-minute **time-to-first-value (TTFV)** target matters because setup friction is the
 primary drop-off point for developer tools. Every step in onboarding either directly builds toward
@@ -115,7 +114,7 @@ The skill invokes `job-search-run` against the new workspace (the run loop itsel
 dedup, judge, detail-read, digest — is owned by
 [`skills/job-search/references/onboarding.md`](../../skills/job-search/references/onboarding.md)).
 What the user sees at this step is the payoff: the agent presents strong and moderate matches as
-a discovery — "Here are N jobs matching your brief, found seconds ago."
+a discovery, with each role's title, company, location, plain-language reasoning, and link.
 
 If the run is blocked instead, the user meets a named error in the digest and the home view; how
 that surfacing works is owned by

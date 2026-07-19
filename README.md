@@ -15,7 +15,7 @@ Instead of keyword alerts, you get judgment: each posting is weighed against a p
 
    > **Set up my job search. I'm looking for** a senior product-design role, remote in the US, at a mission-driven company.
 
-That's the whole golden path. The agent takes it from there: it checks a couple of prerequisites, creates your private workspace, learns what you want, saves your first searches, and pulls live postings — ending on real matches found seconds ago, usually within about five minutes.
+That's the whole golden path. The agent takes it from there: it checks a couple of prerequisites, creates your private workspace, learns what you want, saves your first searches, and pulls live postings — ending on real matches, usually within about five minutes.
 
 You **don't** need a preferences document to begin. If you have relevant material — a resume, a cover letter, or notes from past applications — share it and the agent will draw on it as background; if you don't, a sentence or two about what you want is enough to start.
 

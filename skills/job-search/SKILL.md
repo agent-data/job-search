@@ -19,7 +19,7 @@ which is `job-search-agent`'s manual (see the note above).
 
 This skill has two modes and almost no logic of its own — it **routes**, then follows a playbook:
 
-- **First run** → walk the user through onboarding end-to-end, ending with real matches found seconds ago.
+- **First run** → walk the user through onboarding end-to-end, ending with real, relevance-judged matches.
 - **Returning** → show the job-search home (latest digest, new matches, pipeline) with conversational quick
   actions.
 
