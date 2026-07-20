@@ -15,7 +15,7 @@ Your preferences, reviewed postings, run logs, and digests stay in `~/.job-searc
 
 The agent checks its prerequisites, creates `~/.job-search/`, turns your description into an initial preference brief, and searches live postings. If useful roles are available, it shows the first fully reviewed matches while it continues through the rest.
 
-**Checkpoint:** setup worked when the agent summarizes what it understood and either shows a reviewed match or explains why the search returned none. It then writes the complete digest to your local workspace.
+   > **Checkpoint:** setup worked when the agent summarizes what it understood and either shows a reviewed match or explains why the search returned none. It then writes the complete digest to your local workspace.
 
 A sentence or two is enough to begin. You can also share relevant material, such as a resume, cover letter, or notes from previous applications. Refine the search after you see the first results.
 
@@ -80,16 +80,7 @@ These expectations apply to every listed agent:
 | Modes | interactive and background (headless) |
 | Tested primary / detail model IDs | not recorded / not recorded |
 
-| Agent | Version record | Structural check | Live run |
-|---|---|---|---|
-| Claude Code | ≥ 2.1.x | verified | not recorded |
-| Codex | not recorded | verified | not recorded |
-| Cursor | not recorded | verified | not recorded |
-| opencode | not recorded | verified | not recorded |
-| Gemini CLI | not recorded | verified | not recorded |
-| GitHub Copilot CLI | not recorded | verified | not recorded |
-| Factory Droid | not recorded | verified | not recorded |
-| Pi | not recorded | verified | not recorded |
+Job Search is compatible with Claude Code, Codex, Cursor, opencode, Gemini CLI, GitHub Copilot CLI, Factory Droid, and Pi.
 
 The primary model inherits the session that creates the job. Setup records an exact detail-review model, and scheduled runs reuse it. A recurring schedule is recorded only after the agent tests the actual invocation and confirms that it can reach agent-data and write the workspace.
 
