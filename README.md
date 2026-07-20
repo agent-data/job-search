@@ -1,6 +1,8 @@
 # Job Search
 
-Turn your coding agent into a job-search assistant. Describe what you want in plain English. Job Search finds postings from LinkedIn, Ashby, Greenhouse, and Lever, judges each role against your preferences, and writes a filtered digest. Run it on demand or on a schedule.
+Turn your coding agent into a job-search assistant. Describe what you want in plain English. Job Search finds postings from LinkedIn and ATS platforms like Ashby and Greenhouse, judges each role against your preferences, and writes a filtered digest. Run it on demand or on a schedule.
+
+<img width="3182" height="2160" alt="Job Search digest showing reviewed matches in an agent conversation" src="https://github.com/user-attachments/assets/a3c45a7e-6a93-4afa-86f0-f522c8f8d53c" />
 
 Your preferences, reviewed postings, run logs, and digests stay in `~/.job-search/` by default. The workspace starts with a deny-all `.gitignore`, which keeps those files out of ordinary Git commits. See [Security & Privacy](docs/SECURITY.md) for the threat model and limits.
 
@@ -16,8 +18,6 @@ The agent checks its prerequisites, creates `~/.job-search/`, turns your descrip
 **Checkpoint:** setup worked when the agent summarizes what it understood and either shows a reviewed match or explains why the search returned none. It then writes the complete digest to your local workspace.
 
 A sentence or two is enough to begin. You can also share relevant material, such as a resume, cover letter, or notes from previous applications. Refine the search after you see the first results.
-
-<img width="3182" height="2160" alt="Job Search digest showing reviewed matches in an agent conversation" src="https://github.com/user-attachments/assets/a3c45a7e-6a93-4afa-86f0-f522c8f8d53c" />
 
 ## Before the first search: agent-data
 
