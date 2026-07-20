@@ -6,7 +6,7 @@ contracts now live in `shared/references/`).
 
 ## Living
 - [Core Beliefs — Agent-First Operating Principles](core-beliefs.md) — _status: current_
-- [Verify-don't-encode: adapter-free portability, unattended scheduling, and config-time run verification](2026-07-11-verify-dont-encode-design.md) — _status: current_
+- [Cost-aware decisions, explicit models, and canary-verified recurring jobs](2026-07-16-cost-aware-verified-recurring-jobs-design.md) — _status: current_; the approved DX addendum covers quick activation, durable incremental runs, scheduler liveness, migration/repair, and support truth
 
 ## Historical design snapshots
 - [Job Search OS — Original Design Spec](2026-06-05-os-design.md) — _status: historical_
@@ -17,6 +17,7 @@ contracts now live in `shared/references/`).
 - [Multi-Harness Portability — Research Dossier](multi-harness-portability.md) — _status: aspirational_
 
 ## Superseded
+- [Verify-don't-encode: adapter-free portability, unattended scheduling, and config-time run verification](2026-07-11-verify-dont-encode-design.md) — _status: superseded_ (superseded by the [cost-aware recurring-jobs design](2026-07-16-cost-aware-verified-recurring-jobs-design.md), which retains runtime verification while replacing scheduling eligibility, model ownership, and cost-context scope)
 - [Three-Skill Job Search Redesign](2026-07-09-three-skill-redesign.md) — _status: superseded_ (superseded by the later plugin↔guide alignment work, which keeps all five skills)
 - [Codex Portability — What It Takes to Run job-search on OpenAI Codex](codex-portability.md) — _status: superseded_ (superseded by the [Multi-Harness Portability dossier](multi-harness-portability.md), which generalizes it to seven harnesses)
 

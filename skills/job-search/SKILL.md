@@ -1,6 +1,6 @@
 ---
 name: job-search
-description: Set up, check on, and steer the user's job search — the front door and home screen. Use when they want to start or set up a job search, see status, matches, the latest digest, or the pipeline, or change what they're looking for — "set up job search", "start my job search", "I'm looking for a new job", "check my job search", "show me my matches", "what's new in my pipeline", or /job-search. First run onboards end-to-end; afterward it shows the job-search home with quick actions. Not for a fresh headless pull ("check for new jobs" → job-search-run) or for configuring/troubleshooting the agent itself (→ job-search-agent).
+description: Set up, check on, and steer the user's job search — the front door and home screen. Use when they want to start or set up a job search, see status, matches, the latest digest, or the pipeline, or change what they're looking for — "set up job search", "start my job search", "I'm looking for a new job", "check my job search", "show me my matches", "what's new in my pipeline", or /job-search. First run reaches real live matches fast — a one-question sketch, then live postings — with no setup ceremony; afterward it shows the job-search home with quick actions. Not for a fresh headless pull ("check for new jobs" → job-search-run) or for configuring/troubleshooting the agent itself (→ job-search-agent).
 ---
 
 # job-search
@@ -19,7 +19,7 @@ which is `job-search-agent`'s manual (see the note above).
 
 This skill has two modes and almost no logic of its own — it **routes**, then follows a playbook:
 
-- **First run** → walk the user through onboarding end-to-end, ending with real matches found seconds ago.
+- **First run** → walk the user through onboarding end-to-end, ending with real, relevance-judged matches.
 - **Returning** → show the job-search home (latest digest, new matches, pipeline) with conversational quick
   actions.
 
@@ -72,11 +72,20 @@ before the playbook was opened) or the home view.
 - **Never clobber real user data.** When adopting an existing workspace, only additively create what's
   missing — never overwrite a `config.yaml`, `preferences.md`, or `jobs.jsonl`. See the never-clobber rule
   in `../../shared/references/internals.md`.
+- **Route feedback to the right scope.** When the user reacts — to a match, the digest, or what they want
+  overall — apply it immediately at the correct scope and confirm in one line: a clear general preference
+  edits the brief and, if a run is in flight, records a brief revision on it; a posting-specific reaction
+  touches only pipeline state unless the user generalizes it; ambiguous feedback earns one clarification only
+  when the reading changes the result; a retrieval change previews its agent-data impact first. The single
+  routing table is `references/home.md` → **Applying your feedback** — follow it in both modes (it points
+  one hop at the `run-lifecycle.md` revision/settling and `internals.md` usage contracts).
 
 Read and follow exactly: `../../shared/references/internals.md` (OS state, discovery, never-clobber adoption, config
 recipes, and the verbatim scheduling block), `../../shared/references/conventions.md` (workspace layout, `config.yaml`
 schema, `jobs.jsonl` statuses, digest format + counts line), `../../shared/references/errors.md` (every named error),
 `../../shared/references/voice.md` (how every reply talks to the user — plain English, zero-context first-run asks,
 render documents inline), `../../shared/references/update.md` (cached update signal + update banner), and
-`../../shared/references/agent-data-contract.md` (the source contract `job-search-run` honors). These are the source of
+`../../shared/references/agent-data-contract.md` (the source contract `job-search-run` honors), plus
+`../../shared/references/run-lifecycle.md` (invoke `lifecycle-fold.sh` and require `closed=true` for the
+candidate's exact run_id before any record/digest is surfaced or a canary is trusted). These are the source of
 truth; this skill never restates their details from memory.

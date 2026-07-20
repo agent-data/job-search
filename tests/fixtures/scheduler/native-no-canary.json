@@ -1,0 +1,23 @@
+{
+  "scenario": "native-no-canary",
+  "summary": "Harness-native scheduler that runs unattended but exposes no run-now/near-term fire, so it cannot be canary-tested through its registered invocation.",
+  "probe": {
+    "mechanism": "native",
+    "mechanism_token": "harness-native",
+    "unattended": true,
+    "canary_testable": false,
+    "primary_model_preserving": true,
+    "local_access": true,
+    "reversible": true,
+    "session_bound": false
+  },
+  "register_disabled": {
+    "ok": true
+  },
+  "inspect": {
+    "registration": "current"
+  },
+  "fire": {
+    "outcome": "unsupported"
+  }
+}

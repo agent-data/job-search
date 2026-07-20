@@ -11,7 +11,7 @@ maps those surfaces.
 - [The interview](#the-interview--building-and-refining-the-brief) (`/job-preference-interview`)
 - [The digest](#the-digest--primary-output) — the primary output the user reads
 - [Error surfacing as UX](#error-surfacing-as-ux) — how a blocked run reaches the user
-- [The CLI / headless surface](#cli--headless-surface) — the scheduled `/loop` run
+- [The CLI / headless surface](#cli--headless-surface) — the scheduled run
 
 Slash commands in this doc use the **short skill names** as shorthand. The typed form depends on
 the install: plugin installs (the usual case) are namespaced — `/job-search:job-search` — because
@@ -27,7 +27,15 @@ status — by chatting. Skills read `config.yaml` or the relevant file, apply a 
 edit that preserves comments and structure, and write it back. Hand-editing files is an
 escape hatch: it works, but skills never require it or guide users toward it by default.
 
-For the exact config recipes (how to add a query, change frequency, update the brief),
+Review depth uses the same conversational surface. “Review up to 50 new postings this run” is a
+one-off finite request; “review up to 50 every run” is saved; ambiguous “scan everything” defaults
+to one run and says so. Enabling or increasing depth first shows the known calls and uncertain
+additions, then asks for explicit confirmation before a metered run or config write. A confirmed
+saved setting is durable consent for later headless runs; reductions and a return to normal first-
+page coverage take effect immediately.
+
+For the exact config recipes (how to add a query, change frequency, update the brief, or change
+review depth) and the preview arithmetic,
 see [`../shared/references/internals.md`](../shared/references/internals.md).
 
 For the product philosophy behind this (prose-over-knobs, conversational-first),
@@ -58,8 +66,13 @@ sees at a glance:
 - **Latest digest summary** — the date and the counts line from the newest digest.
 - **Pipeline counts** — totals grouped by job status (the status vocabulary is owned by
   [`conventions.md`](../shared/references/conventions.md)) and how many need a human check.
+- **One-time deeper-coverage offer** — only after the latest local run provides the qualifying
+  evidence, and never again after it is shown; the marker and eligibility rules are owned by
+  [`internals.md`](../shared/references/internals.md) and
+  [`home.md`](../skills/job-search/references/home.md).
 - **Quick actions** — conversational prompts: run a search now, add or edit a query,
-  change frequency, update preferences, toggle the schedule, show the latest digest.
+  change frequency or review depth, explain usage, update preferences, toggle the schedule,
+  show the latest digest.
 
 All quick actions are conversational: the user types a sentence; the skill applies it.
 The skill that owns this surface is [`../skills/job-search/SKILL.md`](../skills/job-search/SKILL.md).
@@ -85,9 +98,10 @@ Full spec: [`../skills/job-preference-interview/SKILL.md`](../skills/job-prefere
 
 Each run writes a Markdown digest to `reports/<date>-digest.md`. The digest is the main
 artifact the user reads: it groups postings by match strength, states the run-health,
-includes a counts line, and gives a one-line reason for every shown match so the user can
-audit why it landed in its band. Footnotes cover stale detail links, partial failures, and
-a brief-age nudge when applicable.
+includes a counts line and a calls-first usage summary, and gives a one-line reason for every
+shown match so the user can audit why it landed in its band. Any account-neutral dollar context
+is labeled as a pay-as-you-go equivalent, not an actual charge. Footnotes cover stale detail
+links, incomplete deeper coverage, partial failures, and a brief-age nudge when applicable.
 
 The **exact digest format** (section layout, counts line shape, run-health vocabulary,
 footnote conventions) is owned by
@@ -108,26 +122,31 @@ exit-code trap — is owned by
 from the interface's side, what the user meets is the blocked digest in place of the normal
 match listing and the same blocked state named in the home view on their next `/job-search`.
 
-Every failure is named (e.g. `E-NO-AUTH`, `E-QUOTA`, `E-SERVICE-DOWN`) with a
-cause-and-fix message the user can act on. There are no silent failures.
+Every failure is named internally and reaches the user as a plain, four-part cause · preserved
+work · next step · exact fix message they can act on — never the raw internal code. There are no
+silent failures, and the user never sees a code token. The internal name lives only in the run
+record and the operator manual.
 
-Full error catalog with exact cause+fix wording:
+Full error catalog with exact cause+fix wording, and the internal-vs-user rendering rule:
 [`../shared/references/errors.md`](../shared/references/errors.md).
 
 ---
 
 ## CLI / headless surface
 
-The recurring run is Claude Code's native `/loop` — `/loop <interval> /job-search:job-search-run`
-(plugin installs; loose skills drop the prefix) re-runs the search inside an open Claude
-session (the one-off form is the same target without `/loop`). Users set this up
-conversationally through the `/job-search` home view; nothing is installed on their
-machine (no cron, no launchd).
+The scheduled pass is the headless `job-search-run` — the same search loop, run non-interactively
+by a schedule (the one-off "run a search now" is the same target invoked by hand). Users set
+scheduling up conversationally through the `/job-search` home view. The advocated default is an
+**unattended machine schedule** — a `cron`/`launchd` entry, or the host's own scheduler — that
+fires with no session open; the **in-session loop is the named fallback** when the host has no
+unattended scheduler or the user declines the machine change. Either way the schedule is
+consent-gated (the exact change is shown first and written only on an explicit yes) and is
+recorded as running only after a **config-time canary** proves the real invocation works.
 
-The OS state — the registry, the local jobs file, the schedule marker — is plain files that
-Claude Code reads and writes natively, following the pinned procedures in
-`shared/references/`. None of it is user-facing; users never interact with those files
-directly.
+The OS state — the registry, the local jobs file, the schedule marker — is plain files the host
+agent reads and writes natively, following the pinned procedures in `shared/references/`. None of
+it is user-facing; users never interact with those files directly.
 
-For the full surface and how the scheduling mechanisms work, see
-[`../ARCHITECTURE.md`](../ARCHITECTURE.md).
+For the full surface and how the scheduling mechanisms and canary work, see
+[`../ARCHITECTURE.md`](../ARCHITECTURE.md) and
+[`../shared/references/internals.md`](../shared/references/internals.md) (Scheduling setup).

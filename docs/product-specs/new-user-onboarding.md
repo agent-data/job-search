@@ -2,7 +2,7 @@
 title: New-User Onboarding
 status: current
 verified: partial
-last_reviewed: 2026-06-22
+last_reviewed: 2026-07-19
 code_refs: [skills/job-search/SKILL.md, skills/job-search/references/onboarding.md, shared/references/internals.md]
 ---
 
@@ -12,9 +12,8 @@ code_refs: [skills/job-search/SKILL.md, skills/job-search/references/onboarding.
 
 Within approximately five minutes of installing Job Search, a new user sees real, live job
 postings judged against their own stated preferences — strong, moderate, or weak matches with
-plain-language reasoning — without writing a single file by hand. That first digest, produced
-seconds after the interview ends, is the **magical moment**: the system is no longer abstract; it
-works, and it works on their actual search.
+plain-language reasoning — without writing a single file by hand. Seeing that first digest is the
+**magical moment**: the system is no longer abstract; it works, and it works on their actual search.
 
 The five-minute **time-to-first-value (TTFV)** target matters because setup friction is the
 primary drop-off point for developer tools. Every step in onboarding either directly builds toward
@@ -61,10 +60,10 @@ input (`npm install -g agent-data`, verified with `agent-data --version`). If pe
 the install, that's a one-line handoff, not an error: the agent gives the exact in-session command
 (`! npm install -g agent-data`) and resumes once it lands. Then — and starting here when the CLI was
 present but unauthenticated — the agent walks the user through generating an API key (with explicit
-steps), authenticates using the platform adapter's `agent-data init` line (harness-specific flag +
-`--api-key <KEY> --yes` — see your platform adapter → agent-data setup), and verifies with
-`agent-data whoami` before continuing. The API key is requested only at this connect step, never before
-the install. The canonical setup-doc URL lives in the platform adapter → agent-data setup. The internal codes for
+steps), authenticates with the contract's `agent-data init --api-key <KEY> -y` line (the same on
+every host — see [`shared/references/agent-data-contract.md`](../../shared/references/agent-data-contract.md)
+→ Auth), and verifies with `agent-data whoami` before continuing. The API key is requested only at
+this connect step, never before the install. The internal codes for
 this state (`E-NO-AGENT-DATA`, `E-NO-AUTH`, owned by
 [`shared/references/errors.md`](../../shared/references/errors.md)) are never shown to the user. The
 **headless runner** (`job-search-run`) can't prompt, so it still halts on these with a blocked digest.
@@ -115,7 +114,7 @@ The skill invokes `job-search-run` against the new workspace (the run loop itsel
 dedup, judge, detail-read, digest — is owned by
 [`skills/job-search/references/onboarding.md`](../../skills/job-search/references/onboarding.md)).
 What the user sees at this step is the payoff: the agent presents strong and moderate matches as
-a discovery — "Here are N jobs matching your brief, found seconds ago."
+a discovery, with each role's title, company, location, plain-language reasoning, and link.
 
 If the run is blocked instead, the user meets a named error in the digest and the home view; how
 that surfacing works is owned by
@@ -126,12 +125,15 @@ limits surface, reactively) and `E-SERVICE-DOWN`, both catalogued in
 
 ### 7. Schedule offer
 
-The skill offers to keep the search running automatically on the user's chosen cadence. The user
-answers yes/no; on yes the skill starts the scheduler (using the mechanism in your platform adapter →
-Scheduling — whichever tier applies) and records the scheduling marker in the registry. The
-recurring-run and one-off-run recipes are shown either way, copied verbatim from the platform
-adapter → Run recipe. The scheduling protocol is owned by
-[`shared/references/internals.md`](../../shared/references/internals.md).
+The skill offers to keep the search running automatically on the user's chosen cadence, as a
+yes/no. The advocated default is an **unattended** machine schedule (a `cron`/`launchd` entry or
+the host's own scheduler) that fires with no session open; the **in-session loop is the named
+fallback**. It is consent-gated — the exact machine change is shown first and written only on the
+user's explicit yes — and the scheduling marker is recorded as running **only after a config-time
+canary** proves the real invocation works; a failed canary records nothing and stays honest that it
+is not scheduled. The agent composes the schedule and the run recipe for its own host (there is no
+per-host recipe to look up). The scheduling protocol, eligibility gates, and canary are owned by
+[`shared/references/internals.md`](../../shared/references/internals.md) (Scheduling setup).
 
 ## What the user sees / success criteria
 
@@ -141,7 +143,8 @@ At the end of onboarding all of the following are true:
 - A **persisted workspace** at `~/.job-search/` (or a user-chosen path) contains `config.yaml`,
   `preferences.md`, and `jobs.jsonl` — all created or adopted without hand-editing.
 - An **optional recurring schedule** is running and recorded in the OS registry if the user consented
-  (the scheduling mechanism is harness-specific — see platform adapter → Scheduling).
+  and its config-time canary passed (the agent resolves the mechanism for its own host; see
+  [`shared/references/internals.md`](../../shared/references/internals.md) → Scheduling setup).
 
 On a **returning session**, discovery reports `first_run: false` because
 `config.yaml` exists in the workspace, and the skill routes to the home view (latest digest,
@@ -149,7 +152,8 @@ pipeline, quick actions) instead of restarting onboarding.
 
 ## Edge cases
 
-All failure paths surface a named `E-*` code. Wording and fixes are owned by
+All failure paths are named internally with an `E-*` code and reach the user as a plain cause + fix,
+never the raw code. Wording and fixes are owned by
 [`shared/references/errors.md`](../../shared/references/errors.md); they are not restated here.
 
 - **Missing prerequisites** — `agent-data` missing or unauthenticated. Interactive onboarding

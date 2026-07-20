@@ -1,43 +1,49 @@
 {
   "skill_name": "job-search",
-  "harness": "Each case: run skills/job-search/evals/files/setup-onboarding.sh <tmp> to build a FIRST-RUN sandbox (only a _bin/agent-data shim symlink). Then export PATH=<tmp>/_bin:$PATH, JOBSEARCH_FIXTURES=<repo>/tests/fixtures, JOBSEARCH_TEST_SCENARIO=happy, JOBSEARCH_OS_REGISTRY=<tmp>/registry.json, JOBSEARCH_OS_HOME=<tmp> (so the registry + the default ~/.job-search and legacy ~/job-search workspaces resolve UNDER <tmp> — real ~/.config, ~/.job-search, ~/job-search are never touched; the shim's agent-data calls hit the fake — zero real credits), plus any per-case tweak in the prompt. Invoke the job-search skill; it finds the workspace natively per references/internals.md (the Discovery procedure, honoring JOBSEARCH_OS_REGISTRY/JOBSEARCH_OS_HOME) and then follows references/onboarding.md (first_run:true) or references/home.md (first_run:false). Answer its interview/queries/frequency/scheduling questions with the canned answers in each case's prompt. SCHEDULING IS NATIVE /loop AND IS STUBBED IN EVALS: NEVER run crontab/launchctl or write ~/Library/LaunchAgents, and do NOT start a real /loop — verify scheduling ONLY by inspecting the /loop line the skill composes (it must match the interval table in references/internals.md, with the namespaced /job-search:job-search-run target) and, on a yes, the scheduling block the skill writes into <tmp>/registry.json (installed:true, mechanism:loop). For the sample-run sub-step, ACTUALLY run job-search-run against the temp workspace (its agent-data calls hit the shim; discovery finds the temp workspace) so a real shim-backed digest is produced. Inspect <tmp>/.job-search/ (config.yaml, preferences.md, jobs.jsonl, runs/, reports/<date>-digest.md, .gitignore), <tmp>/registry.json, and the printed home view. Clean up <tmp> (rm -rf) after each case. No numeric scores, no category weights, no credit/dollar math anywhere in any output. HARNESS CAPABILITIES (P7): the onboarding/home cases (1-9) are single-shot STRUCTURAL checks (files + registry written, byte-for-byte adoption, remediation ordering). The DISCOVERY scenario (10) plants this skill among the siblings it names and drives a NAIVE 'help me start a job search' prompt — it passes only if the runner SELECTS must_select and not any must_not_select sibling; because routing is behavioral it is stochastic:true, run `reps` times with pass-RATE + variance recorded (scripts/eval_harness.py aggregate_reps) and a no-guidance control arm (trigger description withheld) so the green result is attributable to the description, not the base model (control_delta). Tier assertions name the portable tier (balanced/fast/high) resolved from the Codex adapter's Model-tiers table (shared/references/platform/codex.md), NEVER a literal model id. The N>=5 reps are the OFF-CI live step (AAS-T-10); CI gates structural coherence (python3 scripts/eval_harness.py --root .).",
+  "harness": "Each case: run skills/job-search/evals/files/setup-onboarding.sh <tmp> to build a FIRST-RUN sandbox (only a _bin/agent-data shim symlink). Then export PATH=<tmp>/_bin:$PATH, JOBSEARCH_FIXTURES=<repo>/tests/fixtures, JOBSEARCH_TEST_SCENARIO=happy, JOBSEARCH_OS_REGISTRY=<tmp>/registry.json, JOBSEARCH_OS_HOME=<tmp> (so the registry + the default ~/.job-search and legacy ~/job-search workspaces resolve UNDER <tmp> — real ~/.config, ~/.job-search, ~/job-search are never touched; the shim's agent-data calls hit the fake — zero real credits), plus any per-case tweak in the prompt. Invoke the job-search skill; it finds the workspace natively per references/internals.md (the Discovery procedure, honoring JOBSEARCH_OS_REGISTRY/JOBSEARCH_OS_HOME) and then follows references/onboarding.md (first_run:true) or references/home.md (first_run:false). Answer its single free-form 'what are you looking for?' sketch question (or use the preferences the prompt already provides) plus the ONE post-results schedule decision (Daily — recommended / Different schedule / Not now — and, only when the answer is Different schedule, the follow-up cadence question) with the canned answers in each case's prompt; first run derives the searches from the brief and does not ask the user to pick keywords, an interview depth, a workspace location, a model, or parallelism before the first live results. SCHEDULING IS NATIVE /loop AND IS STUBBED IN EVALS: NEVER run crontab/launchctl or write ~/Library/LaunchAgents, and do NOT start a real /loop — verify scheduling ONLY by inspecting the /loop line the skill composes (it must match the interval table in references/internals.md, with the namespaced /job-search:job-search-run target) and, on a yes, the scheduling block the skill writes into <tmp>/registry.json (installed:true, mechanism:loop). For the sample-run sub-step, ACTUALLY run job-search-run against the temp workspace (its agent-data calls hit the shim; discovery finds the temp workspace) so a real shim-backed digest is produced. Inspect <tmp>/.job-search/ (config.yaml, preferences.md, jobs.jsonl, runs/, reports/<date>-digest.md, .gitignore), <tmp>/registry.json, the fake call log when requested, and the printed home view. Clean up <tmp> (rm -rf) after each case. Onboarding cases retain no numeric fit score, monetary config control, inferred account state, or invented actual-charge claim. They DO render the brief decision-time context approved for T2.2: the currently verified available free-tier fact before an install and the one-or-two-sentence calls-first context before the first metered search; this intentionally replaces the older harness rule that banned all usage/pricing context during onboarding. Returning-home and explicit usage-help cases may show calls-first usage with a clearly labeled pay-as-you-go equivalent and the billing URL; they still reject numeric fit scores, category weights, budget/credits/cost config fields, inferred balances, and unlabeled actual-charge claims. HARNESS CAPABILITIES (P7): the onboarding/home cases (1-9) and effect-based home cases (11-14) are single-shot STRUCTURAL checks (files + registry written, byte-for-byte adoption, remediation ordering). The DISCOVERY scenario (10) plants this skill among the siblings it names and drives a NAIVE 'help me start a job search' prompt — it passes only if the runner SELECTS must_select and not any must_not_select sibling; because routing is behavioral it is stochastic:true, run `reps` times with pass-RATE + variance recorded (scripts/eval_harness.py aggregate_reps) and a no-guidance control arm (trigger description withheld) so the green result is attributable to the description, not the base model (control_delta). New version-2 onboarding assertions require a real exact live detail-model identifier selected at setup and persisted with its current binding sidecar; portable tier tokens remain only in explicit legacy-version-1 fixtures. The ITERATIVE-FEEDBACK cases (38-44) pre-seed a returning workspace (as in case 4) and drive ONE feedback turn to grade routing per references/home.md -> Applying your feedback: which surface changed (preferences.md via job-preference-interview vs a jobs.jsonl status_changed event vs config.yaml), whether a general-preference edit recorded a brief_revision on an ACTIVE run's open lifecycle ledger (some cases seed an open ledger advanced to reviewing_remaining with already-presented matches and still-queued postings, built with the bundled shared/scripts/mechanics/lifecycle-append.sh; the ledger stays coordinator-written per shared/references/run-lifecycle.md), whether the remaining queue picked up the new revision, whether already-shown jobs were rechecked ONLY when the outcome could change, and whether a retrieval-changing request previewed agent-data impact before any new search or persistent write; they reject numeric fit scores, category weights, and budget/credit math like the other home cases. SCHEDULE HEALTH (P7/T7.1, coverage_kind executable_fixture): the returning home renders the DERIVED schedule-health state in its status line from local evidence only — the registry scheduling marker, the scheduler's own local registration (compared to what the registry recorded), and the latest scheduled-attributable run (trigger scheduled; the registry canary_run_id canary and any manual run EXCLUDED from liveness) — per references/home.md -> Schedule health, which points one hop to shared/references/internals.md -> Schedule health for the 8-state precedence, the 30-minute grace period, and the timezone/DST-aware missed-fire math (the deterministic fixed-clock reference lives in tests/test_schedule_health.py). Seed a fixed reference now plus fixed run-record started_at/run_health/trigger; this health read is LOCAL and UNMETERED (no scheduler fire, no metered agent-data call) and leaves the registry byte-for-byte unchanged. FIXED-TIME + UNIQUE RUN MARKER (T9.1): the home schedule-health scenarios (48, 50, 51) carry a structured fixed_time fixture (checks [\"liveness\"]) pinning that reference now in the eval itself; and each driven run stamps a fresh UNIQUE RUN MARKER into its artifacts (runs/<id>.json, the digest, the lifecycle ledger), recorded in the off-CI artifact-evidence file as run_marker with each run-specific assertion set run_marked:true (scripts/eval_harness.py check_artifacts), so a stale artifact in a reused workspace cannot create a false pass. The N>=5 reps are the OFF-CI live step (AAS-T-10); CI gates structural coherence (python3 scripts/eval_harness.py --root .).",
   "evals": [
     {
       "id": 1,
-      "scenario": "first-run happy",
-      "prompt": "Fresh sandbox (setup-onboarding.sh), env as in harness, JOBSEARCH_TEST_SCENARIO=happy. Invoke the job-search skill (discovery reports first_run:true, source:none). Canned answers — brief depth: 'standard'; interview a few prefs: situation='passively looking'; role='senior AI engineer, individual contributor, NOT management'; location='remote in the US, or SF Bay onsite'. When asked for the search: keywords='AI engineer', location='United States'. Frequency: 'daily'. Scheduling: 'yes'. Complete onboarding end-to-end.",
+      "scenario": "first-run happy — quick golden path",
+      "prompt": "Fresh sandbox (setup-onboarding.sh), env as in harness, JOBSEARCH_TEST_SCENARIO=happy, and export JOBSEARCH_TEST_CALL_LOG=<tmp>/calls.jsonl. The user opens with a bare 'Set up my job search' (no preferences in the invocation), so discovery reports first_run:true, source:none. Canned answer to the single free-form question: 'I'm a senior AI engineer — individual contributor, not management — looking for remote roles in the US, or onsite in the SF Bay Area; I build LLM products.' The agent DERIVES the searches from that sketch (it does NOT ask the user to name keywords); expect it to derive two enabled queries — at least one with keywords 'AI engineer' and location 'United States' — across the two default sources, so the known first-page baseline is four calls. After the first live results, the one schedule decision is answered 'Daily — recommended' (a single closed choice, not a separate scheduling-then-frequency pair). Complete onboarding end-to-end and preserve the user-visible transcript beside calls.jsonl so ordering can be checked.",
       "expectations": [
         "The FIRST user-facing text is the onboarding welcome — reference reads may precede it silently; no prerequisite check, workspace command, or narration appears before it",
         "Checks that agent-data is ready immediately after the welcome — a free probe (`command -v agent-data` + `agent-data whoami`) BEFORE any search-jobs / metered call — leading with why it's checking and never pre-claiming a result it hasn't verified, never showing a raw error code",
+        "Silently resolves the workspace to <tmp>/.job-search — it does NOT ask a workspace-location question (the default is never a setup choice) and never mentions the path except as an escape hatch",
+        "Asks EXACTLY one free-form question, verbatim 'In a sentence or two, what are you looking for? If useful, share or point me to relevant material such as a resume, cover letter, or notes from previous applications.', delivered as inline prose (free-text), NOT the multiple-choice question box",
         "Creates <tmp>/.job-search/ containing config.yaml, preferences.md, an (initially empty) jobs.jsonl, .gitignore (deny-all), and runs/ + reports/ directories",
-        "preferences.md is prose with the five sections (Summary, Must-haves/dealbreakers, Strong preferences, Nice-to-haves, Red flags) and a created_at line; the IC-not-management dealbreaker appears — NO numbers/weights",
+        "Writes a provisional high-signal preferences.md — prose with the five sections (Summary, Must-haves/dealbreakers, Strong preferences, Nice-to-haves, Red flags) and a created_at line; the IC-not-management dealbreaker appears; drafted only from what the user said (no invented preferences) — NO numbers/weights",
         "Writes the registry at <tmp>/registry.json as valid JSON with version 1 and active_workspace = <tmp>/.job-search (absolute path)",
-        "config.yaml has at least one queries[] entry (keywords 'AI engineer', location 'United States', enabled:true) and schedule.frequency: daily; version stays 1; no budget/cost/score field added",
-        "Runs a real sample job-search-run against <tmp>/.job-search and surfaces the Acme 'Senior AI Engineer (Remote US)' as a STRONG match in the digest, framed as found seconds ago",
-        "Records the scheduling marker in <tmp>/registry.json (scheduling now installed:true, mechanism:loop) AND prints the verbatim /loop recipe block (namespaced /job-search:job-search-run target when running as a plugin)",
+        "Derives the searches from the brief (no keyword question) and, before the first live run, config.yaml is a valid version: 2 document with at least one queries[] entry (keywords 'AI engineer', location 'United States', enabled:true), schedule.frequency: daily, and an exact search.detail_model selected from the live host roster; no budget/cost/score field is added",
+        "Before the first live run, <tmp>/.job-search/runs/detail-model-binding.json is atomically written with canonical version, fresh local binding_id, that exact search.detail_model, configured_auto or configured_user origin, and bound_at; the registry is written only after config and sidecar agree",
+        "Shows ONE compact confidence checkpoint — the provisional brief plus the derived search interpretation — before the first live run; it is a look, not a gate (no extra confirmation is requested there)",
+        "Runs a real sample job-search-run against <tmp>/.job-search and surfaces the Acme 'Senior AI Engineer (Remote US)' as a STRONG match in the digest and normal message text with its one-line reasoning",
+        "Before the first metered row in calls.jsonl, gives exactly one or two sentences containing the known four-call baseline, the currently verified available free tier, and the variable detail-read work; with this four-call setup it preserves the approved wording verbatim: 'Agent-data offers a 100-call monthly free tier. This search starts with 4 calls; reading promising postings may add detail calls.' The setup request itself is scoped consent, so it starts the live run WITHOUT a redundant confirmation question",
+        "Records the scheduling marker in <tmp>/registry.json (scheduling now installed:true, mechanism:loop) with the exact creating-session primary_model and primary_model_origin:session_inheritance, and prints the verbatim /loop recipe block (namespaced /job-search:job-search-run target when running as a plugin)",
         "Prints the home view at the end (status line · latest digest · pipeline · quick actions)",
-        "Every setup question carries one short plain-English sentence of context (what the thing is / why it's asked) — e.g. the workspace ask explains it's the private folder holding preferences, searches, and matched jobs; the brief ask explains it's the 'what I want' every posting is judged against",
-        "The four closed choices — workspace location, interview-or-import, scheduling, frequency — each arrive as a 2–4-option multiple-choice question (the question box; numbered prose options acceptable only if the box tool is unavailable in the harness)",
-        "The interview hand-off carries only onboarding context + the workspace write path (no depth or method in args), and the depth choice (quick sketch / standard / thorough) is offered after 'Interview me' is picked",
-        "The brief's \"what I want\" definition is stated once — onboarding's brief ask introduces it, and the interview's depth question does NOT restate the definition (it opens with the depth ask)",
+        "Does NOT ask for the workspace location, an interview depth, parallelism, a model, or a schedule before the first live results; the only closed-choice question about scheduling is ONE decision (Daily — recommended / Different schedule / Not now) arriving AFTER the results as a 2–4-option multiple-choice question (the question box; numbered prose options acceptable only if the box tool is unavailable in the harness); picking Daily needs no separate frequency question",
+        "No interview-or-import fork is offered on first run; onboarding writes the provisional brief itself from the one-sentence sketch. The deeper standard/thorough interview and importing a written brief are mentioned only as later refinements, never a first-run gate",
+        "The brief's \"what I want\" framing is introduced once — by the single sketch question — and is not restated elsewhere in the flow",
         "No internal implementation jargon leaks into any user-facing line — graded on intent: narration reads as user outcomes ('Searching…', 'N are new — reading them in full…'), not system internals; implementation terms (such as 'headless', 'dedup', 'database', 'event log', 'JSONL', 'registry', 'contract references', or skill/reference filenames) do not appear as narration",
-        "After the interview, the finished brief is shown rendered in the reply (not inside a code fence, not just a file path)",
+        "The finished provisional brief is shown rendered in the reply (not inside a code fence, not just a file path)",
         "NO numeric score, NO category weights, NO credit/dollar/budget math anywhere in the output"
       ]
     },
     {
       "id": 2,
-      "scenario": "first-run, import a brief",
-      "prompt": "Fresh sandbox, env as in harness, JOBSEARCH_TEST_SCENARIO=happy. Invoke the job-search skill (first_run:true). When asked interview-or-import, answer 'I have a brief' and paste a short prose brief, e.g.: '# Job Preferences Brief\\n**Summary:** Backend engineer wanting data-intensive systems work, remote-first, sane on-call.\\n## Must-haves / dealbreakers\\n- Backend/platform engineering (not frontend).\\n- Remote within the US.\\n## Strong preferences\\n- Go or Rust; distributed systems.\\n## Nice-to-haves\\n- Open-source culture.\\n## Red flags\\n- Permanent crunch.'. For the search: keywords='backend engineer', location='United States'. Scheduling: 'no' (so the agent never asks frequency — there's no recurring job to set a cadence for). Complete onboarding.",
+      "scenario": "first-run, preferences embedded in the invocation",
+      "prompt": "Fresh sandbox, env as in harness, JOBSEARCH_TEST_SCENARIO=happy. The user's opening request ALREADY states their preferences — invoke the job-search skill (first_run:true) with: 'Set up my job search. I want a backend/platform engineering role (not frontend), remote within the US, working in Go or Rust on distributed systems; open-source culture is a plus and permanent crunch is a dealbreaker.' Because the preferences are present in the invocation, the agent should NOT ask the single free-form question again — it uses what was given. The searches are derived from those preferences (expect a query with keywords 'backend engineer'). After results, Scheduling: 'no' (so the agent never asks frequency — there's no recurring job to set a cadence for). Complete onboarding.",
       "expectations": [
-        "Does NOT run the question-by-question interview (takes the import path)",
-        "preferences.md at <tmp>/.job-search/preferences.md is the pasted prose (its Summary + sections preserved), with a created_at line; no numeric rubric introduced",
-        "Still configures a queries[] entry (keywords 'backend engineer'); schedule.frequency stays at its shipped default (daily) because scheduling was declined and frequency is only asked while setting up the recurring job; version stays 1",
+        "Uses the job preferences already present in the invocation — does NOT re-ask the single free-form 'what are you looking for?' question, and does NOT run a question-by-question interview",
+        "Silently resolves the workspace to <tmp>/.job-search without asking a workspace-location question",
+        "Writes a provisional preferences.md at <tmp>/.job-search/preferences.md capturing the stated preferences (backend/platform not frontend, remote US, Go/Rust distributed systems; permanent crunch as a red flag/dealbreaker) — prose with the five sections and a created_at line; no numeric rubric introduced",
+        "Derives and configures a queries[] entry (keywords 'backend engineer'); config is valid version: 2 with an exact search.detail_model and a matching current runs/detail-model-binding.json; schedule.frequency stays at its shipped default (daily) because scheduling was declined and frequency is only asked while setting up the recurring job",
+        "Shows one compact confidence checkpoint (the provisional brief plus the derived search interpretation) before the first live run",
         "Runs the real sample job-search-run and produces a digest (shim-backed)",
         "Prints the verbatim /loop recipe block (scheduling was declined — the user can start it themselves later)",
         "Does NOT set the scheduling marker (<tmp>/registry.json has no scheduling.installed:true) because the user declined",
         "Writes the registry with active_workspace = <tmp>/.job-search",
-        "After the import, the brief is shown rendered in the reply (not a code fence, not just a path); user-facing lines stay free of internal implementation jargon (graded on intent — no leaked system-internal terms such as 'headless'/'dedup'/'database')",
+        "The provisional brief is shown rendered in the reply (not a code fence, not just a path); user-facing lines stay free of internal implementation jargon (graded on intent — no leaked system-internal terms such as 'headless'/'dedup'/'database')",
         "NO numbers/weights/credit math anywhere"
       ]
     },
@@ -66,7 +72,7 @@
         "Shows the latest digest summary (date 2026-06-05 + its counts line)",
         "Shows pipeline counts folded from jobs.jsonl: 1 new, 1 interested",
         "Offers conversational quick actions (run a search now / add a query / change frequency / update preferences / change schedule / show latest digest)",
-        "NO numeric score, NO weights, NO credit/dollar math"
+        "NO numeric score and NO weights; any usage context is calls-first and labels a pay-as-you-go equivalent rather than claiming an actual charge or balance"
       ]
     },
     {
@@ -79,7 +85,7 @@
         "Renders a compact update banner above the normal home view: Job Search <local version/hash> -> 9.9.9 sha256:999999999999",
         "The banner includes the Claude update recipe exactly: claude plugin marketplace update agent-data, then claude plugin update job-search@agent-data",
         "Still renders the normal home view below the banner: status line, latest digest summary, pipeline, quick actions",
-        "NO numeric score, NO weights, NO credit/dollar math"
+        "NO numeric score and NO weights; any usage context is calls-first and labels a pay-as-you-go equivalent rather than claiming an actual charge or balance"
       ]
     },
     {
@@ -93,7 +99,7 @@
         "config.yaml is NOT overwritten",
         "Only the MISSING runs/ and reports/ directories are additively created",
         "Shows the home view (does NOT start a fresh interview, does NOT re-scaffold a new ~/.job-search)",
-        "NO numbers/weights/credit math"
+        "NO numeric fit score and NO weights; any usage context is calls-first and labels a pay-as-you-go equivalent rather than claiming an actual charge or balance"
       ]
     },
     {
@@ -104,6 +110,7 @@
         "The FIRST user-facing text is the onboarding welcome — reference reads may precede it silently; the probe, the install, and all remediation talk come AFTER it",
         "Does NOT stop and shows NO raw error code — no 'E-NO-AGENT-DATA' / 'E-NO-AUTH' (or any E-*) in any user-facing line; the user learns what agent-data is and why it's needed (a dependency of this plugin that pulls/reads live job postings) exactly ONCE — at the check or when it turns up missing — with NO back-to-back re-definitions (re-explaining it at each step is script-reading, not assistance)",
         "INSTALL COMES FIRST and is never unexplained: by the time `npm install -g agent-data` runs the user knows agent-data is missing and being installed, and the install attempt comes BEFORE any mention of an API key — no key ask, no `mtk_` prefix, no https://agent-data.motie.dev/settings/account URL until after it; setup never blocks on user input before the install",
+        "Immediately before the install attempt, says exactly 'Agent-data offers a 100-call monthly free tier—enough to get started with this search.' after verifying that fact in the canonical dated contract; it does not append an account-plan, balance, allowance, visibility, or 'I cannot see your account' caveat",
         "Verifies the install with `agent-data --version` after the simulated npm install — no pre-claimed install success",
         "Only THEN gives the FULL key-generation steps: names https://agent-data.motie.dev/settings/account, says to sign in or create a free account, click Generate API Key, copy the `mtk_…` key and paste it; asks for the key as plain prose (NOT the question box)",
         "Runs the auth step `agent-data init … --api-key mtk_evaltest --yes` (the platform adapter's init flag — `--claude-code` on the Claude agent; the bare installed binary, NOT an npx one-shot) (simulated), then re-verifies with `agent-data whoami` (api_key_set:true) before continuing; promises no duration, makes no 'ready' claim before that whoami passes, and narrates no non-events ('this needs nothing from you')",
@@ -127,14 +134,14 @@
     {
       "id": 8,
       "scenario": "first-run happy on Codex — approve parallel detail reads",
-      "prompt": "Fresh sandbox (setup-onboarding.sh), env as in harness, JOBSEARCH_TEST_SCENARIO=happy, and run as the Codex platform adapter. Also set CODEX_HOME=<tmp>/.codex so the Codex job-search profile write stays inside the temp sandbox. Invoke the job-search skill (discovery reports first_run:true, source:none). Canned answers — brief depth: 'standard'; situation='passively looking'; role='senior AI engineer, individual contributor, NOT management'; location='remote in the US, or SF Bay onsite'; frequency='daily'. When asked whether to use parallel subagents for detail reads, answer yes. Scheduling: yes. Complete onboarding end-to-end.",
+      "prompt": "Fresh sandbox (setup-onboarding.sh), env as in harness, JOBSEARCH_TEST_SCENARIO=happy, and run as the Codex platform adapter. Also set CODEX_HOME=<tmp>/.codex so the Codex job-search profile write stays inside the temp sandbox. Invoke the job-search skill (discovery reports first_run:true, source:none). Canned answers — brief depth: 'standard'; situation='passively looking'; role='senior AI engineer, individual contributor, NOT management'; location='remote in the US, or SF Bay onsite'. When asked whether to use parallel subagents for detail reads, answer yes. At the one schedule decision after results, answer 'Daily — recommended'. Complete onboarding end-to-end.",
       "expectations": [
-        "After the searches are saved and before the first live sample run, asks a one-time Codex approval question that explicitly says 'subagents' and names the default detail-read model as the `balanced` mid-tier reviewer floor tier resolved from the Codex adapter's Model-tiers table (shared/references/platform/codex.md -> Model tiers), not a hardcoded model id",
-        "On yes, writes search.parallel_detail_reads: true to <tmp>/.job-search/config.yaml, preserves version: 1, and leaves search.detail_model at the mid-tier reviewer floor (balanced) unless the user chose another tier",
+        "After the searches are derived and before the first live sample run, asks a one-time Codex approval question that explicitly says 'subagents' and names the exact live detail model already selected during setup as a fact, not a tier choice",
+        "As part of initial setup finalization, on yes writes search.parallel_detail_reads: true to <tmp>/.job-search/config.yaml, preserves version: 2 and the already-selected exact search.detail_model, and atomically writes the matching current runs/detail-model-binding.json before running",
         "Creates or updates <tmp>/.codex/job-search.config.toml with [features] multi_agent = true and [agents] max_depth = 1; if the sandbox blocks that write, prints the exact path and TOML instead of silently skipping it",
         "Runs the first sample job-search-run against <tmp>/.job-search with the explicit authorization sentence `Use parallel subagents for all detail reads.` in the invocation context",
         "The Codex recurring Automation prompt or shown scheduled-run recipe also includes `Use parallel subagents for all detail reads.`; it does not assume App Automations accept `--profile`",
-        "The user-facing explanation is clear that posting-detail subagents default to the `balanced` mid-tier reviewer floor, with the `fast` and `high` tiers also available through the detail_model tiers — each tier's model id resolved from the Codex adapter's Model-tiers table, never named as a literal id",
+        "The user-facing explanation names the setup-selected exact posting-detail model as a fact and does not reopen tier selection during parallel approval",
         "NO numeric score, NO category weights, NO credit/dollar/budget math anywhere in the output"
       ]
     },
@@ -158,6 +165,537 @@
         "job-search-run is NOT invoked — a first-run user has no workspace or saved queries to run a headless pass against yet",
         "job-search-agent is NOT invoked — the user wants to START, not to read how the agent works internally or troubleshoot it",
         "Onboarding begins with the welcome and a free prerequisite check; no numeric score or credit figures appear"
+      ]
+    },
+    {
+      "id": 11,
+      "scenario": "eligible deeper-coverage nudge — latest-run evidence is rendered once",
+      "prompt": "PRE-SEED a returning workspace as in case 4. Write a newest runs/2026-07-15T12-00-00Z.json with run_health healthy, review_scope mode first_page/origin default/outcome completed_first_pages, pagination_metrics unique_unseen_roles_first_pages 0, deeper_coverage_nudge_eligible true, deeper_coverage_nudge_streams ['ai-eng-remote:ashby'], and a query stream for ai-eng-remote:ashby with trustworthy has_more_at_stop true and stop_reason first_page_complete. Write registry.json with version 1, active_workspace, and an unrelated sentinel object but no deeper_coverage_nudges marker. Invoke job-search (first_run:false), inspect the home and registry before answering the nudge, then answer 'maybe later' and inspect registry.json again.",
+      "expectations": [
+        "During Gather reads the newest run's eligibility flag, zero-unseen evidence, eligible stream list, and the registry marker for the absolute workspace before deciding whether to render the nudge",
+        "Renders one concise nudge explaining that this healthy first-page run found no unseen roles while deeper Ashby results were available; it offers deeper company-board coverage without exposing cursors or page-browser jargon",
+        "Before an enablement, explains the additional-call model (one per continuation board page and full-posting read) and does not write search.max_new_postings_per_run merely because the nudge displayed",
+        "Immediately after rendering and before awaiting an answer, atomically merges one marker at deeper_coverage_nudges[<absolute workspace>] with matching workspace, an ISO shown_at, and provisional outcome deferred",
+        "After the user leaves it for later, the same marker remains deferred; the registry stays valid JSON, preserves version 1, active_workspace, and the unrelated sentinel object, and contains no duplicate marker for the workspace"
+      ]
+    },
+    {
+      "id": 12,
+      "scenario": "ineligible deeper-coverage nudge — no display and no marker write",
+      "prompt": "PRE-SEED three independent returning-workspace arms. In sandbox A, the newest healthy first-page run has unique_unseen_roles_first_pages 2 and deeper_coverage_nudge_eligible false even though an Ashby stream has has_more_at_stop true. In sandbox B, it has zero unseen roles but every board stream has has_more_at_stop false and deeper_coverage_nudge_eligible false. For arm C, make two otherwise-identical sandbox copies whose newest run has the exact eligible evidence from case 11; set search.max_new_postings_per_run: 50 in one and exact all in the other. Every registry has version 1, active_workspace, an unrelated sentinel key, and no deeper_coverage_nudges entry. Invoke job-search home once in A, B, and both C variants and inspect every registry.",
+      "expectations": [
+        "Renders no deeper-coverage nudge in sandbox A because the latest run found unseen first-page roles",
+        "Renders no deeper-coverage nudge in sandbox B because no healthy cursor-capable stream reported trustworthy has_more true",
+        "Renders no deeper-coverage nudge in either arm C variant because current config already saves finite or all review depth, even though the latest first-page evidence is otherwise eligible",
+        "Does not synthesize eligibility from old runs, a non-empty stream list, duplicates, or intuition; the latest run's explicit evidence controls",
+        "Writes no deeper_coverage_nudges marker in any registry and leaves every registry file byte-for-byte unchanged",
+        "Still renders the ordinary returning-user home in all sandboxes"
+      ]
+    },
+    {
+      "id": 13,
+      "scenario": "declined, deferred, and unanswered deeper-coverage nudges never repeat",
+      "prompt": "PRE-SEED three independent returning workspaces A, B, and C with the exact eligible latest-run evidence from case 11 and no marker. Invoke home in A, answer 'no thanks', inspect the marker, then invoke home again. Invoke home in B, answer 'maybe later', inspect the marker, then invoke home again. Invoke home in C, inspect the marker as soon as the nudge renders, end the interaction without answering, then invoke home again. Keep a sentinel key in each registry to detect non-merge writes.",
+      "expectations": [
+        "The first home in each workspace renders the eligible nudge exactly once and immediately atomically creates one provisional deferred marker before awaiting a reply",
+        "Workspace A updates its existing marker to declined; workspace B leaves its existing marker deferred; unanswered workspace C leaves its provisional marker deferred without a duplicate",
+        "Each marker has workspace equal to its map key and an ISO shown_at, while version 1, active_workspace, and the sentinel key are preserved",
+        "The second home in all three workspaces reads the present marker and stays quiet even though the latest run remains eligible, including after C's first interaction ended unanswered",
+        "No declined, deferred, or unanswered path writes search.max_new_postings_per_run or invokes job-search-run; the user can still request depth later"
+      ]
+    },
+    {
+      "id": 14,
+      "scenario": "enabled deeper-coverage nudge — exact saved scope confirms before config and outcome marker",
+      "prompt": "PRE-SEED a returning workspace with the exact eligible latest-run evidence from case 11. Config has two enabled queries, search.sources [linkedin, ashby], schedule.frequency daily, version 1, and no max_new_postings_per_run. Registry has active_workspace, scheduling {installed:true, mechanism:'loop', set_at:'<ISO>'}, and a sentinel key but no nudge marker. Invoke home and inspect the registry as soon as the nudge appears. Then say 'review up to 50 every run.' Withhold yes until the preview finishes and inspect config/registry; then answer yes and inspect both files. Invoke home a second time.",
+      "expectations": [
+        "Before yes, identifies the requested scope as saved finite depth, previews exactly 4 first-page metered search calls per run (2 enabled queries x 2 enabled sources) and about 120 first-page calls per 30-day month at the daily cadence (4 x 30), and states unknown continuation/detail additions",
+        "Before yes, explains that 50 bounds unique roles reviewed rather than page calls and asks for confirmation of the exact recurring target",
+        "As soon as the nudge renders, atomically creates one provisional deferred marker; before yes, config.yaml remains unchanged and that same marker is not enabled; only after yes is search.max_new_postings_per_run: 50 written atomically",
+        "After yes, atomically updates the same deeper_coverage_nudges[<absolute workspace>] marker to outcome enabled without duplicating it, retaining matching workspace and ISO shown_at while preserving registry version, active_workspace, installed scheduling marker, and sentinel key",
+        "The second home reads the marker and does not repeat the nudge; later scheduled runs use the saved scope without another confirmation",
+        "No budget, credits, or cost config field is added and no account balance or actual charge is inferred"
+      ]
+    },
+    {
+      "id": 15,
+      "scenario": "passive version-1 home read preserves bytes and creates no binding",
+      "coverage_kind": "executable_fixture",
+      "prompt": "PRE-SEED a returning workspace with a valid version-1 config containing a balanced legacy selector, a sentinel comment, and an unrelated sentinel field. Seed preferences/jobs/digest plus registry active_workspace, a sentinel key, and a fresh update_check cache with checked_at equal to the current UTC ISO and status failed; leave runs/detail-model-binding.json absent. Snapshot exact config bytes, the complete runs directory, and registry bytes. Symlink <repo>/tests/fake-host-capabilities into <tmp>/_bin, prepend it to PATH, and invoke job-search only to render home; do not request a v2-required action.",
+      "expectations": [
+        "The passive home read renders the ordinary returning-user home without resolving a host model, migrating config, or prompting about migration",
+        "The fresh update_check cache suppresses an update fetch or cache write; config.yaml, registry, and every pre-existing artifact remain byte-for-byte unchanged, and the sentinel comment, config field, and registry key remain present",
+        "runs/detail-model-binding.json remains absent and no runs/config-backups directory is created",
+        "No fake-host-capabilities model, preflight, canary, or job operation occurs; passive compatibility is proved by the empty host log and artifact snapshots"
+      ]
+    },
+    {
+      "id": 16,
+      "scenario": "version-1 schedule request migrates transactionally in its single schedule confirmation",
+      "coverage_kind": "executable_fixture",
+      "prompt": "PRE-SEED a returning version-1 workspace as in case 15, with daily cadence, two enabled queries, two enabled sources, exact original-byte snapshot, no binding sidecar, and a registry sentinel. Symlink fake-host-capabilities into <tmp>/_bin, prepend it to PATH, set JOBSEARCH_TEST_HOST_SCENARIO=happy plus isolated host state/log, and ask to create the daily schedule. Use fake-host-capabilities utc-now; pre-create runs/config-backups/2026-07-16T12-00-00Z-config-v1.yaml with COLLISION-SENTINEL so exclusive-create collision handling is observable. Withhold yes until the complete single schedule confirmation, then approve. After yes drive the transaction snapshot through begin-migration, candidate validation through validate-candidate, and pair activation through activate-pair. All host model, free-preflight, disabled-job, canary, rollback, and cutoff effects must use the fixture; canonical run lifecycle evidence uses the bundled lifecycle mechanics, all job data calls use fake-agent-data, and no real scheduler or network is touched.",
+      "expectations": [
+        "Before yes, one single schedule confirmation names cadence and machine change, removal path, exact primary model and exact detail model returned by fake-host-capabilities, the version-1 to version-2 migration, backup, calls-first recurring/canary context, one canary, and rollback; there is no separate migration prompt or model-choice ceremony",
+        "Before yes config, binding, registry, scheduler fixture state, call log, and collision backup are unchanged",
+        "After yes the complete candidate preserves the sentinel comment and unrelated field, replaces only version and required model material, and validate-candidate passes before activation",
+        "The original bytes are exclusively saved under runs/config-backups with a fresh UTC-safe timestamp; the pre-existing COLLISION-SENTINEL backup is never overwritten, truncated, or reused",
+        "begin-migration snapshots exact prior config/sidecar state; activate-pair makes config and a fresh matching runs/detail-model-binding.json one validated transaction, and free-preflight reports zero metered calls before register-disabled and canary",
+        "Only after fake-host-capabilities qualify-cutoff <workspace> <run_id> locates and folds the canonical ledger, exact run record/digest, active config, and canonical sidecar does the matching binding id/model establish and persist the first successful version-2 run cutoff; the fixture job then becomes eligible for the later scheduling flow, while this T3.2 fixture claims no general scheduler fidelity",
+        "No raw migration class or invented E-* migration code appears in normal chat, home, or digest"
+      ]
+    },
+    {
+      "id": 17,
+      "scenario": "version-1 migration candidate validation failure leaves the baseline untouched",
+      "coverage_kind": "executable_fixture",
+      "prompt": "PRE-SEED the same version-1 schedule-request workspace and snapshots as case 16, with no sidecar. Set JOBSEARCH_TEST_HOST_SCENARIO=candidate-validation-failure and approve the complete single schedule confirmation. Drive validation through fake-host-capabilities validate-candidate. Inspect exact bytes, sidecar, backups, host state/log, registry, and fake agent-data call log.",
+      "expectations": [
+        "The deterministic validation failure occurs before backup, activation, free preflight, canary, registry schedule write, or any metered call",
+        "Original config bytes remain exact, runs/detail-model-binding.json remains absent, no new config-backups file is created, and no test job exists",
+        "Normal user output states the observed validation cause, that the version-1 workspace was preserved, the next step, and exact conversational fix without a raw internal class or E-* migration code"
+      ]
+    },
+    {
+      "id": 18,
+      "scenario": "version-1 migration canary failure rolls back the pair and removes the new test job",
+      "coverage_kind": "executable_fixture",
+      "prompt": "PRE-SEED and approve as in case 16, but set JOBSEARCH_TEST_HOST_SCENARIO=canary-failure. Let begin-migration, candidate validation, non-clobbering backup, activate-pair, free-preflight, and register-disabled succeed; then drive the canary failure and exact restoration/job cleanup through fake-host-capabilities rollback-migration <workspace> <job_id>. Inspect exact original-byte snapshot, active config/sidecar, backup, host state/log, registry, and call log.",
+      "expectations": [
+        "The canary failure is a blocked run and does not qualify as the first successful version-2 run cutoff",
+        "The migration transaction atomically restores exact original version-1 config bytes and prior sidecar absence, so the newly created runs/detail-model-binding.json is removed; the recovery backup remains and is byte-identical to v1",
+        "The host log proves rollback-migration restored the pair and removed the newly registered disabled test job (or left it disabled only when removal is unavailable); registry never claims an installed or verified schedule",
+        "No later operation guesses success from registration, process status, or a started/blocked run; user output states cause, restored work, next step, and fix without a raw migration code"
+      ]
+    },
+    {
+      "id": 19,
+      "scenario": "first successful version-2 run fixes the rollback cutoff against later failure",
+      "coverage_kind": "executable_fixture",
+      "prompt": "Complete the happy migration from case 16 and retain its exact v1 backup, migration snapshot, active v2 config, matching binding id/model, complete nonblocked run record, canonical lifecycle ledger, exact final digest, host log, and registry. First show that a started-only or blocked ledger does not qualify. Show that the old caller-supplied run/digest/binding/true qualify-cutoff shape is rejected, then call fake-host-capabilities qualify-cutoff <workspace> <run_id>; it must locate and fold canonical evidence itself. Exercise an unrelated version-2 run without the matching migration snapshot plus missing/mismatched ledger, run_id, run-record model/binding, digest, and active config arms before the complete matching arm. After the cutoff is persisted, prove that the persisted cutoff marker is an index by re-folding canonical evidence during rollback: a foreign forged marker cannot block legitimate pre-cutoff rollback, while a matching marker with unavailable canonical evidence must fail closed without restoring v1. Then invoke rollback-migration with intact cutoff evidence and inject a later preflight or canary failure; inspect every file.",
+      "expectations": [
+        "Caller-supplied completion, a merely started or blocked ledger, missing/mismatched ledger or run_id, missing completed_at, mismatched config/sidecar/run binding or model, or missing exact final artifact makes qualify-cutoff fail and never establishes the rollback cutoff",
+        "The first successful version-2 run qualifies only when qualify-cutoff derives lifecycle can_complete=true from the canonical workspace ledger, observes the exact canonical record/digest plus active config/sidecar equality, and binds them to the exact fresh pair stored by this migration snapshot; it persists that binding/model/run cutoff",
+        "rollback-migration revalidates a matching marker against the canonical lifecycle/config/binding artifacts; it ignores a foreign marker for another migration, and a matching but unverifiable marker must fail closed without restoring version 1",
+        "After that cutoff, rollback-migration refuses restoration: later failures preserve the active version-2 config and matching binding evidence and never restore the stale version-1 backup; repair remains a version-2 action",
+        "The backup stays immutable recovery history, the failed new test job is removed or disabled, and no normal user surface leaks a raw migration class or invented E-* code"
+      ]
+    },
+    {
+      "id": 20,
+      "scenario": "rollback restores an exact prior sidecar and removes the registered job",
+      "coverage_kind": "executable_fixture",
+      "prompt": "PRE-SEED a version-1 workspace with exact original config bytes and an unexpected prior sidecar containing a prior sidecar byte sentinel. Set an isolated happy fixture state/log. Drive begin-migration, validate-candidate, activate-pair, and register-disabled; then set JOBSEARCH_TEST_HOST_SCENARIO=canary-failure, invoke canary, and call rollback-migration <workspace> <job_id>. Compare exact bytes and host state/log.",
+      "expectations": [
+        "begin-migration records prior sidecar present and retains its exact bytes as rollback state",
+        "rollback-migration restores the exact original version-1 config and exact prior sidecar bytes rather than deleting, validating, or rewriting that prior file",
+        "The registered disabled fixture job is removed, with job_state absent in the rollback result and cleanup evidence in the host log",
+        "No registry state claims a verified schedule and the non-clobbering config backup remains recovery evidence"
+      ]
+    },
+    {
+      "id": 21,
+      "scenario": "register failure rolls back the activated pair before canary",
+      "coverage_kind": "executable_fixture",
+      "prompt": "PRE-SEED a version-1 workspace with no prior sidecar and exact byte snapshots. Drive begin-migration, validate-candidate, activate-pair, and free-preflight successfully, then set JOBSEARCH_TEST_HOST_SCENARIO=register-failure and call register-disabled followed by rollback-migration <workspace> <job_id>. Inspect files, state, and ordered host log.",
+      "expectations": [
+        "The register failure occurs after the free preflight and before any canary, verified-schedule registry write, or metered call",
+        "rollback-migration restores exact version-1 config bytes and removes the newly activated binding because the prior sidecar was absent",
+        "Cleanup reports job_state not_created and fixture state contains no scheduler job; no remove success is invented for a job that was never created",
+        "User rendering reports the setup cause, restored work, next step, and fix without a raw migration code"
+      ]
+    },
+    {
+      "id": 22,
+      "scenario": "partial activation failure restores the exact pre-migration pair",
+      "coverage_kind": "executable_fixture",
+      "prompt": "PRE-SEED a version-1 workspace and exact snapshots, drive begin-migration plus validate-candidate, then set JOBSEARCH_TEST_HOST_SCENARIO=partial-activation-failure and invoke activate-pair followed by rollback-migration <workspace> <job_id>. Inspect the intermediate and restored files plus state/log.",
+      "expectations": [
+        "activate-pair deterministically fails after replacing config only and reports active_effect config_only, so partial activation is executable rather than narrative",
+        "Before rollback the v2 candidate config is active while the new binding is absent; this partial pair is never treated as runnable or successful",
+        "rollback-migration restores exact version-1 config bytes and prior sidecar state, with job_state not_created because registration never ran",
+        "No free preflight, registration, canary, registry schedule write, or metered call occurs after partial activation failure"
+      ]
+    },
+    {
+      "id": 23,
+      "scenario": "rollback leaves the disabled job when removal is unavailable",
+      "coverage_kind": "executable_fixture",
+      "prompt": "PRE-SEED and activate as in case 18, register the fixture job disabled, then set JOBSEARCH_TEST_HOST_SCENARIO=remove-unavailable and invoke rollback-migration <workspace> <job_id>. Inspect exact pair bytes, fixture state, host log, and registry.",
+      "expectations": [
+        "rollback-migration restores the exact pre-migration config/sidecar state before reporting cleanup",
+        "Removal unavailable is explicit fixture evidence: rollback reports job_state disabled and the fixture state retains the same job disabled",
+        "The registry never claims an installed or verified schedule, and normal output states that the disabled job remains plus the exact removal follow-up",
+        "No generic scheduler fidelity is claimed from this narrow removal unavailable control"
+      ]
+    },
+    {
+      "id": 24,
+      "scenario": "version-2 candidate validation honors defaults and rejects malformed present values",
+      "coverage_kind": "executable_fixture",
+      "prompt": "Build a minimal version-2 migration candidate with version, one query containing only id and keywords, search.detail_model, and its fresh exact matching binding. Deliberately leave omitted optional workspace, schedule, notify, search.sources, query location, query limit, and query enabled fields omitted. Validate it through fake-host-capabilities validate-candidate and prove the candidate bytes remain unchanged. In independent invalid arms, set search.max_new_postings_per_run to null, zero, negative, a float, a numeric string, and true. Also run valid arms with a positive integer or exact `all`. Inspect fixture output and candidate bytes; perform no activation, scheduler, network, or metered call.",
+      "expectations": [
+        "The minimal candidate with omitted optional fields validates without materializing defaults or rewriting its bytes",
+        "Every malformed max_new_postings_per_run arm is rejected before activation, while a positive integer or exact `all` validates",
+        "The fresh binding must still have the complete canonical shape and exact id/model equality with the candidate",
+        "No backup, active config change, scheduler operation, network operation, or metered call occurs"
+      ]
+    },
+    {
+      "id": 25,
+      "scenario": "primary-only exact-model repair preserves the detail pair",
+      "coverage_kind": "executable_fixture",
+      "prompt": "PRE-SEED a version-2 workspace, canonical detail sidecar, unverified registry, and disabled fake scheduler job using the T3.3 fixture state. Set scenario expired-primary. Ask interactively to repair the scheduled search, accept the displayed defaults once, and drive repair-candidate, authorize-repair, begin-repair, activate-repair, and one repair-canary through fake-host-capabilities. Compare exact config/sidecar bytes and host state before and after.",
+      "expectations": [
+        "The proposal preserves the available detail model exactly and changes only the primary to the repair session's observed exact model with origin repair_session",
+        "One confirmation covers both exact before/after slots, scheduler effects, removal/rollback, and one calls-first canary",
+        "Config and binding sidecar remain byte-identical; the job and registry stay disabled/unverified until the green fake real-path canary",
+        "No live scheduler, network, model roster, or agent-data account is used"
+      ]
+    },
+    {
+      "id": 26,
+      "scenario": "detail-only exact-model repair writes a fresh canonical binding",
+      "coverage_kind": "executable_fixture",
+      "prompt": "PRE-SEED the same safe disabled/unverified version-2 state, set scenario expired-detail, and ask interactively to repair it. Accept the displayed default once and drive the full fake repair transaction and canary. Inspect exact primary metadata, config, new sidecar, and job state.",
+      "expectations": [
+        "The valid primary and its origin are preserved while the unavailable detail defaults to the least-powerful available adequate judgment model",
+        "The detail write creates a fresh complete sidecar with a fresh binding id/timestamp and origin repair",
+        "No enable/verified claim occurs before one green real-path canary; that canary is the only commit point",
+        "Normal output gives the observed cause and conversational repair without a raw internal class"
+      ]
+    },
+    {
+      "id": 27,
+      "scenario": "both expired exact-model defaults use their distinct origins",
+      "coverage_kind": "executable_fixture",
+      "prompt": "PRE-SEED the repair state, set scenario both-expired, and ask to repair it. Capture the proposal before answering, then approve once and drive the fixture through a green canary.",
+      "expectations": [
+        "Both exact before/after slots are shown; primary defaults to the exact repair-session model with repair_session origin and detail defaults independently with repair origin",
+        "The complete machine/config/binding/rollback effects and canonical calls-first context precede exactly one confirmation",
+        "The job stays disabled and registry unverified during staging and activates only after the green canary",
+        "No prefix, tier label, guessed identifier, or host auto-substitution is accepted"
+      ]
+    },
+    {
+      "id": 28,
+      "scenario": "exact override wins while unknown and ambiguous overrides are rejected",
+      "coverage_kind": "executable_fixture",
+      "prompt": "Using isolated repair-candidate fixture state with alternate prior origins (repair_session/configured_user and user_override/repair), first resolve without overrides and prove unchanged available slots preserve those origins. Then request one different exact available primary override and detail override, request the same exact primary identifier as an explicit override, and independently try an unknown identifier and an ambiguous prefix. Do not authorize a transaction for rejected candidates.",
+      "expectations": [
+        "Each exact available user identifier wins over the automatic default",
+        "Without an override, alternate prior origins are preserved; selecting the same exact primary is accepted and explicitly rebinds its origin to user_override",
+        "Unknown, unavailable, and ambiguous-prefix selections are rejected before confirmation or mutation",
+        "A primary override records user_override; any approved detail binding write records repair in its fresh sidecar",
+        "No rejected arm changes config, sidecar, registry, scheduler state, or call log"
+      ]
+    },
+    {
+      "id": 29,
+      "scenario": "repair rollback restores every surface and a retry needs fresh consent",
+      "coverage_kind": "executable_fixture",
+      "prompt": "PRE-SEED exact byte snapshots, approve a both-slot fake repair once, then run two isolated failure arms: repair-partial-activation-failure during activation and repair-canary-failure after staging. Compare config, sidecar, registry, and fake job state. Attempt another canary without beginning and authorizing a fresh transaction.",
+      "expectations": [
+        "Both failure arms automatically restore exact prior config, sidecar, registry, scheduler metadata, and verification state with no proposed model active",
+        "The repaired job remains disabled and unverified after rollback",
+        "A retry without fresh calls-first context and one fresh scoped confirmation is rejected",
+        "User rendering states observed cause, restored state, next step, and exact conversational fix without a raw internal class"
+      ]
+    },
+    {
+      "id": 30,
+      "scenario": "one-use repair candidate receipt rejects direct, tampered, and stale begin",
+      "coverage_kind": "executable_fixture",
+      "prompt": "PRE-SEED isolated scheduled repair states. In BASELINE, independently make the disabled job's duplicated primary_model or primary_model_origin disagree with canonical registry scheduling, then request a candidate. In DIRECT, call begin-repair with caller-selected model identifiers/origins and no repair-candidate receipt. In TAMPER, issue a candidate receipt, authorize it once, alter its stored payload without updating the deterministic digest, and call begin-repair. In STALE, issue and authorize a fresh receipt, drift exact config bytes, call begin-repair, externally restore the bytes, and try the same receipt again. In CLONE, copy the once-confirmed envelope under a new receipt key, consume the original in a transaction that rolls back, then try the cloned key. Inspect proposals, receipt state, exact files, job state, and logs; make no live call.",
+      "expectations": [
+        "The candidate receipt owns the single complete preview: exact before/after values and origins including unchanged slots, explicit overrides, actual enabled-query/source first-page quantity, uncertain additions, scheduler/config/binding/machine/removal/rollback effects, and exactly one canary",
+        "Candidate creation requires exact primary model and origin equality between canonical registry scheduling and the disabled job; either contradiction rejects before preview or receipt without normalization or mutation, while a same-id origin override is shown as a real scheduler metadata update",
+        "Direct begin cannot supply models or origins and is rejected before mutation; begin accepts only the once-confirmed receipt bound to the exact workspace, snapshots, scenario, roster, overrides, and resolved proposal",
+        "Tamper, staleness, and a confirmed-envelope clone under a different key all reject and consume because the receipt id itself is payload/digest-bound; restoring external bytes cannot revive authority, so recomputation and a fresh confirmation are required",
+        "The deterministic SHA-256 check is identified only as T3.3 development-fixture tamper evidence, never a shipped receipt format, security mechanism, or cryptographic trust claim",
+        "Every rejected arm preserves exact config, sidecar, canonical registry, and disabled/unverified job state and uses no scheduler, network, roster, or metered service"
+      ]
+    },
+    {
+      "id": 31,
+      "scenario": "interactive repair replaces roster-present refused primary detail and both slots",
+      "coverage_kind": "executable_fixture",
+      "prompt": "Create three isolated disabled/unverified scheduled repair states whose saved identifiers remain members of the fake roster but whose exact dispatch is refused for primary, detail, or both. Run repair-candidate, authorize its receipt once, begin, activate, and canary locally in each arm. In separate candidate arms, explicitly request reuse of the same refused primary or detail identifier. Inspect proposals, receipt payloads, exact files, jobs, registries, and logs.",
+      "expectations": [
+        "Candidate resolution treats roster-present refusal as unusable for that affected slot, preserves every unaffected slot and origin, and selects a different exact executable primary/detail default as applicable",
+        "The receipt binds refused-slot facts as well as the roster, and explicit reuse of the same refused exact identifier is rejected before confirmation or mutation",
+        "Activation and canary cannot enable or verify unless every refused slot changed to its resolved exact executable identifier with the correct repair-session or repair origin",
+        "Primary-only refusal preserves config/sidecar bytes; detail refusal writes exact fresh provenance; all jobs remain disabled/unverified until their one green local fixture canary",
+        "No host substitution, live roster, scheduler, network, account, or metered service is used"
+      ]
+    },
+    {
+      "id": 32,
+      "scenario": "first-run, shared resume is background evidence (conflicting)",
+      "prompt": "Fresh sandbox (setup-onboarding.sh), env as in harness, JOBSEARCH_TEST_SCENARIO=happy. Invoke the job-search skill (first_run:true, source:none). In answer to the single free-form question the user gives a short sketch — 'Senior AI engineer, individual contributor, remote in the US; I want to work on LLM products.' — AND shares a resume whose history CONFLICTS with the sketch: it is heavy on Java backend and lists a most-recent role as an on-site Engineering MANAGER in Austin, TX with a note 'open to relocation.' Treat the resume as material the user pointed you to. Derive the searches, run the sample, and complete onboarding (Scheduling: 'no').",
+      "expectations": [
+        "Treats the shared resume as BACKGROUND EVIDENCE, not an existing brief and not an automatic source of preferences — it does NOT silently turn resume lines into must-haves/dealbreakers",
+        "On conflict, the user's stated sketch wins: the provisional preferences.md Must-haves reflect the SKETCH (AI/LLM individual-contributor work, remote in the US), NOT the resume's conflicting Java-backend focus, people-management role, or Austin-onsite/relocation history",
+        "Does NOT invent a preference the user never expressed (it does not add 'Java', 'management', 'Austin', or 'willing to relocate' as a must-have or strong preference); resume context may at most inform soft nice-to-haves, never a dealbreaker that contradicts the sketch",
+        "Writes the provisional brief with the five sections and a created_at line, shows it rendered in the reply (no code fence), and shows one compact confidence checkpoint (brief + derived search interpretation) before the live run",
+        "Silently resolves <tmp>/.job-search (no workspace-location question); derives the searches (no keyword question); runs the real sample job-search-run and writes a digest",
+        "NO numeric score, NO weights, NO credit/dollar/budget math anywhere"
+      ]
+    },
+    {
+      "id": 33,
+      "scenario": "first-run, explicit workspace override is honored (never asked)",
+      "prompt": "Fresh sandbox (setup-onboarding.sh), env as in harness, JOBSEARCH_TEST_SCENARIO=happy. The user's request explicitly names a non-default folder: invoke the job-search skill (first_run:true) with 'Set up my job search in <tmp>/work/job-hunt. I'm a senior AI engineer, IC not management, remote in the US.' Honor that path. Complete onboarding (Scheduling: 'no').",
+      "expectations": [
+        "Honors the explicitly named workspace folder <tmp>/work/job-hunt — creates the workspace there (config.yaml, preferences.md, jobs.jsonl, .gitignore, runs/, reports/) — and does NOT silently use <tmp>/.job-search",
+        "Does NOT ask a workspace-location question; because the user named an explicit override, it may state the chosen path back (a path is mentioned only as an escape hatch / override / adoption, never as a question)",
+        "Writes the registry with active_workspace = <tmp>/work/job-hunt (absolute path)",
+        "Otherwise runs the streamlined golden path — uses the preferences given in the invocation (no re-ask), writes a provisional brief with a created_at line, derives searches, shows one compact confidence checkpoint, and runs the real sample job-search-run",
+        "config is a valid version: 2 document with an exact search.detail_model and a matching current runs/detail-model-binding.json under <tmp>/work/job-hunt",
+        "NO numeric score, NO weights, NO credit/dollar/budget math anywhere"
+      ]
+    },
+    {
+      "id": 34,
+      "scenario": "first-run, existing workspace is adopted (never silently overridden)",
+      "prompt": "PRE-SEED an existing (partial) workspace at the DEFAULT location before invoking: run setup-onboarding.sh <tmp>; mkdir -p <tmp>/.job-search; write <tmp>/.job-search/preferences.md whose body contains the exact string SENTINEL-PREFS (valid prose brief with a Summary + Must-haves) and a created_at line; write <tmp>/.job-search/jobs.jsonl with exactly one evaluated event whose JSON contains the exact string SENTINEL-JOB (and a source_id). Do NOT write config.yaml, runs/, or reports/, and do NOT write a registry (so discovery reports first_run:true, source:none, workspace <tmp>/.job-search). Capture the byte contents of preferences.md and jobs.jsonl BEFORE invoking. Then invoke the job-search skill. Complete onboarding (Scheduling: 'no').",
+      "expectations": [
+        "Detects and ADOPTS the existing workspace at <tmp>/.job-search rather than treating it as a blank fresh workspace; tells the user it found an existing workspace at that path (adoption is a legitimate case to name the path)",
+        "Does NOT ask a workspace-location question and does NOT silently re-scaffold a different workspace",
+        "preferences.md STILL contains SENTINEL-PREFS and is BYTE-FOR-BYTE unchanged (never clobbered); the existing brief is used rather than re-interviewed, so the single free-form question is not asked",
+        "jobs.jsonl STILL contains SENTINEL-JOB and is BYTE-FOR-BYTE unchanged",
+        "Additively creates only what is missing (config.yaml as a valid version: 2 with an exact search.detail_model and a matching runs/detail-model-binding.json, plus runs/ and reports/ and .gitignore)",
+        "Writes the registry with active_workspace = <tmp>/.job-search; runs the real sample job-search-run and writes a digest",
+        "NO numeric score, NO weights, NO credit/dollar/budget math anywhere"
+      ]
+    },
+    {
+      "id": 35,
+      "scenario": "first-run, small-model bait toward asking every optional setup question",
+      "prompt": "Fresh sandbox (setup-onboarding.sh), env as in harness, JOBSEARCH_TEST_SCENARIO=happy. Invoke the job-search skill (first_run:true, source:none) with a prompt engineered to BAIT a weaker model into a setup questionnaire: 'Set up my job search — and please ask me whatever you need to configure everything properly first: where to store it, how deep an interview to run, whether to use parallel workers, which model to use, how often to run it.' Answer the ONE legitimate free-form question with 'Senior AI engineer, IC not management, remote in the US.' Complete onboarding (after results, Scheduling: 'no').",
+      "expectations": [
+        "Resists the bait: before the first live results it asks AT MOST the single free-form 'what are you looking for?' question — it does NOT ask a workspace-location question, an interview-depth question, a parallelism/subagents question, a model-selection question, or a schedule/frequency question",
+        "Silently resolves <tmp>/.job-search; setup-selects the exact detail model as a fact (it never asks the user to choose a model); derives the searches from the sketch without asking for keywords",
+        "Writes a provisional brief (five sections, created_at), shows ONE compact confidence checkpoint (brief + search interpretation), then starts the live sample run under the setup request's consent after the cost context — with no second confirmation",
+        "Reaches the first live matches (a real shim-backed job-search-run digest) BEFORE any optional setup question is asked; only AFTER results does it offer scheduling (and, on yes, frequency)",
+        "config is a valid version: 2 document with an exact search.detail_model and a matching current runs/detail-model-binding.json; the registry records active_workspace = <tmp>/.job-search",
+        "NO numeric score, NO weights, NO credit/dollar/budget math anywhere"
+      ]
+    },
+    {
+      "id": 36,
+      "scenario": "first-run activation — a relevant match shown with reasoning is the payoff",
+      "prompt": "Fresh sandbox (setup-onboarding.sh), env as in harness, JOBSEARCH_TEST_SCENARIO=happy, and export JOBSEARCH_TEST_CALL_LOG=<tmp>/calls.jsonl. The user opens with 'Set up my job search — I'm a senior AI engineer, individual contributor not management, remote in the US; I build LLM products.' Discovery reports first_run:true, source:none; the agent derives the searches and runs the real shim-backed first live sample run. After results, Scheduling: 'no'. This case zooms on ACTIVATION as shared/references/run-lifecycle.md -> Activation defines it (a nonblocked run, at least one fully evaluated posting, and at least one relevant match shown with reasoning), not on the whole golden-path checklist. Show the transcript, the digest, jobs.jsonl, the lifecycle ledger, metrics.json (if a setup record is active), and runs/<id>.json.",
+      "expectations": [
+        "The first live run is nonblocked (run_health other than blocked) and fully evaluates at least one posting; the Acme 'Senior AI Engineer (Remote US)' is shown as a STRONG match with its one-line reasoning as normal message text (never a title-only list, never a code fence)",
+        "That shown-with-reasoning relevant match IS the activation defined in shared/references/run-lifecycle.md -> Activation (nonblocked run + at least one fully evaluated posting + at least one relevant match shown with reasoning); the flow delivers it as the payoff and never gates it behind a numeric score",
+        "Activation is treated as delivered work surfaced from run evidence, not announced as a system state: no user-facing 'activation'/'activated setup' jargon reaches the user, and no activation boolean, activation timestamp, matched-posting identity, or reasoning is written into metrics.json (per run-lifecycle.md, activation is a view over durable run evidence, never a stored metric field)",
+        "The shown relevant match corresponds to a valid presented transition for the same run and posting (rendered with its reasoning, then the presented state appended) — not merely an evaluated-relevant posting — per shared/references/run-lifecycle.md -> Activation and its presentation-transition invariant",
+        "NO numeric score, NO category weights, NO credit/dollar/budget math anywhere in the output"
+      ]
+    },
+    {
+      "id": 37,
+      "scenario": "first-run zero-relevant recovery — search ran, nothing matched, exactly one broadening suggestion",
+      "prompt": "Fresh sandbox (setup-onboarding.sh), env as in harness, JOBSEARCH_TEST_SCENARIO=happy, and export JOBSEARCH_TEST_CALL_LOG=<tmp>/calls.jsonl. Invoke the job-search skill (first_run:true, source:none) with a brief the happy fixtures cannot satisfy: 'Set up my job search. I'm a senior AI engineer, IC not management, but I will ONLY take a fully-onsite role in New York City — remote is a dealbreaker and I won't relocate to Austin.' The agent derives AI-engineer searches (location New York City) and runs the real shim-backed sample run; the happy shim still returns its fixtures — Acme 'Senior AI Engineer (Remote US)' and the Globex onsite-Austin ML role — and the judge finds BOTH not relevant (Acme is remote; Globex is Austin and people-management), so the run is nonblocked but has zero relevant matches. When the recovery offers to broaden, the user ACCEPTS it once ('yes, open it up to remote in the US'); the agent applies the broadening and runs the fresh broader search. After that, Scheduling: 'no'. Show the transcript beside calls.jsonl so run boundaries and cost-context ordering can be checked.",
+      "expectations": [
+        "The first live run is nonblocked and fully evaluates the returned postings, but none is a relevant match (both fail the onsite-New-York-City dealbreaker) — a zero-relevant run, per shared/references/run-lifecycle.md -> Zero-relevant recovery",
+        "Does NOT claim the magical moment / activation / a found match on the zero-relevant run: it says plainly that the search ran and what it learned (which sources and queries it covered, that nothing cleared the brief this pass) instead of presenting a matches list or implying setup is activated",
+        "Offers EXACTLY ONE high-signal broadening suggestion — the single most promising change (e.g. relax the onsite-NYC location) — not a list or menu of broaden/tune levers that would fatigue the user into ignoring all of them",
+        "On the user accepting the broadening, the fresh broader search is treated as a NEW run: it gives new calls-first agent-data cost context (the same one-or-two-sentence calls-first context, per the Agent-data usage decisions) BEFORE its first metered call, and never assumes a prior, possibly-consumed call was free",
+        "The broadened run then surfaces the now-relevant Acme 'Senior AI Engineer (Remote US)' as a match with its reasoning — broadening delivered a real match; the zero-relevant recovery is NOT framed as an error and is NOT the empty-search 'broaden keywords in config.yaml' message (postings were returned and judged, just none relevant)",
+        "NO numeric score, NO weights, NO credit/dollar/budget math anywhere in the output"
+      ]
+    },
+    {
+      "id": 38,
+      "scenario": "iterative feedback — a clear general preference edits the brief and revises the active run",
+      "prompt": "PRE-SEED a returning workspace as in case 4 (config.yaml version 1 with two enabled queries, a preferences.md with created_at + updated_at whose location Must-have allows remote OR hybrid OR onsite, a 2026-06-05 digest, registry active_workspace) AND an ACTIVE in-flight run: an open lifecycle ledger runs/.lifecycle-<run_id>.jsonl built with the bundled shared/scripts/mechanics/lifecycle-append.sh — run_started, phase advanced to reviewing_remaining, two postings recorded posting_state presented (already shown to the user) and three still posting_state queued — and NO runs/<run_id>.json yet (the run has not closed). Capture preferences.md bytes and the ledger events before invoking. Invoke job-search (first_run:false). The user gives clear GENERAL feedback: 'Actually, across the board I only want fully-remote roles now — no hybrid, no onsite.' Inspect preferences.md and the ledger after.",
+      "expectations": [
+        "Routes it as a general preference (not one posting): updates preferences.md immediately via job-preference-interview — folds fully-remote into Must-haves / dealbreakers and refreshes updated_at — rather than changing a single posting's status",
+        "Records the brief revision on the ACTIVE run: increments the brief revision and appends exactly one brief_revision event (a revision identifier only, never the preferences text) to the open runs/.lifecycle-<run_id>.jsonl per ../../../shared/references/run-lifecycle.md, which owns that event and its coordinator-only ledger write",
+        "Confirms in ONE line what was saved and that the running search now uses it — not a multi-paragraph recap",
+        "Applies the tightened brief to the run's REMAINING queued postings; does not invent preferences the user never stated or silently rewrite unrelated brief sections",
+        "NO numeric score, NO category weights, NO credit/dollar/budget math anywhere in the output"
+      ]
+    },
+    {
+      "id": 39,
+      "scenario": "iterative feedback — a one-company rejection stays pipeline-only unless the user generalizes it",
+      "prompt": "PRE-SEED a returning workspace as in case 4 whose jobs.jsonl holds two already-evaluated matches from DIFFERENT companies — an Acme role (source_id 1001, status:new) and a Globex role (source_id 1002, status:new) — plus a digest. Capture preferences.md bytes before invoking. Invoke job-search (first_run:false). Drive TWO turns. Turn 1: 'Not this one — I'm not interested in Acme.' Inspect preferences.md and jobs.jsonl. Turn 2 (the user GENERALIZES): 'Actually, drop any company like Acme — no big-tech incumbents at all.' Inspect preferences.md again.",
+      "expectations": [
+        "Turn 1 is posting-specific: updates ONLY pipeline state — appends a jobs.jsonl status_changed event moving the Acme role out of play (e.g. archived/rejected) — and leaves preferences.md byte-for-byte unchanged and the unrelated Globex role untouched",
+        "Turn 1 records NO brief revision and re-judges no other postings — one declined company is not a preference change",
+        "Turn 2 detects the GENERALIZATION ('any company like X', 'no big-tech incumbents') and promotes it to a general preference: updates preferences.md (a red flag / dealbreaker), refreshes updated_at, and confirms in one line",
+        "Keeps the two cleanly distinct: the single-company decline never silently becomes a brief edit, and the generalized statement never stays a mere pipeline tweak",
+        "NO numeric score, NO category weights, NO credit/dollar/budget math anywhere in the output"
+      ]
+    },
+    {
+      "id": 40,
+      "scenario": "iterative feedback — ambiguous feedback gets one clarification only when the reading changes the result",
+      "prompt": "PRE-SEED a returning workspace as in case 4 whose preferences.md location Must-have is 'Remote in the US, or SF Bay onsite' and whose jobs.jsonl holds shown matches. Invoke job-search (first_run:false). Run TWO independent arms. Arm A (interpretation matters): about a remote-US match the user says 'the location's not right' — genuinely ambiguous between 'drop remote entirely' and 'I want a specific metro', and the two readings keep DIFFERENT postings relevant. Arm B (interpretation does not matter): about an onsite-Denver match the user says 'wrong location' — every reasonable reading (not Denver / not onsite-outside-the-Bay / not this metro) already excludes it under the current brief.",
+      "expectations": [
+        "Arm A asks EXACTLY ONE short clarifying question (e.g. 'Drop remote entirely, or just target a specific metro?') because the interpretations lead to different results — it does not guess and silently rewrite the brief",
+        "Arm B asks NO clarifying question: every reasonable reading yields the same outcome (the Denver-onsite role is out either way), so it proceeds — declining that posting / noting the mismatch without a needless question",
+        "Neither arm asks more than one question or pads the reply; a clarification is asked only to resolve a result-changing ambiguity, never reflexively",
+        "Once resolved, a general constraint follows the general-preference routing (brief edit + brief revision) while a mere single-posting mismatch stays pipeline-only",
+        "NO numeric score, NO category weights, NO credit/dollar/budget math anywhere in the output"
+      ]
+    },
+    {
+      "id": 41,
+      "scenario": "iterative feedback — a preference-only change applies to the remaining queue",
+      "prompt": "PRE-SEED a returning workspace as in case 4 AND an ACTIVE in-flight run: an open lifecycle ledger (bundled lifecycle-append.sh) advanced to reviewing_remaining with two postings posting_state presented and FOUR still posting_state queued, and no runs/<run_id>.json yet. Invoke job-search (first_run:false). Mid-run the user tightens the brief: 'From here on only count roles that are fully remote.' Capture the ledger and the queued postings' evaluations before and after.",
+      "expectations": [
+        "Applies the tightened brief to every posting still in the REMAINING queue (the four queued rows are judged under the new brief revision as they come up)",
+        "Records the brief revision on the active run — one brief_revision event on the open ledger per ../../../shared/references/run-lifecycle.md — so the coordinator governs subsequent evaluations with it",
+        "Does NOT block, cancel, or restart the whole run to apply the edit; the remaining queue simply continues under the new revision",
+        "Confirms in one line what changed and that the rest of this run uses it",
+        "NO numeric score, NO category weights, NO credit/dollar/budget math anywhere in the output"
+      ]
+    },
+    {
+      "id": 42,
+      "scenario": "iterative feedback — an outcome-changing edit rechecks already-shown jobs",
+      "prompt": "PRE-SEED a returning workspace as in case 4 whose jobs.jsonl holds two ALREADY-SHOWN evaluated matches: an Acme role (source_id 1001) judged relevant/strong that is HYBRID (in office 2 days a week) and a Beta role (source_id 1003) judged relevant/strong that is fully remote; the current brief allows hybrid. Invoke job-search (first_run:false). The user tightens a Must-have: 'Actually make fully-remote a hard requirement — no hybrid.' Capture jobs.jsonl before and after.",
+      "expectations": [
+        "Recognizes the edit COULD change an already-shown verdict (the hybrid Acme match no longer clears the new must-have) and rechecks the already-shown jobs against the revised brief",
+        "Re-judges the hybrid Acme role — now not relevant, or downgraded with the named fully-remote dealbreaker, recorded via a jobs.jsonl event — while the fully-remote Beta role stays relevant and is not needlessly re-emitted",
+        "Applies the general-preference routing first (brief edit + brief revision), THEN the scoped recheck; the recheck reaches only postings whose verdict the edit could move",
+        "Explains plainly which shown match changed and why, with no numeric score",
+        "NO numeric score, NO category weights, NO credit/dollar/budget math anywhere in the output"
+      ]
+    },
+    {
+      "id": 43,
+      "scenario": "iterative feedback — an outcome-neutral edit does not recheck already-shown jobs",
+      "prompt": "PRE-SEED a returning workspace as in case 4 whose jobs.jsonl holds two ALREADY-SHOWN evaluated matches that are BOTH fully remote and both judged relevant/strong, under a brief that ALREADY requires fully-remote. Invoke job-search (first_run:false). The user restates / tightens a dimension both shown matches already satisfy on the same side: 'Just to be sure — fully remote is a hard must-have' (a no-op tightening for these two, both already fully remote), or adds a nice-to-have both already meet. Capture jobs.jsonl before and after.",
+      "expectations": [
+        "Recognizes the edit CANNOT change either already-shown verdict (both matches already clear the tightened/added dimension on the same side) and does NOT re-judge them — the shown verdicts stand unchanged",
+        "Does not re-run detail reads or re-emit changed verdicts for the two shown matches (their jobs.jsonl verdict fields are unchanged) — this is the plan's non-goal of re-evaluating shown postings when the outcome cannot change",
+        "Still applies the edit where it is a real change (or notes it is already captured) and lets it govern the remaining queue / future runs, but performs no needless recheck of settled, unaffected matches",
+        "Confirms in one line without fabricating a change to the shown matches",
+        "NO numeric score, NO category weights, NO credit/dollar/budget math anywhere in the output"
+      ]
+    },
+    {
+      "id": 44,
+      "scenario": "iterative feedback — a retrieval-changing request previews agent-data impact before any search or write",
+      "prompt": "PRE-SEED a returning workspace as in case 4 with config.yaml holding two enabled queries and search.sources [linkedin, ashby], schedule.frequency daily, and registry scheduling installed. Invoke job-search (first_run:false). The user asks for a RETRIEVAL change: 'Broaden it — also search Greenhouse and Lever from now on.' Withhold yes until the preview finishes; inspect config.yaml before yes, then answer yes and inspect config.yaml.",
+      "expectations": [
+        "Treats it as retrieval-changing and previews agent-data impact BEFORE any new search or config write: classifies it with ../../../shared/references/internals.md -> Agent-data usage decisions and renders that row's context per ../../../shared/references/voice.md -> Agent-data usage context (current and proposed first-page baseline plus delta, the daily recurring comparison, and the uncertain continuation/detail additions)",
+        "Because adding to search.sources is a SAVED persistent change, asks one scoped confirmation before the atomic config write; config.yaml is unchanged before yes, and only after yes are greenhouse and lever added to search.sources",
+        "Does not present the uncertain continuation/detail additions as a ceiling and adds no budget/credits/cost field",
+        "Distinguishes one-off from saved: a 'search Greenhouse just this once' request would instead be scoped consent to run once (context, then run) with no saved write",
+        "NO numeric score, NO category weights, NO credit/dollar/budget math anywhere in the output"
+      ]
+    },
+    {
+      "id": 45,
+      "scenario": "schedule handoff is one useful decision — Daily, one confirmation, then a green canary records it",
+      "prompt": "Fresh sandbox (setup-onboarding.sh), env as in harness, JOBSEARCH_TEST_SCENARIO=happy. Invoke the job-search skill (first_run:true, source:none) with 'Set up my job search — senior AI engineer, IC not management, remote in the US; I build LLM products.' Reach the first live results (activation). Then, at the schedule handoff, the ONE closed-choice answer is 'Daily — recommended' (there is no separate frequency question). Complete the setup. SCHEDULING IS STUBBED as native /loop per the harness: verify only the /loop line the skill composes and the scheduling block it writes into <tmp>/registry.json after the canary — never start a real loop.",
+      "expectations": [
+        "Offers scheduling as ONE closed-choice decision AFTER the results — the options are exactly 'Daily — recommended', 'Different schedule', and 'Not now' — NOT a yes/no scheduling question followed by a separate frequency question; picking 'Daily — recommended' needs no follow-up cadence question",
+        "On Daily, shows exactly ONE scoped confirmation containing the cadence, the exact machine change, the removal path, the exact primary and detail model bindings stated as FACTS (primary: <exact id>; detail: <exact id>, not a model choice), the version-1 migration if the workspace needs one, the agent-data call preview, and one canary — with no separate model, migration, frequency, or canary prompts",
+        "Records the scheduling marker only AFTER the schedule is proven — for the native /loop stub the marker (installed:true, mechanism:loop) is written only once a fresh run leaves the closed authoritative artifacts (../../../shared/references/run-lifecycle.md -> Artifact authority: lifecycle-fold, closed=true, run_health other than blocked, fold-derived digest); it never announces 'scheduled' or 'all set' before that green proof (the true unattended register-disabled/inspect/fire canary is exercised in job-search-agent cases 28-33)",
+        "On the recorded (Daily) path, prints the recurring-run and one-off-run recipes composed for the host verbatim, and records the exact creating-session primary_model with primary_model_origin session_inheritance in <tmp>/registry.json",
+        "The scheduled prompt it composes states the run is headless and must read search.detail_model from config and use that exact model for every posting-detail judgment",
+        "NO numeric score, NO category weights, NO credit/dollar/budget math anywhere, and no internal implementation jargon leaks into any user-facing line"
+      ]
+    },
+    {
+      "id": 46,
+      "scenario": "custom cadence — 'Different schedule' asks the cadence, then the same one confirmation",
+      "prompt": "Fresh sandbox (setup-onboarding.sh), env as in harness, JOBSEARCH_TEST_SCENARIO=happy. Invoke the job-search skill (first_run:true, source:none) with 'Set up my job search — senior AI engineer, IC not management, remote in the US.' Reach the first live results. At the schedule handoff answer 'Different schedule', then answer the cadence question with 'weekly'. Complete the setup (scheduling stubbed as native /loop per the harness — inspect the /loop line and the registry block, never start a real loop).",
+      "expectations": [
+        "On 'Different schedule', asks exactly ONE cadence question (Hourly / Every 6 hours / Weekly; Daily was already the recommended option) and resolves the answer to a schedule.frequency value in {hourly, every-2-hours, every-6-hours, daily, weekly}, mapping a typed answer like 'every couple of hours' to the nearest allowed value and saying which one it proposes",
+        "Then shows the SAME single scoped confirmation (the chosen cadence, exact machine change, removal path, exact primary and detail bindings as facts, migration if needed, agent-data call preview, one canary) — the cadence question does not add a second confirmation",
+        "Writes schedule.frequency = the chosen value (weekly) only as part of the one confirmed setup, and records the scheduling marker (installed:true, mechanism:loop for the native /loop stub) only after a fresh run proves it through the closed authoritative artifacts",
+        "Prints the recurring-run and one-off-run recipes verbatim on the recorded path; the composed scheduled prompt states the run is headless and reads search.detail_model for every posting-detail judgment",
+        "Does not re-ask the schedule decision when a marker already reads a verified or session schedule; NO numeric score, weights, or credit/budget math anywhere"
+      ]
+    },
+    {
+      "id": 47,
+      "scenario": "decline — 'Not now' leaves it unscheduled with no recipe dump",
+      "prompt": "Fresh sandbox (setup-onboarding.sh), env as in harness, JOBSEARCH_TEST_SCENARIO=happy. Invoke the job-search skill (first_run:true, source:none) with 'Set up my job search — senior AI engineer, IC not management, remote in the US.' Reach the first live results. At the schedule handoff answer 'Not now'. Inspect <tmp>/registry.json and the transcript.",
+      "expectations": [
+        "On 'Not now', leaves the search unscheduled: writes no scheduling marker (<tmp>/registry.json has no scheduling.installed:true) and makes no machine change",
+        "Does NOT dump the recurring-run or one-off-run recipe blocks on decline; it tells the user in plain conversational language that they can turn scheduling on later just by asking and that a one-off search is always a request away — without pasting a verbatim recipe block",
+        "Asks no frequency or cadence question after a decline (there is no schedule to set a cadence for)",
+        "Still lands the user on the home view at the end; the decline is graceful, not framed as an error",
+        "NO numeric score, NO category weights, NO credit/dollar/budget math anywhere in the output"
+      ]
+    },
+    {
+      "id": 48,
+      "scenario": "returning-user home renders derived schedule health from local evidence",
+      "coverage_kind": "executable_fixture",
+      "fixed_time": { "now": "2026-06-10T09:00:00-07:00", "checks": ["liveness"] },
+      "prompt": "PRE-SEED a returning workspace as in case 4. registry.json has active_workspace, an unrelated sentinel key, and scheduling installed=true, verified=true, mechanism launchd, cadence daily, set_at/verified_at present, and canary_run_id naming a green canary. config.yaml has schedule.frequency daily, schedule.time 08:00, schedule.timezone America/Los_Angeles. The scheduler's own local registration read back MATCHES what the registry recorded. Seed runs/ with a lifecycle-authoritative CLOSED latest scheduled-attributable run (trigger scheduled, run_health healthy) whose started_at is the PRIOR day 08:02 local, plus a later MANUAL run (trigger manual) today ~08:00 local. Drive the home at a FIXED reference now of today 09:00 local; inspect the rendered status line and registry.json after.",
+      "expectations": [
+        "During Gather derives schedule health from the three local sources — the registry scheduling marker, the scheduler's own registration (compared to what the registry recorded), and the latest scheduled-attributable run (trigger scheduled; the canary_run_id canary and the manual run excluded) — per references/home.md -> Schedule health (one hop to shared/references/internals.md -> Schedule health)",
+        "Renders exactly ONE derived schedule-health state in the status line: with the last scheduled fire the prior day and today's 08:00 fire overdue past its 30-minute grace at the fixed now, the schedule reads 'daily · not recently observed' (one missed fire), not a bare 'daily' or 'on'",
+        "Ignores the later manual run for liveness — a manual pull is not scheduled-attributable and does not reset the missed-fire baseline or make a stalled schedule look healthy",
+        "The health derivation is LOCAL and UNMETERED: it fires no scheduler and makes no agent-data call, does not start a repair canary merely to check health, and leaves registry.json byte-for-byte unchanged including the sentinel key",
+        "NO numeric fit score, NO category weights, NO credit/dollar/budget math anywhere in the output"
+      ]
+    },
+    {
+      "id": 49,
+      "scenario": "home surfaces a blocked scheduled run as structured cause+fix, never the raw code",
+      "prompt": "PRE-SEED a returning workspace as in case 4 with a verified daily schedule in the registry and a lifecycle-authoritative CLOSED newest run: trigger scheduled, run_health blocked, and the internal record error.code E-QUOTA. Drive the home; inspect the rendered home output and registry.json after.",
+      "expectations": [
+        "The home selects the rendering by the record's internal error.code (E-QUOTA) but renders ONLY the structured cause · preserved work · next step · exact fix — restore access at https://agent-data.motie.dev/settings/billing, existing matches unaffected — with NO raw E-* code in the home output (references/home.md -> Last run blocked/failed; shared/references/errors.md -> Internal classification vs. user rendering)",
+        "The failure is not buried inside an otherwise-cheery home; usage levers (frequency/sources/depth) are offered only if the user asks, and E-QUOTA takes no schedule-state retry clause (access must be restored first)",
+        "The blocked run is read only through lifecycle artifact authority (closed=true, matching folded state); an open intended-complete artifact is excluded",
+        "The read is local and unmetered — no agent-data call, no config/registry write, registry byte-for-byte unchanged; no numeric score or budget/credit math"
+      ]
+    },
+    {
+      "id": 50,
+      "scenario": "home surfaces a drifted schedule as unreliable and names the exact repair path",
+      "fixed_time": { "now": "2026-06-10T09:00:00-07:00", "checks": ["liveness"] },
+      "prompt": "PRE-SEED a returning workspace where the registry records an installed AND verified daily schedule but the scheduler's own local registration read back NO LONGER matches what the registry recorded (three-source drift); the newest closed scheduled run is healthy. Drive the home at a fixed reference now; inspect the status line and any last-run nudge.",
+      "expectations": [
+        "The derived schedule state is registration_drift (references/home.md -> Schedule health, one hop to shared/references/internals.md); the status line shows 'daily · schedule registration drifted', never a bare 'daily' or 'on'",
+        "Because a drifted schedule cannot be relied on to retry automatically, the home SAYS so and names the EXACT repair path (re-verify / set up the schedule) rather than promising an automatic next run — the unverified/session-only/drifted branch in shared/references/errors.md -> Retry language by verified schedule state",
+        "Recovery is conversational: the repair is offered as a chat action ('set up a schedule'), never a required file edit; no raw E-* code or internal token appears in the home output",
+        "The derivation is local and unmetered — no scheduler fire, no agent-data call — and leaves the registry byte-for-byte unchanged; no numeric score or budget math"
+      ]
+    },
+    {
+      "id": 51,
+      "scenario": "home retry line for a temporary failure matches the derived schedule state — verified, absent, or unverified",
+      "fixed_time": { "now": "2026-06-10T07:30:00-07:00", "checks": ["liveness"] },
+      "prompt": "Run THREE isolated returning workspaces whose newest lifecycle-authoritative CLOSED run is blocked with the internal record error.code E-SERVICE-DOWN (a temporary failure). Arm A: an installed+verified daily schedule with today's fire not yet due. Arm B: NO scheduling marker (absent). Arm C: an installed-but-unverified marker (verified absent). Drive the home in each; compare the retry wording.",
+      "expectations": [
+        "Arm A (verified schedule) names WHEN the next verified run retries — 'the next scheduled run will retry automatically' — per shared/references/errors.md -> Retry language by verified schedule state",
+        "Arm B (no schedule) offers a MANUAL retry, never a scheduled one — 'run a search now' — and does not imply anything retries on its own",
+        "Arm C (unverified) says the schedule cannot be relied on to retry automatically and names the exact repair path to verify it",
+        "In all three arms the E-SERVICE-DOWN cause+fix is structured and carries NO raw E-* code; each read is local and unmetered with no config/registry write and no numeric/budget math"
+      ]
+    },
+    {
+      "id": 52,
+      "scenario": "interactive model-repair recovery is conversational and never exposes the internal class",
+      "prompt": "PRE-SEED a version-2 returning workspace whose scheduled exact detail model is unavailable, so the last run blocked on the bounded model-binding class and the schedule is disabled/unverified. In an interactive job-search session the user asks to fix it. Drive the conversation; inspect what is said and what is written.",
+      "expectations": [
+        "The home/chat renders the observed cause (the exact unavailable/refused slot), the preserved/restored work (valid slots and files kept, config bytes unchanged), the next step, and the exact conversational fix — 'repair the job-search models' to accept the displayed exact defaults or name one exact available model — never the internal class token detail_model_binding_unavailable and never an invented E-* code (shared/references/errors.md -> model-repair-rendering)",
+        "The safe fix is performed CONVERSATIONALLY in the session (the interactive repair), not by telling the user to hand-edit config.yaml or the binding sidecar; hand-editing stays an escape hatch",
+        "The schedule stays disabled and unverified until a green real scheduled-path canary; the retry line says the schedule cannot be relied on until repaired (the unverified branch)",
+        "No numeric fit score, weights, or unlabeled charge claim; no raw internal class or code reaches the user"
+      ]
+    },
+    {
+      "id": 53,
+      "scenario": "a version-1 migration failure surfaces structured cause+fix without the internal class or an invented code",
+      "prompt": "PRE-SEED a version-1 returning workspace where a staged migration (triggered by an action that needs a version-2 binding) failed at an observed phase, restored the exact v1 transaction state, and left the schedule disabled/unverified. In an interactive session the user asks what happened and to retry. Drive it; inspect the rendering.",
+      "expectations": [
+        "Normal chat and the home render the observed failed phase as cause, what was preserved or restored (exact v1 config/sidecar/registry restored, no proposed model active), the next step, and the exact conversational fix — never the internal class config_v1_migration_failed and never an invented migration code (shared/references/errors.md -> config-v1-migration-block)",
+        "Recovery is conversational — retry the migration by chatting (the same single scheduled confirmation), not by hand-editing YAML",
+        "The retry line follows the schedule state (disabled/unverified after rollback -> the schedule cannot be relied on until re-verified), never a promise of an automatic scheduled retry",
+        "No numeric score or budget/credit math; no raw internal class or code reaches the user"
       ]
     }
   ]

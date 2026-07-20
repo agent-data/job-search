@@ -1,10 +1,14 @@
 # agent-data Job Postings API — contract
 
-_Last verified against the live CLI: 2026-07-14._ This mirrors a live, evolving service — the routes,
-fields, and error envelopes below are what the CLI returned as of that date. When the actual output
-disagrees (a new field, a renamed error, a source added or dropped), trust the live response, treat the
-stale line here as the thing to fix, and re-stamp this date when you re-verify. Never fill a gap from
-memory: if a field, source, or error code isn't in the real output, it isn't in the contract.
+_Last verified:_ route docs and production behavior against the live CLI on 2026-07-15. Live pagination
+evidence covers first-page and exact one-hop continuation calls for Ashby, Greenhouse, and Lever; zero-result
+terminal envelopes for all three; and LinkedIn pagination omission plus non-retryable cursor rejection.
+Opaque cursors and request IDs were not retained. Pricing/metering values were supplied and approved on
+2026-07-15 without a live account/pricing probe. This mirrors a live, evolving service. When actual CLI
+output or live account/pricing metadata disagrees (a new field, a renamed error, a source added or dropped),
+trust the live source, treat the stale line here as the thing to fix, and re-stamp the relevant date when you
+re-verify. Never fill a gap from memory: if a field, source, or error code isn't in the real output, it
+isn't in the contract.
 
 One listing, four sources. Accessed via the `agent-data` CLI (JSON stdout, errors to stderr,
 exit 1 on failure). Every `search-jobs` / `get-posting` call targets exactly ONE source via
@@ -32,6 +36,38 @@ selector flags that additionally drop a loose discovery skill for that host; the
 do **not** pass one here. The CLI must be on `PATH` in the run's execution environment, with outbound
 network egress to the agent-data endpoint permitted. Verify with `agent-data whoami` → `api_key_set: true`.
 
+## Pricing and metering
+
+These values were verified on 2026-07-15. Live account/pricing metadata wins when available; update this
+date and downstream tests when the service changes. Do not infer rollover, overage, renewal, or balance
+behavior not stated here. The pricing values were supplied and approved for this contract; no live
+account/pricing probe was run.
+
+<!-- agent-data-metering-contract:pricing -->
+| Option | Included metered calls | Effective value |
+|---|---:|---:|
+| `free_tier` | `100_calls_per_month` | `no_charge` |
+| `pay_as_you_go` | `purchased_as_needed` | `$0.008_per_metered_call;$5_adds_625_calls` |
+| `monthly_subscription_$30` | `4,000_per_month` | `$0.0075_per_call_if_fully_used` |
+| `monthly_subscription_$100` | `15,000_per_month` | `about_$0.0067_per_call_if_fully_used` |
+| `monthly_subscription_$200` | `40,000_per_month` | `$0.005_per_call_if_fully_used` |
+<!-- /agent-data-metering-contract:pricing -->
+
+The underscore-delimited cells are stable contract tokens: read them as ordinary spaces when explaining
+the options. Subscription effective rates assume full use. Search and detail attempts are metered external
+calls, so use call count as the primary usage measure and do not infer an actual charge without live account
+data. The action classification, usage preview, and confirmation rules that consume these facts live in
+[Agent-data usage decisions](internals.md#agent-data-usage-decisions).
+
+- Each successful `search-jobs` or `get-posting` attempt counts as one metered call.
+- Failed attempts and retry attempts currently count. The producer plans to make failures unmetered, so
+  this is a dated current-state fact, not a permanent promise.
+- A call rejected for quota or payment does not count.
+- Free routes such as `status` and `whoami` do not count.
+
+If agent-data returns an explicit charged or metered status for an attempt, that status overrides inference
+from the outcome.
+
 ## Route: status  (run this first)
 ```
 agent-data call f9a6ec16-0bfd-44d8-b3ee-073776745ee7 status
@@ -45,10 +81,18 @@ ask on file: per-source status.)
 ```
 agent-data call f9a6ec16-0bfd-44d8-b3ee-073776745ee7 search-jobs \
   --keywords "<required>" [--location "<optional>"] [--limit <1-100, default 20>] [--source <linkedin|ashby|greenhouse|lever>] \
-  [--published_on_or_after <YYYY-MM-DD>] \
+  [--published_on_or_after <YYYY-MM-DD>] [--cursor <opaque token>] \
   --fields id,source_id,source_url,title,company_name,location_display,salary_display,posted_at,published_at,detail_available,source
 ```
-- **No pagination on any source**; re-running may reorder. Vary keywords/location for breadth.
+- **`--cursor <opaque token>`** is optional. Omit to fetch the first page. Ashby, Greenhouse, and Lever
+  return `data.pagination` and accept its continuation token. `data.pagination.has_more` is a boolean;
+  `data.pagination.next_cursor` is an opaque string when `has_more:true` and is `null` when
+  `has_more:false`. LinkedIn omits `data.pagination`; LinkedIn cursor is rejected as a non-retryable
+  `400 validation_error` with `error.param:"cursor"`.
+- **Continuation binding.** Replay `source`, `keywords`, `location`, `published_on_or_after`, the literal
+  `fields` value, and `limit` exactly, then add only the returned cursor. Cursors are opaque, expire after
+  24 hours, and are never durable checkpoints: do not decode, persist, or resume them. Ordering and
+  traversal are best-effort, not snapshot isolation.
 - **`--source` targets ONE source** (omitted → `linkedin`). Comma-separated or repeated values →
   `400 validation_error` (`error.param:"source"`, `retryable:false`; the message names the allowed sources) — drop that source for
   this run (E-SOURCE-UNSUPPORTED in `errors.md`), never retry it.

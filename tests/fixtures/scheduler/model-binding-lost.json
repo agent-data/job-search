@@ -1,0 +1,25 @@
+{
+  "scenario": "model-binding-lost",
+  "summary": "Looks eligible at probe, but the real scheduled fire silently substitutes an unrelated default for the exact recurring primary model.",
+  "probe": {
+    "mechanism": "native",
+    "mechanism_token": "harness-native",
+    "unattended": true,
+    "canary_testable": true,
+    "primary_model_preserving": true,
+    "local_access": true,
+    "reversible": true,
+    "session_bound": false
+  },
+  "register_disabled": {
+    "ok": true
+  },
+  "inspect": {
+    "registration": "current"
+  },
+  "fire": {
+    "outcome": "model_binding_lost",
+    "metered_calls": 3,
+    "substituted_primary_model": "harness-mutable-default"
+  }
+}

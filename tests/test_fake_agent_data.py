@@ -194,3 +194,89 @@ def test_recency_bad_date_is_422_validation_error():
     body = json.loads(r.stderr)["error"]
     assert body["code"] == "validation_error" and body["param"] == "published_on_or_after" \
         and body["retryable"] is False
+
+
+def search_page(source, cursor=None, scenario="pagination", extra_env=None):
+    args = ["call", LISTING, "search-jobs", "--keywords", "AI engineer",
+            "--location", "United States", "--limit", "2", "--source", source,
+            "--published_on_or_after", "2026-07-01",
+            "--fields", "id,source_id,source_url,title,company_name,location_display,salary_display,posted_at,published_at,detail_available,source"]
+    if cursor is not None:
+        args += ["--cursor", cursor]
+    return shim(args, scenario=scenario, extra_env=extra_env)
+
+
+def test_board_pagination_returns_opaque_cursor_then_terminal_page():
+    first = json.loads(search_page("ashby").stdout)["data"]
+    assert first["pagination"] == {"has_more": True, "next_cursor": "cursor_ashby_2"}
+    second = json.loads(search_page("ashby", "cursor_ashby_2").stdout)["data"]
+    assert second["pagination"] == {"has_more": False, "next_cursor": None}
+    assert {r["source_id"] for r in first["results"]}.isdisjoint(
+        {r["source_id"] for r in second["results"]})
+
+
+def test_continuation_replays_every_bound_request_field(tmp_path):
+    log = tmp_path / "calls.jsonl"
+    env = {"JOBSEARCH_TEST_CALL_LOG": str(log)}
+    assert search_page("greenhouse", extra_env=env).returncode == 0
+    assert search_page("greenhouse", "cursor_greenhouse_2", extra_env=env).returncode == 0
+    calls = [json.loads(line) for line in log.read_text().splitlines()]
+    assert calls[0]["request"] == calls[1]["request"] == {
+        "keywords": "AI engineer", "location": "United States", "limit": 2,
+        "source": "greenhouse", "published_on_or_after": "2026-07-01",
+        "fields": "id,source_id,source_url,title,company_name,location_display,salary_display,posted_at,published_at,detail_available,source",
+    }
+    assert [c["cursor"] for c in calls] == [None, "cursor_greenhouse_2"]
+
+
+def test_linkedin_omits_pagination_and_rejects_cursor():
+    first = json.loads(search_page("linkedin").stdout)["data"]
+    assert "pagination" not in first
+    rejected = search_page("linkedin", "cursor_linkedin_2")
+    assert rejected.returncode != 0
+    error = json.loads(rejected.stderr)["error"]
+    assert error["param"] == "cursor" and error["retryable"] is False
+
+
+def read_calls(path):
+    return [json.loads(line) for line in path.read_text().splitlines() if line.strip()]
+
+
+def test_call_log_marks_free_success_failure_and_quota_rejection(tmp_path):
+    log = tmp_path / "calls.jsonl"
+    env = {"JOBSEARCH_TEST_CALL_LOG": str(log), "JOBSEARCH_TEST_QUOTA_AFTER": "2"}
+    assert shim(["call", LISTING, "status"], extra_env=env).returncode == 0
+    assert search_page("ashby", extra_env=env).returncode == 0
+    failed = shim(["call", LISTING, "search-jobs", "--keywords", "x"],
+                  scenario="stretch", extra_env=env)
+    assert failed.returncode != 0
+    quota = search_page("ashby", "cursor_ashby_2", extra_env=env)
+    assert quota.returncode != 0
+
+    calls = read_calls(log)
+    assert [(c["slug"], c["outcome"], c["metered"]) for c in calls] == [
+        ("status", "success", False),
+        ("search-jobs", "success", True),
+        ("search-jobs", "failure", True),
+        ("search-jobs", "quota_rejected", False),
+    ]
+
+
+def test_completed_retry_and_failure_rows_are_authoritative_metering_evidence(tmp_path):
+    log = tmp_path / "calls.jsonl"
+    env = {"JOBSEARCH_TEST_CALL_LOG": str(log)}
+    args = ["call", LISTING, "search-jobs", "--keywords", "same immutable request",
+            "--source", "ashby"]
+
+    first = shim(args, scenario="stretch", extra_env=env)
+    retry = shim(args, scenario="stretch", extra_env=env)
+    assert first.returncode != 0 and retry.returncode != 0
+
+    calls = read_calls(log)
+    assert len(calls) == 2
+    assert calls[0]["request"] == calls[1]["request"]
+    assert [(call["outcome"], call["metered"]) for call in calls] == [
+        ("failure", True),
+        ("failure", True),
+    ]
+    assert sum(call["metered"] is True for call in calls) == 2

@@ -1,0 +1,1964 @@
+#!/usr/bin/env python3
+"""Deterministic, local-only lifecycle coordinator pressure fixture for T4.1.
+
+This is development test infrastructure, not shipped runtime code.  It invokes the canonical POSIX
+append/fold mechanics and simulates producer responses without network, models, scheduler writes, or
+credits.  Usage: fake-run-lifecycle SCENARIO WORKSPACE
+"""
+import hashlib
+import json
+import pathlib
+import re
+import subprocess
+import sys
+from datetime import datetime
+from urllib.parse import parse_qs, urlparse
+
+
+ROOT = pathlib.Path(__file__).resolve().parents[1]
+APPEND = ROOT / "shared" / "scripts" / "mechanics" / "lifecycle-append.sh"
+FOLD = ROOT / "shared" / "scripts" / "mechanics" / "lifecycle-fold.sh"
+CONVENTIONS = ROOT / "shared" / "references" / "conventions.md"
+RUN_ID = "2026-07-17T12-00-00Z"
+TIMESTAMP = "2026-07-17T08:00:00-04:00"
+REVISION = "fixture-revision-1"
+LINKEDIN_ID = "9100001"
+LINKEDIN_ID_2 = "9100002"
+LINKEDIN_PRIOR_ID = "9100000"
+ASHBY_ID = "a1111111-1111-4111-8111-111111111111"
+POSTING_ID = "jp_0123456789ab"
+
+TERMINAL_MESSAGES = {
+    "E-QUOTA": (
+        "agent-data's API allowance has been reached, so this run cannot continue "
+        "until calls are available.",
+        "Check your account at https://agent-data.motie.dev/settings/billing. "
+        "Your existing matches are unaffected.",
+    ),
+    "E-LIFECYCLE-INCOMPLETE": (
+        "The run stopped with unfinished or untrusted lifecycle evidence; completed "
+        "matches were kept.",
+        "Start a fresh run, or ask me to diagnose it if this repeats.",
+    ),
+    "E-FINAL-ARTIFACT": (
+        "Final results could not be safely finalized; completed matches remain preserved.",
+        "Start a fresh run or ask me to diagnose it so finalization can retry.",
+    ),
+}
+
+
+def marked_forbidden_model_values():
+    text = CONVENTIONS.read_text(encoding="utf-8")
+    match = re.search(
+        r"<!-- exact-model-contract:forbidden-run-record-values -->\n(.*?)\n"
+        r"<!-- /exact-model-contract:forbidden-run-record-values -->",
+        text,
+        re.DOTALL,
+    )
+    if match is None:
+        raise RuntimeError("canonical forbidden run-record model vocabulary is missing")
+    values = frozenset(re.findall(r"^- `([^`]+)`$", match.group(1), re.MULTILINE))
+    if not values:
+        raise RuntimeError("canonical forbidden run-record model vocabulary is empty")
+    return values
+
+
+FORBIDDEN_MODEL_VALUES = marked_forbidden_model_values()
+
+ATTRIBUTION = {
+    "happy_manual": ("manual", "-"),
+    "happy_scheduled": ("scheduled", "scheduler-fixture-1"),
+    "happy_canary": ("canary", "scheduler-fixture-1"),
+    "authority_window": ("canary", "scheduler-fixture-1"),
+    "invalid_manual_scheduler": ("manual", "scheduler-fixture-1"),
+    "invalid_scheduled_without_scheduler": ("scheduled", "-"),
+    "invalid_canary_without_scheduler": ("canary", "-"),
+}
+
+VALID_SCENARIOS = {
+    "happy_manual",
+    "happy_scheduled",
+    "happy_canary",
+    "remaining_work",
+    "in_flight_work",
+    "unaccounted_retry",
+    "compaction_after_selection",
+    "interruption_before_selection",
+    "quota_during_detail",
+    "worker_failure",
+    "display_failure",
+    "artifact_write_failure",
+    "artifact_validation_failure",
+    "complete_close_write_failure",
+    "authority_window",
+}
+REJECTED_SCENARIOS = {
+    "invalid_manual_scheduler",
+    "invalid_scheduled_without_scheduler",
+    "invalid_canary_without_scheduler",
+    "mutable_before_ledger",
+}
+
+
+class Coordinator:
+    def __init__(self, scenario, workspace, trigger, scheduler_arg):
+        self.scenario = scenario
+        self.workspace = workspace
+        self.trigger = trigger
+        self.scheduler_arg = scheduler_arg
+        self.scheduler_id = None if scheduler_arg == "-" else scheduler_arg
+        self.source_order = "linkedin"
+        self.ledger = workspace / "runs" / (".lifecycle-%s.jsonl" % RUN_ID)
+        self.jobs = workspace / "jobs.jsonl"
+        self.effects = []
+        self.run_record_valid = False
+        self.digest_valid = False
+        self.validated_before_complete_close = False
+        self.complete_close_attempted = False
+        self.preserved_judgment_bytes = None
+        self.artifact_failure_injected = False
+        self.coordinator_reinstantiated = False
+        self.reconstructed_posting_states = {}
+        self.reconstructed_job_identities = []
+        self.reconstructed_attempt_ids = []
+        self.intended_complete_files_existed_before_close = False
+        self.public_complete_authorized_before_close = None
+        self.canary_authorized_before_close = None
+        self.public_complete_authorized_after_close = None
+
+    @classmethod
+    def recover(cls, scenario, workspace):
+        ledger = workspace / "runs" / (".lifecycle-%s.jsonl" % RUN_ID)
+        rows = [json.loads(line) for line in ledger.read_text().splitlines()]
+        started = rows[0]
+        scheduler_arg = started["scheduler_id"] if started["scheduler_id"] is not None else "-"
+        recovered = cls(scenario, workspace, started["trigger"], scheduler_arg)
+        recovered.effects = ["context_recovered_from_durable_files"]
+        recovered.coordinator_reinstantiated = True
+        state = recovered.fold()
+        recovered.source_order = state["source_order"]
+        for row in rows:
+            if row["event"] == "posting_state":
+                identity = "%s:%s" % (row["source"], row["source_id"])
+                recovered.reconstructed_posting_states[identity] = row["state"]
+        if recovered.jobs.exists():
+            current_run_rows = []
+            for row in (
+                json.loads(line) for line in recovered.jobs.read_text().splitlines()
+            ):
+                if row.get("event") != "evaluated" or row.get("run_id") != RUN_ID:
+                    continue
+                current_run_rows.append(row)
+            if not recovered.valid_current_run_job_events(
+                current_run_rows, recovered.source_order
+            ):
+                raise RuntimeError("current-run jobs evidence was malformed")
+            current_run_jobs = {
+                "%s:%s" % (row["source"], row["source_id"])
+                for row in current_run_rows
+            }
+            recovered.reconstructed_job_identities = sorted(current_run_jobs)
+        recovered.reconstructed_attempt_ids = sorted(
+            row["attempt_id"] for row in rows if row["event"] == "attempt_started"
+        )
+        if state["phase"] != "reviewing_initial_batch":
+            raise RuntimeError("durable recovery did not reconstruct the review phase")
+        return recovered
+
+    def append(self, command, *args):
+        result = subprocess.run(
+            [
+                "sh",
+                str(APPEND),
+                str(self.ledger),
+                command,
+                RUN_ID,
+                TIMESTAMP,
+                *args,
+            ],
+            capture_output=True,
+            text=True,
+        )
+        if result.returncode != 0:
+            raise RuntimeError("append %s failed: %s" % (command, result.stderr.strip()))
+
+    def fold(self):
+        result = subprocess.run(
+            ["sh", str(FOLD), str(self.ledger), str(self.workspace)],
+            capture_output=True,
+            text=True,
+        )
+        if result.returncode != 0:
+            raise RuntimeError("fold failed: %s" % result.stderr.strip())
+        values = {}
+        for line in result.stdout.splitlines():
+            key, value = line.split("=", 1)
+            values[key] = value
+        return values
+
+    def start(self):
+        self.append("start", self.trigger, self.scheduler_arg, self.source_order)
+        self.effects.append("ledger_started")
+
+    def phase(self, phase):
+        self.append("phase", phase)
+        self.effects.append("phase:%s" % phase)
+
+    def posting(self, source_id, state, source="linkedin"):
+        self.append("posting", source, source_id, state, REVISION)
+        self.effects.append("posting_%s" % state)
+
+    def producer(
+        self,
+        attempt_id,
+        operation,
+        metered,
+        outcome,
+        request_id,
+        account=True,
+        logical_operation_id=None,
+        attempt_number=1,
+    ):
+        logical_operation_id = logical_operation_id or attempt_id
+        self.append(
+            "attempt-started",
+            attempt_id,
+            operation,
+            logical_operation_id,
+            str(attempt_number),
+        )
+        self.effects.append("attempt_started:%s" % attempt_id)
+        # The next effect is the simulated producer invocation.  Its returned status below is the sole
+        # source of metered/outcome/request evidence; the fixture never infers billing from an exception.
+        self.effects.append("producer_call:%s" % attempt_id)
+        if account:
+            self.append(
+                "attempt-accounted",
+                attempt_id,
+                "true" if metered else "false",
+                outcome,
+                request_id if request_id is not None else "-",
+            )
+            self.effects.append("attempt_accounted:%s" % attempt_id)
+
+    def evaluated_job(
+        self,
+        source_id=LINKEDIN_ID,
+        source="linkedin",
+        salary_display="",
+        posted_at=TIMESTAMP,
+    ):
+        if source == "ashby":
+            source_url = "https://jobs.ashbyhq.com/fixture/%s" % source_id
+        elif source == "greenhouse":
+            company, native_id = source_id.split(":", 1)
+            source_url = (
+                "https://boards.greenhouse.io/%s/jobs/%s?gh_jid=%s"
+                % (company, native_id, native_id)
+            )
+        elif source == "lever":
+            company, native_id = source_id.split(":", 1)
+            source_url = "https://jobs.lever.co/%s/%s" % (company, native_id)
+        else:
+            source_url = "https://www.linkedin.com/jobs/view/%s" % source_id
+        event = {
+            "event": "evaluated",
+            "ts": TIMESTAMP,
+            "run_id": RUN_ID,
+            "source": source,
+            "source_id": source_id,
+            "query_id": "fixture-query",
+            "title": "Fixture role",
+            "company_name": "Fixture company",
+            "location_display": "Remote",
+            "salary_display": salary_display,
+            "posted_at": posted_at,
+            "source_url": source_url,
+            "posting_id_at_seen": POSTING_ID,
+            "detail_read": True,
+            "relevant": True,
+            "match": "strong",
+            "reasoning": "Deterministic fixture reasoning.",
+            "dealbreakers_hit": [],
+            "unknowns": [],
+            "needs_human_check": False,
+            "status": "new",
+            "first_seen": TIMESTAMP,
+        }
+        self.jobs.parent.mkdir(parents=True, exist_ok=True)
+        with self.jobs.open("a", encoding="utf-8") as stream:
+            stream.write(json.dumps(event, separators=(",", ":"), sort_keys=True) + "\n")
+        self.effects.append("mutable_jobs_append")
+
+    def valid_evaluated_job_event(self, row):
+        def nonempty(value):
+            return isinstance(value, str) and value == value.strip() and bool(value)
+
+        def iso_date(value):
+            if not isinstance(value, str) or re.fullmatch(r"[0-9]{4}-[0-9]{2}-[0-9]{2}", value) is None:
+                return False
+            try:
+                datetime.strptime(value, "%Y-%m-%d")
+            except ValueError:
+                return False
+            return True
+
+        def iso_timestamp(value):
+            if not isinstance(value, str) or re.fullmatch(
+                r"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}"
+                r"(?:\.[0-9]+)?(?:Z|[+-][0-9]{2}:[0-9]{2})",
+                value,
+            ) is None:
+                return False
+            try:
+                datetime.fromisoformat(value.replace("Z", "+00:00"))
+            except ValueError:
+                return False
+            return True
+
+        def uuid(value):
+            return isinstance(value, str) and re.fullmatch(
+                r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}",
+                value,
+            ) is not None
+
+        def source_id_parts(source, source_id):
+            if not nonempty(source_id):
+                return None
+            if source == "linkedin":
+                return (source_id,) if re.fullmatch(r"[0-9]+", source_id) else None
+            if source == "ashby":
+                return (source_id,) if uuid(source_id) else None
+            if ":" not in source_id:
+                return None
+            company, native_id = source_id.split(":", 1)
+            if re.fullmatch(r"[a-z0-9._-]+", company) is None:
+                return None
+            if source == "greenhouse" and re.fullmatch(r"[0-9]+", native_id):
+                return company, native_id
+            if source == "lever" and uuid(native_id):
+                return company, native_id
+            return None
+
+        def canonical_source_url(source, source_id, value):
+            if not nonempty(value):
+                return False
+            parsed = urlparse(value)
+            if parsed.scheme != "https" or parsed.username is not None or parsed.password is not None:
+                return False
+            try:
+                if parsed.port is not None:
+                    return False
+            except ValueError:
+                return False
+            host = (parsed.hostname or "").lower()
+            parts = [part for part in parsed.path.split("/") if part]
+            native = source_id_parts(source, source_id)
+            if native is None or parsed.fragment:
+                return False
+            if source == "linkedin":
+                return (
+                    host in ("linkedin.com", "www.linkedin.com")
+                    and len(parts) >= 3
+                    and parts[0:2] == ["jobs", "view"]
+                    and (
+                        parts[-1] == source_id
+                        or parts[-1].endswith("-%s" % source_id)
+                    )
+                )
+            if source == "ashby":
+                return (
+                    host == "jobs.ashbyhq.com"
+                    and len(parts) == 2
+                    and parts[-1] == source_id
+                    and not parsed.query
+                )
+            company, native_id = native
+            if source == "greenhouse":
+                return (
+                    host == "boards.greenhouse.io"
+                    and parts == [company, "jobs", native_id]
+                    and parse_qs(parsed.query) == {"gh_jid": [native_id]}
+                )
+            return (
+                host == "jobs.lever.co"
+                and parts == [company, native_id]
+                and not parsed.query
+            )
+
+        required = {
+            "company_name", "dealbreakers_hit", "detail_read", "event", "first_seen",
+            "location_display", "match", "needs_human_check", "posting_id_at_seen",
+            "posted_at", "query_id", "reasoning", "relevant", "run_id", "salary_display",
+            "source", "source_id", "source_url", "status", "title", "ts", "unknowns",
+        }
+        optional = {"posted_at_extracted", "same_role_as"}
+        if not isinstance(row, dict) or set(row) - (required | optional) or not required.issubset(row):
+            return False
+        if row["event"] != "evaluated" or row["run_id"] != RUN_ID:
+            return False
+        sources = ("linkedin", "ashby", "greenhouse", "lever")
+        if row["source"] not in sources:
+            return False
+        string_fields = (
+            "company_name", "first_seen", "location_display", "posting_id_at_seen",
+            "query_id", "reasoning", "source_id", "source_url", "title", "ts",
+        )
+        if not all(nonempty(row[key]) for key in string_fields):
+            return False
+        if source_id_parts(row["source"], row["source_id"]) is None:
+            return False
+        if not canonical_source_url(row["source"], row["source_id"], row["source_url"]):
+            return False
+        if re.fullmatch(r"jp_[0-9a-f]{12}", row["posting_id_at_seen"]) is None:
+            return False
+        if not all(iso_timestamp(row[key]) for key in ("ts", "first_seen")):
+            return False
+        if not isinstance(row["salary_display"], str):
+            return False
+        if row["source"] == "ashby":
+            if row["posted_at"] is not None:
+                return False
+        elif row["source"] == "linkedin" and row["detail_read"] is True:
+            if not iso_timestamp(row["posted_at"]):
+                return False
+        elif not (iso_date(row["posted_at"]) or iso_timestamp(row["posted_at"])):
+            return False
+        if not all(type(row[key]) is bool for key in ("detail_read", "relevant", "needs_human_check")):
+            return False
+        if row["match"] not in ("strong", "moderate", "weak", None):
+            return False
+        if row["relevant"] is False and row["match"] is not None:
+            return False
+        if row["relevant"] is True and row["match"] is None:
+            return False
+        if row["status"] not in ("new", "interested", "applied", "rejected", "archived"):
+            return False
+        if not all(
+            isinstance(row[key], list)
+            and all(nonempty(item) for item in row[key])
+            for key in ("dealbreakers_hit", "unknowns")
+        ):
+            return False
+        if "posted_at_extracted" in row:
+            if row["posted_at"] is not None or not iso_date(row["posted_at_extracted"]):
+                return False
+        if "same_role_as" in row:
+            if not nonempty(row["same_role_as"]) or ":" not in row["same_role_as"]:
+                return False
+            target_source, target_id = row["same_role_as"].split(":", 1)
+            if target_source not in sources or source_id_parts(target_source, target_id) is None:
+                return False
+            if (target_source, target_id) == (row["source"], row["source_id"]):
+                return False
+        return True
+
+    def valid_current_run_job_events(self, rows, source_order=None):
+        if not isinstance(rows, list) or not all(
+            self.valid_evaluated_job_event(row) for row in rows
+        ):
+            return False
+        by_identity = {}
+        for row in rows:
+            identity = "%s:%s" % (row["source"], row["source_id"])
+            if identity in by_identity:
+                return False
+            by_identity[identity] = row
+        shared_verdict_fields = (
+            "relevant", "match", "reasoning", "dealbreakers_hit", "unknowns",
+            "needs_human_check",
+        )
+        for row in rows:
+            target_identity = row.get("same_role_as")
+            if target_identity is None:
+                continue
+            target = by_identity.get(target_identity)
+            if target is None or "same_role_as" in target:
+                return False
+            if row["detail_read"] is not False:
+                return False
+            if target["source"] == "linkedin" and row["source"] != "linkedin":
+                return False
+            if any(row[field] != target[field] for field in shared_verdict_fields):
+                return False
+        if source_order is not None:
+            ordered_sources = (
+                source_order.split("+")
+                if isinstance(source_order, str)
+                else list(source_order)
+            )
+            if (
+                not ordered_sources
+                or len(ordered_sources) != len(set(ordered_sources))
+                or any(
+                    source not in ("linkedin", "ashby", "greenhouse", "lever")
+                    for source in ordered_sources
+                )
+                or any(row["source"] not in ordered_sources for row in rows)
+            ):
+                return False
+            source_rank = {
+                source: index for index, source in enumerate(ordered_sources)
+            }
+            groups = {}
+            for row in rows:
+                primary_identity = row.get("same_role_as") or "%s:%s" % (
+                    row["source"],
+                    row["source_id"],
+                )
+                groups.setdefault(primary_identity, []).append(row)
+            for primary_identity, group in groups.items():
+                primary = by_identity[primary_identity]
+                boards = [row["source"] for row in group if row["source"] != "linkedin"]
+                if boards and primary["source"] != min(boards, key=source_rank.get):
+                    raise RuntimeError("alias group contradicts durable primary source order")
+        return True
+
+    def render_and_present(self, succeeds, source_id=LINKEDIN_ID, source="linkedin"):
+        if succeeds:
+            self.effects.append("interactive_render_succeeded")
+            self.posting(source_id, "presented", source=source)
+        else:
+            self.effects.append("interactive_render_failed")
+
+    def resume_recovered_work(self):
+        # Revalidate the complete durable prefix at the point of use; recovery memory cannot authorize a
+        # posting after the ledger changes or if its retry ordinals/accounting are malformed.
+        self.fold()
+        rows = self.ledger_rows()
+        starts = {
+            row["attempt_id"]: row
+            for row in rows
+            if row["event"] == "attempt_started"
+        }
+        accounted = {
+            row["attempt_id"]: row
+            for row in rows
+            if row["event"] == "attempt_accounted"
+        }
+        resolutions = {
+            row["attempt_id"]: row["resolution"]
+            for row in rows
+            if row["event"] == "attempt_resolved"
+        }
+        posting_states = {}
+        for row in rows:
+            if row["event"] == "posting_state":
+                posting_states["%s:%s" % (row["source"], row["source_id"])] = row[
+                    "state"
+                ]
+        current_job_rows = []
+        if self.jobs.exists():
+            current_job_rows = [
+                row
+                for row in (
+                    json.loads(line)
+                    for line in self.jobs.read_text(encoding="utf-8").splitlines()
+                )
+                if row.get("event") == "evaluated" and row.get("run_id") == RUN_ID
+            ]
+        if not self.valid_current_run_job_events(current_job_rows, self.source_order):
+            raise RuntimeError("current-run jobs evidence changed or became malformed")
+        primary_jobs = {
+            "%s:%s" % (row["source"], row["source_id"]): row
+            for row in current_job_rows
+            if "same_role_as" not in row
+        }
+        for identity, job in primary_jobs.items():
+            state = posting_states.get(identity)
+            if state is None:
+                raise RuntimeError("durable job had no primary lifecycle identity")
+            if state == "queued":
+                raise RuntimeError("queued posting already had durable job")
+            if state == "terminally_skipped":
+                raise RuntimeError("terminally skipped posting had durable job")
+        for identity, state in posting_states.items():
+            if state in ("evaluated", "presented") and identity not in primary_jobs:
+                raise RuntimeError("settled posting lacked durable job evidence")
+        try:
+            resolved_logical_ids = {
+                starts[attempt_id]["logical_operation_id"] for attempt_id in resolutions
+            }
+        except KeyError as exc:
+            raise RuntimeError(
+                "handled detail resolution lacked exact durable false primary"
+            ) from exc
+        expected_resolved_logical_ids = {
+            "detail-%s-%s" % (job["source"], job["source_id"])
+            for job in primary_jobs.values()
+            if job["detail_read"] is False
+            and any(
+                start["logical_operation_id"]
+                == "detail-%s-%s" % (job["source"], job["source_id"])
+                for start in starts.values()
+            )
+        }
+        if resolved_logical_ids - expected_resolved_logical_ids:
+            raise RuntimeError(
+                "handled detail resolution lacked exact durable false primary"
+            )
+        if expected_resolved_logical_ids - resolved_logical_ids:
+            raise RuntimeError("summary-only judgment had detail attempt evidence")
+
+        def latest_detail_success(logical_operation_id):
+            attempts = sorted(
+                (
+                    start
+                    for start in starts.values()
+                    if start["logical_operation_id"] == logical_operation_id
+                ),
+                key=lambda row: row["attempt_number"],
+            )
+            if not attempts:
+                return False
+            if [row["attempt_number"] for row in attempts] != list(
+                range(1, len(attempts) + 1)
+            ):
+                return False
+            latest = attempts[-1]
+            result = accounted.get(latest["attempt_id"])
+            return (
+                latest["operation"] == "detail_read"
+                and result is not None
+                and result["outcome"] == "success"
+            )
+
+        resumed_jobs = []
+        recovery_attempt = 0
+        for identity, posting_state in sorted(posting_states.items()):
+            source, source_id = identity.split(":", 1)
+            logical_operation_id = "detail-%s-%s" % (source, source_id)
+            if posting_state == "evaluating":
+                job = primary_jobs.get(identity)
+                if job is None:
+                    raise RuntimeError("evaluating posting lacked durable result evidence")
+                matching_starts = [
+                    start
+                    for start in starts.values()
+                    if start["logical_operation_id"] == logical_operation_id
+                ]
+                if job["detail_read"] is False:
+                    if matching_starts:
+                        attempts = sorted(
+                            matching_starts, key=lambda row: row["attempt_number"]
+                        )
+                        latest = attempts[-1]
+                        result = accounted.get(latest["attempt_id"])
+                        outcomes = [
+                            accounted.get(attempt["attempt_id"], {}).get("outcome")
+                            for attempt in attempts
+                        ]
+                        if not (
+                            "success" not in outcomes
+                            and latest["operation"] == "detail_read"
+                            and result is not None
+                            and result["outcome"] in (
+                                "retryable_failure",
+                                "terminal_failure",
+                                "worker_failed",
+                            )
+                            and resolutions.get(latest["attempt_id"])
+                            == "summary_fallback"
+                        ):
+                            raise RuntimeError(
+                                "summary-only judgment had detail attempt evidence"
+                            )
+                elif not latest_detail_success(logical_operation_id):
+                    raise RuntimeError("evaluating posting lacked durable result evidence")
+                self.posting(source_id, "evaluated", source=source)
+                resumed_jobs.append(identity)
+            elif posting_state == "queued":
+                recovery_attempt += 1
+                attempt_id = "detail-recovered-%d" % recovery_attempt
+                self.posting(source_id, "evaluating", source=source)
+                self.producer(
+                    attempt_id,
+                    "detail_read",
+                    True,
+                    "success",
+                    "request-%s" % attempt_id,
+                    logical_operation_id=logical_operation_id,
+                )
+                self.evaluated_job(source_id, source=source)
+                self.posting(source_id, "evaluated", source=source)
+                resumed_jobs.append(identity)
+            elif posting_state not in ("evaluated", "presented", "terminally_skipped"):
+                raise RuntimeError("recovery found an unknown posting state")
+        return resumed_jobs
+
+    def ledger_rows(self):
+        return [json.loads(line) for line in self.ledger.read_text().splitlines()]
+
+    def canonical_digest(self, record):
+        summary = record["results_summary"]
+        close_state = record["lifecycle"]["close_state"]
+        health = record["run_health"]
+        jobs = []
+        if self.jobs.exists():
+            jobs = [
+                row
+                for row in (
+                    json.loads(line) for line in self.jobs.read_text().splitlines()
+                )
+                if row.get("event") == "evaluated" and row.get("run_id") == record["run_id"]
+            ]
+        if not self.valid_current_run_job_events(jobs, record["sources_searched"]):
+            raise ValueError("digest source job evidence was malformed")
+        source_labels = {
+            "linkedin": "LinkedIn",
+            "ashby": "Ashby",
+            "greenhouse": "Greenhouse",
+            "lever": "Lever",
+        }
+        row_count = len(jobs)
+        source_breakdown = ""
+        if len(record["sources_searched"]) > 1:
+            source_breakdown = " (%s)" % " · ".join(
+                "%d %s" % (
+                    sum(1 for row in jobs if row["source"] == source),
+                    source_labels[source],
+                )
+                for source in record["sources_searched"]
+            )
+        digest = (
+            "# Job search digest — %s\n"
+            "Run ID: %s\n"
+            "Run health: %s\n"
+            "%d new %s%s · %d strong · %d moderate · %d weak · %d filtered out · %d searches · %d detail reads\n"
+            "Agent-data usage: %d metered calls this run\n\n"
+            % (
+                record["run_id"][:10],
+                record["run_id"],
+                health if health == "healthy" else "blocked (action needed)",
+                row_count,
+                "posting" if row_count == 1 else "postings",
+                source_breakdown,
+                summary["strong"],
+                summary["moderate"],
+                summary["weak"],
+                summary["evaluated"] - summary["relevant"],
+                len(record["queries"]),
+                summary["detail_read"],
+                record["agent_data_usage"]["metered_calls"],
+            )
+        )
+        if close_state != "complete":
+            error = record.get("error") or {}
+            condition = error.get("code") or error.get("class") or "E-LIFECYCLE-INCOMPLETE"
+            if condition not in TERMINAL_MESSAGES:
+                raise ValueError("terminal condition has no canonical user rendering")
+            cause, fix = TERMINAL_MESSAGES[condition]
+            return digest + (
+                "%s\n"
+                "Cause: %s\n"
+                "Fix: %s\n"
+                % (condition, cause, fix)
+            )
+        primary_jobs = [row for row in jobs if "same_role_as" not in row]
+        aliases_by_primary = {}
+        for row in jobs:
+            if "same_role_as" in row:
+                aliases_by_primary.setdefault(row["same_role_as"], []).append(row)
+        for band, heading in (
+            ("strong", "Strong"), ("moderate", "Moderate"), ("weak", "Weak")
+        ):
+            digest += "## %s matches\n" % heading
+            for row in primary_jobs:
+                if row.get("relevant") is not True or row.get("match") != band:
+                    continue
+                identity = "%s:%s" % (row["source"], row["source_id"])
+                aliases = aliases_by_primary.get(identity, [])
+                if aliases:
+                    primary_label = (
+                        "view on company board" if row["source"] != "linkedin" else "view"
+                    )
+                    links = ["[%s](%s)" % (primary_label, row["source_url"])]
+                    source_order = {
+                        source: index for index, source in enumerate(record["sources_searched"])
+                    }
+                    aliases.sort(
+                        key=lambda alias: (
+                            source_order.get(alias["source"], len(source_order)),
+                            alias["source"],
+                            alias["source_id"],
+                        )
+                    )
+                    for alias in aliases:
+                        label = {
+                            "linkedin": "LinkedIn",
+                            "ashby": "Ashby",
+                            "greenhouse": "Greenhouse",
+                            "lever": "Lever",
+                        }[alias["source"]]
+                        links.append("[also on %s](%s)" % (label, alias["source_url"]))
+                    link_text = " · ".join(links)
+                else:
+                    link_text = "[view](%s)" % row["source_url"]
+                source_tag = (
+                    " · %s" % source_labels[row["source"]]
+                    if len(record["sources_searched"]) > 1
+                    else ""
+                )
+                date_mark = ""
+                if row["posted_at"] is None:
+                    if row.get("posted_at_extracted"):
+                        extracted = datetime.strptime(
+                            row["posted_at_extracted"], "%Y-%m-%d"
+                        )
+                        date_mark = " — posted ~%s %d (from posting text)" % (
+                            extracted.strftime("%b"),
+                            extracted.day,
+                        )
+                    else:
+                        date_mark = " — date not stated"
+                digest += (
+                    "- **%s** — %s — %s%s\n"
+                    "  %s%s  %s\n"
+                    % (
+                        row["title"],
+                        row["company_name"],
+                        row["location_display"],
+                        source_tag,
+                        row["reasoning"],
+                        date_mark,
+                        link_text,
+                    )
+                )
+            digest += "\n"
+        filtered = [row for row in primary_jobs if row.get("relevant") is False]
+        digest += "## Filtered out (not relevant): %d\n" % len(filtered)
+        for row in filtered:
+            digest += "%s — %s — %s\n" % (
+                row["title"], row["company_name"], row["reasoning"]
+            )
+        return digest
+
+    def artifact_values(self, close_state, internal_code=None):
+        before = self.fold()
+        if close_state != "complete" and not internal_code:
+            raise ValueError("noncomplete artifacts require the exact terminal condition")
+        rows = self.ledger_rows()
+        operations = {
+            row["attempt_id"]: row["operation"]
+            for row in rows
+            if row["event"] == "attempt_started"
+        }
+        accounted = [row for row in rows if row["event"] == "attempt_accounted"]
+        metered = [row for row in accounted if row["metered"]]
+        by_operation = {
+            operation: sum(
+                1
+                for row in metered
+                if operations[row["attempt_id"]] == operation
+            )
+            for operation in ("initial_search", "continuation_search", "detail_read")
+        }
+        jobs = []
+        if self.jobs.exists():
+            jobs = [
+                row
+                for row in (
+                    json.loads(line) for line in self.jobs.read_text().splitlines()
+                )
+                if row.get("event") == "evaluated" and row.get("run_id") == RUN_ID
+            ]
+            if not self.valid_current_run_job_events(jobs, before["source_order"]):
+                raise ValueError("run artifact job evidence was malformed")
+        primary_jobs = [row for row in jobs if "same_role_as" not in row]
+        source_order = before["source_order"].split("+")
+        selected_by_source = {
+            source: sum(1 for row in primary_jobs if row["source"] == source)
+            for source in source_order
+        }
+        pending_roles = int(before["selected"]) - sum(selected_by_source.values())
+        if pending_roles > 0:
+            selected_by_source[source_order[0]] += pending_roles
+        search_attempts = sum(
+            1 for operation in operations.values() if operation == "initial_search"
+        )
+        search_request_ids = [
+            row["request_id"]
+            for row in accounted
+            if operations[row["attempt_id"]] == "initial_search"
+            and row["request_id"] is not None
+        ]
+        queries = []
+        for index, source in enumerate(source_order):
+            source_rows = sum(1 for row in jobs if row["source"] == source)
+            observed = max(source_rows, selected_by_source[source])
+            queries.append(
+                {
+                    "query_id": "fixture-query",
+                    "source": source,
+                    "keywords": "fixture",
+                    "results_returned": observed,
+                    "new": observed,
+                    "pages_fetched": 1,
+                    "rows_scanned": observed,
+                    "unique_candidates": observed,
+                    "selected_for_review": selected_by_source[source],
+                    "has_more_at_stop": None if source == "linkedin" else False,
+                    "stop_reason": (
+                        "unpaginated" if source == "linkedin" else "first_page_complete"
+                    ),
+                    "attempts": search_attempts if index == 0 else 0,
+                    "request_ids": search_request_ids if index == 0 else [],
+                    "upstream_code": None,
+                    "retryable": None,
+                    "errors": [],
+                }
+            )
+        relevant = sum(1 for row in primary_jobs if row.get("relevant") is True)
+        strong = sum(1 for row in primary_jobs if row.get("match") == "strong")
+        phase = "complete" if close_state == "complete" else before["phase"]
+        health = "healthy" if close_state == "complete" else "blocked"
+        record = {
+            "run_id": RUN_ID,
+            "started_at": TIMESTAMP,
+            "completed_at": TIMESTAMP,
+            "build": {
+                "version": "0.6.0",
+                "content_hash": "sha256:000000000000",
+                "git_sha": "unknown",
+            },
+            "trigger": before["trigger"],
+            "scheduler_id": (
+                None if before["scheduler_id"] == "null" else before["scheduler_id"]
+            ),
+            "primary_model": "fixture-primary-exact",
+            "primary_model_origin": "session_inheritance",
+            "status_probe": "ok",
+            "detail_model": "fixture-detail-exact",
+            "detail_model_origin": "configured_user",
+            "detail_model_binding_id": "fixture-binding-1",
+            "queries": queries,
+            "sources_searched": source_order,
+            "sources_failed": [],
+            "review_scope": {
+                "mode": "first_page",
+                "target_new_postings": None,
+                "origin": "default",
+                "outcome": (
+                    "completed_first_pages"
+                    if close_state == "complete"
+                    else "incomplete"
+                ),
+            },
+            "agent_data_usage": {
+                "metered_calls": len(metered),
+                "unit_rate_usd": None,
+                "payg_equivalent_usd": None,
+                "pricing_basis": "pay_as_you_go_equivalent",
+                "by_operation": by_operation,
+                "diagnostics": {
+                    "retry_attempts": sum(
+                        1
+                        for row in rows
+                        if row["event"] == "attempt_started" and row["attempt_number"] > 1
+                    ),
+                    "charged_failures": sum(
+                        1
+                        for row in metered
+                        if row["outcome"] not in ("success", "quota_rejected")
+                    ),
+                    "quota_rejections": sum(
+                        1 for row in accounted if row["outcome"] == "quota_rejected"
+                    ),
+                    "free_route_calls": 0,
+                },
+            },
+            "pagination_metrics": {
+                "first_page_rows": max(len(jobs), int(before["selected"])),
+                "continuation_rows": 0,
+                "known_rows": 0,
+                "same_run_cross_query_duplicate_rows": 0,
+                "cross_source_rows_merged": len(jobs) - len(primary_jobs),
+                "unique_unseen_roles_first_pages": int(before["selected"]),
+                "unique_unseen_roles_continuations": 0,
+                "selected_roles_from_continuations": 0,
+                "deeper_coverage_nudge_eligible": False,
+                "deeper_coverage_nudge_streams": [],
+            },
+            "results_summary": {
+                "total_results": max(len(jobs), int(before["selected"])),
+                "new_postings": int(before["selected"]),
+                "evaluated": int(before["evaluated"]),
+                "detail_read": sum(
+                    1 for row in primary_jobs if row.get("detail_read") is True
+                ),
+                "relevant": relevant,
+                "strong": strong,
+                "moderate": 0,
+                "weak": 0,
+            },
+            "errors": (
+                []
+                if close_state == "complete"
+                else [
+                    {
+                        "stage": "fixture",
+                        "code": "fixture_terminal",
+                        "retryable": False,
+                        "attempts": 1,
+                        "final": "stopped",
+                        "request_id": None,
+                    }
+                ]
+            ),
+            "error": None if close_state == "complete" else {"code": internal_code},
+            "lifecycle": {
+                "phase": phase,
+                "close_state": close_state,
+                "health": health,
+            },
+            "run_health": health,
+        }
+        return record, self.canonical_digest(record)
+
+    def validate_run_record(self, record):
+        def exact_keys(value, keys):
+            return isinstance(value, dict) and set(value) == set(keys)
+
+        def nonempty(value):
+            return isinstance(value, str) and bool(value.strip())
+
+        def count(value):
+            return type(value) is int and value >= 0
+
+        def timestamp(value):
+            if not nonempty(value):
+                return False
+            if re.fullmatch(
+                r"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(?:\.[0-9]+)?(?:Z|[+-][0-9]{2}:[0-9]{2})",
+                value,
+            ) is None:
+                return False
+            try:
+                datetime.fromisoformat(value.replace("Z", "+00:00"))
+            except ValueError:
+                return False
+            return True
+
+        def decimal_or_none(value):
+            return value is None or (
+                isinstance(value, str)
+                and re.fullmatch(r"(?:0|[1-9][0-9]*)(?:\.[0-9]+)?", value) is not None
+            )
+
+        def exact_model(value):
+            return (
+                nonempty(value)
+                and value == value.strip()
+                and value.lower() not in FORBIDDEN_MODEL_VALUES
+            )
+
+        def valid_attempt_error(error):
+            required_error = {
+                "stage", "code", "retryable", "attempts", "final", "request_id"
+            }
+            if not isinstance(error, dict) or not required_error.issubset(error):
+                return False
+            if set(error) - (required_error | {"source_id"}):
+                return False
+            if not all(nonempty(error[key]) for key in ("stage", "code", "final")):
+                return False
+            if type(error["retryable"]) is not bool:
+                return False
+            if not count(error["attempts"]) or error["attempts"] == 0:
+                return False
+            if error["request_id"] is not None and not nonempty(error["request_id"]):
+                return False
+            if "source_id" in error and not nonempty(error["source_id"]):
+                return False
+            return True
+
+        required = {
+            "agent_data_usage", "build", "completed_at", "detail_model",
+            "detail_model_binding_id", "detail_model_origin", "error", "errors",
+            "lifecycle", "pagination_metrics", "primary_model", "primary_model_origin",
+            "queries", "results_summary", "review_scope", "run_health", "run_id",
+            "scheduler_id", "sources_failed", "sources_searched", "started_at",
+            "status_probe", "trigger",
+        }
+        if not exact_keys(record, required) or record["run_id"] != RUN_ID:
+            return False
+        if re.fullmatch(r"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}-[0-9]{2}-[0-9]{2}Z", record["run_id"]) is None:
+            return False
+        if not timestamp(record["started_at"]) or not timestamp(record["completed_at"]):
+            return False
+        if datetime.fromisoformat(record["completed_at"].replace("Z", "+00:00")) < datetime.fromisoformat(record["started_at"].replace("Z", "+00:00")):
+            return False
+        build = record["build"]
+        if not exact_keys(build, {"version", "content_hash", "git_sha"}):
+            return False
+        if re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+", build["version"]) is None:
+            return False
+        if re.fullmatch(r"sha256:[0-9a-f]{12}", build["content_hash"]) is None:
+            return False
+        if build["git_sha"] != "unknown" and re.fullmatch(r"[0-9a-f]{7,40}", build["git_sha"]) is None:
+            return False
+        if record["trigger"] not in ("manual", "scheduled", "canary"):
+            return False
+        if (record["trigger"] == "manual") != (record["scheduler_id"] is None):
+            return False
+        if record["scheduler_id"] is not None and not nonempty(record["scheduler_id"]):
+            return False
+        if not exact_model(record["primary_model"]):
+            return False
+        if record["primary_model_origin"] not in (
+            "session_inheritance", "user_override", "repair_session"
+        ):
+            return False
+        if record["status_probe"] not in ("ok", "degraded", "unreachable"):
+            return False
+        if record["status_probe"] == "unreachable" and record["run_health"] != "blocked":
+            return False
+        detail_values = (
+            record["detail_model"],
+            record["detail_model_origin"],
+            record["detail_model_binding_id"],
+        )
+        binding_block = (
+            record["run_health"] == "blocked"
+            and isinstance(record["error"], dict)
+            and record["error"].get("class") == "detail_model_binding_unavailable"
+        )
+        if binding_block:
+            if detail_values != (None, None, None):
+                return False
+        else:
+            if not exact_model(record["detail_model"]):
+                return False
+            if record["detail_model_origin"] not in (
+                "configured_auto", "configured_user", "legacy_v1_selector", "repair"
+            ):
+                return False
+            if record["detail_model_origin"] == "legacy_v1_selector":
+                if record["detail_model_binding_id"] is not None:
+                    return False
+            elif not nonempty(record["detail_model_binding_id"]):
+                return False
+
+        lifecycle = record["lifecycle"]
+        if not exact_keys(lifecycle, {"phase", "close_state", "health"}):
+            return False
+        phases = (
+            "preflight", "searching", "selection_settled", "reviewing_initial_batch",
+            "early_results_shown", "reviewing_remaining", "finalizing", "complete",
+        )
+        if lifecycle["phase"] not in phases:
+            return False
+        if lifecycle["close_state"] not in ("complete", "blocked", "interrupted"):
+            return False
+        if record["run_health"] not in ("healthy", "partial", "degraded", "blocked"):
+            return False
+        if lifecycle["health"] != record["run_health"]:
+            return False
+        if lifecycle["close_state"] == "complete":
+            if lifecycle["phase"] != "complete" or record["run_health"] == "blocked":
+                return False
+            if record["error"] is not None:
+                return False
+        elif lifecycle["phase"] == "complete" or record["run_health"] != "blocked":
+            return False
+        elif binding_block:
+            if not exact_keys(record["error"], {"class"}):
+                return False
+        else:
+            if not exact_keys(record["error"], {"code"}):
+                return False
+            if re.fullmatch(r"E-[A-Z0-9]+(?:-[A-Z0-9]+)*", record["error"]["code"]) is None:
+                return False
+
+        if not isinstance(record["queries"], list):
+            return False
+        if not record["queries"] and not (
+            binding_block and lifecycle["phase"] == "preflight"
+        ):
+            return False
+        query_keys = {
+            "query_id", "source", "keywords", "results_returned", "new", "pages_fetched",
+            "rows_scanned", "unique_candidates", "selected_for_review", "has_more_at_stop",
+            "stop_reason", "attempts", "request_ids", "upstream_code", "retryable", "errors",
+        }
+        for query in record["queries"]:
+            if not exact_keys(query, query_keys):
+                return False
+            if not all(nonempty(query[key]) for key in ("query_id", "keywords")):
+                return False
+            if query["source"] not in ("linkedin", "ashby", "greenhouse", "lever"):
+                return False
+            if not all(count(query[key]) for key in (
+                "results_returned", "new", "pages_fetched", "rows_scanned",
+                "unique_candidates", "selected_for_review", "attempts",
+            )):
+                return False
+            if query["new"] > query["results_returned"] or query["selected_for_review"] > query["unique_candidates"]:
+                return False
+            if query["has_more_at_stop"] is not None and type(query["has_more_at_stop"]) is not bool:
+                return False
+            if query["stop_reason"] not in (
+                "first_page_complete", "target_reached", "sources_exhausted", "unpaginated",
+                "pagination_incomplete", "source_failed",
+            ):
+                return False
+            if query["stop_reason"] == "unpaginated" and query["source"] != "linkedin":
+                return False
+            if query["source"] == "linkedin" and query["stop_reason"] != "unpaginated":
+                return False
+            if query["source"] == "linkedin" and query["has_more_at_stop"] is not None:
+                return False
+            if query["source"] != "linkedin":
+                expected_has_more = {
+                    "first_page_complete": (False, True),
+                    "target_reached": (True,),
+                    "sources_exhausted": (False,),
+                    "pagination_incomplete": (None,),
+                    "source_failed": (None,),
+                }[query["stop_reason"]]
+                if query["has_more_at_stop"] not in expected_has_more:
+                    return False
+            if not isinstance(query["request_ids"], list) or not all(nonempty(item) for item in query["request_ids"]):
+                return False
+            if query["upstream_code"] is not None and not nonempty(query["upstream_code"]):
+                return False
+            if query["retryable"] is not None and type(query["retryable"]) is not bool:
+                return False
+            if not isinstance(query["errors"], list) or not all(
+                valid_attempt_error(error) for error in query["errors"]
+            ):
+                return False
+
+        sources = ("linkedin", "ashby", "greenhouse", "lever")
+        for key in ("sources_searched", "sources_failed"):
+            if not isinstance(record[key], list) or not all(item in sources for item in record[key]):
+                return False
+            if len(record[key]) != len(set(record[key])):
+                return False
+        if not set(record["sources_failed"]).issubset(set(record["sources_searched"])):
+            return False
+        if any(
+            query["source"] not in record["sources_searched"]
+            for query in record["queries"]
+        ):
+            return False
+
+        review = record["review_scope"]
+        if not exact_keys(review, {"mode", "target_new_postings", "origin", "outcome"}):
+            return False
+        if review["mode"] not in ("first_page", "finite", "all"):
+            return False
+        if review["origin"] not in ("default", "one_off", "saved"):
+            return False
+        if review["outcome"] not in (
+            "completed_first_pages", "target_reached", "sources_exhausted", "incomplete"
+        ):
+            return False
+        if review["mode"] == "finite":
+            if not count(review["target_new_postings"]) or review["target_new_postings"] == 0:
+                return False
+        elif review["target_new_postings"] is not None:
+            return False
+
+        outcomes_by_mode = {
+            "first_page": {"completed_first_pages", "incomplete"},
+            "finite": {"target_reached", "sources_exhausted", "incomplete"},
+            "all": {"sources_exhausted", "incomplete"},
+        }
+        if review["outcome"] not in outcomes_by_mode[review["mode"]]:
+            return False
+        board_queries = [query for query in record["queries"] if query["source"] != "linkedin"]
+        failure_stops = {"pagination_incomplete", "source_failed"}
+        failed_query_sources = {
+            query["source"]
+            for query in record["queries"]
+            if query["stop_reason"] == "source_failed"
+        }
+        if failed_query_sources != set(record["sources_failed"]):
+            return False
+        if (
+            record["sources_failed"]
+            or any(query["stop_reason"] in failure_stops for query in record["queries"])
+        ) and review["outcome"] != "incomplete":
+            return False
+        normal_board_stops = {
+            "first_page": {"first_page_complete"},
+            "finite": {"target_reached", "sources_exhausted"},
+            "all": {"sources_exhausted"},
+        }[review["mode"]]
+        allowed_board_stops = set(normal_board_stops)
+        if review["outcome"] == "incomplete":
+            allowed_board_stops.update(failure_stops)
+        if any(query["stop_reason"] not in allowed_board_stops for query in board_queries):
+            return False
+        if review["outcome"] == "completed_first_pages" and any(
+            query["stop_reason"] != "first_page_complete" for query in board_queries
+        ):
+            return False
+        if review["outcome"] == "sources_exhausted" and any(
+            query["stop_reason"] != "sources_exhausted" for query in board_queries
+        ):
+            return False
+        usage = record["agent_data_usage"]
+        if not exact_keys(usage, {
+            "metered_calls", "unit_rate_usd", "payg_equivalent_usd",
+            "pricing_basis", "by_operation", "diagnostics",
+        }):
+            return False
+        if not count(usage["metered_calls"]):
+            return False
+        if not decimal_or_none(usage["unit_rate_usd"]) or not decimal_or_none(usage["payg_equivalent_usd"]):
+            return False
+        if (usage["unit_rate_usd"] is None) != (usage["payg_equivalent_usd"] is None):
+            return False
+        if usage["pricing_basis"] != "pay_as_you_go_equivalent":
+            return False
+        if not exact_keys(usage["by_operation"], {"initial_search", "continuation_search", "detail_read"}):
+            return False
+        if not all(count(value) for value in usage["by_operation"].values()):
+            return False
+        if sum(usage["by_operation"].values()) != usage["metered_calls"]:
+            return False
+        diagnostics = usage["diagnostics"]
+        if not exact_keys(diagnostics, {"retry_attempts", "charged_failures", "quota_rejections", "free_route_calls"}):
+            return False
+        if not all(count(value) for value in diagnostics.values()):
+            return False
+
+        pagination = record["pagination_metrics"]
+        pagination_counts = {
+            "first_page_rows", "continuation_rows", "known_rows",
+            "same_run_cross_query_duplicate_rows", "cross_source_rows_merged",
+            "unique_unseen_roles_first_pages", "unique_unseen_roles_continuations",
+            "selected_roles_from_continuations",
+        }
+        if not exact_keys(pagination, pagination_counts | {
+            "deeper_coverage_nudge_eligible", "deeper_coverage_nudge_streams"
+        }):
+            return False
+        if not all(count(pagination[key]) for key in pagination_counts):
+            return False
+        if type(pagination["deeper_coverage_nudge_eligible"]) is not bool:
+            return False
+        if not isinstance(pagination["deeper_coverage_nudge_streams"], list) or not all(
+            nonempty(item) for item in pagination["deeper_coverage_nudge_streams"]
+        ):
+            return False
+        nudge_streams = pagination["deeper_coverage_nudge_streams"]
+        if len(nudge_streams) != len(set(nudge_streams)):
+            return False
+        if not pagination["deeper_coverage_nudge_eligible"]:
+            if nudge_streams:
+                return False
+        else:
+            if (
+                review["mode"] != "first_page"
+                or review["outcome"] != "completed_first_pages"
+                or pagination["unique_unseen_roles_first_pages"] != 0
+                or not nudge_streams
+            ):
+                return False
+            healthy_cursor_streams = {
+                "%s:%s" % (query["query_id"], query["source"])
+                for query in record["queries"]
+                if query["source"] in ("ashby", "greenhouse", "lever")
+                and query["source"] not in record["sources_failed"]
+                and query["has_more_at_stop"] is True
+            }
+            if not set(nudge_streams).issubset(healthy_cursor_streams):
+                return False
+
+        summary = record["results_summary"]
+        summary_keys = {
+            "total_results", "new_postings", "evaluated", "detail_read",
+            "relevant", "strong", "moderate", "weak",
+        }
+        if not exact_keys(summary, summary_keys) or not all(count(summary[key]) for key in summary_keys):
+            return False
+        if summary["new_postings"] > summary["total_results"] or summary["evaluated"] > summary["new_postings"]:
+            return False
+        if summary["detail_read"] > summary["evaluated"]:
+            return False
+        if summary["relevant"] != summary["strong"] + summary["moderate"] + summary["weak"]:
+            return False
+        if summary["relevant"] > summary["evaluated"]:
+            return False
+        if sum(query["selected_for_review"] for query in record["queries"]) != summary["new_postings"]:
+            return False
+        if review["outcome"] == "target_reached" and (
+            summary["new_postings"] != review["target_new_postings"]
+        ):
+            return False
+        if (
+            review["mode"] == "finite"
+            and review["outcome"] == "sources_exhausted"
+            and summary["new_postings"] >= review["target_new_postings"]
+        ):
+            return False
+
+        if not isinstance(record["errors"], list):
+            return False
+        if not all(valid_attempt_error(error) for error in record["errors"]):
+            return False
+        if binding_block and lifecycle["phase"] == "preflight":
+            if record["queries"] or record["sources_searched"] or record["sources_failed"]:
+                return False
+            if usage["metered_calls"] != 0 or any(usage["by_operation"].values()):
+                return False
+            if any(usage["diagnostics"].values()):
+                return False
+            if usage["unit_rate_usd"] is not None or usage["payg_equivalent_usd"] is not None:
+                return False
+            if any(pagination[key] for key in pagination_counts):
+                return False
+            if pagination["deeper_coverage_nudge_eligible"] or nudge_streams:
+                return False
+            if any(summary.values()) or record["errors"]:
+                return False
+            if review["outcome"] != "incomplete":
+                return False
+        return True
+
+    def validate_digest(self, digest, record):
+        try:
+            return digest == self.canonical_digest(record)
+        except (KeyError, OSError, RuntimeError, TypeError, ValueError):
+            return False
+
+    def jobs_match_folded_source_evidence(self, record, source_order):
+        try:
+            jobs = []
+            if self.jobs.exists():
+                jobs = [
+                    row
+                    for row in (
+                        json.loads(line)
+                        for line in self.jobs.read_text(encoding="utf-8").splitlines()
+                    )
+                    if row.get("event") == "evaluated" and row.get("run_id") == RUN_ID
+                ]
+            if not self.valid_current_run_job_events(jobs, source_order):
+                return False
+            posting_states = {}
+            ledger_rows = self.ledger_rows()
+            for row in ledger_rows:
+                if row["event"] == "posting_state":
+                    posting_states["%s:%s" % (row["source"], row["source_id"])] = row[
+                        "state"
+                    ]
+            starts = [row for row in ledger_rows if row["event"] == "attempt_started"]
+            accounted = {
+                row["attempt_id"]: row
+                for row in ledger_rows
+                if row["event"] == "attempt_accounted"
+            }
+            resolutions = {
+                row["attempt_id"]: row["resolution"]
+                for row in ledger_rows
+                if row["event"] == "attempt_resolved"
+            }
+        except (KeyError, OSError, RuntimeError, TypeError, ValueError):
+            return False
+
+        primary_identities = {
+            "%s:%s" % (row["source"], row["source_id"])
+            for row in jobs
+            if "same_role_as" not in row
+        }
+        evaluated_identities = {
+            identity
+            for identity, state in posting_states.items()
+            if state in ("evaluated", "presented")
+        }
+        if primary_identities != evaluated_identities:
+            return False
+
+        searched_sources = set(record["sources_searched"])
+        durable_sources = set(source_order)
+        query_evidence = {
+            (query["source"], query["query_id"]) for query in record["queries"]
+        }
+        if any(
+            row["source"] not in durable_sources
+            or row["source"] not in searched_sources
+            or (row["source"], row["query_id"]) not in query_evidence
+            for row in jobs
+        ):
+            return False
+
+        by_identity = {
+            "%s:%s" % (row["source"], row["source_id"]): row for row in jobs
+        }
+        expected_resolved_logical_ids = set()
+        for identity in primary_identities:
+            primary = by_identity[identity]
+            logical_id = "detail-%s-%s" % (
+                primary["source"],
+                primary["source_id"],
+            )
+            attempts = sorted(
+                (
+                    row
+                    for row in starts
+                    if row["logical_operation_id"] == logical_id
+                ),
+                key=lambda row: row["attempt_number"],
+            )
+            outcomes = [
+                accounted.get(row["attempt_id"], {}).get("outcome")
+                for row in attempts
+            ]
+            if primary["detail_read"] is False:
+                if not attempts:
+                    continue
+                expected_resolved_logical_ids.add(logical_id)
+                latest = attempts[-1]
+                if (
+                    "success" in outcomes
+                    or latest["operation"] != "detail_read"
+                    or outcomes[-1]
+                    not in ("retryable_failure", "terminal_failure", "worker_failed")
+                    or resolutions.get(latest["attempt_id"]) != "summary_fallback"
+                ):
+                    return False
+            else:
+                if not attempts:
+                    return False
+                latest = attempts[-1]
+                if (
+                    latest["operation"] != "detail_read"
+                    or outcomes[-1] != "success"
+                    or any(row["attempt_id"] in resolutions for row in attempts)
+                ):
+                    return False
+        start_by_attempt = {row["attempt_id"]: row for row in starts}
+        try:
+            resolved_logical_ids = {
+                start_by_attempt[attempt_id]["logical_operation_id"]
+                for attempt_id in resolutions
+            }
+        except KeyError:
+            return False
+        if resolved_logical_ids != expected_resolved_logical_ids:
+            return False
+        source_rank = {
+            source: index for index, source in enumerate(source_order)
+        }
+        groups = {}
+        for row in jobs:
+            primary_identity = row.get("same_role_as") or "%s:%s" % (
+                row["source"],
+                row["source_id"],
+            )
+            groups.setdefault(primary_identity, []).append(row)
+        for primary_identity, group in groups.items():
+            primary = by_identity[primary_identity]
+            board_sources = {
+                row["source"] for row in group if row["source"] != "linkedin"
+            }
+            if board_sources:
+                expected_primary_source = min(
+                    board_sources, key=lambda source: source_rank[source]
+                )
+                if primary["source"] != expected_primary_source:
+                    return False
+        return True
+
+    def write_and_validate_artifacts(
+        self, close_state, record_milestones=True, internal_code=None
+    ):
+        record, digest = self.artifact_values(close_state, internal_code=internal_code)
+        run_path = self.workspace / "runs" / (RUN_ID + ".json")
+        digest_path = self.workspace / "reports" / "2026-07-17-digest.md"
+
+        inject_failure = (
+            self.scenario in ("artifact_write_failure", "artifact_validation_failure")
+            and not self.artifact_failure_injected
+        )
+        if inject_failure:
+            self.artifact_failure_injected = True
+        if inject_failure and self.scenario == "artifact_write_failure":
+            self.effects.append("terminal_artifact_write_failed")
+            return False
+        digest_path.parent.mkdir(parents=True, exist_ok=True)
+        if inject_failure and self.scenario == "artifact_validation_failure":
+            run_path.write_text('{"run_id":"wrong"}\n', encoding="utf-8")
+            digest_path.write_text("# Wrong digest\n", encoding="utf-8")
+            self.effects.append("terminal_artifact_validation_failed")
+        else:
+            run_path.write_text(
+                json.dumps(record, indent=2, sort_keys=True) + "\n",
+                encoding="utf-8",
+            )
+            digest_path.write_text(digest, encoding="utf-8")
+
+        try:
+            loaded_record = json.loads(run_path.read_text(encoding="utf-8"))
+            loaded_digest = digest_path.read_text(encoding="utf-8")
+            self.run_record_valid = (
+                loaded_record == record and self.validate_run_record(loaded_record)
+            )
+            self.digest_valid = (
+                loaded_digest == digest and self.validate_digest(loaded_digest, loaded_record)
+            )
+        except (OSError, ValueError):
+            self.run_record_valid = False
+            self.digest_valid = False
+        valid = self.run_record_valid and self.digest_valid
+        if valid:
+            try:
+                source_order = self.fold()["source_order"].split("+")
+                valid = self.jobs_match_folded_source_evidence(
+                    loaded_record, source_order
+                )
+            except (KeyError, OSError, RuntimeError, TypeError, ValueError):
+                valid = False
+            if not valid:
+                self.run_record_valid = False
+                self.digest_valid = False
+        if valid and record_milestones:
+            self.append("milestone", "final_run_record_written")
+            self.append("milestone", "final_digest_written")
+            self.effects.extend(
+                ["final_run_record_validated", "final_digest_validated"]
+            )
+        return valid
+
+    def public_artifact_authority(self):
+        try:
+            state = self.fold()
+            record = json.loads(
+                (self.workspace / "runs" / (RUN_ID + ".json")).read_text(encoding="utf-8")
+            )
+            digest = (self.workspace / "reports" / "2026-07-17-digest.md").read_text(
+                encoding="utf-8"
+            )
+        except (OSError, RuntimeError, ValueError):
+            return False
+        if state["run_id"] != RUN_ID or record.get("run_id") != RUN_ID:
+            return False
+        record_scheduler = record.get("scheduler_id")
+        folded_scheduler = None if state["scheduler_id"] == "null" else state["scheduler_id"]
+        if record.get("trigger") != state["trigger"] or record_scheduler != folded_scheduler:
+            return False
+        source_order = state.get("source_order", "").split("+")
+        if not source_order or record.get("sources_searched") != source_order:
+            return False
+        if state["closed"] != "true":
+            return False
+        if record.get("lifecycle", {}).get("close_state") != state["close_state"]:
+            return False
+        if record.get("lifecycle", {}).get("phase") != state["phase"]:
+            return False
+        if not self.validate_run_record(record) or not self.validate_digest(digest, record):
+            return False
+        if not self.jobs_match_folded_source_evidence(record, source_order):
+            return False
+        try:
+            close_row = next(
+                row for row in reversed(self.ledger_rows()) if row["event"] == "run_closed"
+            )
+            expected_record, expected_digest = self.artifact_values(
+                state["close_state"], internal_code=close_row["internal_code"]
+            )
+        except (KeyError, OSError, RuntimeError, TypeError, ValueError):
+            return False
+        if record != expected_record or digest != expected_digest:
+            return False
+        if state["close_state"] == "complete":
+            return state["can_complete"] == "true"
+        return state["can_complete"] == "false"
+
+    def close(self, close_state, code):
+        if close_state == "complete":
+            self.complete_close_attempted = True
+        self.append("close", close_state, code)
+        self.effects.append("run_closed:%s" % close_state)
+
+    def summary(self):
+        state = self.fold()
+        snapshot_hash = None
+        final_prefix_hash = None
+        preserved = None
+        if self.preserved_judgment_bytes is not None:
+            final_bytes = self.jobs.read_bytes()
+            prefix = final_bytes[: len(self.preserved_judgment_bytes)]
+            snapshot_hash = hashlib.sha256(self.preserved_judgment_bytes).hexdigest()
+            final_prefix_hash = hashlib.sha256(prefix).hexdigest()
+            preserved = prefix == self.preserved_judgment_bytes
+        return {
+            "accepted": True,
+            "run_id": RUN_ID,
+            "ledger_name": self.ledger.name,
+            "trigger": state["trigger"],
+            "scheduler_id": None if state["scheduler_id"] == "null" else state["scheduler_id"],
+            "phase": state["phase"],
+            "close_state": state["close_state"],
+            "can_complete": state["can_complete"] == "true",
+            "remaining": int(state["remaining"]),
+            "in_flight": int(state["in_flight"]),
+            "attempts_started": int(state["attempts_started"]),
+            "attempts_accounted": int(state["attempts_accounted"]),
+            "blocking_attempt_failures": int(state["blocking_attempt_failures"]),
+            "presented": int(state["presented"]),
+            "run_record_valid": self.run_record_valid,
+            "digest_valid": self.digest_valid,
+            "validated_before_complete_close": self.validated_before_complete_close,
+            "complete_close_attempted": self.complete_close_attempted,
+            "judgments_preserved": preserved,
+            "judgment_snapshot_sha256": snapshot_hash,
+            "judgment_final_prefix_sha256": final_prefix_hash,
+            "coordinator_reinstantiated": self.coordinator_reinstantiated,
+            "reconstructed_posting_states": self.reconstructed_posting_states,
+            "reconstructed_job_identities": self.reconstructed_job_identities,
+            "reconstructed_attempt_ids": self.reconstructed_attempt_ids,
+            "intended_complete_files_existed_before_close": self.intended_complete_files_existed_before_close,
+            "public_complete_authorized_before_close": self.public_complete_authorized_before_close,
+            "canary_authorized_before_close": self.canary_authorized_before_close,
+            "public_complete_authorized_after_close": self.public_complete_authorized_after_close,
+            "effects": self.effects,
+        }
+
+
+def validate_attribution(trigger, scheduler_arg):
+    if trigger == "manual":
+        return scheduler_arg == "-"
+    if trigger in ("scheduled", "canary"):
+        return scheduler_arg != "-"
+    return False
+
+
+def finish(coordinator, close_state, code):
+    internal_code = None if code == "-" else code
+    artifacts_valid = coordinator.write_and_validate_artifacts(
+        close_state, internal_code=internal_code
+    )
+    if not artifacts_valid and close_state != "complete":
+        if not coordinator.write_and_validate_artifacts(
+            close_state, internal_code=internal_code
+        ):
+            raise RuntimeError("failed to publish truthful blocked terminal artifacts")
+        coordinator.effects.append("terminal_artifacts_repaired")
+        artifacts_valid = True
+    if close_state == "complete":
+        if not artifacts_valid:
+            raise RuntimeError("complete artifacts did not validate")
+        readiness = coordinator.fold()
+        if readiness["ready_to_close"] != "true":
+            raise RuntimeError("completion predicate was not ready")
+        coordinator.validated_before_complete_close = True
+        if coordinator.scenario == "complete_close_write_failure":
+            coordinator.complete_close_attempted = True
+            coordinator.ledger.chmod(0o444)
+            try:
+                coordinator.append("close", "complete", "-")
+            except RuntimeError:
+                coordinator.effects.append("complete_close_failed")
+            else:
+                raise RuntimeError("fixture could not induce the complete-close write failure")
+            finally:
+                coordinator.ledger.chmod(0o644)
+            if not coordinator.write_and_validate_artifacts(
+                "blocked",
+                record_milestones=False,
+                internal_code="E-FINAL-ARTIFACT",
+            ):
+                raise RuntimeError("failed to repair terminal artifacts after close failure")
+            coordinator.effects.append("terminal_artifacts_repaired")
+            coordinator.close("blocked", "E-FINAL-ARTIFACT")
+            return
+    coordinator.close(close_state, code)
+    if close_state == "complete":
+        closed = coordinator.fold()
+        if closed["can_complete"] != "true":
+            raise RuntimeError("post-close fold did not prove completion")
+        coordinator.effects.append("post_close_fold_verified")
+
+
+def run_scenario(scenario, workspace):
+    trigger, scheduler_arg = ATTRIBUTION.get(scenario, ("manual", "-"))
+    coordinator = Coordinator(scenario, workspace, trigger, scheduler_arg)
+    coordinator.start()
+    coordinator.phase("searching")
+    coordinator.producer("search-1", "initial_search", True, "success", "request-search-1")
+
+    if scenario == "interruption_before_selection":
+        finish(coordinator, "interrupted", "E-LIFECYCLE-INCOMPLETE")
+        return coordinator.summary()
+
+    coordinator.posting(LINKEDIN_ID, "queued")
+    if scenario in ("remaining_work", "compaction_after_selection"):
+        coordinator.posting(LINKEDIN_ID_2, "queued")
+    if scenario in ("quota_during_detail", "worker_failure"):
+        coordinator.posting(LINKEDIN_PRIOR_ID, "queued")
+
+    # The phase marker is the commit point: once it exists, the entire selected queue is already durable.
+    coordinator.phase("selection_settled")
+
+    if scenario == "compaction_after_selection":
+        coordinator.phase("reviewing_initial_batch")
+        coordinator.posting(LINKEDIN_ID, "evaluating")
+        coordinator.producer(
+            "detail-1",
+            "detail_read",
+            True,
+            "success",
+            "request-detail-1",
+            logical_operation_id="detail-linkedin-%s" % LINKEDIN_ID,
+        )
+        coordinator.evaluated_job(LINKEDIN_ID)
+        coordinator = None
+        coordinator = Coordinator.recover(scenario, workspace)
+        recovered = coordinator.fold()
+        expected_states = {
+            "linkedin:%s" % LINKEDIN_ID: "evaluating",
+            "linkedin:%s" % LINKEDIN_ID_2: "queued",
+        }
+        if (
+            recovered["remaining"] != "1"
+            or recovered["in_flight"] != "1"
+            or coordinator.reconstructed_posting_states != expected_states
+            or coordinator.reconstructed_job_identities != ["linkedin:%s" % LINKEDIN_ID]
+        ):
+            raise RuntimeError("post-selection compaction could not reconstruct durable work")
+        resumed_jobs = coordinator.resume_recovered_work()
+        if resumed_jobs != [
+            "linkedin:%s" % LINKEDIN_ID,
+            "linkedin:%s" % LINKEDIN_ID_2,
+        ]:
+            raise RuntimeError("post-selection recovery did not resume durable work")
+        presented_source_id = coordinator.reconstructed_job_identities[0].split(":", 1)[1]
+        coordinator.render_and_present(True, presented_source_id)
+        coordinator.phase("early_results_shown")
+        coordinator.append("milestone", "early_results_shown")
+        coordinator.effects.append("milestone:early_results_shown")
+        coordinator.phase("reviewing_remaining")
+        coordinator.phase("finalizing")
+        finish(coordinator, "complete", "-")
+        return coordinator.summary()
+
+    coordinator.phase("reviewing_initial_batch")
+
+    if scenario in ("quota_during_detail", "worker_failure"):
+        coordinator.posting(LINKEDIN_PRIOR_ID, "evaluating")
+        coordinator.producer(
+            "detail-prior", "detail_read", True, "success", "request-detail-prior",
+            logical_operation_id="detail-linkedin-%s" % LINKEDIN_PRIOR_ID,
+        )
+        coordinator.evaluated_job(LINKEDIN_PRIOR_ID)
+        coordinator.posting(LINKEDIN_PRIOR_ID, "evaluated")
+        coordinator.preserved_judgment_bytes = coordinator.jobs.read_bytes()
+
+    coordinator.posting(LINKEDIN_ID, "evaluating")
+
+    if scenario == "quota_during_detail":
+        coordinator.producer(
+            "detail-1", "detail_read", False, "quota_rejected", None,
+            logical_operation_id="detail-linkedin-%s" % LINKEDIN_ID,
+        )
+        coordinator.posting(LINKEDIN_ID, "terminally_skipped")
+        finish(coordinator, "blocked", "E-QUOTA")
+        return coordinator.summary()
+    if scenario == "worker_failure":
+        coordinator.producer(
+            "detail-1", "detail_read", True, "worker_failed", "request-detail-1",
+            logical_operation_id="detail-linkedin-%s" % LINKEDIN_ID,
+        )
+        coordinator.posting(LINKEDIN_ID, "terminally_skipped")
+        finish(coordinator, "blocked", "E-LIFECYCLE-INCOMPLETE")
+        return coordinator.summary()
+    if scenario == "in_flight_work":
+        coordinator.producer(
+            "detail-1", "detail_read", True, "success", "request-detail-1",
+            logical_operation_id="detail-linkedin-%s" % LINKEDIN_ID,
+        )
+        finish(coordinator, "interrupted", "E-LIFECYCLE-INCOMPLETE")
+        return coordinator.summary()
+    if scenario == "unaccounted_retry":
+        coordinator.producer(
+            "detail-1", "detail_read", True, "retryable_failure", "request-detail-1",
+            logical_operation_id="detail-linkedin-%s" % LINKEDIN_ID, attempt_number=1,
+        )
+        coordinator.producer(
+            "detail-2", "detail_read", False, "success", None, account=False,
+            logical_operation_id="detail-linkedin-%s" % LINKEDIN_ID, attempt_number=2,
+        )
+        coordinator.posting(LINKEDIN_ID, "terminally_skipped")
+        finish(coordinator, "blocked", "E-LIFECYCLE-INCOMPLETE")
+        return coordinator.summary()
+
+    coordinator.producer(
+        "detail-1", "detail_read", True, "success", "request-detail-1",
+        logical_operation_id="detail-linkedin-%s" % LINKEDIN_ID,
+    )
+    coordinator.evaluated_job()
+    coordinator.posting(LINKEDIN_ID, "evaluated")
+
+    if scenario == "display_failure":
+        coordinator.render_and_present(False)
+        finish(coordinator, "blocked", "E-LIFECYCLE-INCOMPLETE")
+        return coordinator.summary()
+
+    if coordinator.trigger == "manual":
+        coordinator.render_and_present(True)
+        coordinator.phase("early_results_shown")
+        coordinator.append("milestone", "early_results_shown")
+        coordinator.effects.append("milestone:early_results_shown")
+    else:
+        coordinator.phase("early_results_shown")
+
+    coordinator.phase("reviewing_remaining")
+
+    if scenario == "remaining_work":
+        finish(coordinator, "blocked", "E-LIFECYCLE-INCOMPLETE")
+        return coordinator.summary()
+
+    coordinator.phase("finalizing")
+    if scenario in ("artifact_write_failure", "artifact_validation_failure"):
+        finish(coordinator, "blocked", "E-FINAL-ARTIFACT")
+        return coordinator.summary()
+
+    if scenario == "authority_window":
+        if not coordinator.write_and_validate_artifacts("complete"):
+            raise RuntimeError("intended complete artifacts did not validate")
+        coordinator.intended_complete_files_existed_before_close = True
+        coordinator.public_complete_authorized_before_close = coordinator.public_artifact_authority()
+        coordinator.canary_authorized_before_close = coordinator.public_artifact_authority()
+        readiness = coordinator.fold()
+        if readiness["ready_to_close"] != "true":
+            raise RuntimeError("authority-window fixture was not ready to close")
+        coordinator.validated_before_complete_close = True
+        coordinator.close("complete", "-")
+        coordinator.public_complete_authorized_after_close = coordinator.public_artifact_authority()
+        return coordinator.summary()
+
+    finish(coordinator, "complete", "-")
+    return coordinator.summary()
+
+
+def main(argv):
+    if len(argv) != 3:
+        print("usage: fake-run-lifecycle SCENARIO WORKSPACE", file=sys.stderr)
+        return 2
+    scenario = argv[1]
+    workspace = pathlib.Path(argv[2])
+    if scenario not in VALID_SCENARIOS | REJECTED_SCENARIOS:
+        print(json.dumps({"accepted": False, "effects": [], "error": "unknown_scenario"}))
+        return 2
+
+    trigger, scheduler_arg = ATTRIBUTION.get(scenario, ("manual", "-"))
+    if scenario == "mutable_before_ledger" or not validate_attribution(trigger, scheduler_arg):
+        print(json.dumps({"accepted": False, "effects": [], "error": "invalid_preflight"}))
+        return 2
+
+    try:
+        summary = run_scenario(scenario, workspace)
+    except (OSError, RuntimeError, ValueError) as exc:
+        print(json.dumps({"accepted": True, "effects": [], "error": str(exc)}))
+        return 1
+    print(json.dumps(summary, sort_keys=True))
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv))

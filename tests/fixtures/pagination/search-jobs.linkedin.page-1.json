@@ -1,0 +1,41 @@
+{
+  "data": {
+    "query": {
+      "source": "linkedin",
+      "published_on_or_after": "2026-07-01"
+    },
+    "status": "ok",
+    "results": [
+      {
+        "id": "jp_d50000000001",
+        "source_id": "9100001",
+        "source_url": "https://www.linkedin.com/jobs/view/9100001",
+        "title": "Senior AI Engineer",
+        "company_name": "Acme",
+        "location_display": "Remote (US)",
+        "salary_display": null,
+        "posted_at": "2026-07-14T00:00:00Z",
+        "published_at": null,
+        "detail_available": true,
+        "source": "linkedin"
+      },
+      {
+        "id": "jp_d50000000002",
+        "source_id": "9100002",
+        "source_url": "https://www.linkedin.com/jobs/view/9100002",
+        "title": "Staff ML Engineer",
+        "company_name": "Globex",
+        "location_display": "New York, NY",
+        "salary_display": null,
+        "posted_at": "2026-07-13T00:00:00Z",
+        "published_at": null,
+        "detail_available": true,
+        "source": "linkedin"
+      }
+    ],
+    "warnings": [],
+    "started_at": "2026-07-15T08:03:00Z",
+    "completed_at": "2026-07-15T08:03:02Z"
+  },
+  "meta": {"request_id": "req_pagination_linkedin_1"}
+}

@@ -44,6 +44,15 @@
         "job-preference-interview is SELECTED — the user wants to BUILD the preferences brief, which is exactly this skill's job",
         "evaluate-job-fit is NOT invoked — there is no posting to judge; the user is defining preferences, not testing a role against them",
         "Offers the depth choice (quick sketch / standard / thorough) and asks questions one at a time; the written brief carries no numeric scoring"
+      ] },
+    { "id": 5, "scenario": "quick-sketch depth — one-sentence brief, high-signal, no padding",
+      "prompt": "Invoke the job-preference-interview skill standalone. At the depth choice, the user picks 'Quick sketch' (or says 'just a quick sketch — I want to see jobs fast'). To the one sketch question they answer with a single sentence: 'Senior backend engineer, fully remote in the US, base at least ~$180K, and no on-call.' They share nothing else. Finish.",
+      "expectations": [
+        "Offers the depth choice (Quick sketch ~1 / Standard ~6–10 / Thorough ~15–20) as a closed choice BEFORE any question, then on Quick sketch asks a SINGLE question and takes whatever the user gives",
+        "Drafts <tmp>/.job-search/preferences.md with the five sections (Summary, Must-haves / dealbreakers, Strong preferences, Nice-to-haves, Red flags) and a created_at line, from ONLY what the user said: the role, remote-in-US, and the ~$180K base floor become Must-haves; 'no on-call' becomes a Red flag",
+        "Does NOT invent preferences the user never expressed — thin sections are left sparse rather than padded, and the brief can be deepened later",
+        "Contains NO numeric score, NO 0–100 rubric, NO category weights, NO scoring formula (the '$180K base' floor is captured as plain prose, not math)",
+        "Ends with a 'How to use this' line stating the assistant judges relevant/not + weak/moderate/strong with reasoning and 'No score.', shows the brief rendered in the reply (not inside a code fence), and notes in one line where it was saved"
       ] }
   ]
 }

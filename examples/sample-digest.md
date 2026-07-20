@@ -1,6 +1,8 @@
 # Job search digest — 2026-06-05
+Run ID: 2026-06-05T14-30-00Z
 Run health: healthy
 10 new postings (7 LinkedIn · 3 Ashby) · 2 strong · 2 moderate · 2 weak · 3 filtered out · 4 searches · 5 detail reads
+Agent-data usage: 9 metered calls this run · about $0.072 pay-as-you-go equivalent
 
 ## Strong matches
 - **Senior Product Designer** — Tidewater Health — Remote (US)

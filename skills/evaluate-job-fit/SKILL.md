@@ -52,9 +52,11 @@ numerically; if comp matters and isn't clearly stated, it's an unknown.
 
 ## Output
 Return BOTH a short human summary AND this object (used by job-search-run when evaluating in batch).
-When job-search-run drives this skill in its per-posting fan-out, return the object on the **delegated return
-channel** pinned in `../../shared/references/parallelism.md` — the object as plain text in your final message,
-never a sidecar file, no fenced code block, no confirmation/politeness preamble.
+When job-search-run dispatches this skill as a cold detail worker, return the full dispatch envelope defined in
+`../../shared/references/parallelism.md` — the dispatched `run_id`/`source`/`source_id`, a `status`, this
+judgment object as the verdict fields, and the detail-call attempt attribution — as plain text on the
+**delegated return channel** in your final message: never a sidecar file, no fenced code block, no
+confirmation/politeness preamble, no progress chatter. The envelope schema lives there; do not restate it here.
 The summary is 1–2 sentences: the verdict + the deciding factor — e.g. "Strong match — remote-US
 senior IC in Python; comp not stated."
 

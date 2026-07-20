@@ -1,0 +1,42 @@
+{
+  "data": {
+    "query": {
+      "source": "lever",
+      "published_on_or_after": "2026-07-01"
+    },
+    "status": "completed",
+    "results": [
+      {
+        "id": "jp_c50000000001",
+        "source_id": "acme:c1111111-1111-4111-8111-111111111111",
+        "source_url": "https://jobs.lever.co/acme/c1111111-1111-4111-8111-111111111111",
+        "title": "Senior AI Engineer",
+        "company_name": "Acme",
+        "location_display": "Remote (US)",
+        "salary_display": "Competitive",
+        "posted_at": "2026-07-14T16:00:00",
+        "published_at": "2026-07-14T16:00:00",
+        "detail_available": true,
+        "source": "lever"
+      },
+      {
+        "id": "jp_c50000000002",
+        "source_id": "globex:c2222222-2222-4222-8222-222222222222",
+        "source_url": "https://jobs.lever.co/globex/c2222222-2222-4222-8222-222222222222",
+        "title": "Staff ML Engineer",
+        "company_name": "Globex",
+        "location_display": "Chicago, IL",
+        "salary_display": null,
+        "posted_at": "2026-07-13T15:00:00",
+        "published_at": "2026-07-13T15:00:00",
+        "detail_available": true,
+        "source": "lever"
+      }
+    ],
+    "pagination": {"has_more": true, "next_cursor": "cursor_lever_2"},
+    "warnings": [],
+    "started_at": "2026-07-15T08:02:00Z",
+    "completed_at": "2026-07-15T08:02:00Z"
+  },
+  "meta": {"request_id": "req_pagination_lever_1"}
+}

@@ -1,6 +1,6 @@
 ---
 name: job-preference-interview
-description: Build or update the user's Job Preferences Brief at a depth they choose — a quick free-form sketch (~1 question), a standard interview, or a thorough pass — producing a prose preferences.md (Summary, Must-haves/dealbreakers, Strong preferences, Nice-to-haves, Red flags). Imports an existing brief too, and can deepen a light brief later. Use when the user wants to set up or refine what they want in a job, or when job-search onboarding needs a brief — "set up my job preferences", "what I want in a job", "redo my preferences interview", "change my must-haves", "import my preferences brief". Not for judging a specific posting (→ evaluate-job-fit).
+description: Build, refine, deepen, or import the user's Job Preferences Brief at a depth they choose — a quick free-form sketch (~1 question), a standard interview, or a thorough pass — producing a prose preferences.md (Summary, Must-haves/dealbreakers, Strong preferences, Nice-to-haves, Red flags). Use when the user wants to define or change what they want in a job, or to go deeper than a first-run quick sketch — "set up my job preferences", "what I want in a job", "redo my preferences interview", "change my must-haves", "make my brief more thorough", "import my preferences brief". Not the front door or home view (→ job-search), and not for judging a specific posting (→ evaluate-job-fit).
 ---
 
 # job-preference-interview
@@ -50,6 +50,13 @@ command, then its precedence rules) and never hard-code its path.
   ...
   ```
 
+When you're invoked to change the brief **while a search is active** (the user reacted to a match or the
+digest), your job is still just to write the updated brief. Applying that change to the running search —
+recording the brief revision, letting the remaining queue pick it up, and rechecking already-shown matches
+only when the outcome could change — is the **job-search** front door's feedback routing (its home view's
+**Applying your feedback**), not yours. That routing records the `brief_revision` and applies the in-flight
+settling rule owned by `../../shared/references/run-lifecycle.md`.
+
 ## Choose a depth (offer all three; give the question estimate)
 Before you ask anything, let the user choose how deep to go — and make clear they can **start light and deepen
 later** (a follow-up interview reads the existing brief and *enriches* it, never overwrites). **The depth ask
@@ -92,7 +99,10 @@ For users who'd rather see jobs now than answer questions:
    on-call **red flag** from "good work-life balance") — a stated role / location / pay floor becomes a
    **Must-have**, softer wants go to **Strong preferences / Nice-to-haves**. **Don't invent preferences they
    didn't express**; leave a section empty rather than padding it — they can deepen it later. Ask **at most one**
-   follow-up, and only if a likely must-have is missing entirely.
+   follow-up, and only if a likely must-have is missing entirely. **If they share material** (a resume, cover
+   letter, or notes), treat it as **background evidence** — context to inform the brief, never an existing
+   brief and never silently turned into must-haves/preferences; on any conflict, what they actually *said*
+   wins over a résumé line (an old title, a past location, a former stack).
 3. Write it, **show it rendered in your reply** (no code fence), say in one line where it went, and tell the
    user plainly they can **run a deeper interview anytime** to sharpen it — then hand back so they can run a
    search.

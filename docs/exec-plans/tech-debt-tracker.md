@@ -48,13 +48,30 @@ misreports — cost, not correctness.
 postings") that writes a new file and never edits in place. Do not build preemptively.
 **Linked tests:** none (watch item).
 
-## P3 — untested config fields & edges
-**What:** `notify.desktop_notify_on_block` (blocked-run desktop alert), `schedule.timezone` runtime behavior, and
-concurrency / interrupted-run recovery (two overlapping runs; a hard-kill mid-run).
-**Why:** Each is environment-dependent or an edge for v0.1; `jobs.jsonl` is append-only so corruption risk is low.
-**Impact:** verified all three carry **zero tests** (no hit in `tests/` for `desktop_notify_on_block`, `schedule.timezone`, or any concurrency/interrupted-run case; `schedule.timezone` is informational-only under `/loop` per the scheduling section of [`../../shared/references/internals.md`](../../shared/references/internals.md)) — a regression in any of them ships silently and only surfaces in the field; blast radius stays low because the append-only `jobs.jsonl` contract ([`../../shared/references/conventions.md`](../../shared/references/conventions.md)) bounds the corruption risk.
-**How to apply:** Add targeted tests when these surfaces are exercised in the field.
-**Linked tests:** none yet.
+## P3 — untested config fields & edges (partially resolved)
+**Resolved 2026-07-17 — `schedule.timezone` runtime behavior + interrupted-run recovery.** `schedule.timezone`
+now carries a runtime contract and CI-executable coverage: the schedule-health derivation in
+[`../../shared/references/internals.md`](../../shared/references/internals.md) (§ Schedule health) computes the
+expected fire instants **in the configured timezone** (DST-aware via stdlib `zoneinfo`), and
+[`tests/test_schedule_health.py`](../../tests/test_schedule_health.py) pins the 30-minute grace boundary, the
+one-vs-two missed-fire thresholds, and a daily fire across a daylight-saving transition against fixed clocks —
+so it is no longer informational-only. Interrupted-run recovery (a hard-kill mid-run) is likewise contracted
+and tested: the recovery map in
+[`../../shared/references/run-lifecycle.md`](../../shared/references/run-lifecycle.md)
+(`open_before_selection_settled` → close `interrupted` and restart cleanly) is exercised by
+`tests/test_run_lifecycle_pressure.py`.
+**What (still open):** `notify.desktop_notify_on_block` (blocked-run desktop alert) and the CONCURRENCY edge
+(two overlapping runs racing the same workspace) remain untested.
+**Why:** Both are environment-dependent edges; `jobs.jsonl` is append-only so corruption risk is low.
+**Impact:** the two open surfaces carry **zero tests** (no hit in `tests/` for `desktop_notify_on_block` or any
+two-overlapping-run case) — a regression ships silently and only surfaces in the field; blast radius stays low
+because the append-only `jobs.jsonl` contract
+([`../../shared/references/conventions.md`](../../shared/references/conventions.md)) bounds the corruption risk.
+**How to apply:** Add a targeted test for the desktop-notify path and an overlapping-run guard when those
+surfaces are exercised in the field.
+**Linked tests:** resolved portions — [`tests/test_schedule_health.py`](../../tests/test_schedule_health.py)
+(timezone/DST + grace) and `tests/test_run_lifecycle_pressure.py` (interrupted recovery); none yet for the two
+open surfaces.
 
 ## P3 — schedule-line accepts an out-of-range --time (`TODO-TIME-RANGE`) — ✅ resolved (obsolete)
 **Resolved 2026-06-08 by removal.** The cron/launchd generators no longer exist — scheduling is native `/loop` (see [`../../shared/references/internals.md`](../../shared/references/internals.md)). The `/loop` line is composed from `schedule.frequency` alone (no `--time`), so there is no time value to range-check. No action needed.
@@ -240,3 +257,113 @@ experimental/expected-to-work; require a live verification transcript before pro
 or adding product-critical commands like update recipes.
 **Linked tests:** none yet; future adapter-promotion work should add a manual live verification lane to
 `TESTING.md`.
+
+## Deferred release hardening (2026-07-16)
+
+### P3 — authentication transport can expose the API key (`TODO-CREDENTIAL-SAFE-AUTH`)
+**What:** Replace the current copy/paste plus `agent-data init --api-key <KEY> -y` flow with a
+credential-safe authentication transport, and add credential-handling tests that prove the key does not
+appear in conversation history, command output, process captures, logs, or persisted job-search artifacts.
+**Why:** The documented local init path is functional and bounded to the user's machine, but it carries the
+secret through chat and a command argument. It remains the bounded fallback until agent-data and the active
+host expose a tested stdin, interactive-prompt, or secret-store handoff; this hardening is P3 and explicitly
+non-release-blocking.
+**Impact:** A user connecting agent-data during onboarding can leave the key in host-managed transcripts or
+diagnostic captures even though normal searches and workspace artifacts need only the resulting local auth;
+the exposure is limited to credential setup and does not make the release's search flow incorrect.
+**How to apply:** First pin one producer- and host-supported secret handoff in
+[`agent-data-contract.md`](../../shared/references/agent-data-contract.md), then update onboarding to use it,
+redact all auth command/error rendering, and exercise the real handoff with sentinel-key absence assertions.
+Keep `agent-data init --api-key <KEY> -y` documented as the local fallback until the replacement is available,
+and continue to verify readiness only through `agent-data whoami`.
+**Linked tests:** [`job-search` evals](../../skills/job-search/evals/evals.json) cases 3, 6, and 7 verify the
+current local init plus post-init `whoami` path, but do not prove credential non-observability; extend those
+arms and the onboarding harness with sentinel-key leak assertions when the safe transport lands.
+
+### P3 — update reminders have no display backoff (`TODO-UPDATE-REMINDER-BACKOFF`)
+**What:** Record the checked version/build and check time plus the version/build and time last reminded.
+Suppress the same update reminder during a documented backoff interval; let a newer version/build or a
+compatibility blocker bypass backoff; honor explicit update checks; and never auto-update.
+**Why:** [`update.md`](../../shared/references/update.md) already caches remote checks for 24 hours but renders
+the same available-update banner on every home view. Repetition can train users to ignore the signal; because
+the banner is advisory and compatibility failures remain independently visible, reminder backoff is P3 and
+explicitly non-release-blocking.
+**Impact:** Repeated home views can nag with an identical banner until the user updates, creating warning
+fatigue without corrupting state, hiding a required fix, or preventing an explicit check.
+**How to apply:** Extend the registry's optional `update_check` state with the last checked and last reminded
+version/build timestamps; define one interval and suppress only an identical non-blocking reminder inside it.
+Render immediately for a newer version/build, a known compatibility blocker, or a user-requested check.
+Preserve the existing failure-soft cache rules and update recipe, and never invoke an update automatically.
+**Linked tests:** [`job-search` evals](../../skills/job-search/evals/evals.json) case 4 covers a fresh cached
+update banner; add fake-clock arms for identical-version suppression, newer-version bypass, compatibility-
+blocker bypass, and explicit-check bypass, with an assertion that no update command runs automatically.
+
+## Pagination and usage-context follow-ups
+
+### P2 — source/frequency increases lack credit-aware previews (`TODO-USAGE-PREVIEW-LEVERS`)
+**What:** Extend the pagination flow's decision-time usage preview to source additions and frequency
+increases, without adding a monetary budget control.
+**Why:** The [shared config recipes](../../shared/references/internals.md) now make review-depth increases
+preview their known first-page call baseline and uncertain additions, but the adjacent outcome levers can
+also increase recurring metered work without the same scoped preview.
+**Impact:** a user can broaden sources or raise cadence without seeing the added-call shape before the
+change; the edit is conversational and reversible and later runs still report actual calls, but informed
+consent is inconsistent across three controls that affect usage.
+**How to apply:** reuse the shared calls-first preview/confirmation pattern for source and frequency
+increases, using the user's enabled query/source counts and cadence while labeling continuation and detail
+work as unknown. Confirm the exact increase before a config write or metered one-off run; keep decreases
+immediate and add no `budget`, `credits`, or `cost` config field.
+**Linked tests:** [`job-search-agent` evals](../../skills/job-search-agent/evals/evals.json) cases 6–10 cover
+the depth-preview pattern only; add source/frequency increase arms and extend [`TESTING.md`
+§4](../../TESTING.md) T4.2–T4.3 with pre-confirmation call/config invariants.
+
+### P3 — future unmetered failures need an accounting cutover (`TODO-UNMETERED-FAILURES`)
+**What:** When agent-data stops metering failed attempts, including failed retry attempts, switch the
+consumer accounting model to that producer contract and update the dated contract, fake shim, errors,
+evals, and historical interpretation together. Successful attempts, including a successful retry, continue
+to follow producer-authoritative metering status.
+**Why:** Today's [pinned producer contract](../../shared/references/agent-data-contract.md) consistently treats
+non-quota failures as metered; changing only one layer after the producer cutover would make local call
+totals and explanations disagree.
+**Impact:** there is no current defect. After the upstream change, stale inference could overstate actual
+calls and make comparable-run estimates mix accounting regimes; explicit producer metering status remains
+authoritative in the meantime.
+**How to apply:** update the canonical dated metering rule first, then make the fake shim and attempt ledger
+mark failed attempts and failed retries unmetered while preserving producer-authoritative status for every
+successful attempt; revise retry/failure diagnostics and quota wording, and update effect-based evals.
+Preserve historical run records byte-for-byte and define how pre-cutover records are excluded from or clearly
+interpreted in comparable-history calculations.
+**Linked tests:** [`tests/test_fake_agent_data.py`](../../tests/test_fake_agent_data.py) attempt-accounting
+cases and [`job-search-run` evals](../../skills/job-search-run/evals/evals.json) cases 1, 6, 30, 31, and 38
+pin current metering, quota, retry, and comparable-history effects.
+
+## Local metrics wiring (2026-07-19 whole-branch review)
+
+### P2 — metrics.json is contract-specified but no shipped surface writes it (`TODO-METRICS-WIRING`)
+**What:** Wire the `{workspace}/metrics.json` writes the local-metrics contract in
+[`../../shared/references/run-lifecycle.md`](../../shared/references/run-lifecycle.md) (§ Local metrics)
+already specifies: the **front door** must create the per-attempt `setups[]` record and write
+`onboarding_started_at` + `agent_data_ready_at`, and **schedule setup** must write `schedule_verified_at`
+after its green canary. The runner's four milestone writes (`first_live_call_at`,
+`first_relevant_match_ready_at`, `early_results_shown_at`, `run_completed_at`) already have guarded prose,
+but they target a file the front door never creates.
+**Why:** T1.3 landed the metrics contract as prose only, and T5.1 rewrote onboarding without a metric-write
+step, so no shipped skill/script/template ever creates `metrics.json` or appends a setup record — a `grep`
+across `skills/**` and `shared/scripts/**` finds the timestamp keys only in eval *expectations*, never in a
+SKILL.md, reference, template, or mechanic that performs the write.
+**Impact:** `metrics.json` is never created, so the runner's own guarded writes no-op against an absent file
+and all three derived durations — `time_to_help`, `first_match_review_latency`, `total_run_time` — are
+permanently reported "unavailable" (their absent-endpoint contract). Non-blocking: it breaks no flow and
+fails no gate (the durations degrade to "unavailable" exactly as specified), but release **time-to-help
+evidence — relevant to T9.4 — cannot be measured** until the front-door and schedule-setup writes are wired.
+**How to apply:** Add the front-door create-attempt + `onboarding_started_at`/`agent_data_ready_at` writes
+and the schedule-setup `schedule_verified_at` write per the owner table and write rules in
+[`../../shared/references/run-lifecycle.md`](../../shared/references/run-lifecycle.md) (§ Local metrics —
+atomic whole-file, write-once, append-new-setup-record, never overwrite history). Classify this as **the
+priority to wire before the live / T9.4 measurement lane**, distinct from and ahead of the pre-existing P3
+credential/backoff debt above. Do **not** wire it as part of this review — this entry is the conscious
+deferral; the wiring is a separate follow-up decision.
+**Linked tests:** none yet (there is no shipped writer to exercise). The runner-side milestone timestamps
+are described by [`job-search-run` evals](../../skills/job-search-run/evals/evals.json) and the activation
+view by [`job-search` evals](../../skills/job-search/evals/evals.json); add front-door and schedule-setup
+metric-write coverage when the writes land.

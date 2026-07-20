@@ -1,0 +1,24 @@
+{
+  "scenario": "native-session-bound",
+  "summary": "Harness-native loop bound to the creating session; it fires only while a session is alive, so it fails the unattended gate and is session-only.",
+  "probe": {
+    "mechanism": "native",
+    "mechanism_token": "harness-native-loop",
+    "unattended": false,
+    "canary_testable": true,
+    "primary_model_preserving": true,
+    "local_access": true,
+    "reversible": true,
+    "session_bound": true
+  },
+  "register_disabled": {
+    "ok": true
+  },
+  "inspect": {
+    "registration": "current"
+  },
+  "fire": {
+    "outcome": "success",
+    "metered_calls": 3
+  }
+}

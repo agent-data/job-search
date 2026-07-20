@@ -1,0 +1,24 @@
+{
+  "scenario": "native-eligible",
+  "summary": "Harness-native scheduler that passes every eligibility gate; the canary fire produces a fresh nonblocked scheduled-path run.",
+  "probe": {
+    "mechanism": "native",
+    "mechanism_token": "harness-native",
+    "unattended": true,
+    "canary_testable": true,
+    "primary_model_preserving": true,
+    "local_access": true,
+    "reversible": true,
+    "session_bound": false
+  },
+  "register_disabled": {
+    "ok": true
+  },
+  "inspect": {
+    "registration": "current"
+  },
+  "fire": {
+    "outcome": "success",
+    "metered_calls": 3
+  }
+}

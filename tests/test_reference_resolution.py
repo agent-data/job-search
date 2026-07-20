@@ -27,6 +27,9 @@ import pytest
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 SHARED = ROOT / "shared" / "references"
 MECH = ROOT / "shared" / "scripts" / "mechanics"
+LIFECYCLE = SHARED / "run-lifecycle.md"
+LIFECYCLE_LEDGER_PATH = "runs/.lifecycle-{run_id}.jsonl"
+LIFECYCLE_METRICS_PATH = "{workspace}/metrics.json"
 
 # Unique marker planted in the ONE canonical home (shared/references/conventions.md).
 MARKER = "reference-resolution-marker:8f2a4c1e-single-home"
@@ -66,6 +69,260 @@ _PTR = re.compile(r"(?:\.\./)*(?:shared/)?references/(?:platform/)?[A-Za-z0-9._-
 # shared/references body). The "run the shared script where a runtime exists" arm must resolve in place to
 # the single scripts home — a dangling invocation would silently drop to the fallback on every host.
 _SCRIPT_PTR = re.compile(r"(?:\.\./)+(?:shared/)?scripts/mechanics/[A-Za-z0-9._-]+\.sh")
+
+LIFECYCLE_CONSUMERS = (
+    ROOT / "ARCHITECTURE.md",
+    SHARED / "conventions.md",
+    SHARED / "internals.md",
+)
+
+LIFECYCLE_PHASES = (
+    "preflight",
+    "searching",
+    "selection_settled",
+    "reviewing_initial_batch",
+    "early_results_shown",
+    "reviewing_remaining",
+    "finalizing",
+    "complete",
+)
+
+LIFECYCLE_EVENTS = (
+    "run_started",
+    "phase_changed",
+    "posting_state",
+    "attempt_started",
+    "attempt_accounted",
+    "attempt_resolved",
+    "brief_revision",
+    "milestone",
+    "run_closed",
+)
+
+LIFECYCLE_POSTING_STATES = (
+    "queued",
+    "evaluating",
+    "evaluated",
+    "presented",
+    "terminally_skipped",
+)
+
+LIFECYCLE_PRESENTATION_TRANSITION = {
+    "presented_identity": "same_run_id+source+source_id",
+    "qualifying_job_event": "evaluated+relevant_true+nonempty_reasoning",
+    "surface_proof": "rendered_relevant_posting_with_reasoning",
+    "transition_order": "append_after_successful_render",
+    "ledger_content": "state_transition_only",
+    "reasoning_available_only": "insufficient",
+    "title_only_render": "insufficient",
+    "scheduled_or_canary": "no_interactive_presented_transition",
+}
+
+LIFECYCLE_CLOSE_STATES = (
+    "complete",
+    "blocked",
+    "interrupted",
+)
+
+LIFECYCLE_METRICS = (
+    "onboarding_started_at",
+    "agent_data_ready_at",
+    "first_live_call_at",
+    "first_relevant_match_ready_at",
+    "early_results_shown_at",
+    "run_completed_at",
+    "schedule_verified_at",
+)
+
+LIFECYCLE_LEDGER = {
+    "path": LIFECYCLE_LEDGER_PATH,
+    "write_mode": "append_only",
+    "visibility": "hidden",
+    "writer": "coordinator_only",
+}
+
+LIFECYCLE_INVARIANTS = {
+    "presented_counts_as_evaluated": "true",
+    "presented_counts_as_presented": "true",
+    "early_results_terminal": "false",
+    "blocked_counts_as_complete": "false",
+    "interrupted_counts_as_complete": "false",
+}
+
+LIFECYCLE_COMPLETION_CLAUSES = {
+    "remaining_zero": "remaining=0",
+    "in_flight_zero": "in_flight=0",
+    "selected_settled": "selected=evaluated+terminally_skipped",
+    "all_started_attempts_accounted": "each_attempt_started_has_exactly_one_attempt_accounted",
+    "no_blocking_attempt_failure": "no_permanent_or_unresolved_attempt_failure",
+    "final_run_record_written": "runs/{run_id}.json",
+    "final_digest_written": "reports/{ISO-date}-digest.md",
+    "ledger_closed_complete": "closed_with_complete_state",
+}
+
+LIFECYCLE_RECOVERY = {
+    "closed": "do_not_append_or_replay",
+    "open_after_selection_settled": "resume_queued_and_reconcile_evaluating",
+    "open_before_selection_settled": "close_interrupted_and_restart_with_fresh_call_context",
+}
+
+LIFECYCLE_SEARCH_STATE = {
+    "cursor_persistence": "prohibited",
+    "cursor_reconstruction": "prohibited",
+    "cursor_reuse": "prohibited",
+    "search_restart": "clean_required",
+    "pagination_scratch": "separate_non_resumable",
+}
+
+LIFECYCLE_PROHIBITED_FIELDS = {
+    "api_keys",
+    "auth_headers",
+    "environment_dumps",
+    "pagination_cursors",
+    "opaque_api_continuation_tokens",
+    "full_job_descriptions",
+    "preferences_text",
+    "match_prose",
+}
+
+LIFECYCLE_METRIC_PROPERTIES = {
+    "path": LIFECYCLE_METRICS_PATH,
+    "local_only": "true",
+    "pii_allowed": "false",
+    "telemetry_enabled": "false",
+    "write_mode": "atomic_whole_file",
+}
+
+LIFECYCLE_METRIC_DOCUMENT = {
+    "version": "1",
+    "required_root_keys": "version,active_setup_id,setups",
+    "record_container": "setups[]",
+    "active_selector": "active_setup_id",
+    "record_identity": "setup_id",
+    "identity_format": "setup-{uuid_v4_lowercase}",
+    "timestamp_scope": "per_setup_record",
+    "unobserved_timestamps": "omitted",
+}
+
+LIFECYCLE_METRIC_OWNERS = {
+    "onboarding_started_at": "front_door",
+    "agent_data_ready_at": "front_door",
+    "first_live_call_at": "runner",
+    "first_relevant_match_ready_at": "runner",
+    "early_results_shown_at": "runner",
+    "run_completed_at": "runner",
+    "schedule_verified_at": "schedule_setup",
+}
+
+LIFECYCLE_METRIC_WRITE_RULES = {
+    "timestamp_writer": "owner_only",
+    "first_observation": "write_once",
+    "existing_timestamp": "preserve_exactly",
+    "setup_id": "immutable",
+    "new_onboarding_attempt": "append_new_setup_record",
+    "historical_setup_records": "never_overwrite_or_delete",
+}
+
+LIFECYCLE_ACTIVATION = {
+    "persisted": "false",
+    "run_health": "not_blocked",
+    "fully_evaluated_postings": "at_least_one",
+    "relevant_matches_shown_with_reasoning": "at_least_one_valid_presented_transition",
+}
+
+LIFECYCLE_DERIVED_DURATIONS = {
+    "time_to_help": "onboarding_started_at->early_results_shown_at",
+    "first_match_review_latency": "first_live_call_at->first_relevant_match_ready_at",
+    "total_run_time": "first_live_call_at->run_completed_at",
+}
+
+LIFECYCLE_COMPLETION_SIGNATURE = {
+    "remaining=0",
+    "in_flight=0",
+    "selected=evaluated+terminally_skipped",
+    "attempt_started",
+    "attempt_accounted",
+    "runs/{run_id}.json",
+    "reports/{ISO-date}-digest.md",
+}
+
+LIFECYCLE_COMPLETION_MARKED_TOKENS = (
+    set(LIFECYCLE_COMPLETION_CLAUSES) | set(LIFECYCLE_COMPLETION_CLAUSES.values())
+)
+
+LIFECYCLE_OWNER_CONTRACT_GROUPS = (
+    set(LIFECYCLE_PHASES),
+    set(LIFECYCLE_EVENTS),
+    set(LIFECYCLE_POSTING_STATES),
+    set(LIFECYCLE_PRESENTATION_TRANSITION) | set(LIFECYCLE_PRESENTATION_TRANSITION.values()),
+    set(LIFECYCLE_CLOSE_STATES),
+    set(LIFECYCLE_METRICS),
+    LIFECYCLE_COMPLETION_SIGNATURE,
+    LIFECYCLE_COMPLETION_MARKED_TOKENS,
+    set(LIFECYCLE_METRIC_DOCUMENT) | set(LIFECYCLE_METRIC_DOCUMENT.values()),
+    set(LIFECYCLE_METRIC_OWNERS) | set(LIFECYCLE_METRIC_OWNERS.values()),
+    set(LIFECYCLE_METRIC_WRITE_RULES) | set(LIFECYCLE_METRIC_WRITE_RULES.values()),
+    set(LIFECYCLE_ACTIVATION) | set(LIFECYCLE_ACTIVATION.values()),
+    set(LIFECYCLE_DERIVED_DURATIONS) | set(LIFECYCLE_DERIVED_DURATIONS.values()),
+)
+
+
+def _contract_block(text, name):
+    """Body between stable owner-only lifecycle contract markers."""
+    pattern = (
+        rf"<!-- lifecycle-contract:{re.escape(name)} -->\s*"
+        rf"(?P<body>.*?)\s*<!-- /lifecycle-contract:{re.escape(name)} -->"
+    )
+    match = re.search(pattern, text, re.DOTALL)
+    assert match, f"run-lifecycle.md is missing the {name!r} semantic contract block"
+    return match.group("body")
+
+
+def _contract_list(text, name):
+    """Normalized first code token from each list row in a marked contract block."""
+    block = _contract_block(text, name)
+    lines = [line.strip() for line in block.splitlines() if line.strip()]
+    assert lines, f"the {name!r} semantic contract list is empty"
+    tokens = []
+    for line in lines:
+        match = re.fullmatch(r"(?:\d+\.|-)\s+`([^`]+)`(?:\s+.*)?", line)
+        assert match, f"the {name!r} semantic contract has a malformed list row: {line!r}"
+        tokens.append(match.group(1))
+    assert len(tokens) == len(set(tokens)), (
+        f"the {name!r} semantic contract has a duplicate list token: {tokens}")
+    return tuple(tokens)
+
+
+def _contract_table(text, name):
+    """Normalized key/value code cells from a marked Markdown table."""
+    block = _contract_block(text, name)
+    lines = [line.strip() for line in block.splitlines() if line.strip()]
+    assert len(lines) >= 3, f"the {name!r} semantic contract table has no data rows"
+    assert re.fullmatch(r"\|[^|]+\|[^|]+\|", lines[0]), (
+        f"the {name!r} semantic contract has a malformed table header")
+    assert re.fullmatch(r"\|\s*:?-+:?\s*\|\s*:?-+:?\s*\|", lines[1]), (
+        f"the {name!r} semantic contract has a malformed table separator")
+    rows = []
+    for line in lines[2:]:
+        match = re.fullmatch(r"\|\s*`([^`]+)`\s*\|\s*`([^`]+)`\s*\|", line)
+        assert match, f"the {name!r} semantic contract has a malformed table row: {line!r}"
+        rows.append(match.groups())
+    keys = [key for key, _ in rows]
+    assert len(keys) == len(set(keys)), (
+        f"the {name!r} semantic contract has a duplicate table key: {keys}")
+    return dict(rows)
+
+
+def _contract_token_groups(text):
+    """Normalized code tokens from bounded contract-like Markdown blocks, never the whole file."""
+    groups = []
+    for block in re.split(r"\n\s*\n", text):
+        code_tokens = re.findall(r"`([^`]+)`", block)
+        structural = any(re.match(r"^\s*(?:\d+\.|-|\|)", line)
+                         for line in block.splitlines())
+        if code_tokens and (structural or len(code_tokens) >= 2):
+            groups.append({re.sub(r"\s+", "", token) for token in code_tokens})
+    return groups
 
 
 def _pointer_files():
@@ -162,6 +419,98 @@ def test_no_fanned_reference_copy_remains():
             present.add(p.relative_to(ROOT).as_posix())
     fanned = sorted(present - SKILL_LOCAL_ORIGINALS)
     assert not fanned, f"fanned reference copies still present (must be single-homed): {fanned}"
+
+
+def test_run_lifecycle_contract_is_single_homed_and_consumed():
+    """T1.1: the lifecycle schema has one shared owner and every architecture/reference consumer links it."""
+    assert LIFECYCLE.is_file(), "shared/references/run-lifecycle.md is the required single contract home"
+
+    for consumer in LIFECYCLE_CONSUMERS:
+        consumer_text = consumer.read_text(encoding="utf-8")
+        targets = re.findall(r"\[[^]]+\]\(([^)#]+\.md)\)", consumer_text)
+        resolved = {(consumer.parent / target).resolve() for target in targets}
+        assert LIFECYCLE.resolve() in resolved, (
+            f"{consumer.relative_to(ROOT)} must link to shared/references/run-lifecycle.md")
+
+        assert "<!-- lifecycle-contract:" not in consumer_text, (
+            f"{consumer.relative_to(ROOT)} duplicates an owner-only semantic contract marker")
+        assert LIFECYCLE_LEDGER_PATH not in consumer_text, (
+            f"{consumer.relative_to(ROOT)} duplicates the lifecycle ledger path")
+        assert LIFECYCLE_METRICS_PATH not in consumer_text, (
+            f"{consumer.relative_to(ROOT)} duplicates the lifecycle metrics path")
+        consumer_groups = _contract_token_groups(consumer_text)
+        duplicated = [tokens for tokens in LIFECYCLE_OWNER_CONTRACT_GROUPS
+                      if any(tokens <= group for group in consumer_groups)]
+        assert not duplicated, (
+            f"{consumer.relative_to(ROOT)} duplicates lifecycle contract structure: {duplicated}")
+
+
+def test_lifecycle_consumer_contract_detection_is_bounded():
+    expected = set(LIFECYCLE_EVENTS)
+    scattered = "\n\n".join(f"Mentions `{token}` independently." for token in LIFECYCLE_EVENTS)
+    assert not any(expected <= group for group in _contract_token_groups(scattered))
+
+    grouped = "Closed vocabulary: " + ", ".join(f"`{token}`" for token in LIFECYCLE_EVENTS)
+    assert any(expected <= group for group in _contract_token_groups(grouped))
+
+
+def test_lifecycle_contract_list_parser_rejects_duplicate_rows():
+    duplicate = """<!-- lifecycle-contract:duplicate-list -->
+- `same`
+- `same`
+<!-- /lifecycle-contract:duplicate-list -->"""
+    with pytest.raises(AssertionError, match="duplicate"):
+        _contract_list(duplicate, "duplicate-list")
+
+
+@pytest.mark.parametrize("second_value", ("same", "conflict"))
+def test_lifecycle_contract_table_parser_rejects_duplicate_keys(second_value):
+    duplicate = f"""<!-- lifecycle-contract:duplicate-table -->
+| Key | Value |
+|---|---|
+| `same` | `same` |
+| `same` | `{second_value}` |
+<!-- /lifecycle-contract:duplicate-table -->"""
+    with pytest.raises(AssertionError, match="duplicate"):
+        _contract_table(duplicate, "duplicate-table")
+
+
+def test_run_lifecycle_contract_has_stable_vocabulary():
+    text = LIFECYCLE.read_text(encoding="utf-8")
+
+    assert _contract_table(text, "ledger") == LIFECYCLE_LEDGER
+    assert _contract_list(text, "phases") == LIFECYCLE_PHASES
+    assert set(_contract_list(text, "events")) == set(LIFECYCLE_EVENTS)
+    assert set(_contract_list(text, "posting-states")) == set(LIFECYCLE_POSTING_STATES)
+    assert set(_contract_list(text, "close-states")) == set(LIFECYCLE_CLOSE_STATES)
+    assert set(_contract_list(text, "metric-timestamps")) == set(LIFECYCLE_METRICS)
+
+
+def test_run_lifecycle_contract_pins_rendered_presentation_transition():
+    text = LIFECYCLE.read_text(encoding="utf-8")
+
+    assert _contract_table(text, "presentation-transition") == LIFECYCLE_PRESENTATION_TRANSITION
+
+
+def test_run_lifecycle_contract_pins_completion_recovery_and_privacy():
+    text = LIFECYCLE.read_text(encoding="utf-8")
+
+    assert _contract_table(text, "invariants") == LIFECYCLE_INVARIANTS
+    assert _contract_table(text, "completion") == LIFECYCLE_COMPLETION_CLAUSES
+    assert _contract_table(text, "recovery") == LIFECYCLE_RECOVERY
+    assert _contract_table(text, "search-state") == LIFECYCLE_SEARCH_STATE
+    assert set(_contract_list(text, "persistence-prohibitions")) == LIFECYCLE_PROHIBITED_FIELDS
+    assert _contract_table(text, "metric-properties") == LIFECYCLE_METRIC_PROPERTIES
+
+
+def test_run_lifecycle_contract_pins_metric_ownership_activation_and_durations():
+    text = LIFECYCLE.read_text(encoding="utf-8")
+
+    assert _contract_table(text, "metric-document") == LIFECYCLE_METRIC_DOCUMENT
+    assert _contract_table(text, "metric-owners") == LIFECYCLE_METRIC_OWNERS
+    assert _contract_table(text, "metric-write-rules") == LIFECYCLE_METRIC_WRITE_RULES
+    assert _contract_table(text, "activation") == LIFECYCLE_ACTIVATION
+    assert _contract_table(text, "derived-durations") == LIFECYCLE_DERIVED_DURATIONS
 
 
 # ------------------------------------------------------ mechanics-script resolution (P4/T4.2)

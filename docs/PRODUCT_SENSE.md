@@ -17,9 +17,10 @@ refuses to become and why, which is the part most likely to be re-litigated. Jum
 ## Who this is for
 
 Job Search is built for a single persona: a technically comfortable job seeker who wants their
-search to run itself. They have Claude Code installed and can follow a five-minute setup, but they
-do not want to babysit a dashboard, tune a scoring rubric, or reason about API credits. They
-describe what they want once, in plain English, and then expect the system to surface relevant
+search to run itself. They have Claude Code installed and can follow a five-minute setup. They do
+not want to babysit a dashboard, tune a scoring rubric, or micromanage API credits, but they need
+enough usage context to make informed choices. They describe what they want once, in plain English,
+and then expect the system to surface relevant
 matches on a schedule — with enough reasoning to act on, and with nothing buried in a log file
 when something goes wrong. The product turns Claude Code into their private job-search operating
 system; their workspace, their data, their machine.
@@ -37,13 +38,17 @@ reasoning carries the weight; the band locates it in the digest. This stance is 
 enforced — see the **Qualitative, never numeric** and **Prose over knobs** beliefs in
 [docs/design-docs/core-beliefs.md](design-docs/core-beliefs.md).
 
-### Frequency, not budget
+### Usage context, not budget controls
 
-The only lever the user touches is how often the system runs. Cost surfaces in exactly one place
-— the reactive quota error — and when it does, the fix is always a frequency change or a plan
-upgrade, never credit arithmetic. For the exact wording of that error and the principle behind
-it, see [shared/references/errors.md](../shared/references/errors.md) and the **Frequency, not
-budget** belief in [docs/design-docs/core-beliefs.md](design-docs/core-beliefs.md).
+Users control outcomes they understand — how often the search runs, which sources it covers, and
+how deeply it reviews company boards — rather than setting a monetary budget. Before a choice can
+add metered work, the agent gives the exact known call baseline and names what remains uncertain;
+after every run, it reports actual calls first. Accurate, clearly labeled usage context is expected,
+but a `budget`, `credits`, or `cost` config field and a hard monetary cap are not. Canonical pricing
+and metering facts live in
+[shared/references/agent-data-contract.md](../shared/references/agent-data-contract.md); quota recovery
+wording lives in [shared/references/errors.md](../shared/references/errors.md). See the **Usage context,
+not budget controls** belief in [docs/design-docs/core-beliefs.md](design-docs/core-beliefs.md).
 
 ### Privacy as a promise
 
@@ -92,11 +97,13 @@ decision.
   is treated as opaque text; parsing it would require arithmetic the model can only approximate.
   Qualitative bands plus reasoning are more honest and more actionable.
 
-- **Credit budgeting and cost dashboards.** Users cannot predict per-call costs, so a budget knob
-  forces reasoning over a number they cannot control. Frugal-by-behavior design (dedup, judge from
-  the free summary first, detail reads only for promising matches) keeps usage modest without any
-  user-visible math. The one place cost can ever surface — a quota limit — is handled reactively
-  as a named error; see [shared/references/errors.md](../shared/references/errors.md).
+- **Monetary budget controls and cost dashboards.** Users can choose outcome levers and see their
+  exact call impact without micromanaging a hard monetary cap or an inferred account balance. The
+  product previews decision-relevant usage, reports actual calls after a run, and keeps frugal-by-
+  behavior design (dedup, summary-first judgment, selective detail reads); it does not add a
+  `budget`, `credits`, or `cost` config field. Current pricing and metering facts stay single-homed in
+  [shared/references/agent-data-contract.md](../shared/references/agent-data-contract.md), while a quota
+  limit remains a named, actionable error in [shared/references/errors.md](../shared/references/errors.md).
 
 - **Multi-source aggregation — shipped 2026-07; the non-goal's own trigger fired.** This entry
   previously refused multi-source aggregation "before a second source exists," naming the seam
@@ -115,8 +122,9 @@ decision.
   enough matches and an established workflow; building it now would be premature.
 
 - **Cloud sync, hosted dashboard, email/Slack notifications.** The product's identity is
-  local-first: the workspace lives on the user's machine, runs are driven by Claude Code's native
-  `/loop`, and the digest is a file. Adding cloud infrastructure inverts that identity and
+  local-first: the workspace lives on the user's machine, runs fire from a schedule on that same
+  machine (an unattended `cron`/`launchd` or host scheduler, with an in-session loop as the
+  fallback), and the digest is a file. Adding cloud infrastructure inverts that identity and
   introduces data-custody questions for sensitive job-search PII. A desktop notification on a
   blocked run (when action is needed) is the narrow exception — configured locally.
 
@@ -133,8 +141,9 @@ Two mechanical backstops prevent product sense from drifting as the codebase evo
 
 The **philosophy guard** (`scripts/philosophy_guard.py`) scans shipped artifacts — digests,
 templates, examples — and fails the build if a numeric fit score, a category weight, or a
-budget/cost config field appears. This makes the qualitative-over-numeric and frequency-over-
-budget stances hard constraints, not just intentions.
+budget/cost config field or unverified actual-charge claim appears. This makes the qualitative-
+over-numeric and usage-context-without-budget-controls stances hard constraints, not just
+intentions, while allowing accurate calls-first usage context.
 
 The **doc linter** (`scripts/doc_lint.py`) checks that every live KB doc links shared/references
 rather than restating contract literals, that every Markdown link resolves, and that the index

@@ -1,0 +1,1788 @@
+#!/usr/bin/env python3
+"""T3.2/T3.3 host-capability shim for exact-model migration and repair evals.
+
+This is not a scheduler emulator. It exposes only the deterministic model facts and
+migration/repair stage effects needed to drive v1 resolution, exact candidate selection,
+free preflight, a disabled test-job canary, cleanup, and rollback evidence. The repair
+operations are T3.3-scoped controls, not general scheduler fidelity. The shim never
+touches a real host model roster, scheduler, network, or agent-data account.
+"""
+
+import base64
+import hashlib
+import json
+import os
+import pathlib
+import re
+import subprocess
+import sys
+import tempfile
+from datetime import datetime, timedelta, timezone
+
+
+SCENARIO = os.environ.get("JOBSEARCH_TEST_HOST_SCENARIO", "happy")
+LOG_PATH = os.environ.get("JOBSEARCH_TEST_HOST_LOG")
+STATE_PATH = os.environ.get("JOBSEARCH_TEST_HOST_STATE")
+ROSTER = {
+    "fast": "fake-fast-001",
+    "balanced": "fake-review-001",
+    "high": "fake-capable-001",
+}
+ALIASES = {"haiku": "fast", "sonnet": "balanced", "opus": "high"}
+PRIMARY = "fake-primary-001"
+REPAIR_SESSION_PRIMARY = "fake-primary-002"
+REPAIR_DETAIL_DEFAULT = "fake-review-002"
+REPAIR_MODELS = {
+    "fake-primary-001",
+    REPAIR_SESSION_PRIMARY,
+    "fake-user-primary-001",
+    "fake-review-001",
+    REPAIR_DETAIL_DEFAULT,
+    "fake-review-003",
+    "fake-capable-002",
+}
+REPO_ROOT = pathlib.Path(__file__).resolve().parents[1]
+LIFECYCLE_FOLD = REPO_ROOT / "shared" / "scripts" / "mechanics" / "lifecycle-fold.sh"
+RUN_ID_PATTERN = re.compile(
+    r"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}-[0-9]{2}-[0-9]{2}Z"
+)
+BINDING_ID_PATTERN = re.compile(
+    r"binding-[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}"
+)
+UTC_TIMESTAMP_PATTERN = re.compile(
+    r"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}"
+    r"(?:\.[0-9]+)?(?:Z|\+00:00)"
+)
+
+
+def without_yaml_comment(value):
+    quote = None
+    escaped = False
+    rendered = []
+    for character in value:
+        if escaped:
+            rendered.append(character)
+            escaped = False
+            continue
+        if quote == '"' and character == "\\":
+            rendered.append(character)
+            escaped = True
+            continue
+        if character in {"'", '"'}:
+            if quote is None:
+                quote = character
+            elif quote == character:
+                quote = None
+            rendered.append(character)
+            continue
+        if character == "#" and quote is None:
+            break
+        rendered.append(character)
+    return "".join(rendered).strip()
+
+
+def split_yaml_items(value):
+    items = []
+    start = 0
+    quote = None
+    depth = 0
+    for index, character in enumerate(value):
+        if character in {"'", '"'}:
+            if quote is None:
+                quote = character
+            elif quote == character:
+                quote = None
+        elif quote is None and character in "[{":
+            depth += 1
+        elif quote is None and character in "]}":
+            depth -= 1
+        elif quote is None and depth == 0 and character == ",":
+            items.append(value[start:index].strip())
+            start = index + 1
+    items.append(value[start:].strip())
+    return items
+
+
+def yaml_value(value):
+    value = without_yaml_comment(value)
+    if value == "":
+        return None
+    if len(value) >= 2 and value[0] == value[-1] == '"':
+        try:
+            return json.loads(value)
+        except ValueError:
+            return object()
+    if len(value) >= 2 and value[0] == value[-1] == "'":
+        return value[1:-1].replace("''", "'")
+    if value == "true":
+        return True
+    if value == "false":
+        return False
+    if value in {"null", "~"}:
+        return None
+    if re.fullmatch(r"-?(0|[1-9][0-9]*)", value):
+        return int(value)
+    if value.startswith("[") and value.endswith("]"):
+        inner = value[1:-1].strip()
+        return [] if not inner else [yaml_value(item) for item in split_yaml_items(inner)]
+    return value
+
+
+def inline_yaml_map(value):
+    value = without_yaml_comment(value)
+    if not (value.startswith("{") and value.endswith("}")):
+        return None
+    fields = {}
+    for item in split_yaml_items(value[1:-1]):
+        if ":" not in item:
+            return None
+        key, raw_value = item.split(":", 1)
+        key = key.strip()
+        if not re.fullmatch(r"[a-z_]+", key) or key in fields:
+            return None
+        fields[key] = yaml_value(raw_value)
+    return fields
+
+
+def parse_candidate_config(text):
+    """Parse and validate the canonical config-v2 subset used by migration."""
+    top = {}
+    nested = {}
+    query_rows = []
+    section = None
+    malformed = False
+    current_query = None
+    block_list_field = None
+    for raw_line in text.splitlines():
+        if not raw_line.strip() or raw_line.lstrip().startswith("#"):
+            continue
+        if raw_line == raw_line.lstrip() and ":" in raw_line:
+            key, value = raw_line.split(":", 1)
+            section = key.strip()
+            if section in top:
+                malformed = True
+            top[section] = yaml_value(value)
+            current_query = None
+            block_list_field = None
+            continue
+        if section not in {"workspace", "queries", "search", "schedule", "notify"}:
+            continue
+        if section == "queries" and raw_line.startswith("  - "):
+            item = raw_line[4:].strip()
+            current_query = inline_yaml_map(item)
+            if current_query is None and ":" in item:
+                key, raw_value = item.split(":", 1)
+                key = key.strip()
+                if re.fullmatch(r"[a-z_]+", key):
+                    current_query = {key: yaml_value(raw_value)}
+            if current_query is None:
+                malformed = True
+            else:
+                query_rows.append(current_query)
+            continue
+        if section == "queries" and raw_line.startswith("    ") and current_query is not None:
+            match = re.match(r"^    ([a-z_]+):\s*(.*)$", raw_line)
+            if not match or match.group(1) in current_query:
+                malformed = True
+            else:
+                current_query[match.group(1)] = yaml_value(match.group(2))
+            continue
+        if section != "queries" and raw_line.startswith("    "):
+            if block_list_field == ("search", "sources"):
+                item_match = re.match(r"^    -\s+(.*)$", raw_line)
+                item = yaml_value(item_match.group(1)) if item_match else None
+                if not isinstance(item, str) or not item:
+                    malformed = True
+                else:
+                    nested[block_list_field].append(item)
+            continue
+        match = re.match(r"^  ([a-z_]+):\s*(.*)$", raw_line)
+        if match:
+            field = (section, match.group(1))
+            if top.get(section) is not None or field in nested:
+                malformed = True
+            raw_value = match.group(2)
+            if field == ("search", "sources") and without_yaml_comment(raw_value) == "":
+                nested[field] = []
+                block_list_field = field
+            else:
+                nested[field] = yaml_value(raw_value)
+                block_list_field = None
+            continue
+        malformed = True
+
+    required_query_fields = {"id", "keywords"}
+    if malformed or top.get("version") != 2:
+        return None
+    if not {"queries", "search"}.issubset(top):
+        return None
+    if any(
+        top[section] is not None
+        for section in ("workspace", "queries", "search", "schedule", "notify")
+        if section in top
+    ):
+        return None
+    if ("search", "detail_model") not in nested:
+        return None
+    string_fields = {
+        ("workspace", "preferences_path"),
+        ("workspace", "master_resume_path"),
+        ("search", "detail_model"),
+        ("schedule", "frequency"),
+        ("schedule", "time"),
+        ("schedule", "timezone"),
+        ("notify", "digest_path_template"),
+    }
+    if any(
+        not isinstance(nested[field], str) or not nested[field].strip()
+        for field in string_fields.intersection(nested)
+    ):
+        return None
+    frequency = nested.get(("schedule", "frequency"), "daily")
+    if frequency not in {
+        "hourly",
+        "every-2-hours",
+        "every-6-hours",
+        "daily",
+        "weekly",
+    }:
+        return None
+    schedule_time = nested.get(("schedule", "time"), "08:00")
+    if not re.fullmatch(r"(?:[01][0-9]|2[0-3]):[0-5][0-9]", schedule_time):
+        return None
+    notify_block = nested.get(("notify", "desktop_notify_on_block"), True)
+    if ("notify", "desktop_notify_on_block") in nested and not isinstance(
+        notify_block, bool
+    ):
+        return None
+    freshness = nested.get(("search", "freshness"), "past-2-weeks")
+    if freshness not in {"any", "past-week", "past-2-weeks", "past-month"}:
+        return None
+    sources = nested.get(("search", "sources"), ["linkedin", "ashby"])
+    if (
+        not isinstance(sources, list)
+        or not sources
+        or any(source not in {"linkedin", "ashby", "greenhouse", "lever"} for source in sources)
+        or len(sources) != len(set(sources))
+    ):
+        return None
+    parallel = nested.get(("search", "parallel_detail_reads"), False)
+    if ("search", "parallel_detail_reads") in nested and not isinstance(parallel, bool):
+        return None
+    if ("search", "max_new_postings_per_run") in nested:
+        depth = nested[("search", "max_new_postings_per_run")]
+        if not (
+            (isinstance(depth, int) and not isinstance(depth, bool) and depth > 0)
+            or depth == "all"
+        ):
+            return None
+    if not query_rows:
+        return None
+    for query in query_rows:
+        if not required_query_fields.issubset(query):
+            return None
+        if any(
+            not isinstance(query[field], str) or not query[field].strip()
+            for field in ("id", "keywords")
+        ):
+            return None
+        if "location" in query and not isinstance(query["location"], str):
+            return None
+        if "limit" in query and (
+            isinstance(query["limit"], bool)
+            or not isinstance(query["limit"], int)
+            or not 1 <= query["limit"] <= 100
+        ):
+            return None
+        if "enabled" in query and not isinstance(query["enabled"], bool):
+            return None
+    return {
+        "detail_model": nested[("search", "detail_model")],
+        "enabled_query_count": sum(query.get("enabled", True) for query in query_rows),
+        "enabled_source_count": len(sources),
+    }
+
+
+def valid_binding(binding, detail_model):
+    if not isinstance(binding, dict) or set(binding) != {
+        "version",
+        "binding_id",
+        "detail_model",
+        "detail_model_origin",
+        "bound_at",
+    }:
+        return False
+    if type(binding["version"]) is not int or binding["version"] != 1:
+        return False
+    if not isinstance(binding["binding_id"], str) or not BINDING_ID_PATTERN.fullmatch(
+        binding["binding_id"]
+    ):
+        return False
+    if binding["detail_model"] != detail_model or detail_model not in {
+        *ROSTER.values(),
+        PRIMARY,
+        *REPAIR_MODELS,
+    }:
+        return False
+    if binding["detail_model_origin"] not in {
+        "configured_auto",
+        "configured_user",
+        "repair",
+    }:
+        return False
+    try:
+        bound_at = datetime.fromisoformat(binding["bound_at"])
+    except (TypeError, ValueError):
+        return False
+    return bound_at.tzinfo is not None and bound_at.utcoffset() == timedelta(0)
+
+
+def regular_nonsymlink_file(path):
+    try:
+        return path.is_file() and not path.is_symlink()
+    except OSError:
+        return False
+
+
+def atomic_write_bytes(path, payload):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd, temp_name = tempfile.mkstemp(prefix=path.name + ".", dir=str(path.parent))
+    try:
+        with os.fdopen(fd, "wb") as handle:
+            handle.write(payload)
+        os.replace(temp_name, path)
+    except BaseException:
+        try:
+            os.unlink(temp_name)
+        except FileNotFoundError:
+            pass
+        raise
+
+
+def valid_run_id(run_id):
+    if not isinstance(run_id, str) or not RUN_ID_PATTERN.fullmatch(run_id):
+        return False
+    try:
+        datetime.strptime(run_id, "%Y-%m-%dT%H-%M-%SZ")
+    except ValueError:
+        return False
+    return True
+
+
+def parse_utc_timestamp(value):
+    if not isinstance(value, str) or not UTC_TIMESTAMP_PATTERN.fullmatch(value):
+        return None
+    normalized = value[:-1] + "+00:00" if value.endswith("Z") else value
+    try:
+        timestamp = datetime.fromisoformat(normalized)
+    except ValueError:
+        return None
+    if timestamp.utcoffset() != timedelta(0):
+        return None
+    return timestamp
+
+
+def valid_utc_timestamp(value):
+    return parse_utc_timestamp(value) is not None
+
+
+def available_repair_models():
+    available = set(REPAIR_MODELS)
+    if SCENARIO in {
+        "expired-primary",
+        "expired-primary-session-unknown",
+        "both-expired",
+        "auto-substitution-bait",
+    }:
+        available.discard("fake-primary-001")
+    if SCENARIO in {"expired-detail", "both-expired", "auto-substitution-bait"}:
+        available.discard("fake-review-001")
+    return available
+
+
+def exact_dispatch_refused_slots():
+    return {
+        "exact-dispatch-refused-primary": ["primary"],
+        "exact-dispatch-refused-detail": ["detail"],
+        "exact-dispatch-refused-both": ["primary", "detail"],
+    }.get(SCENARIO, [])
+
+
+def validate_repair_selection(selection, available):
+    if selection in available:
+        return selection
+    prefix_matches = sorted(model for model in available if model.startswith(selection))
+    if len(prefix_matches) > 1:
+        fail("repair_model_ambiguous", selection=selection)
+    fail("repair_model_unavailable", selection=selection)
+
+
+def parse_json_bytes(payload):
+    try:
+        value = json.loads(payload.decode("utf-8"))
+    except (UnicodeError, ValueError):
+        fail("invalid_repair_state")
+    if not isinstance(value, dict):
+        fail("invalid_repair_state")
+    return value
+
+
+def encode_bytes(payload):
+    return base64.b64encode(payload).decode("ascii")
+
+
+def decode_bytes(payload):
+    try:
+        return base64.b64decode(payload, validate=True)
+    except (TypeError, ValueError):
+        fail("invalid_test_state")
+
+
+def decode_staged_bytes(payload):
+    try:
+        return base64.b64decode(payload, validate=True)
+    except (TypeError, ValueError):
+        return None
+
+
+def repair_key(workspace):
+    return str(workspace.resolve())
+
+
+def canonical_registry_path():
+    value = os.environ.get("JOBSEARCH_OS_REGISTRY")
+    if not value:
+        fail("missing_test_registry_path")
+    return pathlib.Path(value).resolve()
+
+
+def payload_digest(payload):
+    encoded = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode(
+        "utf-8"
+    )
+    return hashlib.sha256(encoded).hexdigest()
+
+
+def fresh_repair_receipt_id(state):
+    tick = state.get("repair_receipt_tick", 1)
+    if not isinstance(tick, int) or tick < 1 or tick > 999999:
+        fail("invalid_test_state")
+    state["repair_receipt_tick"] = tick + 1
+    return f"repair-receipt-{tick:06d}"
+
+
+def fresh_repair_binding(state):
+    tick = state.get("repair_binding_tick", 1)
+    if not isinstance(tick, int) or tick < 1 or tick > 0xFFFFFFFFFFFF:
+        return None
+    try:
+        bound_at = (
+            datetime.fromisoformat("2026-07-16T13:00:00+00:00")
+            + timedelta(seconds=tick)
+        ).isoformat(timespec="seconds")
+    except OverflowError:
+        return None
+    state["repair_binding_tick"] = tick + 1
+    return {
+        "binding_id": f"binding-00000000-0000-4000-8000-{tick:012x}",
+        "bound_at": bound_at,
+    }
+
+
+def replace_detail_model(config_bytes, before, after):
+    try:
+        text = config_bytes.decode("utf-8")
+    except UnicodeError:
+        return None
+    pattern = re.compile(
+        r'^(\s*detail_model:\s*)(?:(?:["\'])'
+        + re.escape(before)
+        + r'["\']|'
+        + re.escape(before)
+        + r')(\s*(?:#.*)?)$',
+        re.MULTILINE,
+    )
+    updated, count = pattern.subn(
+        lambda match: f'{match.group(1)}"{after}"{match.group(2)}', text
+    )
+    if count != 1:
+        return None
+    return updated.encode("utf-8")
+
+
+def restore_repair(state, workspace, registry_path, job_id, transaction):
+    atomic_write_bytes(
+        workspace / "config.yaml", decode_bytes(transaction["config_b64"])
+    )
+    atomic_write_bytes(
+        workspace / "runs" / "detail-model-binding.json",
+        decode_bytes(transaction["sidecar_b64"]),
+    )
+    atomic_write_bytes(registry_path, decode_bytes(transaction["registry_b64"]))
+    state["jobs"][job_id] = transaction["job_before"]
+    state.get("repair_transactions", {}).pop(repair_key(workspace), None)
+    write_state(state)
+
+
+def fold_lifecycle(workspace, run_id):
+    ledger = workspace / "runs" / f".lifecycle-{run_id}.jsonl"
+    result = subprocess.run(
+        ["sh", str(LIFECYCLE_FOLD), str(ledger), str(workspace)],
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode != 0:
+        return None
+    folded = {}
+    for line in result.stdout.splitlines():
+        if "=" not in line:
+            return None
+        key, value = line.split("=", 1)
+        folded[key] = value
+    return folded
+
+
+def canonical_cutoff_evidence(workspace, run_id, migration_snapshot):
+    if not valid_run_id(run_id) or not workspace.is_dir():
+        return None
+    config_path = workspace / "config.yaml"
+    binding_path = workspace / "runs" / "detail-model-binding.json"
+    run_record_path = workspace / "runs" / f"{run_id}.json"
+    try:
+        config = parse_candidate_config(config_path.read_text(encoding="utf-8"))
+        with run_record_path.open(encoding="utf-8") as handle:
+            run_record = json.load(handle)
+        with binding_path.open(encoding="utf-8") as handle:
+            binding = json.load(handle)
+    except (OSError, ValueError):
+        return None
+    if not isinstance(config, dict) or not isinstance(run_record, dict):
+        return None
+    detail_model = config.get("detail_model")
+    binding_id = binding.get("binding_id") if isinstance(binding, dict) else None
+    folded = fold_lifecycle(workspace, run_id)
+    qualified = all(
+        (
+            regular_nonsymlink_file(run_record_path),
+            regular_nonsymlink_file(binding_path),
+            regular_nonsymlink_file(config_path),
+            run_record.get("run_id") == run_id,
+            valid_utc_timestamp(run_record.get("completed_at")),
+            run_record.get("run_health") in {"healthy", "partial", "degraded"},
+            valid_binding(binding, detail_model),
+            run_record.get("detail_model_binding_id") == binding_id,
+            run_record.get("detail_model") == detail_model,
+            isinstance(folded, dict),
+            folded.get("run_id") == run_id if isinstance(folded, dict) else False,
+            folded.get("can_complete") == "true"
+            if isinstance(folded, dict)
+            else False,
+            folded.get("final_run_record_written") == "true"
+            if isinstance(folded, dict)
+            else False,
+            folded.get("final_digest_written") == "true"
+            if isinstance(folded, dict)
+            else False,
+            isinstance(migration_snapshot, dict),
+            migration_snapshot.get("activation_stage") == "pair_active"
+            if isinstance(migration_snapshot, dict)
+            else False,
+            migration_snapshot.get("activated_binding_id") == binding_id
+            if isinstance(migration_snapshot, dict)
+            else False,
+            migration_snapshot.get("activated_detail_model") == detail_model
+            if isinstance(migration_snapshot, dict)
+            else False,
+        )
+    )
+    if not qualified:
+        return None
+    return {
+        "binding_id": binding_id,
+        "detail_model": detail_model,
+        "run_id": run_id,
+    }
+
+
+def emit(value, *, stream=sys.stdout, status=0):
+    print(json.dumps(value, sort_keys=True), file=stream)
+    raise SystemExit(status)
+
+
+def fail(error, **evidence):
+    emit({"error": error, **evidence}, stream=sys.stderr, status=1)
+
+
+def log(operation, arguments, outcome):
+    if not LOG_PATH:
+        return
+    path = pathlib.Path(LOG_PATH)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("a", encoding="utf-8") as handle:
+        handle.write(
+            json.dumps(
+                {
+                    "operation": operation,
+                    "arguments": arguments,
+                    "scenario": SCENARIO,
+                    "outcome": outcome,
+                },
+                sort_keys=True,
+            )
+            + "\n"
+        )
+
+
+def read_state():
+    if not STATE_PATH or not pathlib.Path(STATE_PATH).exists():
+        return {"jobs": {}}
+    with pathlib.Path(STATE_PATH).open(encoding="utf-8") as handle:
+        state = json.load(handle)
+    if not isinstance(state, dict) or not isinstance(state.get("jobs"), dict):
+        fail("invalid_test_state")
+    for key in ("migration_snapshots", "migration_cutoffs"):
+        if key in state and not isinstance(state[key], dict):
+            fail("invalid_test_state")
+    return state
+
+
+def write_state(state):
+    if not STATE_PATH:
+        fail("missing_test_state_path")
+    path = pathlib.Path(STATE_PATH)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd, temp_name = tempfile.mkstemp(prefix=path.name + ".", dir=str(path.parent))
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            json.dump(state, handle, indent=2, sort_keys=True)
+            handle.write("\n")
+        os.replace(temp_name, path)
+    except BaseException:
+        try:
+            os.unlink(temp_name)
+        except FileNotFoundError:
+            pass
+        raise
+
+
+def need_arg(args, index, label):
+    if len(args) <= index or not args[index]:
+        fail(f"missing_{label}")
+    return args[index]
+
+
+def main(args):
+    operation = need_arg(args, 0, "operation")
+    arguments = args[1:]
+
+    if operation == "utc-now":
+        state = read_state()
+        tick = state.get("clock_tick", 0)
+        if not isinstance(tick, int) or tick < 0:
+            fail("invalid_test_clock")
+        instant = datetime(2026, 7, 16, 12, tzinfo=timezone.utc) + timedelta(seconds=tick)
+        state["clock_tick"] = tick + 1
+        write_state(state)
+        log(operation, arguments, "success")
+        emit(
+            {
+                "iso": instant.isoformat(timespec="seconds"),
+                "filename_safe": instant.strftime("%Y-%m-%dT%H-%M-%SZ"),
+            }
+        )
+
+    if operation == "model-roster":
+        if SCENARIO == "tier-roster-unavailable":
+            log(operation, arguments, "tier_roster_unavailable")
+            fail("tier_roster_unavailable")
+        log(operation, arguments, "success")
+        emit(ROSTER)
+
+    if operation == "resolve-detail":
+        selector = need_arg(args, 1, "selector")
+        selector = ALIASES.get(selector, selector)
+        if selector not in ROSTER:
+            log(operation, arguments, "invalid_selector")
+            fail("invalid_selector")
+        if SCENARIO == "tier-resolution-unavailable":
+            log(operation, arguments, "tier_resolution_unavailable")
+            fail("tier_resolution_unavailable")
+        log(operation, arguments, "success")
+        emit({"selector": arguments[0], "exact_model": ROSTER[selector]})
+
+    if operation == "primary-model":
+        if SCENARIO == "primary-unknown":
+            log(operation, arguments, "primary_unknown")
+            fail("primary_unknown")
+        log(operation, arguments, "success")
+        emit({"exact_model": PRIMARY})
+
+    if operation == "repair-candidate":
+        if len(args) != 5:
+            fail("invalid_repair_request")
+        workspace = pathlib.Path(need_arg(args, 1, "workspace")).resolve()
+        job_id = need_arg(args, 2, "job_id")
+        primary_override = need_arg(args, 3, "primary_override")
+        detail_override = need_arg(args, 4, "detail_override")
+        primary_override = None if primary_override == "-" else primary_override
+        detail_override = None if detail_override == "-" else detail_override
+        registry_path = canonical_registry_path()
+        config_path = workspace / "config.yaml"
+        sidecar_path = workspace / "runs" / "detail-model-binding.json"
+        try:
+            config_bytes = config_path.read_bytes()
+            sidecar_bytes = sidecar_path.read_bytes()
+            registry_bytes = registry_path.read_bytes()
+            config = parse_candidate_config(config_bytes.decode("utf-8"))
+            sidecar = parse_json_bytes(sidecar_bytes)
+            registry = parse_json_bytes(registry_bytes)
+        except (OSError, UnicodeError):
+            fail("invalid_repair_state")
+        state = read_state()
+        scheduling = registry.get("scheduling")
+        job_before = state["jobs"].get(job_id)
+        if (
+            config is None
+            or not valid_binding(sidecar, config["detail_model"])
+            or registry.get("active_workspace") != str(workspace)
+            or not isinstance(scheduling, dict)
+            or not isinstance(job_before, dict)
+            or scheduling.get("scheduler_id") != job_id
+            or scheduling.get("installed") is not True
+            or scheduling.get("verified") is not False
+            or job_before.get("state") != "disabled"
+            or job_before.get("verified") is not False
+            or job_before.get("primary_model") != scheduling.get("primary_model")
+            or job_before.get("primary_model_origin")
+            != scheduling.get("primary_model_origin")
+        ):
+            fail("invalid_repair_state")
+        old_primary = scheduling.get("primary_model")
+        old_primary_origin = scheduling.get("primary_model_origin")
+        old_detail = config["detail_model"]
+        old_detail_origin = sidecar["detail_model_origin"]
+        if old_primary_origin not in {
+            "session_inheritance",
+            "user_override",
+            "repair_session",
+        } or old_detail_origin not in {"configured_auto", "configured_user", "repair"}:
+            fail("invalid_repair_state")
+        available = available_repair_models()
+        refused_slots = exact_dispatch_refused_slots()
+        primary_available = set(available)
+        detail_available = set(available)
+        if "primary" in refused_slots:
+            primary_available.discard(old_primary)
+        if "detail" in refused_slots:
+            detail_available.discard(old_detail)
+
+        if primary_override:
+            new_primary = validate_repair_selection(
+                primary_override, primary_available
+            )
+            primary_origin = "user_override"
+        elif old_primary in primary_available:
+            new_primary = old_primary
+            primary_origin = old_primary_origin
+        else:
+            if SCENARIO == "expired-primary-session-unknown":
+                fail("repair_primary_exact_selection_required")
+            new_primary = validate_repair_selection(
+                REPAIR_SESSION_PRIMARY, primary_available
+            )
+            primary_origin = "repair_session"
+
+        if detail_override:
+            new_detail = validate_repair_selection(detail_override, detail_available)
+        elif old_detail in detail_available:
+            new_detail = old_detail
+            detail_origin = old_detail_origin
+        else:
+            new_detail = validate_repair_selection(
+                REPAIR_DETAIL_DEFAULT, detail_available
+            )
+            detail_origin = "repair"
+
+        primary_changed = new_primary != old_primary
+        detail_changed = new_detail != old_detail
+        detail_write_required = detail_changed or detail_override is not None
+        if detail_override:
+            detail_origin = "repair"
+        primary_effect = (
+            "update_exact_primary_keep_disabled_unverified"
+            if primary_changed or primary_origin != old_primary_origin
+            else "preserve_exact_primary_keep_disabled_unverified"
+        )
+        enabled_queries = config["enabled_query_count"]
+        enabled_sources = config["enabled_source_count"]
+        proposal = {
+            "primary": {
+                "before": old_primary,
+                "after": new_primary,
+                "changed": primary_changed,
+                "origin_before": old_primary_origin,
+                "origin_after": primary_origin,
+            },
+            "detail": {
+                "before": old_detail,
+                "after": new_detail,
+                "changed": detail_changed,
+                "origin_before": old_detail_origin,
+                "origin_after": detail_origin,
+                "write_required": detail_write_required,
+            },
+            "confirmation": {
+                "required": True,
+                "count": 0,
+                "scope": "exact_candidate_machine_change_and_one_canary",
+                "canary_count": 1,
+                "usage_context": {
+                    "action": "metered_canary_retry_or_repair",
+                    "known_first_page_calls": enabled_queries * enabled_sources,
+                    "baseline_formula": (
+                        f"{enabled_queries}_enabled_"
+                        f"{'query' if enabled_queries == 1 else 'queries'}*"
+                        f"{enabled_sources}_enabled_"
+                        f"{'source' if enabled_sources == 1 else 'sources'}"
+                    ),
+                    "uncertain_additions": [
+                        "continuation_pages",
+                        "full_posting_detail_reads",
+                        "metered_failures_and_retries",
+                    ],
+                    "recurring_multiplier": "approved_canary_attempt_only",
+                },
+                "effects": {
+                    "config": (
+                        "replace_exact_detail_model"
+                        if detail_write_required
+                        else "preserve_bytes"
+                    ),
+                    "binding": (
+                        "write_fresh_canonical_repair_binding"
+                        if detail_write_required
+                        else "preserve_bytes"
+                    ),
+                    "scheduler": primary_effect,
+                    "machine_change": (
+                        "update_existing_registered_job_without_enabling"
+                    ),
+                    "removal": "stop_or_remove_job_and_clear_scheduling_marker",
+                    "rollback": (
+                        "restore_exact_config_sidecar_registry_and_job_snapshot"
+                    ),
+                },
+            },
+        }
+        receipt_id = fresh_repair_receipt_id(state)
+        payload = {
+            "fixture_scope": "t3_3_dev_fixture_transaction_evidence",
+            "receipt_id": receipt_id,
+            "workspace": str(workspace),
+            "registry_path": str(registry_path),
+            "job_id": job_id,
+            "scenario": SCENARIO,
+            "available_models": sorted(available),
+            "refused_slots": refused_slots,
+            "primary_override": primary_override,
+            "detail_override": detail_override,
+            "config_b64": encode_bytes(config_bytes),
+            "sidecar_b64": encode_bytes(sidecar_bytes),
+            "registry_b64": encode_bytes(registry_bytes),
+            "job_before": job_before,
+            "primary_before": old_primary,
+            "primary_origin_before": old_primary_origin,
+            "primary_after": new_primary,
+            "primary_origin_after": primary_origin,
+            "detail_before": old_detail,
+            "detail_origin_before": old_detail_origin,
+            "detail_after": new_detail,
+            "write_detail": detail_write_required,
+            "proposal": proposal,
+        }
+        receipts = state.setdefault("repair_candidate_receipts", {})
+        for prior_id, envelope in list(receipts.items()):
+            if envelope.get("payload", {}).get("workspace") == str(workspace):
+                receipts.pop(prior_id)
+        receipts[receipt_id] = {
+            "payload": payload,
+            "payload_sha256": payload_digest(payload),
+            "confirmation_count": 0,
+        }
+        write_state(state)
+        log(operation, arguments, "candidate_resolved")
+        emit(
+            {
+                "receipt_id": receipt_id,
+                "receipt_integrity": "sha256_deterministic_tamper_detection_only",
+                **proposal,
+            }
+        )
+
+    if operation == "repair-unscheduled-detail":
+        if len(args) != 3:
+            fail("invalid_repair_request")
+        workspace = pathlib.Path(need_arg(args, 1, "workspace")).resolve()
+        detail_after = need_arg(args, 2, "detail_after")
+        registry_path = canonical_registry_path()
+        state = read_state()
+        if registry_path.exists():
+            try:
+                registry = parse_json_bytes(registry_path.read_bytes())
+            except OSError:
+                fail("invalid_repair_state")
+            scheduling = registry.get("scheduling")
+            if scheduling is not None:
+                if (
+                    not isinstance(scheduling, dict)
+                    or not isinstance(scheduling.get("installed"), bool)
+                ):
+                    fail("invalid_repair_state")
+                if scheduling["installed"]:
+                    fail("scheduled_repair_required")
+                cleared_fields = {
+                    "installed",
+                    "mechanism",
+                    "set_at",
+                    "primary_model",
+                    "primary_model_origin",
+                }
+                if set(scheduling) != cleared_fields:
+                    fail("invalid_repair_state")
+                if any(
+                    scheduling.get(field) is not None
+                    for field in (
+                        "mechanism",
+                        "set_at",
+                        "primary_model",
+                        "primary_model_origin",
+                    )
+                ):
+                    fail("invalid_repair_state")
+        if state["jobs"]:
+            fail("scheduled_repair_required")
+        config_path = workspace / "config.yaml"
+        sidecar_path = workspace / "runs" / "detail-model-binding.json"
+        try:
+            config_before = config_path.read_bytes()
+            sidecar_before = sidecar_path.read_bytes()
+            config = parse_candidate_config(config_before.decode("utf-8"))
+            sidecar = parse_json_bytes(sidecar_before)
+        except (OSError, UnicodeError):
+            fail("invalid_repair_state")
+        if config is None or not valid_binding(sidecar, config["detail_model"]):
+            fail("invalid_repair_state")
+        detail_before = config["detail_model"]
+        detail_available = set(available_repair_models())
+        if "detail" in exact_dispatch_refused_slots():
+            detail_available.discard(detail_before)
+        validate_repair_selection(detail_after, detail_available)
+        config_after = replace_detail_model(config_before, detail_before, detail_after)
+        if config_after is None:
+            fail("invalid_repair_state")
+        binding_facts = fresh_repair_binding(state)
+        if binding_facts is None:
+            fail("invalid_test_state")
+        binding_after = {
+            "version": 1,
+            "binding_id": binding_facts["binding_id"],
+            "detail_model": detail_after,
+            "detail_model_origin": "repair",
+            "bound_at": binding_facts["bound_at"],
+        }
+        binding_before_time = parse_utc_timestamp(sidecar.get("bound_at"))
+        binding_after_time = parse_utc_timestamp(binding_after.get("bound_at"))
+        if (
+            binding_after["binding_id"] == sidecar.get("binding_id")
+            or binding_before_time is None
+            or binding_after_time is None
+            or binding_after_time <= binding_before_time
+        ):
+            write_state(state)
+            log(operation, arguments, "binding_freshness_failed_preserved_exact")
+            fail(
+                "repair_activation_failed",
+                config="restored_exact",
+                sidecar="restored_exact",
+            )
+        atomic_write_bytes(config_path, config_after)
+        if SCENARIO == "repair-unscheduled-partial-failure":
+            atomic_write_bytes(config_path, config_before)
+            atomic_write_bytes(sidecar_path, sidecar_before)
+            log(operation, arguments, "partial_write_restored_exact")
+            fail(
+                "repair_activation_failed",
+                config="restored_exact",
+                sidecar="restored_exact",
+            )
+        atomic_write_bytes(
+            sidecar_path,
+            (json.dumps(binding_after, indent=2, sort_keys=True) + "\n").encode(
+                "utf-8"
+            ),
+        )
+        write_state(state)
+        log(operation, arguments, "atomic_pair_repaired")
+        emit(
+            {
+                "state": "repaired",
+                "confirmation_required": False,
+                "canary_required": False,
+                "detail": {
+                    "before": detail_before,
+                    "after": detail_after,
+                    "origin": "repair",
+                },
+            }
+        )
+
+    if operation == "headless-model-check":
+        primary = need_arg(args, 1, "primary")
+        detail = need_arg(args, 2, "detail")
+        available = available_repair_models()
+        unavailable = []
+        if primary not in available:
+            unavailable.append("primary")
+        if detail not in available:
+            unavailable.append("detail")
+        if unavailable:
+            log(operation, arguments, "blocked_no_substitute")
+            fail(
+                "exact_model_repair_required",
+                slots=unavailable,
+                substitution_attempted=False,
+            )
+        refused_slots = exact_dispatch_refused_slots()
+        if refused_slots:
+            log(
+                operation,
+                arguments,
+                "blocked_exact_dispatch_refused_no_substitute",
+            )
+            fail(
+                "exact_model_repair_required",
+                cause="exact_dispatch_refused",
+                slots=refused_slots,
+                substitution_attempted=False,
+                completed_attempt_accounting="preserved",
+            )
+        log(operation, arguments, "exact_models_available")
+        emit({"available": True, "substitution_attempted": False})
+
+    if operation == "begin-repair":
+        if len(args) != 3:
+            fail("repair_candidate_receipt_required")
+        workspace = pathlib.Path(need_arg(args, 1, "workspace")).resolve()
+        receipt_id = need_arg(args, 2, "receipt_id")
+        state = read_state()
+        receipts = state.get("repair_candidate_receipts", {})
+        envelope = receipts.pop(receipt_id, None)
+        if not isinstance(envelope, dict):
+            fail("repair_candidate_receipt_required")
+        payload = envelope.get("payload")
+        if (
+            not isinstance(payload, dict)
+            or envelope.get("payload_sha256") != payload_digest(payload)
+            or payload.get("receipt_id") != receipt_id
+            or envelope.get("confirmation_count") != 1
+            or payload.get("fixture_scope")
+            != "t3_3_dev_fixture_transaction_evidence"
+            or payload.get("workspace") != str(workspace)
+            or payload.get("scenario") != SCENARIO
+            or payload.get("available_models") != sorted(available_repair_models())
+            or payload.get("refused_slots") != exact_dispatch_refused_slots()
+        ):
+            write_state(state)
+            fail("repair_candidate_receipt_invalid")
+        registry_value = os.environ.get("JOBSEARCH_OS_REGISTRY")
+        if not registry_value:
+            write_state(state)
+            fail("repair_candidate_receipt_invalid")
+        registry_path = pathlib.Path(registry_value).resolve()
+        job_id = payload.get("job_id")
+        if payload.get("registry_path") != str(registry_path):
+            write_state(state)
+            fail("repair_candidate_receipt_invalid")
+        try:
+            stale = (
+                (workspace / "config.yaml").read_bytes()
+                != decode_bytes(payload["config_b64"])
+                or (workspace / "runs" / "detail-model-binding.json").read_bytes()
+                != decode_bytes(payload["sidecar_b64"])
+                or registry_path.read_bytes() != decode_bytes(payload["registry_b64"])
+                or state["jobs"].get(job_id) != payload.get("job_before")
+            )
+        except (KeyError, OSError):
+            stale = True
+        if stale:
+            write_state(state)
+            fail("repair_candidate_receipt_stale")
+        key = repair_key(workspace)
+        transactions = state.setdefault("repair_transactions", {})
+        if key in transactions:
+            write_state(state)
+            fail("repair_already_in_progress")
+        transactions[key] = {
+            "registry_path": str(registry_path),
+            "job_id": job_id,
+            "receipt_id": receipt_id,
+            "scenario": payload["scenario"],
+            "config_b64": payload["config_b64"],
+            "sidecar_b64": payload["sidecar_b64"],
+            "registry_b64": payload["registry_b64"],
+            "job_before": payload["job_before"],
+            "primary_before": payload["primary_before"],
+            "primary_origin_before": payload["primary_origin_before"],
+            "primary_after": payload["primary_after"],
+            "primary_origin_after": payload["primary_origin_after"],
+            "detail_before": payload["detail_before"],
+            "detail_after": payload["detail_after"],
+            "write_detail": payload["write_detail"],
+            "refused_slots": payload["refused_slots"],
+            "confirmation_count": 1,
+            "stage": "candidate",
+        }
+        write_state(state)
+        log(operation, arguments, "authorized_receipt_consumed")
+        emit(
+            {
+                "receipt_id": receipt_id,
+                "confirmation_count": 1,
+                "stage": "authorized_candidate_snapshotted",
+                "schedule_during_repair": "disabled_unverified",
+            }
+        )
+
+    if operation == "authorize-repair":
+        if len(args) != 3:
+            fail("repair_candidate_receipt_required")
+        workspace = pathlib.Path(need_arg(args, 1, "workspace")).resolve()
+        receipt_id = need_arg(args, 2, "receipt_id")
+        state = read_state()
+        receipts = state.get("repair_candidate_receipts", {})
+        envelope = receipts.get(receipt_id)
+        if not isinstance(envelope, dict):
+            fail("repair_candidate_receipt_required")
+        payload = envelope.get("payload")
+        if (
+            not isinstance(payload, dict)
+            or envelope.get("payload_sha256") != payload_digest(payload)
+            or payload.get("receipt_id") != receipt_id
+            or payload.get("workspace") != str(workspace)
+            or payload.get("scenario") != SCENARIO
+        ):
+            receipts.pop(receipt_id, None)
+            write_state(state)
+            fail("repair_candidate_receipt_invalid")
+        if envelope.get("confirmation_count") != 0:
+            fail("duplicate_repair_confirmation")
+        envelope["confirmation_count"] = 1
+        write_state(state)
+        log(operation, arguments, "authorized_once")
+        emit(
+            {
+                "receipt_id": receipt_id,
+                "confirmation_count": 1,
+                "scope": "exact_candidate_and_one_repair_canary",
+            }
+        )
+
+    if operation == "activate-repair":
+        workspace = pathlib.Path(need_arg(args, 1, "workspace")).resolve()
+        registry_path = pathlib.Path(need_arg(args, 2, "registry"))
+        job_id = need_arg(args, 3, "job_id")
+        state = read_state()
+        key = repair_key(workspace)
+        transaction = state.get("repair_transactions", {}).get(key)
+        if not isinstance(transaction, dict):
+            fail("missing_repair_candidate")
+        bound_registry_path = pathlib.Path(transaction["registry_path"])
+        bound_job_id = transaction["job_id"]
+        if (
+            transaction.get("job_id") != job_id
+            or transaction.get("registry_path") != str(registry_path)
+            or transaction.get("scenario") != SCENARIO
+            or transaction.get("confirmation_count") != 1
+            or transaction.get("stage") != "candidate"
+        ):
+            restore_repair(
+                state,
+                workspace,
+                bound_registry_path,
+                bound_job_id,
+                transaction,
+            )
+            log(operation, arguments, "setup_invalid_restored_exact")
+            fail(
+                "repair_setup_invalid",
+                authorization_consumed=True,
+                registry="restored_exact",
+                config="restored_exact",
+                sidecar="restored_exact",
+                job="restored_exact",
+                verified=False,
+            )
+        config_path = workspace / "config.yaml"
+        sidecar_path = workspace / "runs" / "detail-model-binding.json"
+        try:
+            baseline_changed = (
+                config_path.read_bytes() != decode_bytes(transaction["config_b64"])
+                or sidecar_path.read_bytes()
+                != decode_bytes(transaction["sidecar_b64"])
+                or registry_path.read_bytes()
+                != decode_bytes(transaction["registry_b64"])
+                or state["jobs"].get(job_id) != transaction["job_before"]
+            )
+        except OSError:
+            baseline_changed = True
+        if baseline_changed:
+            restore_repair(state, workspace, registry_path, job_id, transaction)
+            log(operation, arguments, "baseline_changed_restored_exact")
+            fail(
+                "repair_baseline_changed",
+                authorization_consumed=True,
+                registry="restored_exact",
+                config="restored_exact",
+                sidecar="restored_exact",
+                job="restored_exact",
+                verified=False,
+            )
+        registry = parse_json_bytes(registry_path.read_bytes())
+        config_after = None
+        binding_after = None
+        binding_after_bytes = None
+        if transaction["write_detail"]:
+            config_after = replace_detail_model(
+                decode_bytes(transaction["config_b64"]),
+                transaction["detail_before"],
+                transaction["detail_after"],
+            )
+            binding_facts = fresh_repair_binding(state)
+            if config_after is not None and binding_facts is not None:
+                binding_after = {
+                    "version": 1,
+                    "binding_id": binding_facts["binding_id"],
+                    "detail_model": transaction["detail_after"],
+                    "detail_model_origin": "repair",
+                    "bound_at": binding_facts["bound_at"],
+                }
+            binding_before = parse_json_bytes(
+                decode_bytes(transaction["sidecar_b64"])
+            )
+            binding_before_time = parse_utc_timestamp(binding_before.get("bound_at"))
+            binding_after_time = (
+                parse_utc_timestamp(binding_after.get("bound_at"))
+                if isinstance(binding_after, dict)
+                else None
+            )
+            if (
+                not isinstance(binding_after, dict)
+                or binding_after["binding_id"] == binding_before.get("binding_id")
+                or binding_before_time is None
+                or binding_after_time is None
+                or binding_after_time <= binding_before_time
+            ):
+                restore_repair(state, workspace, registry_path, job_id, transaction)
+                log(operation, arguments, "binding_freshness_failed_restored_exact")
+                fail(
+                    "repair_activation_failed",
+                    authorization_consumed=True,
+                    registry="restored_exact",
+                    config="restored_exact",
+                    sidecar="restored_exact",
+                    job="restored_exact",
+                    verified=False,
+                )
+            transaction["staged_detail_binding"] = binding_after
+            binding_after_bytes = (
+                json.dumps(binding_after, indent=2, sort_keys=True) + "\n"
+            ).encode("utf-8")
+            transaction["staged_sidecar_b64"] = encode_bytes(binding_after_bytes)
+        registry["scheduling"]["primary_model"] = transaction["primary_after"]
+        registry["scheduling"]["primary_model_origin"] = transaction[
+            "primary_origin_after"
+        ]
+        registry["scheduling"]["verified"] = False
+        registry_after_bytes = (
+            json.dumps(registry, indent=2, sort_keys=True) + "\n"
+        ).encode("utf-8")
+        transaction["staged_registry_b64"] = encode_bytes(registry_after_bytes)
+        atomic_write_bytes(
+            registry_path,
+            registry_after_bytes,
+        )
+        job = state["jobs"][job_id]
+        job["primary_model"] = transaction["primary_after"]
+        job["primary_model_origin"] = transaction["primary_origin_after"]
+        job["state"] = "disabled"
+        job["verified"] = False
+        transaction["staged_registry"] = json.loads(json.dumps(registry))
+        transaction["staged_job"] = json.loads(json.dumps(job))
+        if transaction["write_detail"]:
+            atomic_write_bytes(config_path, config_after)
+            if SCENARIO == "repair-partial-activation-failure":
+                restore_repair(state, workspace, registry_path, job_id, transaction)
+                log(operation, arguments, "activation_failed_restored_exact")
+                fail(
+                    "repair_activation_failed",
+                    authorization_consumed=True,
+                    registry="restored_exact",
+                    config="restored_exact",
+                    sidecar="restored_exact",
+                    job="restored_exact",
+                    verified=False,
+                )
+            atomic_write_bytes(
+                sidecar_path,
+                binding_after_bytes,
+            )
+        transaction["stage"] = "active_unverified"
+        write_state(state)
+        log(operation, arguments, "active_unverified")
+        emit(
+            {
+                "stage": "active_unverified",
+                "job_state": "disabled",
+                "verified": False,
+            }
+        )
+
+    if operation == "repair-canary":
+        workspace = pathlib.Path(need_arg(args, 1, "workspace")).resolve()
+        registry_path = pathlib.Path(need_arg(args, 2, "registry"))
+        job_id = need_arg(args, 3, "job_id")
+        state = read_state()
+        key = repair_key(workspace)
+        transaction = state.get("repair_transactions", {}).get(key)
+        if not isinstance(transaction, dict):
+            fail("fresh_repair_confirmation_required")
+        if (
+            transaction.get("job_id") != job_id
+            or transaction.get("registry_path") != str(registry_path)
+            or transaction.get("scenario") != SCENARIO
+            or transaction.get("confirmation_count") != 1
+            or transaction.get("stage") != "active_unverified"
+        ):
+            restore_repair(
+                state,
+                workspace,
+                pathlib.Path(transaction["registry_path"]),
+                transaction["job_id"],
+                transaction,
+            )
+            log(operation, arguments, "canary_setup_invalid_restored_exact")
+            fail(
+                "repair_canary_evidence_invalid",
+                authorization_consumed=True,
+                registry="restored_exact",
+                config="restored_exact",
+                sidecar="restored_exact",
+                job="restored_exact",
+                verified=False,
+            )
+        if SCENARIO == "repair-canary-failure":
+            restore_repair(state, workspace, registry_path, job_id, transaction)
+            log(operation, arguments, "failed_rolled_back")
+            fail(
+                "repair_canary_failed",
+                authorization_consumed=True,
+                registry="restored_exact",
+                config="restored_exact",
+                sidecar="restored_exact",
+                job="restored_exact",
+                verified=False,
+            )
+        config_bytes = b""
+        sidecar_bytes = b""
+        registry_bytes = b""
+        try:
+            config_bytes = (workspace / "config.yaml").read_bytes()
+            sidecar_bytes = (
+                workspace / "runs" / "detail-model-binding.json"
+            ).read_bytes()
+            registry_bytes = registry_path.read_bytes()
+            registry = json.loads(registry_bytes.decode("utf-8"))
+            sidecar = json.loads(sidecar_bytes.decode("utf-8"))
+            config = parse_candidate_config(config_bytes.decode("utf-8"))
+        except (OSError, UnicodeError, ValueError):
+            registry = {}
+            sidecar = None
+            config = None
+        job = state["jobs"].get(job_id)
+        staged_sidecar_bytes = decode_staged_bytes(
+            transaction.get("staged_sidecar_b64")
+        )
+        staged_registry_bytes = decode_staged_bytes(
+            transaction.get("staged_registry_b64")
+        )
+        if transaction["write_detail"]:
+            expected_config = replace_detail_model(
+                decode_bytes(transaction["config_b64"]),
+                transaction["detail_before"],
+                transaction["detail_after"],
+            )
+            staged_binding = transaction.get("staged_detail_binding")
+            snapshot_binding = parse_json_bytes(
+                decode_bytes(transaction["sidecar_b64"])
+            )
+            staged_binding_time = (
+                parse_utc_timestamp(staged_binding.get("bound_at"))
+                if isinstance(staged_binding, dict)
+                else None
+            )
+            snapshot_binding_time = parse_utc_timestamp(
+                snapshot_binding.get("bound_at")
+            )
+            detail_evidence_valid = (
+                config_bytes == expected_config
+                if isinstance(config, dict)
+                else False
+            ) and (
+                isinstance(staged_binding, dict)
+                and sidecar == staged_binding
+                and staged_sidecar_bytes is not None
+                and sidecar_bytes == staged_sidecar_bytes
+                and valid_binding(staged_binding, transaction["detail_after"])
+                and staged_binding.get("detail_model_origin") == "repair"
+                and staged_binding.get("binding_id")
+                != snapshot_binding.get("binding_id")
+                and staged_binding_time is not None
+                and snapshot_binding_time is not None
+                and staged_binding_time > snapshot_binding_time
+            )
+        else:
+            detail_evidence_valid = (
+                config_bytes == decode_bytes(transaction["config_b64"])
+                and sidecar_bytes == decode_bytes(transaction["sidecar_b64"])
+                if isinstance(config, dict)
+                else False
+            )
+        refused_slots = transaction.get("refused_slots")
+        refusal_evidence_valid = (
+            isinstance(refused_slots, list)
+            and set(refused_slots) <= {"primary", "detail"}
+            and (
+                "primary" not in refused_slots
+                or transaction["primary_after"] != transaction["primary_before"]
+            )
+            and (
+                "detail" not in refused_slots
+                or transaction["detail_after"] != transaction["detail_before"]
+            )
+        )
+        scheduling = registry.get("scheduling") if isinstance(registry, dict) else None
+        if (
+            not isinstance(job, dict)
+            or job.get("state") != "disabled"
+            or job.get("verified") is not False
+            or not isinstance(registry, dict)
+            or not isinstance(scheduling, dict)
+            or scheduling.get("verified") is not False
+            or scheduling.get("primary_model") != transaction["primary_after"]
+            or scheduling.get("primary_model_origin")
+            != transaction["primary_origin_after"]
+            or not isinstance(transaction.get("staged_registry"), dict)
+            or registry != transaction.get("staged_registry")
+            or staged_registry_bytes is None
+            or registry_bytes != staged_registry_bytes
+            or not isinstance(transaction.get("staged_job"), dict)
+            or job != transaction.get("staged_job")
+            or job.get("primary_model") != transaction["primary_after"]
+            or job.get("primary_model_origin") != transaction["primary_origin_after"]
+            or not detail_evidence_valid
+            or not refusal_evidence_valid
+        ):
+            restore_repair(state, workspace, registry_path, job_id, transaction)
+            log(operation, arguments, "invalid_evidence_restored_exact")
+            fail(
+                "repair_canary_evidence_invalid",
+                authorization_consumed=True,
+                registry="restored_exact",
+                config="restored_exact",
+                sidecar="restored_exact",
+                job="restored_exact",
+                verified=False,
+            )
+        scheduling["verified"] = True
+        scheduling["verified_at"] = "2026-07-16T13:30:00+00:00"
+        scheduling["canary_run_id"] = "2026-07-16T13-30-00Z"
+        atomic_write_bytes(
+            registry_path,
+            (json.dumps(registry, indent=2, sort_keys=True) + "\n").encode("utf-8"),
+        )
+        job["state"] = "enabled"
+        job["verified"] = True
+        state["repair_transactions"].pop(key, None)
+        write_state(state)
+        log(operation, arguments, "green_committed")
+        emit(
+            {
+                "canary_path": "simulated_registered_job_real_path_input",
+                "committed": True,
+                "fixture_scope": "t3_3_not_scheduler_fidelity",
+                "run_health": "healthy",
+                "verified": True,
+            }
+        )
+
+    if operation == "dispatch-exact":
+        model = need_arg(args, 1, "exact_model")
+        if model not in {*ROSTER.values(), PRIMARY}:
+            log(operation, arguments, "exact_model_unavailable")
+            fail("exact_model_unavailable")
+        if SCENARIO == "exact-dispatch-unsupported":
+            log(operation, arguments, "exact_dispatch_unsupported")
+            fail("exact_dispatch_unsupported")
+        if SCENARIO == "exact-dispatch-refused":
+            log(operation, arguments, "exact_dispatch_refused")
+            fail("exact_dispatch_refused")
+        log(operation, arguments, "success")
+        emit({"exact_model": model, "observed_executable": True})
+
+    if operation == "validate-candidate":
+        config_path = pathlib.Path(need_arg(args, 1, "candidate_config"))
+        binding_path = pathlib.Path(need_arg(args, 2, "candidate_binding"))
+        if SCENARIO == "candidate-validation-failure":
+            log(operation, arguments, "candidate_validation_failed")
+            fail("candidate_validation_failed")
+        try:
+            config_text = config_path.read_text(encoding="utf-8")
+            with binding_path.open(encoding="utf-8") as handle:
+                binding = json.load(handle)
+        except (OSError, ValueError):
+            log(operation, arguments, "candidate_unreadable")
+            fail("candidate_unreadable")
+        config = parse_candidate_config(config_text)
+        if config is None or not valid_binding(binding, config["detail_model"]):
+            log(operation, arguments, "candidate_validation_failed")
+            fail("candidate_validation_failed")
+        log(operation, arguments, "success")
+        emit({"candidate": "validated"})
+
+    if operation == "free-preflight":
+        if SCENARIO == "preflight-failure":
+            log(operation, arguments, "preflight_failed")
+            fail("preflight_failed", metered_calls=0)
+        log(operation, arguments, "success")
+        emit({"status": "ok", "metered_calls": 0})
+
+    if operation == "begin-migration":
+        if len(args) != 2:
+            fail("invalid_migration_request")
+        workspace = pathlib.Path(need_arg(args, 1, "workspace")).resolve()
+        config_path = workspace / "config.yaml"
+        binding_path = workspace / "runs" / "detail-model-binding.json"
+        if not regular_nonsymlink_file(config_path):
+            fail("invalid_migration_baseline")
+        if binding_path.exists() and not regular_nonsymlink_file(binding_path):
+            fail("invalid_migration_baseline")
+        config_bytes = config_path.read_bytes()
+        prior_binding = binding_path.read_bytes() if binding_path.exists() else None
+        state = read_state()
+        state.setdefault("migration_snapshots", {})[str(workspace)] = {
+            "config_b64": base64.b64encode(config_bytes).decode("ascii"),
+            "prior_sidecar_present": prior_binding is not None,
+            "prior_sidecar_b64": (
+                base64.b64encode(prior_binding).decode("ascii")
+                if prior_binding is not None
+                else None
+            ),
+            "activation_stage": "baseline",
+        }
+        write_state(state)
+        log(operation, arguments, "snapshotted")
+        emit(
+            {
+                "config_snapshotted": True,
+                "prior_sidecar": "present" if prior_binding is not None else "absent",
+            }
+        )
+
+    if operation == "activate-pair":
+        if len(args) != 4:
+            fail("invalid_activation_request")
+        workspace = pathlib.Path(need_arg(args, 1, "workspace")).resolve()
+        candidate_config_path = pathlib.Path(need_arg(args, 2, "candidate_config"))
+        candidate_binding_path = pathlib.Path(need_arg(args, 3, "candidate_binding"))
+        state = read_state()
+        snapshot = state.get("migration_snapshots", {}).get(str(workspace))
+        if not isinstance(snapshot, dict):
+            fail("missing_migration_snapshot")
+        try:
+            config_bytes = candidate_config_path.read_bytes()
+            binding_bytes = candidate_binding_path.read_bytes()
+            config = parse_candidate_config(config_bytes.decode("utf-8"))
+            binding = json.loads(binding_bytes.decode("utf-8"))
+        except (OSError, UnicodeError, ValueError):
+            fail("candidate_validation_failed")
+        if config is None or not valid_binding(binding, config["detail_model"]):
+            fail("candidate_validation_failed")
+        active_config = workspace / "config.yaml"
+        active_binding = workspace / "runs" / "detail-model-binding.json"
+        atomic_write_bytes(active_config, config_bytes)
+        snapshot["activation_stage"] = "config_only"
+        write_state(state)
+        if SCENARIO == "partial-activation-failure":
+            log(operation, arguments, "partial_activation_failed")
+            fail("partial_activation_failed", active_effect="config_only")
+        atomic_write_bytes(active_binding, binding_bytes)
+        snapshot["activation_stage"] = "pair_active"
+        snapshot["activated_binding_id"] = binding["binding_id"]
+        snapshot["activated_detail_model"] = binding["detail_model"]
+        write_state(state)
+        try:
+            active_config_data = parse_candidate_config(
+                active_config.read_text(encoding="utf-8")
+            )
+            active_binding_data = json.loads(active_binding.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            fail("activation_reread_failed")
+        if active_config_data is None or not valid_binding(
+            active_binding_data, active_config_data["detail_model"]
+        ):
+            fail("activation_reread_failed")
+        log(operation, arguments, "complete")
+        emit(
+            {
+                "activation": "complete",
+                "detail_model": active_config_data["detail_model"],
+            }
+        )
+
+    if operation == "register-disabled":
+        job_id = need_arg(args, 1, "job_id")
+        if SCENARIO == "register-failure":
+            log(operation, arguments, "register_failed")
+            fail("register_failed")
+        state = read_state()
+        state["jobs"][job_id] = {"state": "disabled", "fixture_scope": "t3_2_migration"}
+        write_state(state)
+        log(operation, arguments, "disabled")
+        emit({"job_id": job_id, "state": "disabled"})
+
+    if operation == "canary":
+        job_id = need_arg(args, 1, "job_id")
+        state = read_state()
+        if state["jobs"].get(job_id, {}).get("state") != "disabled":
+            log(operation, arguments, "job_not_disabled")
+            fail("job_not_disabled")
+        if SCENARIO == "canary-failure":
+            log(operation, arguments, "canary_failed")
+            fail("canary_failed", run_state="blocked", completed_at=None)
+        if SCENARIO == "started-only":
+            log(operation, arguments, "started")
+            emit({"run_state": "started", "run_health": None, "completed_at": None})
+        log(operation, arguments, "complete")
+        emit(
+            {
+                "run_state": "complete",
+                "run_health": "healthy",
+                "completed_at": "2026-07-16T12:00:00+00:00",
+            }
+        )
+
+    if operation == "qualify-cutoff":
+        if len(args) != 3:
+            log(operation, arguments, "invalid_cutoff_request")
+            fail("invalid_cutoff_request")
+        workspace = pathlib.Path(need_arg(args, 1, "workspace")).resolve()
+        run_id = need_arg(args, 2, "run_id")
+        state = read_state()
+        migration_snapshot = state.get("migration_snapshots", {}).get(str(workspace))
+        evidence = canonical_cutoff_evidence(workspace, run_id, migration_snapshot)
+        if evidence is None:
+            log(operation, arguments, "cutoff_not_qualified")
+            fail("cutoff_not_qualified")
+        state.setdefault("migration_cutoffs", {})[str(workspace)] = evidence
+        write_state(state)
+        log(operation, arguments, "qualified")
+        emit({**evidence, "cutoff_qualifies": True})
+
+    if operation == "rollback-migration":
+        workspace = pathlib.Path(need_arg(args, 1, "workspace")).resolve()
+        job_id = need_arg(args, 2, "job_id")
+        state = read_state()
+        snapshots = state.get("migration_snapshots", {})
+        snapshot = snapshots.get(str(workspace))
+        if not isinstance(snapshot, dict):
+            log(operation, arguments, "missing_migration_snapshot")
+            fail("missing_migration_snapshot")
+        cutoffs = state.get("migration_cutoffs", {})
+        cutoff = cutoffs.get(str(workspace))
+        if isinstance(cutoff, dict):
+            marker_matches_migration = (
+                cutoff.get("binding_id") == snapshot.get("activated_binding_id")
+                and cutoff.get("detail_model")
+                == snapshot.get("activated_detail_model")
+            )
+            if not marker_matches_migration:
+                cutoffs.pop(str(workspace), None)
+            else:
+                evidence = canonical_cutoff_evidence(
+                    workspace, cutoff.get("run_id"), snapshot
+                )
+                if evidence == cutoff:
+                    log(operation, arguments, "rollback_forbidden_after_cutoff")
+                    fail("rollback_forbidden_after_cutoff")
+                log(operation, arguments, "cutoff_evidence_unverifiable")
+                fail("cutoff_evidence_unverifiable")
+        try:
+            original_config = base64.b64decode(snapshot["config_b64"], validate=True)
+            prior_present = snapshot["prior_sidecar_present"] is True
+            prior_sidecar = (
+                base64.b64decode(snapshot["prior_sidecar_b64"], validate=True)
+                if prior_present
+                else None
+            )
+        except (KeyError, TypeError, ValueError):
+            fail("invalid_test_state")
+        config_path = workspace / "config.yaml"
+        binding_path = workspace / "runs" / "detail-model-binding.json"
+        atomic_write_bytes(config_path, original_config)
+        if prior_present:
+            atomic_write_bytes(binding_path, prior_sidecar)
+            sidecar_effect = "restored_exact"
+        else:
+            try:
+                binding_path.unlink()
+            except FileNotFoundError:
+                pass
+            sidecar_effect = "removed"
+        if job_id not in state["jobs"]:
+            job_state = "not_created"
+        elif SCENARIO == "remove-unavailable":
+            state["jobs"][job_id]["state"] = "disabled"
+            job_state = "disabled"
+        else:
+            state["jobs"].pop(job_id, None)
+            job_state = "absent"
+        snapshots.pop(str(workspace), None)
+        write_state(state)
+        log(operation, arguments, f"restored_{job_state}")
+        emit(
+            {
+                "config": "restored_exact",
+                "job_id": job_id,
+                "job_state": job_state,
+                "sidecar": sidecar_effect,
+            }
+        )
+
+    if operation in {"remove-job", "disable-job"}:
+        job_id = need_arg(args, 1, "job_id")
+        state = read_state()
+        if operation == "remove-job":
+            state["jobs"].pop(job_id, None)
+            rendered_state = "absent"
+        else:
+            state["jobs"].setdefault(job_id, {})["state"] = "disabled"
+            rendered_state = "disabled"
+        write_state(state)
+        log(operation, arguments, rendered_state)
+        emit({"job_id": job_id, "state": rendered_state})
+
+    fail("unsupported_operation", operation=operation)
+
+
+if __name__ == "__main__":
+    main(sys.argv[1:])

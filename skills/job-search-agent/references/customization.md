@@ -2,7 +2,19 @@
 
 This reference covers the flexibility and customization workflows — how to honor special requests, narrow results, tune the rubric, and add new capabilities — without breaking the clean defaults.
 
-**Contents:** [1. Honoring an explicit score request](#1-honoring-an-explicit-score-request) · [2. Adding a custom filter](#2-adding-a-custom-filter-or-narrowing-results) · [3. Changing how postings are judged](#3-changing-how-postings-are-judged) · [4. Tuning the search feed & detail reads](#4-tuning-the-search-feed--detail-reads) · [5. Adding a new capability or skill](#5-adding-a-new-capability-or-skill)
+For any action that can change agent-data calls, classify it with the canonical
+[Agent-data usage decisions](../../../shared/references/internals.md#agent-data-usage-decisions) and render
+its decision-time context with `../../../shared/references/voice.md` → **Agent-data usage context**. This
+reference specializes those rules for each setting; it does not restate the action table.
+
+Applying **user feedback** mid-search — deciding whether a reaction is a general preference (edits the brief
+and revises the run), a posting-specific note (pipeline state only, unless the user generalizes it), or a
+retrieval change (previews agent-data impact first), and when a preference edit rechecks already-shown matches
+only because the outcome could change — is routed by the **job-search** front door (its home view's
+**Applying your feedback**). This manual explains the individual settings that feedback may change; it does
+not duplicate that routing table.
+
+**Contents:** [1. Honoring an explicit score request](#1-honoring-an-explicit-score-request) · [2. Adding a custom filter](#2-adding-a-custom-filter-or-narrowing-results) · [3. Changing how postings are judged](#3-changing-how-postings-are-judged) · [4. Tuning the search feed & detail reads](#4-tuning-the-search-feed--detail-reads) · [5. Explaining agent-data usage](#5-explaining-agent-data-usage) · [6. Adding a new capability or skill](#6-adding-a-new-capability-or-skill)
 
 ---
 
@@ -23,7 +35,7 @@ If the user wants the numbers saved, write them to a clearly-named side file (e.
 
 Two routes depending on where you want the narrowing to happen:
 
-**Source-side (fewer postings fetched):** Edit `queries[]` in `config.yaml`. Tighten `keywords`, add a `location`, lower `limit`, or set `enabled: false` to pause a query entirely. This reduces API calls and noise before judgment runs.
+**Source-side (fewer postings fetched):** Edit `queries[]` in `config.yaml`. Tighten `keywords`, add a `location`, lower `limit`, or set `enabled: false` to pause a query entirely. Lowering `limit` reduces rows returned by each call; disabling a query reduces the number of first-page calls. Both reduce noise before judgment runs.
 
 **Judgment-side (postings fetched but screened out):** For criteria like "only fully-remote" or "no agencies", add them to the **preferences brief** (`preferences.md`) as a must-have or red flag. `evaluate-job-fit` reads the brief and enforces the criterion qualitatively — a must-have that is absent makes the posting not relevant; a red flag present makes it weak or not relevant with a named reason.
 
@@ -50,8 +62,23 @@ Importance lives in the bucket assignment, never in numeric weights or score mul
 
 ## 4. Tuning the search feed & detail reads
 
-Four `config.yaml` keys (schema in `../../../shared/references/conventions.md`) control how much the system fetches,
-how fresh it is, whether detail reads run in parallel, and how carefully it reads each posting.
+Five settings in `config.yaml` (schema in `../../../shared/references/conventions.md`) control page size,
+review depth, recency, whether detail reads run in parallel, and how carefully the agent reads each posting.
+
+**Metered outcome changes — all settings**
+
+Enabling a query/source, increasing cadence, saving deeper review, or broadening retrieval in a way likely
+to create more detail reads is a persistent increase. Before any write, use the applicable canonical row and
+the shared structured preview: current and proposed first-page baselines, their delta, uncertain
+continuation/detail work, the applicable recurring comparison, and the verified available-tier fact when
+the row calls for it. Ask one scoped confirmation naming the exact saved change, then write it atomically on
+yes. Do not make a metered call merely to prepare this preview.
+
+A one-off request is scoped consent to run once after its concise context; do not ask the user to approve the
+same request again, and do not save it. Neutral or decreasing changes—including disabling a query/source or
+reducing cadence—are quiet and immediate. Scheduled/headless runs consume durable saved consent without
+prompting. Model or concurrency changes alone are quiet unless applying them requires a canary; then the
+canary gets its own classification and consent.
 
 **Recency window — `search.freshness`**
 
@@ -65,7 +92,64 @@ uses it in place of the saved value.
 
 **Feed size — `queries[].limit`**
 
-Sets how many postings each query pulls; its range and default (and the API-vs-template distinction) are in the config schema — see `../../../shared/references/conventions.md`. A higher limit fetches more raw postings per query, but it is not pagination — there is no way to walk deeper pages. The practical path to seeing more new postings is **breadth + frequency**: several varied queries with meaningful keyword differences, run regularly, with dedup preventing repeats from inflating the digest.
+Sets the maximum rows requested on each query/source call; its range and default (and the
+API-vs-template distinction) are in the config schema. It is a per-call page size, never the total number
+of roles reviewed in a run.
+
+**Review depth — `search.max_new_postings_per_run`**
+
+Omit this advanced setting for normal first-page coverage. A positive integer asks the agent to judge up
+to that many unique unseen roles; exact `"all"` asks it to exhaust the currently traversable Ashby,
+Greenhouse, and Lever results. LinkedIn remains one page. The accepted values and run-record meanings live
+in `../../../shared/references/conventions.md`; the cursor and metering facts live in
+`../../../shared/references/agent-data-contract.md`.
+
+Interpret time scope before taking action:
+
+| User wording | Scope and effect |
+|---|---|
+| “now,” “once,” “this run” | one-off override; do not write config |
+| “each run,” “from now on,” “every time” | saved setting; write only after preview and confirmation |
+| ambiguous depth request such as “scan everything” | default to one run and say so before running |
+| “go back to normal,” “use first-page coverage” | reduce or remove the saved setting immediately when the time scope is recurring |
+
+Apply the appropriate review-depth row from the canonical
+[Agent-data usage decisions](../../../shared/references/internals.md#agent-data-usage-decisions). Use its
+baseline formula and saved-cadence comparison directly; do not reconstruct either here. The preview explains
+that continuation pages and full-posting reads can add calls, that a finite target bounds roles rather than
+calls, and that `"all"` has no reliable call ceiling in advance.
+
+For a one-off increase, give the row's concise context before the first metered attempt, state that the scope
+has no recurring multiplier, and proceed: the request itself is scoped consent. For a saved increase, use the
+shared structured before/after preview and ask one scoped confirmation before the atomic write. A saved value
+then becomes durable consent for later scheduled/headless runs. A smaller finite target, `all` to finite,
+removal, or a one-off first-page override is a reversible decrease and takes effect quietly without
+confirmation.
+
+If a dollar equivalent adds useful context, load the currently verified rate from the canonical agent-data
+contract, put the call count first, preserve exact decimal arithmetic, and label the amount
+**pay-as-you-go equivalent**, never an actual charge. Omit the dollar clause when the rate is unavailable or
+stale.
+
+**High-quality scope handling**
+
+- “Review up to 50 new postings this run.” → preview a finite one-off; then run without changing config or
+  asking for the same approval again.
+- “Review up to 50 every run.” → preview a recurring finite change; after yes, save `50`.
+- “Scan everything.” → explicitly make it one-off, name the unbounded-in-advance additions, then run once.
+- “Scan everything every time.” → preview recurring exhaustive depth; after yes, save `"all"`.
+- “Go back to normal first-page coverage.” → remove the saved setting immediately.
+
+**Low-quality near-misses**
+
+- Treating “scan everything” as recurring and silently saving `"all"`.
+- Asking the user to repeat a one-off approval after the context.
+- Writing a persistent config increase before its scoped confirmation, or starting one-off metered work
+  before its context.
+- Describing the review target as a credit allowance or promising that it caps page calls.
+
+Emulate the high-quality examples' time-scope resolution, preview ordering, and action-specific consent;
+never use the low-quality near-misses as alternate implementations.
 
 **Parallel detail reads — `search.parallel_detail_reads`**
 
@@ -90,22 +174,75 @@ the run uses the parallel fan-out (the default where the host supports it), it f
 subagent per posting (see
 `../../../shared/references/parallelism.md` for the general pattern, the host's own fan-out primitive, and the
 sequential fallback). Each subagent follows the `evaluate-job-fit` skill. This
-key controls which tier those detail readers use — the agent binds the tier to a concrete model from its own
-roster. If the user asks which model a tier maps to on this host, name the concrete model you'd use.
+key is one exact live model identifier in version 2. Setup, an explicit conversational user selection
+(`configured_user`), or interactive repair selects and persists it after availability validation; runtime
+uses that exact value for every posting-detail judgment without reselecting or substituting. The
+automatic setup/repair choice is the least-powerful available model that performs fit judgment well, while
+an explicit exact available model requested by the user overrides it. The canonical schema, private binding
+sidecar, and version-1 compatibility boundary live in `../../../shared/references/conventions.md`; selection
+and write mechanics live in `../../../shared/references/internals.md`.
 
-The four tiers, what each is for, and which is the default are in the config schema — see
-`../../../shared/references/conventions.md` (the `config.yaml` section).
+For an unavailable/refused binding, do not improvise from that setup summary. Follow the canonical
+`exact-model-repair-candidate`, `exact-model-repair-confirmation`, and
+`exact-model-repair-transaction` marked contracts under **Exact-model repair** in
+`../../../shared/references/internals.md`. They preserve a valid unchanged slot, define the distinct
+`repair_session` primary and `repair` detail origins, require exact available overrides, and make the green
+real-path canary the only enable/verify commit point. User-facing failure wording comes from
+`../../../shared/references/errors.md` → `model-repair-rendering`.
 
-`balanced` — the **mid-tier reviewer floor** — is the default, because the per-posting fit verdict is a judgment, not a mechanical step: a well-specified, bite-sized review belongs on a mid-tier model, not the cheapest tier. Scale up with `detail_model: high` where the brief's distinctions are fine-grained or the must-have/red-flag list is long. Opt down with `detail_model: fast` (the cheapest tier) for faster, lighter reads — a touch looser on subtle qualitative calls (occasionally an out-of-vocabulary band or a stray numeric value), though the consolidation step after all subagents return still validates and coerces every verdict before anything reaches `jobs.jsonl` or the digest, so no invalid output persists. This is a **fidelity/speed tradeoff**, not a quality-gate — and the genuinely mechanical bulk (dedup, the summary prefilter, provenance) stays cheap regardless of this tier.
+Without a schedule, repair only the unavailable detail binding. The explicit interactive repair request is
+neutral authority for the atomic config/fresh-sidecar pair write, with no extra confirmation or canary. A
+primary binding, scheduler update, calls-first preview, and canary apply only when a schedule exists.
 
-> **Note:** Per-subagent tier selection is effective only on hosts that support isolated-context subagents.
-> On a single-model host, or one without isolated-context subagents, the knob is inert. If parallel reads are
-> disabled, unavailable, or refused, the same tier still describes the intended detail-read fidelity, but the
-> runner evaluates sequentially.
+On a host that cannot assign a separate worker model, setup stores the exact primary model and configures
+sequential detail reads. Parallel approval, capacity, or refusal may change concurrency, never the saved exact
+model. If that exact dispatch is unavailable or refused, block and route to interactive repair—never choose a
+replacement during the run.
+
+**Version-1 staged migration**
+
+Passive home reads, ordinary headless runs, and compatible ordinary edits stay on version 1, preserve the
+exact config bytes when read-only, and create no binding sidecar. Migrate only for an interactive action that
+requires a version-2 exact binding, such as selecting a new exact detail model or creating a verified
+schedule. Follow `../../../shared/references/internals.md` → **Version-1 staged migration** exactly; do not
+restate or improvise its transaction here.
+
+Resolve and observe the exact detail model before the decision. For scheduling, the single confirmation
+includes that exact detail model, exact primary model, version-2 config change, non-clobbering backup,
+machine change and removal path, calls-first canary context, and rollback behavior. Never add a separate
+migration prompt. After yes, treat config and the fresh matching binding sidecar as one transaction, perform
+the free preflight, and keep a new job disabled until the canary qualifies. A setup or canary failure before
+the canonical cutoff restores the exact version-1 transaction state and removes or disables the new job; a
+failure after the first qualifying complete nonblocked version-2 run never restores stale version 1.
 
 ---
 
-## 5. Adding a new capability or skill
+## 5. Explaining agent-data usage
+
+“Explain my agent-data usage” is a read-only local explanation. For each complete-name-matching candidate,
+apply `../../../shared/references/run-lifecycle.md` → **Artifact authority for every reader**: invoke
+`lifecycle-fold.sh` for its exact run_id and require `closed=true` plus matching folded record state. Ignore
+an open intended-complete candidate. Read only recent records that pass, and lead
+with actual `agent_data_usage.metered_calls` derived from completed, producer-authoritative attempt
+metering. The dated contract determines whether a completed failure or retry is metered; diagnostics such
+as retry attempts and charged failures are subsets and are never added to the total again. Then explain the
+stored `by_operation` breakdown and configured outcome drivers (frequency, enabled queries, enabled sources,
+and review mode). Use each historical run's stored decimal strings as written—do not recompute an old
+equivalent with today's rate.
+
+When `payg_equivalent_usd` is present, put it after the calls, label it a **pay-as-you-go equivalent**, and
+say the computed equivalent is never an actual charge. Separately reported authoritative account data, if
+available, remains distinct from this computed value. If the equivalent is absent because the canonical rate
+was unavailable or stale, report calls only. When live account-plan metadata is absent, direct
+account-specific plan, allowance, and billing questions to <https://agent-data.motie.dev/settings/billing>.
+Do not call agent-data for this
+explanation, mutate config or registry state, infer a remaining balance, or claim a plan, rollover, renewal,
+or exhaustion date. Do not add or recommend `budget`, `credits`, or `cost` config fields. Load current exact
+pricing and metering facts only from `../../../shared/references/agent-data-contract.md`.
+
+---
+
+## 6. Adding a new capability or skill
 
 See the **"Extending & contributing"** section in `SKILL.md` for the full workflow. Key points:
 

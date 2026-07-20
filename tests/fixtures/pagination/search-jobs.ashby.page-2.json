@@ -1,0 +1,42 @@
+{
+  "data": {
+    "query": {
+      "source": "ashby",
+      "published_on_or_after": "2026-07-01"
+    },
+    "status": "completed",
+    "results": [
+      {
+        "id": "jp_a50000000003",
+        "source_id": "a3333333-3333-4333-8333-333333333333",
+        "source_url": "https://jobs.ashbyhq.com/globex/a3333333-3333-4333-8333-333333333333",
+        "title": "AI Platform Engineer",
+        "company_name": "Globex",
+        "location_display": "Remote (US)",
+        "salary_display": null,
+        "posted_at": null,
+        "published_at": "2026-07-12T09:00:00",
+        "detail_available": true,
+        "source": "ashby"
+      },
+      {
+        "id": "jp_a50000000004",
+        "source_id": "a4444444-4444-4444-8444-444444444444",
+        "source_url": "https://jobs.ashbyhq.com/initech/a4444444-4444-4444-8444-444444444444",
+        "title": "Machine Learning Engineer",
+        "company_name": "Initech",
+        "location_display": "Austin, TX",
+        "salary_display": null,
+        "posted_at": null,
+        "published_at": "2026-07-11T11:00:00",
+        "detail_available": true,
+        "source": "ashby"
+      }
+    ],
+    "pagination": {"has_more": false, "next_cursor": null},
+    "warnings": [],
+    "started_at": "2026-07-15T08:00:01Z",
+    "completed_at": "2026-07-15T08:00:01Z"
+  },
+  "meta": {"request_id": "req_pagination_ashby_2"}
+}

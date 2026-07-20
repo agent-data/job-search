@@ -22,7 +22,7 @@ it reports; a few checks are pure shell or visual.
 The terminal state (per the AAS-T-10 ruling) is **a structural gate + automated lanes + a shrinking, honestly-labeled manual residual** — not a manual cross-host ritual. What is now **automated** (⚙️, runs in `pytest` / a CLI, host-independent — no manual driving):
 
 - **Scripted mechanics** — `tests/test_mechanics_scripts.py`: the deterministic state operations (jobs.jsonl append/fold, schedule-line composition, workspace discovery) that the skills call out to, unit-tested directly.
-- **Hardened skill evals** — `python3 scripts/eval_harness.py --root .` validates every `skills/*/evals/evals.json` for structural coherence (contiguous ids, well-formed scenarios, a **discovery** scenario per skill for the four overlap pairs, **stochastic** scenarios carrying `reps ≥ 5` + a **no-guidance control** arm, and **no literal model id** — the agent binds each tier to a concrete model from its own roster (self-selection)); `tests/test_eval_harness.py` unit-tests the rep-aggregation (pass-rate + variance) and the control-delta.
+- **Hardened skill evals** — `python3 scripts/eval_harness.py --root .` validates every `skills/*/evals/evals.json` for structural coherence (contiguous ids, well-formed scenarios, a **discovery** scenario per skill for the four overlap pairs, **stochastic** scenarios carrying `reps ≥ 5` + a **no-guidance control** arm, and — on milestone/liveness scenarios — a **fixed-time fixture** (`fixed_time`: a deterministic reference clock with a valid ISO `now` and a `checks` subset of `milestone`/`liveness`) so those derivations never read the wall clock) and rejects the pinned pack-authored `gpt-5*` literal regression family. Legacy version-1 selectors may resolve through host tier roles; version-2 test and runtime setup injects an exact host-resolved identifier. Pack-authored fixtures and prose never hard-code that identifier. `tests/test_eval_harness.py` unit-tests the rep-aggregation (pass-rate + variance), the control-delta, the fixed-time-fixture validation, and the **unique run marker** enforcement — the off-CI artifact check (`scripts/eval_harness.py --check-artifacts`) accepts a per-run `run_marker` and, for any `run_marked` assertion, requires the artifact to carry it, so a stale artifact left in a reused workspace can never create a false pass.
 - **Release integrity** — `scripts/check_release_integrity.py`: version-sync across the 6 manifests.
 
 Verifying a host-specific action such as scheduling is now a **runtime config-time canary** check, replacing the deleted per-host **structural adapter validation**.
@@ -86,7 +86,7 @@ in `-p` commands anyway so the skill is invoked deterministically.
 ```bash
 cd "$JSOS" && python3 -m pytest -q
 ```
-**Expected:** `170 passed` **and `0 failed`** — treat **`0 failed`** as the real gate (the exact count grows as
+**Expected:** `603 passed` **and `0 failed`** — treat **`0 failed`** as the real gate (the exact count grows as
 tests are added; bump this number when it does). Covers the doc linter, the philosophy guard, the release-integrity checks, the scripted-mechanics unit tests, the **eval-scenario validator +
 harness math** (`test_eval_harness.py`), and the fake-shim self-tests (incl. the `bad-query` scenario behind
 T7.12) — dev tooling only; the runtime state procedures are exercised by the live tests below and the skill evals.
@@ -167,8 +167,9 @@ date +%s > "$JSOS_TEST/.tthw_start"    # run this the moment you send the first 
 - Creates `$JSOS_TEST/.job-search/` with `config.yaml`, a prose `preferences.md`, empty `jobs.jsonl`,
   deny-all `.gitignore`, `runs/`, `reports/`.
 - Writes the registry at `$JSOS_TEST/registry.json` → `active_workspace` = that workspace.
-- Runs a **live** sample search and shows **real, current** postings judged relevant/weak/moderate/strong with
-  reasoning — "found seconds ago." **No numeric scores, no dollar/credit figures.** (0 results → apply the §0.4
+- Runs a **live** sample search and shows real postings judged relevant/weak/moderate/strong with
+  reasoning. **No numeric scores, budget config, or invented actual charge;** an accurate
+  calls-first usage line and clearly labeled equivalent are allowed. (0 results → apply the §0.4
   sparse-data fallback before calling this a ❌.)
 - Prints the `/loop` scheduling recipe and the home view.
 **Verify (👤):**
@@ -292,7 +293,7 @@ say **"/job-search:job-search"**:
   mkdir -p "$JSOS_TEST/.job-search/runs"
   printf '{"run_health":"blocked","error":"E-QUOTA"}\n' > "$JSOS_TEST/.job-search/runs/2099-01-01T00-00-00Z.json"
   ```
-  → Home **names `E-QUOTA`** with its fix (pull less often / upgrade; existing matches unaffected) — it does
+  → Home **names `E-QUOTA`** with its billing recovery and says existing matches are unaffected — it does
   **not** bury the failure under a cheery summary.
 - **Stale brief (>3 months):** age the brief, then open home:
   ```bash
@@ -309,7 +310,8 @@ say **"/job-search:job-search"**:
 Say: **"run a job search now"** (or `/job-search:job-search-run`).
 **Expected:** free `status` gate first; one `search-jobs` per enabled query; new postings judged from summary,
 full details read for the promising ones; writes `reports/<date>-digest.md` (Run health line; counts line;
-Strong→Moderate→Weak; Filtered-out: N; footnotes) and appends `evaluated` events to `jobs.jsonl`. No scores/credits.
+Strong→Moderate→Weak; Filtered-out: N; calls-first usage; footnotes) and appends `evaluated` events to
+`jobs.jsonl`. No scores, budget fields, or invented actual charge.
 **Verify (👤):** `cat "$JSOS_TEST/.job-search/reports/"*.md` ; `wc -l "$JSOS_TEST/.job-search/jobs.jsonl"`.
 **Result:** ⬜
 
@@ -436,8 +438,8 @@ PATH needs no python3 — the skills are zero-dependency; see T9.4.)*
 ### T7.3 E-NO-CONFIG — covered by T5.3. **Result:** ⬜
 ### T7.4 E-NO-PREFERENCES — 👤
 ```bash
-T5=$(mktemp -d); mkdir -p "$T5/.job-search/runs" "$T5/.job-search/reports"
-cp "$JSOS/templates/config.example.yaml" "$T5/.job-search/config.yaml"; : > "$T5/.job-search/preferences.md"; : > "$T5/.job-search/jobs.jsonl"
+T5=$(mktemp -d); bash "$JSOS/skills/job-search-run/evals/files/setup-workspace.sh" "$T5/.job-search" >/dev/null
+: > "$T5/.job-search/preferences.md"
 claude --plugin-dir "$JSOS" -p "/job-search:job-search-run --workspace $T5/.job-search"; echo "exit: $?"; rm -rf "$T5"
 ```
 **Expected:** **E-NO-PREFERENCES** naming the job-preference-interview skill; nothing pulled; writes a `runs/<id>.json` with `run_health: blocked` naming **E-NO-PREFERENCES**, so the next job-search home view surfaces it; the headless `claude -p` process returns **0**, so do not assert on `$?`.
@@ -456,7 +458,7 @@ JOBSEARCH_FIXTURES=$JSOS/tests/fixtures, JOBSEARCH_TEST_SCENARIO=<scenario>) and
 
 | Test | scenario | Expected | Result |
 |---|---|---|---|
-| T7.5 **E-QUOTA** | `quota` | plain-language quota note (lower frequency / upgrade) — **no credit math**; no retry; existing matches intact; writes a `runs/<id>.json` with `run_health: blocked` naming **E-QUOTA**, so the next job-search home view surfaces it; the headless `claude -p` process returns **0**, so do not assert on `$?` | ⬜ |
+| T7.5 **E-QUOTA** | `quota` | plain-language quota note leads with the billing recovery and exact zero prior metered calls; rejected attempt is unmetered; no retry or invented balance/charge; existing matches intact; writes a `runs/<id>.json` with `run_health: blocked` naming **E-QUOTA**, so the next job-search home view surfaces it; the headless `claude -p` process returns **0**, so do not assert on `$?` | ⬜ |
 | T7.6 **E-SERVICE-DOWN** | `down` | "service down" digest, Run health blocked; **no** search/get-posting calls; writes a `runs/<id>.json` with `run_health: blocked` naming **E-SERVICE-DOWN**, so the next job-search home view surfaces it; the headless `claude -p` process returns **0**, so do not assert on `$?` | ⬜ |
 | T7.7 **E-UPSTREAM-STRETCH** | `stretch` | retries the 502 with backoff, opens each source's circuit after two consecutive failed queries against it (the shim fails every source → all stretched); writes a **partial** digest (Run health `partial (all sources unavailable)`); doesn't crash | ⬜ |
 | T7.8 invalid-pair (non-error) | `invalid-pair` | no retry; summary-only judgment + "detail link expired" footnote; `detail_read:false`; run completes, exit 0 | ⬜ |
@@ -474,7 +476,7 @@ workspace, so they don't depend on the shared `$SH` above.
 ### T7.11 E-CONFIG-VERSION — a config from a newer version halts — 👤
 ```bash
 SHV=$(mktemp -d); bash "$JSOS/skills/job-search-run/evals/files/setup-workspace.sh" "$SHV" >/dev/null
-sed -i.bak 's/^version: 1/version: 2/' "$SHV/config.yaml"      # pretend a newer skill wrote it
+sed -i.bak 's/^version: 1/version: 3/' "$SHV/config.yaml"      # pretend a newer skill wrote it
 PATH="$SHV/_bin:$PATH" JOBSEARCH_FIXTURES="$JSOS/tests/fixtures" \
   claude --plugin-dir "$JSOS" -p "/job-search:job-search-run --workspace $SHV"; echo "exit: $?"; rm -rf "$SHV"
 ```
@@ -494,6 +496,8 @@ workspace:
 queries:
   - { id: "good", keywords: "software engineer", location: "United States",   limit: 10, enabled: true }
   - { id: "bad",  keywords: "data engineer",     location: "INVALID-LOCATION", limit: 10, enabled: true }
+search:
+  detail_model: "balanced"  # valid legacy-v1 selector
 schedule:
   frequency: "daily"
   time: "08:00"
@@ -519,6 +523,44 @@ and judges from the **summary** (footnote that the detail couldn't be read); `de
 the run **completes, exit 0** (a footnote, not a failure).
 **Result:** ⬜
 
+### T7.14 Pagination and usage-context matrix — 🤖 + 👤 (fake shim, fully offline)
+
+Use the named eval prompt as the setup recipe for each row; each recipe creates its own temporary workspace,
+redirected registry, fake-shim call log, and artifact assertions. Drive one pass manually here as an offline
+smoke check. The structural gate proves only that the recipes are coherent; it does not substitute for these
+effect checks or the off-CI behavioral eval runs.
+
+| Case | Recipe | Observable pass condition | Result |
+|---|---|---|---|
+| Default, no pagination | `job-search-run` eval 26 | omitted review-depth config makes exactly the first-page calls, never sends a cursor, records first-page scope, and leaves config/registry bytes unchanged | ⬜ |
+| Finite, one-off | `job-search-agent` eval 6 + `job-search-run` eval 31 | preview and exact confirmation precede metered work; the run records one-off finite scope and leaves config byte-identical | ⬜ |
+| Finite, saved | `job-search-agent` eval 7 + `job-search-run` eval 32 | config is unchanged before yes, saved atomically after yes, and a later headless run uses durable consent without another prompt | ⬜ |
+| Exhaustive `all` | `job-search-agent` evals 8–9 + `job-search-run` eval 33 | ambiguous wording defaults to one-off; explicit recurring wording saves only after yes; board streams drain, LinkedIn stays one page, and scratch is removed | ⬜ |
+| Incomplete cursor | `job-search-run` eval 29 | trustworthy rows are kept, healthy streams continue, partial-depth evidence is recorded, no cursor/checkpoint is durable, and the next run starts from page one | ⬜ |
+| Quota with zero / prior usage | `job-search-run` evals 6 and 30 | first-attempt rejection reports zero; later rejection derives prior metered attempts from the completed call log, excludes the rejected attempt, and preserves earlier records | ⬜ |
+| One-time deeper-coverage nudge | `job-search` evals 11–14 | only eligible local evidence renders the offer; shown/declined/deferred/unanswered outcomes write the marker before interaction and suppress every later home view | ⬜ |
+| Usage explanation | `job-search-agent` eval 11 | reads local run records, leads with actual calls and operation breakdown, labels the stored equivalent, makes no API call, and changes no config/registry bytes | ⬜ |
+
+#### Five-run post-release deeper-coverage worksheet — observation only
+
+After release, fill this from `runs/<run_id>.json` for five **comparable finite runs** (same ordered sources,
+enabled query count, and finite review target). This is local product observation, not a release gate. Do not
+generalize from fewer than five runs, and do not let the worksheet or the agent change config automatically;
+any later review-depth change remains a separate conversational choice with its normal consent boundary.
+
+| Run (oldest → newest) | `continuation_rows` | `unique_unseen_roles_continuations` | `selected_roles_from_continuations` | `metered_calls` | `same_run_cross_query_duplicate_rows` | `cross_source_rows_merged` | Notes |
+|---|---:|---:|---:|---:|---:|---:|---|
+| 1 |  |  |  |  |  |  |  |
+| 2 |  |  |  |  |  |  |  |
+| 3 |  |  |  |  |  |  |  |
+| 4 |  |  |  |  |  |  |  |
+| 5 |  |  |  |  |  |  |  |
+
+For each row, copy the first three values and both duplicate/merge counts from `pagination_metrics`, and
+copy calls from `agent_data_usage.metered_calls`. After all five rows exist, note whether continuation is
+consistently contributing unseen and selected roles, and how that observed contribution relates to calls
+and duplicate/merge volume. Record the observation; do not auto-tune `max_new_postings_per_run`.
+
 ---
 
 ## 8. Never-clobber / data safety
@@ -528,6 +570,9 @@ the run **completes, exit 0** (a footnote, not a failure).
 T6=$(mktemp -d)
 mkdir -p "$T6/job-search"                                  # LEGACY (visible) location
 cp "$JSOS/templates/config.example.yaml" "$T6/job-search/config.yaml"
+sed -i.bak -e 's/^version: 2/version: 1/' \
+  -e 's/^  # Setup inserts the required exact search.detail_model before writing a valid new workspace\./  detail_model: "balanced"/' \
+  "$T6/job-search/config.yaml"; rm -f "$T6/job-search/config.yaml.bak"
 printf 'SENTINEL-PREFS\n' > "$T6/job-search/preferences.md"
 printf '{"event":"evaluated","source_id":"SENTINEL-JOB","status":"new"}\n' > "$T6/job-search/jobs.jsonl"
 shasum -a 256 "$T6/job-search/"{preferences.md,jobs.jsonl,config.yaml}     # record
@@ -570,8 +615,11 @@ line?"** (or read it off the scheduling offers in T2.1/T4.3).
 **Result:** ⬜
 
 ### T9.3 `/loop` scheduling — nothing installed on the machine — 🤖 + 👤
-Onboarding's scheduling step (or "set it up to run automatically") uses Claude Code's native `/loop`. Say:
-**"yes, keep it running automatically."**
+This drives the **in-session `/loop` fallback** — the path taken when the host has no unattended
+scheduler or the user declines the machine change (the suite never writes a real crontab). When you
+decline the unattended schedule (or ask to keep it in-session), onboarding's scheduling step uses the
+in-session `/loop`. Say:
+**"keep it running automatically, but just in this session."**
 **Expected:** Claude shows the loop line **`/loop <interval> /job-search:job-search-run`** (the suite runs
 as the plugin, so the target is namespaced; matching your configured frequency — `24h` for daily) and records
 the mechanism — **without** writing any crontab line or launchd plist.
@@ -604,18 +652,22 @@ not found" surfacing as a run error is a ❌ (the skills must never invoke it).
 
 ## 10. Philosophy guardrails (cross-cutting) — 👤
 
-### T10.1 No numeric scoring or credit math in any output **file** — 👤
+### T10.1 No numeric scoring, budget config, or invented charge in any output **file** — 👤
 Skim every digest/brief/config Claude produced during testing (under `$JSOS_TEST` and any `$SH*`/`$T*` dirs you
 kept). This covers files; **chat replies** are covered by T10.2.
 ```bash
-grep -rniE "0-100|0–100|fit score|[0-9]+ ?points|category weight|\$[0-9]|credits?" "$JSOS_TEST" 2>/dev/null
+grep -rniE "0-100|0–100|fit score|[0-9]+ ?points|category weight|^[[:space:]]*(budget|credits?|cost)[[:space:]]*[:=]" \
+  "$JSOS_TEST" 2>/dev/null
+grep -rniE "actual charge|pay-as-you-go|\$[0-9]|credits?" "$JSOS_TEST" 2>/dev/null
 ```
-**Expected:** the only cost language anywhere is the reactive **E-QUOTA** wording; **no** numeric relevance score,
-weight, points, or dollar/credit figure in any digest or brief.
+**Expected:** the first grep is empty except an explicitly requested fit score that remained in chat rather than
+a saved artifact. Review the second grep: salary display, accurate calls-first usage, a clearly labeled pay-as-
+you-go equivalent, and **E-QUOTA** recovery are allowed; an unlabeled or invented actual charge/account balance
+is not. No `budget`, `credits`, or `cost` config field or hard monetary cap appears.
 **Result:** ⬜
 
 ### T10.2 Philosophy holds in CHAT, not just files — 🤖 + 👤
-The no-numbers / frequency-only rule must hold in Claude's **replies**, not only in saved files. Capture a few
+The qualitative-relevance / usage-context rule must hold in Claude's **replies**, not only in saved files. Capture a few
 scripted probes headlessly (two of them try to *elicit* a violation) and grep the transcript:
 ```bash
 PROBES="$JSOS_TEST/probes.txt"; : > "$PROBES"
@@ -636,14 +688,15 @@ grep -rniE "fit score|[0-9]+ ?points|category weight" \
 ```
 Note: `salary`/`$`-amounts (job salary info) and reactive `E-QUOTA` wording are allowed and should not cause a ❌.
 
-**Expected (read the transcript):** Default/unsolicited output stays band-only with no cost
-math. The cost answer leads with **frequency** (and may explain that more queries × higher
-limit × more often = more usage); it must not invent a per-call **dollar/credit** figure or
-a budget knob. For the **explicit** "fit score out of 100" request, honoring it in the reply
+**Expected (read the transcript):** Default/unsolicited relevance output stays band-only. The usage answer
+leads with actual calls and the outcome levers — frequency, sources, and review depth — and may load accurate
+current pricing from the canonical agent-data contract when it clearly labels a pay-as-you-go equivalent. It
+must not invent an actual charge, account balance, or `budget`/`credits`/`cost` config field. For the **explicit**
+"fit score out of 100" request, honoring it in the reply
 is acceptable (the agent is flexible) **as long as** it (a) notes scoring is non-default and
 qualitative bands are the real signal, and (b) does NOT persist the score into any
-digest/brief/`config.yaml`/`jobs.jsonl`. A ❌ is: a numeric score or budget figure in
-**unsolicited** output, OR an on-request score written into a saved artifact.
+digest/brief/`config.yaml`/`jobs.jsonl`. A ❌ is: a numeric relevance score in **unsolicited** output, an
+on-request score written into a saved artifact, a monetary budget control, or an unlabeled/invented charge.
 For "show me the results from the latest run", a ❌ is a title-only list of matches; each shown match must
 include the digest's reasoning line and any "confirm" warning.
 **Result:** ⬜
@@ -673,15 +726,19 @@ cd "$JSOS" && python3 scripts/eval_harness.py --root .   # "Eval harness: eval s
 ```
 
 Then ask Claude, for each skill, to **run its evals** (the `harness` in `skills/<skill>/evals/evals.json`; they use the
-fake-agent-data shim, so zero real credits) — **46 scenarios**:
-- `evaluate-job-fit` (4) · `job-search-run` (23) · `job-preference-interview` (4) · `job-search` (10) · `job-search-agent` (5).
+fake-agent-data shim, so zero real credits) — **179 scenarios**:
+- `evaluate-job-fit` (5) · `job-search-run` (71) · `job-preference-interview` (5) · `job-search` (53) · `job-search-agent` (45).
 
 Each suite now includes a **discovery** scenario (plant the skill among its siblings, drive a naive prompt, assert the
 right skill is selected and the confusable sibling is not — the four overlap pairs). The judgment-heavy **stochastic**
-scenarios (fit verdicts, injection-resistance, cross-source merge, and every discovery scenario) are marked to run at
-**N ≥ 5** with a **no-guidance control** arm — that behavioral rep loop is the **off-CI live-harness step** (record
-pass-rate + variance + the control delta with `scripts/eval_harness.py` `aggregate_reps` / `control_delta`); a single
-driven pass here is the smoke check.
+scenarios (fit verdicts, injection-resistance, cross-source merge, weighted fair-share selection, baited stop-after-first-match
+resistance, and every discovery scenario) are marked to run at **N ≥ 5** with a **no-guidance control** arm — that behavioral
+rep loop is the **off-CI live-harness step** (record pass-rate + variance + the control delta with `scripts/eval_harness.py`
+`aggregate_reps` / `control_delta`); a single driven pass here is the smoke check. Every **crown-jewel** scenario carries a
+baited shortcut **and** the opposite-direction control (e.g. stop-after-early-results vs. complete-the-queue, resume-a-cursor
+vs. close-interrupted-and-research, silently-migrate-v1 vs. passive-compat), and asserts on **effects** rather than exact prose.
+Milestone/liveness scenarios pin a **fixed-time fixture** (a deterministic clock), and each driven run stamps a **unique run
+marker** into its artifacts (checked with `--check-artifacts`) so a stale artifact can never create a false pass.
 **Expected:** the structural gate is clean; every driven scenario passes; outputs are philosophy-clean.
 **Result:** ⬜
 
@@ -761,9 +818,9 @@ entries carry a date mark; the first-Ashby-pass footnote is present.
 - ⬜ Every blocked path is a **named `E-*`** with its fix — auth, no-CLI, no-config, **config-version**, no-prefs, quota, down, stretch, **bad-query**, invalid-pair, detail-fetch-failed, degraded, zero/all-known (§7)
 - ⬜ **Never clobbers** real data; adopts an existing workspace byte-identically; real `~/.job-search`/`~/job-search`/crontab untouched (§8)
 - ⬜ Scheduling correct (the composed `/loop <interval>` matches the pinned table per frequency; `/loop` sets `mechanism:loop`; **zero-Python user path** proven with python3 masked) (§9)
-- ⬜ **No numeric scores/weights/credit knobs** in files **or chat**; frequency is the only cost lever (§10)
+- ⬜ **No numeric scores/weights, budget config, or invented charge** in files or unsolicited chat; accurate calls-first usage context is labeled, and users control frequency, sources, and review depth (§10)
 - ⬜ Docs match reality (install commands, error table, sample digest) (§11)
-- ⬜ Full regression green: `pytest` (**170**; gate on `0 failed`) + the eval structural gate (`eval_harness.py`) + all five skills' evals (**46** scenarios) (§0.3, §12)
+- ⬜ Full regression green: `pytest` (**603**; gate on `0 failed`) + the eval structural gate (`eval_harness.py`) + all five skills' evals (**179** scenarios) (§0.3, §12)
 - ⬜ Planned config slash-command tests are marked **N/A (pending build)**, not green (§13)
 - ⬜ Multi-source: live Ashby/Greenhouse/Lever rows; shim multi-source run shows per-source counts + first-pass footnote; one source down never blanks the run (§14)
 

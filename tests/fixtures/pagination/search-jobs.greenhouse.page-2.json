@@ -1,0 +1,42 @@
+{
+  "data": {
+    "query": {
+      "source": "greenhouse",
+      "published_on_or_after": "2026-07-01"
+    },
+    "status": "completed",
+    "results": [
+      {
+        "id": "jp_b50000000003",
+        "source_id": "initech:8100003",
+        "source_url": "https://boards.greenhouse.io/initech/jobs/8100003?gh_jid=8100003",
+        "title": "AI Platform Engineer",
+        "company_name": "Initech",
+        "location_display": "San Francisco, CA",
+        "salary_display": null,
+        "posted_at": "2026-07-12T13:00:00",
+        "published_at": "2026-07-12T13:00:00",
+        "detail_available": true,
+        "source": "greenhouse"
+      },
+      {
+        "id": "jp_b50000000004",
+        "source_id": "umbrella:8100004",
+        "source_url": "https://boards.greenhouse.io/umbrella/jobs/8100004?gh_jid=8100004",
+        "title": "Machine Learning Engineer",
+        "company_name": "Umbrella",
+        "location_display": "Remote, US",
+        "salary_display": null,
+        "posted_at": "2026-07-11T12:00:00",
+        "published_at": "2026-07-11T12:00:00",
+        "detail_available": true,
+        "source": "greenhouse"
+      }
+    ],
+    "pagination": {"has_more": false, "next_cursor": null},
+    "warnings": [],
+    "started_at": "2026-07-15T08:01:01Z",
+    "completed_at": "2026-07-15T08:01:01Z"
+  },
+  "meta": {"request_id": "req_pagination_greenhouse_2"}
+}
