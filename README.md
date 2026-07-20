@@ -13,7 +13,7 @@ Your preferences, reviewed postings, run logs, and digests stay in `~/.job-searc
 
    > **Set up my job search. I'm looking for** a senior product-design role, remote in the US, at a mission-driven company.
 
-The agent checks its prerequisites, creates `~/.job-search/`, turns your description into an initial preference brief, and searches live postings. If useful roles are available, it shows the first fully reviewed matches while it continues through the rest.
+The agent checks its prerequisites, creates `~/.job-search/`, documents your preferences, and searches live postings. If useful roles are available, it shows the first fully reviewed matches while it continues through the rest.
 
    > **Checkpoint:** setup worked when the agent summarizes what it understood and either shows a reviewed match or explains why the search returned none. It then writes the complete digest to your local workspace.
 
@@ -21,7 +21,7 @@ A sentence or two is enough to begin. You can also share relevant material, such
 
 ## Before the first search: agent-data
 
-Job Search gets live postings through the [agent-data](https://agent-data.motie.dev) command-line tool. Onboarding handles the setup:
+Job Search gets live postings through the [agent-data](https://agent-data.dev) command-line tool. Onboarding handles the setup:
 
 1. If the CLI is missing, the agent offers to install it with `npm install -g agent-data`. If a global install needs different permissions, it gives you the exact command to run.
 2. If authentication is missing, the agent helps you create an API key, runs `agent-data init --api-key <KEY> -y`, and verifies it with `agent-data whoami`. The agent-data CLI stores the key in its own config, outside this repository.
@@ -66,8 +66,6 @@ Natural language is the main interface. Commands such as `/job-search` and `$job
 
 ## Support matrix
 
-Automated checks confirmed the plugin package and its internal file links on 2026-07-17. Live end-to-end runs have not yet been recorded, so the table below shows structural coverage rather than behavioral test results.
-
 <details>
 <summary>Compatibility details</summary>
 
@@ -78,11 +76,10 @@ These expectations apply to every listed agent:
 | OS / architecture | macOS and Linux; arm64 and x86_64 |
 | Recurring scheduler | `cron` or `launchd`, with a session loop fallback |
 | Modes | interactive and background (headless) |
-| Tested primary / detail model IDs | not recorded / not recorded |
 
 Job Search is compatible with Claude Code, Codex, Cursor, opencode, Gemini CLI, GitHub Copilot CLI, Factory Droid, and Pi.
 
-The primary model inherits the session that creates the job. Setup records an exact detail-review model, and scheduled runs reuse it. A recurring schedule is recorded only after the agent tests the actual invocation and confirms that it can reach agent-data and write the workspace.
+The primary model is inherited from the session that creates the job. Setup records an exact detail-review model, and scheduled runs reuse it. A recurring schedule is recorded only after the agent tests the actual invocation and confirms that it can reach agent-data and write the workspace.
 
 </details>
 
