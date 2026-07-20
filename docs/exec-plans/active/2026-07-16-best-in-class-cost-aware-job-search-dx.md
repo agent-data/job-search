@@ -25,17 +25,17 @@ are intentionally untracked and do not ship in the plugin. The stable rule IDs b
 runtime skills and shared references must remain complete without loading, linking to, or discovering
 docs-private/.
 
-| Concern | Private authoring source | Stable rules |
-|---|---|---|
-| Cost-impact decisions and consent | docs-private/agent-agnostic-skills/07-autonomy-calibration.md; docs-private/prompt-style-guide/03-tool-definitions.md | AAS-AUTO-01/02/04/07/11; PSG-TOOL-04/05/14 |
-| Clear, truthful user communication | docs-private/prompt-style-guide/06-user-communication.md; docs-private/prompt-style-guide/01-foundations.md | PSG-COMM-01/04/05/06/07/09/10/11/18/20; PSG-F-01/03/09/10/11/14 |
-| Exact model dispatch and cold-context workers | docs-private/prompt-style-guide/04-subagents-and-delegation.md; docs-private/agent-agnostic-skills/09-harness-neutral-language.md | PSG-SUB-02/03/04/06/09/13; AAS-LANG-01/03/04 |
-| Durable progress and completion evidence | docs-private/agent-agnostic-skills/08-process-vs-domain-skills.md; docs-private/prompt-style-guide/05-harness-injections.md | AAS-PROC-03/04; PSG-INJ-03/04/05/11/14 |
-| Harness-neutral scheduling and fallbacks | docs-private/agent-agnostic-skills/09-harness-neutral-language.md; docs-private/agent-agnostic-skills/10-portability-mechanics.md | AAS-LANG-01/03/08; AAS-PORT-01/03/04/05/10 |
-| Canonical representation and safe mechanics | docs-private/agent-agnostic-skills/03-conceptual-boundaries-and-disclosure.md; docs-private/agent-agnostic-skills/05-guidance-representation.md | AAS-BOUND-01/03/04/08; AAS-FORM-03/04/06/07/08/09/10/14 |
-| Behavioral verification under pressure | docs-private/agent-agnostic-skills/12-testing-and-verification.md; docs-private/prompt-style-guide/08-anti-patterns.md | AAS-TEST-02/03/04/06/07/08/09/10/11/12/13/15; PSG-ANTI-02/03/04/05/07/10/11/12/13 |
-| Safety, privacy, and honest recovery | docs-private/prompt-style-guide/07-safety-and-honesty-pressure.md | PSG-SAFE-02/05/08/11/13/14/16/17 |
-| Skill shape, triggering, and portability | docs-private/agent-agnostic-skills/02-skill-anatomy.md; docs-private/agent-agnostic-skills/04-triggering-and-descriptions.md; docs-private/agent-agnostic-skills/11-distribution-packaging-and-versioning.md | AAS-SKILL-02/04/05/06; AAS-TRIG-01/02/03/04/05; AAS-DIST-03/05/06 |
+| Concern | Stable rules |
+|---|---|
+| Cost-impact decisions and consent | AAS-AUTO-01/02/04/07/11; PSG-TOOL-04/05/14 |
+| Clear, truthful user communication | PSG-COMM-01/04/05/06/07/09/10/11/18/20; PSG-F-01/03/09/10/11/14 |
+| Exact model dispatch and cold-context workers | PSG-SUB-02/03/04/06/09/13; AAS-LANG-01/03/04 |
+| Durable progress and completion evidence | AAS-PROC-03/04; PSG-INJ-03/04/05/11/14 |
+| Harness-neutral scheduling and fallbacks | AAS-LANG-01/03/08; AAS-PORT-01/03/04/05/10 |
+| Canonical representation and safe mechanics | AAS-BOUND-01/03/04/08; AAS-FORM-03/04/06/07/08/09/10/14 |
+| Behavioral verification under pressure | AAS-TEST-02/03/04/06/07/08/09/10/11/12/13/15; PSG-ANTI-02/03/04/05/07/10/11/12/13 |
+| Safety, privacy, and honest recovery | PSG-SAFE-02/05/08/11/13/14/16/17 |
+| Skill shape, triggering, and portability | AAS-SKILL-02/04/05/06; AAS-TRIG-01/02/03/04/05; AAS-DIST-03/05/06 |
 
 Each task below cites the relevant rule IDs. During implementation, use those IDs to review the change; do
 not copy authoring-guide prose into the shipped pack or create a runtime pointer to docs-private/.
