@@ -225,8 +225,8 @@ user to name keywords.** They can retune anytime; the goal here is zero upfront 
    - **location** — read it off the brief's location constraints: "remote within the US" → `United States`;
      "onsite in the SF Bay Area" → `San Francisco Bay Area`. If the brief allows both, cover each with its
      own query. A remote requirement rides in `location` where the source contract can carry it
-     (`../../../shared/references/agent-data-contract.md`); never bolt "remote" onto every keyword phrase,
-     which suppresses the very postings it was meant to find.
+     (`../../../shared/references/agent-data-contract.md`), and fit judgment enforces it either way; never
+     bolt "remote" onto every keyword phrase, which suppresses the very postings it was meant to find.
 2. **Render them into the in-memory version-2 config candidate** per the `internals.md` "Add a query" recipe
    — never make the user open the file. One worked item — the `keywords` and `location` below are
    **illustrative; derive your own from
@@ -246,11 +246,13 @@ user to name keywords.** They can retune anytime; the goal here is zero upfront 
    query is there to find, so a missing lane or a doubled-up query is visible now. Make clear it's all fully
    editable, and that this is a **look, not a gate**: you're about to go live, not asking permission to
    (the run's consent is handled by the setup request + the §6 cost context, not a confirmation here). Name
-   each search and what it covers, e.g.:
+   each search and what it covers, e.g. (**illustrative** — the three searches below are what *this*
+   example's brief happened to close on, never a count to aim for):
 
    > "From your preferences I'll search **LinkedIn and public Ashby company boards** across **US-remote +
    > the SF Bay Area**: **'AI engineer'** for the LLM product work you described, **'ML platform engineer'**
-   > for the platform side of it. I can add, retune, or drop any of these anytime — just say the word."
+   > for the platform side of it, and **'research engineer'** for the model-training roles you said you'd
+   > also take. I can add, retune, or drop any of these anytime — just say the word."
 
    Only if the brief is too thin to derive anything sensible (rare) do you ask one focused question to fill
    the gap — lead with derivation, never a blank "what should I search for?".
@@ -259,13 +261,14 @@ user to name keywords.** They can retune anytime; the goal here is zero upfront 
    anytime just by asking. The config also comes preset with the default job sources (LinkedIn + Ashby
    company boards) — tunable anytime just by asking.
 
-**When the first live run (§6) comes back, read what these queries actually retrieved — in context.** How
-many raw results a query and source returned means nothing on its own: weigh it against how commonly that
-role is posted, how tight the location is, and how many concepts the phrase conjoins. Volume that is
-surprisingly thin for a widely posted role is worth naming once, with an offer to propose broader,
-complementary role families; the same volume for a rare specialty is just the market and says nothing about
-the terms. Either way the run stands as it ran — no automatic retry, no fallback query, no quietly widened
-search. A query change is a proposal the user accepts before anything is written.
+**When the first live run (§6) comes back, read what these queries actually retrieved — in context** —
+this is a brand-new search's first look, not the recurring thin-retrieval signal a saved search builds up
+over its later runs. How many raw results a query and source returned means nothing on its own: weigh it
+against how commonly that role is posted, how tight the location is, and how many concepts the phrase
+conjoins. Volume that is surprisingly thin for a widely posted role is worth naming once, with an offer to
+propose broader, complementary role families; the same volume for a rare specialty is just the market and
+says nothing about the terms. Either way the run stands as it ran — no automatic retry, no fallback query,
+no quietly widened search. A query change is a proposal the user accepts before anything is written.
 
 ### Parallel detail-read approval (approval-gating hosts only)
 
