@@ -305,10 +305,10 @@ fallback, and wording rules in `errors.md` rather than restating them here.
    ```json
    {
      "request_origin": "saved|one_off",
-     "location": null,
+     "location": "<normalized location sent|null>",
      "limit": 25,
-     "freshness": "past-2-weeks",
-     "published_on_or_after": "2026-07-03"
+     "freshness": "<saved recency selector|null for one_off>",
+     "published_on_or_after": "<YYYY-MM-DD|null>"
    }
    ```
 

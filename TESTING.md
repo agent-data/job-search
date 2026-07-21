@@ -104,8 +104,8 @@ export JSOS_CANON_LOC="United States"           # large location → rarely empt
 **Sparse-data fallback (apply to any LIVE test).** If a live search returns **0 results**: broaden the canonical
 query once (drop the location); if still 0, re-run the *same assertion* against the fake-shim **`happy`** scenario
 (§7 setup) and mark the live result **N/A — market-quiet**, not ❌. A bug looks different from an empty market: a
-bug throws a named `E-*`, mis-shapes the digest, or crashes; a quiet market returns a clean "0 results — broaden
-keywords" (T7.10). Only the former is a ❌.
+bug throws a named `E-*`, mis-shapes the digest, or crashes; a quiet market completes cleanly with 0 results and
+offers to propose broader, complementary role families (T7.11). Only the former is a ❌.
 
 > Prefer realism? You may swap in your own role/location as an **optional** variant — but grade the canonical run.
 
@@ -464,7 +464,7 @@ JOBSEARCH_FIXTURES=$JSOS/tests/fixtures, JOBSEARCH_TEST_SCENARIO=<scenario>) and
 | T7.8 invalid-pair (non-error) | `invalid-pair` | no retry; summary-only judgment + "detail link expired" footnote; `detail_read:false`; run completes, exit 0 | ⬜ |
 | T7.9 degraded (non-error) | `degraded` | Run-health line reads `degraded (job sources flaky)`; digest notes results this run may be affected; **no detail-read cap** (reads promising matches as normal); still produces matches; exit 0 | ⬜ |
 | T7.10 many promising postings | `many-promising` | every promising posting is evaluated; if the host hits a subagent/thread limit, it continues in rolling batches or falls back sequentially; capacity backpressure alone does **not** make Run health partial | ⬜ |
-| T7.11 zero / all-known | `zero-empty` | "Searches ran but returned 0 results — broaden keywords"; exit 0. (All-known: pre-seed jobs.jsonl with the happy ids → "No new postings — you've already seen all N of these.") | ⬜ |
+| T7.11 zero / all-known | `zero-empty` | a completed, non-error outcome: every enabled stream ran and returned nothing, and the reply still ends on ONE actionable next step — an offer to propose broader, complementary role families for the user to accept, never a hand-edit of `config.yaml` keywords and never an automatic re-search with different terms; exit 0. (All-known: pre-seed jobs.jsonl with the happy ids → "No new postings — you've already seen all N of these." — leave the queries as they are.) | ⬜ |
 
 ```bash
 rm -rf "$SH"

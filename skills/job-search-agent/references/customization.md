@@ -34,9 +34,9 @@ If the user wants the numbers saved, write them to a clearly-named side file (e.
 ## 2. Adding a custom filter or narrowing results
 
 **Decide which direction the search actually needs first.** If results are thin, consider broadening the
-search queries — judged the way `query-strategy.md` (already loaded by this manual) judges thinness: in
-context, against healthy streams only, and offered as a proposal the user accepts rather than an edit you
-make. Raw volume — the pre-judgment count each query and source returned — is the only count that says
+search queries — but judge thinness the way `query-strategy.md` does, reading it first if this manual has
+not already: in context, against healthy streams only, and offered as a proposal the user accepts rather
+than an edit you make. Raw volume — the pre-judgment count each query and source returned — is the only count that says
 anything about the search terms. Postings that arrive and then get rejected are the opposite signal: recall
 is fine, so work the lane or the brief rather than the phrase, and never narrow further merely because
 nothing was relevant.

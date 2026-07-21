@@ -164,8 +164,12 @@ never the raw code. Wording and fixes are owned by
   Codes stay internal — never shown to the user.
 - **No preferences yet** — `E-NO-PREFERENCES`; the first run halts and directs the user to
   `/job-preference-interview`.
-- **Sparse market** — not a named error; zero search results prompt the agent to offer keyword
-  broadening conversationally (see
+- **Sparse market** — not a named error. Zero search results are read in context first: the agent
+  confirms every stream completed (a failed or incomplete one takes its named recovery instead), then
+  weighs the empty return against how commonly the role family is posted, how tight the location is, and
+  how narrow the recency window is. Only where the volume is surprisingly thin does it offer, once and
+  conversationally, to propose broader complementary role families — a proposal the user accepts before
+  anything is written (see
   [`skills/job-search/references/onboarding.md`](../../skills/job-search/references/onboarding.md)).
 
 ## Related
