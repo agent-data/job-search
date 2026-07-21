@@ -36,9 +36,9 @@ Map each lane to one or more high-recall queries in terminology that actually oc
 descriptions. One query may cover several lanes when the same posting vocabulary genuinely retrieves them all.
 Then close the map: add a query inside a lane when it reaches posting vocabulary the existing one is likely to
 miss, merge or drop a query whose candidate pool another query already covers, and stop once every acceptable
-lane has coverage and the next query would add none. The resulting count is an *output* — one query for a
-narrow search, several for a user open to mutually exclusive careers. Never compress unrelated lanes to hit a
-number, and never pad the portfolio to look thorough.
+lane has coverage and the next query would add none. The resulting count is an *output* — it may be one query
+for a narrow search or several for a user open to mutually exclusive careers. Never compress unrelated lanes
+to hit a number, and never pad the portfolio to look thorough.
 
 Leave stage, founder access, ownership, culture, compensation, coding-agent use, and similar preference
 evidence in the brief, unless the term is itself common posting vocabulary that opens a distinct lane. Keep
@@ -55,7 +55,7 @@ complementary role families (open the lanes): product engineering -> product eng
                                               AI engineering      -> AI engineer
 ```
 
-The broad queries are how plausible candidates reach judgment at all. Nothing is lost by retrieving them: the
+The broad queries are how plausible candidates reach judgment at all. What they do not cost is precision: the
 complete brief is still applied to every candidate that reaches fit evaluation.
 
 ## Judging retrieval health in context
@@ -88,7 +88,7 @@ change requires, then persist.
 | A source call failed, was blocked, or ended incomplete | Operational health is unknown | Apply that failure's named recovery in `errors.md`; wait for healthy evidence before judging breadth |
 | Raw retrieval is contextually or repeatedly thin | The current phrases may be suppressing recall | Propose broader, complementary role families |
 | Raw retrieval is healthy but nothing is relevant | Recall exists; the lane or the brief alignment is wrong | Inspect the rejection reasons, then propose one targeted lane replacement or brief clarification — broaden only if that evidence names a missing adjacent lane |
-| The user wants fewer fetched postings from a healthy, noisy lane | The narrowing is intentional | Offer a narrower role term, location, lower limit, or a paused query under the ordinary change semantics |
+| The user wants fewer fetched postings from a healthy, noisy lane | The narrowing is intentional | Offer a narrower role term, location, lower limit, or a disabled query under the ordinary change semantics |
 | Raw results are healthy but every candidate is already known | The feed holds no unseen work | Say the results were already seen and leave query breadth unchanged |
 
 ## The repeated-thin signal
