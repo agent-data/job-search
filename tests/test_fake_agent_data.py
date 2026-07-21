@@ -196,6 +196,24 @@ def test_recency_bad_date_is_422_validation_error():
         and body["retryable"] is False
 
 
+def test_query_sensitive_ashby_returns_rows_for_role_families_not_phrase_stuffing():
+    common = ["call", LISTING, "search-jobs", "--source", "ashby",
+              "--location", "United States", "--limit", "25",
+              "--published_on_or_after", "2026-06-01"]
+    narrow = shim([*common, "--keywords",
+                   "founding AI product engineer seed Series C developer tools coding agents"],
+                  scenario="query-sensitive")
+    product = shim([*common, "--keywords", "product engineer"],
+                   scenario="query-sensitive")
+    ai = shim([*common, "--keywords", "AI engineer"],
+              scenario="query-sensitive")
+
+    assert narrow.returncode == product.returncode == ai.returncode == 0
+    assert json.loads(narrow.stdout)["data"]["results"] == []
+    assert len(json.loads(product.stdout)["data"]["results"]) >= 1
+    assert len(json.loads(ai.stdout)["data"]["results"]) >= 1
+
+
 def search_page(source, cursor=None, scenario="pagination", extra_env=None):
     args = ["call", LISTING, "search-jobs", "--keywords", "AI engineer",
             "--location", "United States", "--limit", "2", "--source", source,

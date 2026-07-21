@@ -4,8 +4,10 @@
 Scenario via env JOBSEARCH_TEST_SCENARIO (default "happy"); fixtures dir via JOBSEARCH_FIXTURES.
 Scenarios: happy | many-promising | zero-empty | stretch | quota | bad-query | invalid-pair |
 detail-fetch-failed | degraded | down | multi-source | one-source-down | source-unsupported |
-legacy-source-swallow.
+legacy-source-swallow | query-sensitive.
 Error-injection scenarios reuse the "happy" fixtures (fallback) for any data they don't override.
+query-sensitive is the only scenario whose results depend on --keywords: broad role-family terms
+("product engineer", "AI engineer") serve the source fixture; any other phrasing returns zero rows.
 Env JOBSEARCH_TEST_DOWN_SOURCE (default "ashby") selects which source one-source-down fails.
 JOBSEARCH_TEST_NOAUTH=1 makes whoami report unauthenticated. `--version` answers (onboarding's
 post-install check); `init` is NOT shimmed — evals stub it in the case prompt.
@@ -159,7 +161,14 @@ def main(argv):
                         param="location",
                         details=[{"loc": ["query", "location"], "msg": "unrecognized location",
                                   "type": "value_error"}])
-            if SCEN.startswith("pagination"):
+            if SCEN == "query-sensitive":
+                keywords = (flag(argv, "--keywords") or "").strip().casefold()
+                if keywords not in {"product engineer", "ai engineer"}:
+                    fx = fixture("search-jobs.empty.json")
+                else:
+                    names = [f"search-jobs.{src}.json"] if src != "linkedin" else ["search-jobs.json"]
+                    fx = fixture("search-jobs.json", names=names)
+            elif SCEN.startswith("pagination"):
                 page = "page-2" if cursor is not None else "page-1"
                 expected = None if page == "page-1" else f"cursor_{src}_2"
                 if cursor != expected:
