@@ -20,6 +20,20 @@ ONBOARDING = ROOT / "skills" / "job-search" / "references" / "onboarding.md"
 CONVENTIONS = ROOT / "shared" / "references" / "conventions.md"
 INTERNALS = ROOT / "shared" / "references" / "internals.md"
 HOME = ROOT / "skills" / "job-search" / "references" / "home.md"
+CUSTOMIZATION = ROOT / "skills" / "job-search-agent" / "references" / "customization.md"
+RUN_LIFECYCLE = ROOT / "shared" / "references" / "run-lifecycle.md"
+
+# The application surfaces: files that APPLY their local part of the query-strategy contract in their own
+# words. The strategy is reached by exactly two direct pointers, both in SKILL.md files; a third pointer
+# from any of these would make the single home a reference-to-reference hop.
+APPLICATION_SURFACES = (HOME, ONBOARDING, CUSTOMIZATION, RUN_LIFECYCLE)
+
+# A PATH pointer to the strategy: `references/query-strategy.md`, with or without a `shared/` segment and
+# any number of `../` hops. Modeled on `_PTR` in tests/test_reference_resolution.py, which draws exactly
+# this path-versus-name distinction: a bare backticked `query-strategy.md` carries no directory component,
+# is not a path, and is deliberately NOT matched — conventions.md names the file that way on purpose, to
+# satisfy the intra-reference duplication lint, and any file may do the same.
+_STRATEGY_PTR = re.compile(r"(?:\.\./)*(?:shared/)?references/query-strategy\.md")
 
 
 def marked_table(path, marker):
@@ -47,6 +61,27 @@ def test_query_strategy_is_single_homed_and_loaded_directly():
     assert pointer in OPERATOR.read_text(encoding="utf-8")
     assert not (ROOT / "skills" / "job-search" / "references" / "query-strategy.md").exists()
     assert not (ROOT / "skills" / "job-search-agent" / "references" / "query-strategy.md").exists()
+
+
+def test_application_surfaces_apply_the_strategy_instead_of_pointing_at_it():
+    """The strategy has exactly TWO direct pointers, both in SKILL.md files. Every application surface —
+    the home view, onboarding, customization, the run lifecycle — applies its local part of the contract in
+    its own words and never links to it. A one-hop `../../../shared/references/query-strategy.md` added to
+    one of them would resolve, so tests/test_reference_resolution.py would happily accept it; this is the
+    only structural guard on the two-pointer rule."""
+    # the path-versus-name distinction the rule is built on (a bare name mention stays legal)
+    assert _STRATEGY_PTR.search("read `../../../shared/references/query-strategy.md` when retuning")
+    assert _STRATEGY_PTR.search("see `references/query-strategy.md`")
+    assert not _STRATEGY_PTR.search("the repeated-thin rule is owned by `query-strategy.md`")
+
+    for surface in APPLICATION_SURFACES:
+        assert surface.is_file(), f"missing application surface {surface}"
+        found = sorted({m.group(0) for m in _STRATEGY_PTR.finditer(surface.read_text(encoding="utf-8"))})
+        assert not found, (
+            f"{surface.relative_to(ROOT)} points at the query strategy ({found}). Only the two SKILL.md "
+            f"files may point at `shared/references/query-strategy.md`; an application surface applies its "
+            f"local part of the contract in its own words. Name the file inline if you must — a bare "
+            f"backticked `query-strategy.md` is allowed — but do not add a path pointer.")
 
 
 def test_portfolio_contract_has_coverage_closure_not_a_count_quota():

@@ -55,16 +55,18 @@ Read just what the home view needs (all local):
   it never proves anything about retrieval — and reading it never rewrites it.
 - **Query-health evidence (derived — local + unmetered):** skip this entirely when that marker's stored
   `search_shape` still matches the current saved shape. Otherwise, and only if the workspace already holds
-  them, take the three newest **lifecycle-authoritative** run records — closed, complete, non-canary runs
-  that pass the artifact-authority procedure above — that are also *comparable* to today's saved search:
-  every stream carries the current request fields (`../../../shared/references/conventions.md` → the request
-  evidence every stream records) with `request_origin: saved`; the enabled queries, sources, locations,
-  limits, and saved `search.freshness` selector match `config.yaml` — that saved selector, never the rolling
-  cutoff a particular run happened to send; and for the source being judged, every enabled stream succeeded
-  (no `source_failed` or `pagination_incomplete` stop, and that source absent from `sources_failed`). Then sum
-  each source's raw `results_returned` across its enabled streams, per run. Fewer than three such records, a
-  record missing any request field, or a failed or one-off stream means there is nothing to assess — never
-  substitute an older, incomplete, or overridden run. This read is local and unmetered.
+  them, scan back from the newest run record and take the first three that are both
+  **lifecycle-authoritative** — closed, complete, non-canary runs that pass the artifact-authority procedure
+  above — and *comparable* to today's saved search: every stream carries the current request fields
+  (`../../../shared/references/conventions.md` → the request evidence every stream records) with
+  `request_origin: saved`; the enabled queries, sources, locations, limits, and saved `search.freshness`
+  selector match `config.yaml` — that saved selector, never the rolling cutoff a particular run happened to
+  send; and for the source being judged, every enabled stream succeeded (no `source_failed` or
+  `pagination_incomplete` stop, and that source absent from `sources_failed`). Then sum each source's raw
+  `results_returned` across its enabled streams, per run. A record that misses any request field, holds a
+  failed stream, or ran a one-off override is **skipped** — never counted toward the three, and never padded
+  out with weaker evidence; keep scanning further back for records that do qualify. Fewer than three
+  comparable records anywhere means there is nothing to assess. This read is local and unmetered.
 - **Latest digest:** the exact digest derived by the selected run's fold — its date and **counts line**.
   Never select a digest independently by filename.
 - **Pipeline:** fold `<ws>/jobs.jsonl` per the fold operation in `conventions.md` → current jobs (one per (`source`, `source_id`),
@@ -329,10 +331,12 @@ first-run results.
 
   As soon as that nudge renders—and before awaiting a reply—atomically merge the single `query_health_nudge`
   marker per `internals.md`, storing the current shape, the affected sources, and `outcome: shown`. Preserve
-  every unknown registry key. Change that outcome to `accepted` or `dismissed` only once the user has
-  actually accepted or declined. While the stored shape matches the current saved shape, show no further
-  query-health nudge; a confirmed query, location, limit, freshness, or source change makes a new shape,
-  which becomes assessable again after three new comparable runs of its own.
+  every unknown registry key. Change that outcome to `dismissed` once the user declines, and to `accepted`
+  only once the proposed change has actually been applied — a proposal the user accepts and then abandons at
+  the scoped confirmation below changed nothing, so the marker stays at its prior value and suppresses
+  exactly the same. While the stored shape matches the current saved shape, show no further query-health
+  nudge; a confirmed query, location, limit, freshness, or source change makes a new shape, which becomes
+  assessable again after three new comparable runs of its own.
 
   Even after the user says yes, nothing is written on that alone: route the proposed retune through the
   **Retrieval-changing** row of **Applying your feedback** — the agent-data usage preview and the scoped

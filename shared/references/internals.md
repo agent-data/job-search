@@ -35,6 +35,16 @@ i.e. `~/.config/job-search/config.json` by default. Schema:
       "shown_at": "<iso>",
       "outcome": "enabled|declined|deferred"
     }
+  },
+  "query_health_nudge": {
+    "search_shape": {
+      "queries": [ { "id": "<id>", "keywords": "<keywords>", "location": "<normalized|null>", "limit": 25 } ],
+      "sources": ["<enabled source>"],
+      "freshness": "<saved freshness selector>"
+    },
+    "shown_at": "<iso>",
+    "affected_sources": ["<affected source>"],
+    "outcome": "shown|accepted|dismissed"
   } }
 ```
 The registry is machine state; the workspace's `config.yaml` stays the user-facing config.
@@ -166,9 +176,9 @@ does.
   key, and atomically replace the whole file.
 - **Read the query-health nudge marker:** read the registry's single `query_health_nudge` object; absence
   means no query-health nudge has been shown yet. The marker records what was said and suppresses a repeat —
-  it is never evidence that retrieval is actually thin, so revalidate the authoritative run records
-  themselves (`run-lifecycle.md` → **Artifact authority for every reader**) before every query-health
-  decision. Reading never rewrites it.
+  it is never evidence that retrieval is actually thin, so a matching marker may keep the view silent on its
+  own, but every decision to *show* a query-health nudge first revalidates the authoritative run records
+  themselves (`run-lifecycle.md` → **Artifact authority for every reader**). Reading never rewrites it.
 - **Set the query-health nudge marker:** only the **job-search** front door writes it, and only after it has
   actually rendered the nudge to the user — the headless runner never writes it. Merge the object below into
   the current registry per the write rules above: preserve every unknown registry key and atomically replace
@@ -177,7 +187,9 @@ does.
 Store the search shape explicitly, so a later read can compare it without re-deriving a hash: each enabled
 query's `id`, `keywords`, `location`, and `limit`, the enabled `sources`, and the saved `freshness` selector
 (that selector's enum is owned by `conventions.md`). Enabled retrieval configuration only — no preference
-prose, posting data, or credentials. The values below are schematic, not literals to copy:
+prose, posting data, or credentials. Compare a stored shape to the current one on exactly those stored
+fields — lists as sets, strings after trimming — so reordering or incidental whitespace is not a new shape.
+The values below are schematic, not literals to copy:
 
 ```json
 "query_health_nudge": {
