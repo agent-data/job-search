@@ -1222,6 +1222,13 @@ class Coordinator:
                 query["published_on_or_after"]
             ):
                 return False
+            # An `any` selector sends no cutoff, so a saved stream claiming both is incoherent
+            # evidence.  Only this direction is enforced: a non-`any` selector with a null cutoff
+            # is left readable because the fields are bound from the frozen request before the
+            # stream's first call, while the runtime prose defines the value as the cutoff
+            # actually SENT.
+            if query["freshness"] == "any" and query["published_on_or_after"] is not None:
+                return False
             if not all(count(query[key]) for key in (
                 "results_returned", "new", "pages_fetched", "rows_scanned",
                 "unique_candidates", "selected_for_review", "attempts",

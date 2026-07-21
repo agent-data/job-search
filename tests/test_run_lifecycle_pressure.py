@@ -865,11 +865,13 @@ def test_run_record_requires_comparable_request_evidence_on_every_stream(tmp_pat
     mutations = [
         ("invented_origin", {"request_origin": "adhoc"}),
         ("empty_location", {"location": ""}),
+        ("whitespace_location", {"location": "   "}),
         ("limit_zero", {"limit": 0}),
         ("limit_above_page_maximum", {"limit": 101}),
         ("boolean_limit", {"limit": True}),
         ("saved_without_selector", {"freshness": None}),
         ("invented_selector", {"freshness": "past-3-weeks"}),
+        ("any_selector_with_cutoff", {"freshness": "any"}),
         ("one_off_keeping_saved_selector", {"request_origin": "one_off"}),
         ("cutoff_is_not_a_date", {"published_on_or_after": "2026-07"}),
         ("cutoff_is_not_a_real_day", {"published_on_or_after": "2026-02-30"}),
@@ -884,6 +886,16 @@ def test_run_record_requires_comparable_request_evidence_on_every_stream(tmp_pat
         query.update(request_origin="one_off", freshness=None)
     assert validator.validate_run_record(one_off) is True
 
+    located = json.loads(json.dumps(original))
+    for query in located["queries"]:
+        query.update(location="San Francisco")
+    assert validator.validate_run_record(located) is True
+
+    unfiltered = json.loads(json.dumps(original))
+    for query in unfiltered["queries"]:
+        query.update(freshness="any", published_on_or_after=None)
+    assert validator.validate_run_record(unfiltered) is True
+
     # A record written before these fields existed stays readable, but a NEW record may not omit them.
     legacy = json.loads(json.dumps(original))
     for query in legacy["queries"]:
@@ -891,12 +903,17 @@ def test_run_record_requires_comparable_request_evidence_on_every_stream(tmp_pat
             del query[field]
     assert validator.validate_run_record(legacy) is False
 
-    conventions = " ".join(CONVENTIONS.read_text().split())
-    for fragment in [
-        "An older run record written before these five fields existed stays readable",
-        "A stream missing any of the five is not eligible for query-health comparison",
-    ]:
-        assert fragment in conventions, "request-evidence compatibility contract is missing: %s" % fragment
+    # Pin the compatibility classification to the marked machine-readable row, not to prose wording,
+    # so `conventions.md` can be rewritten freely while the contract value stays fixed.
+    match = re.search(
+        r"<!-- query-strategy-contract:run-stream-request-fields -->\n(.*?)\n"
+        r"<!-- /query-strategy-contract:run-stream-request-fields -->",
+        CONVENTIONS.read_text(),
+        re.DOTALL,
+    )
+    assert match is not None
+    rows = dict(re.findall(r"^\| `([^`]+)` \| `([^`]+)` \|$", match.group(1), re.MULTILINE))
+    assert rows["legacy_missing_fields"] == "readable_but_query_health_ineligible"
 
 
 def test_canonical_forbidden_model_vocabulary_pressures_both_run_record_fields(tmp_path):
