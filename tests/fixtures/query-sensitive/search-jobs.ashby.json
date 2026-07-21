@@ -1,0 +1,12 @@
+{ "data": { "query": {}, "status": "completed",
+    "results": [
+      { "id": "jp_ashbyqs01", "source_id": "4a1d7b92-3333-4eee-8fff-5aa6bb7cc8d9",
+        "source_url": "https://jobs.ashbyhq.com/northwind/4a1d7b92-3333-4eee-8fff-5aa6bb7cc8d9",
+        "title": "Product Engineer", "company_name": "Northwind Labs", "location_display": "Remote (US)",
+        "salary_display": null, "posted_at": null, "published_at": "2026-06-18T09:00:00", "source": "ashby", "detail_available": true },
+      { "id": "jp_ashbyqs02", "source_id": "9c5e2a41-4444-4bbb-9ccc-6dd7ee8ff9a0",
+        "source_url": "https://jobs.ashbyhq.com/meridian/9c5e2a41-4444-4bbb-9ccc-6dd7ee8ff9a0",
+        "title": "AI Engineer", "company_name": "Meridian Systems", "location_display": "Remote (US)",
+        "salary_display": null, "posted_at": null, "published_at": "2026-07-02T15:30:00", "source": "ashby", "detail_available": true } ],
+    "warnings": [], "started_at": "2026-07-02T08:00:00Z", "completed_at": "2026-07-02T08:00:00Z" },
+  "meta": { "request_id": "req_fakeashbyqs" } }
