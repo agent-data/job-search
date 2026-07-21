@@ -891,6 +891,11 @@ class Coordinator:
                     "query_id": "fixture-query",
                     "source": source,
                     "keywords": "fixture",
+                    "request_origin": "saved",
+                    "location": None,
+                    "limit": 25,
+                    "freshness": "past-2-weeks",
+                    "published_on_or_after": "2026-07-03",
                     "results_returned": observed,
                     "new": observed,
                     "pages_fetched": 1,
@@ -1039,6 +1044,17 @@ class Coordinator:
                 return False
             return True
 
+        def iso_date(value):
+            if not isinstance(value, str) or re.fullmatch(
+                r"[0-9]{4}-[0-9]{2}-[0-9]{2}", value
+            ) is None:
+                return False
+            try:
+                datetime.strptime(value, "%Y-%m-%d")
+            except ValueError:
+                return False
+            return True
+
         def decimal_or_none(value):
             return value is None or (
                 isinstance(value, str)
@@ -1177,7 +1193,8 @@ class Coordinator:
         ):
             return False
         query_keys = {
-            "query_id", "source", "keywords", "results_returned", "new", "pages_fetched",
+            "query_id", "source", "keywords", "request_origin", "location", "limit",
+            "freshness", "published_on_or_after", "results_returned", "new", "pages_fetched",
             "rows_scanned", "unique_candidates", "selected_for_review", "has_more_at_stop",
             "stop_reason", "attempts", "request_ids", "upstream_code", "retryable", "errors",
         }
@@ -1187,6 +1204,23 @@ class Coordinator:
             if not all(nonempty(query[key]) for key in ("query_id", "keywords")):
                 return False
             if query["source"] not in ("linkedin", "ashby", "greenhouse", "lever"):
+                return False
+            if query["request_origin"] not in ("saved", "one_off"):
+                return False
+            if query["location"] is not None and not nonempty(query["location"]):
+                return False
+            if type(query["limit"]) is not int or not 1 <= query["limit"] <= 100:
+                return False
+            if query["request_origin"] == "saved":
+                if query["freshness"] not in (
+                    "any", "past-week", "past-2-weeks", "past-month"
+                ):
+                    return False
+            elif query["freshness"] is not None:
+                return False
+            if query["published_on_or_after"] is not None and not iso_date(
+                query["published_on_or_after"]
+            ):
                 return False
             if not all(count(query[key]) for key in (
                 "results_returned", "new", "pages_fetched", "rows_scanned",

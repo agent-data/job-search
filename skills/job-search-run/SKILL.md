@@ -298,6 +298,28 @@ fallback, and wording rules in `errors.md` rather than restating them here.
    these values byte-for-value and adds only the opaque cursor. `queries[].limit` remains this per-call page
    size, never the finite run target.
 
+   Before the stream's first call, take the comparable request evidence `conventions.md` requires on every
+   stream from that frozen request. The object below is schematic: it shows the keys and value forms, never
+   values to write.
+
+   ```json
+   {
+     "request_origin": "saved|one_off",
+     "location": null,
+     "limit": 25,
+     "freshness": "past-2-weeks",
+     "published_on_or_after": "2026-07-03"
+   }
+   ```
+
+   Bind the five actual values once, here: `saved` when the stream runs the stored query and search settings
+   unchanged, `one_off` when a conversational override changed any of them for this run; the normalized
+   location sent, or `null` when none was; the resolved per-call `limit`; the saved recency selector, written
+   as `null` for a `one_off` request even when that request resolved an effective cutoff; and the cutoff
+   actually sent, or `null` when none was. Every continuation of that stream replays these bound values
+   unchanged. A healthy stream returning few rows or none has completed normally: record its truthful
+   evidence and never issue a second search with altered keywords.
+
    Build every cursor-null call first, then dispatch all first pages as one concurrent batch. If the host has
    no concurrent-call primitive, execute that same prebuilt batch in stream order; later reconciliation still
    uses config order, never completion order. Echo-verify source on every successful page and, when a cutoff

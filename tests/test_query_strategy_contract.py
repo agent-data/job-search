@@ -17,6 +17,7 @@ STRATEGY = ROOT / "shared" / "references" / "query-strategy.md"
 FRONT_DOOR = ROOT / "skills" / "job-search" / "SKILL.md"
 OPERATOR = ROOT / "skills" / "job-search-agent" / "SKILL.md"
 ONBOARDING = ROOT / "skills" / "job-search" / "references" / "onboarding.md"
+CONVENTIONS = ROOT / "shared" / "references" / "conventions.md"
 
 
 def marked_table(path, marker):
@@ -68,4 +69,15 @@ def test_onboarding_applies_coverage_closure_at_one_existing_checkpoint():
         "fixed_query_count": "prohibited",
         "checkpoint": "existing_brief_and_search_interpretation_checkpoint",
         "first_live_review": "contextual_raw_retrieval_assessment",
+    }
+
+
+def test_new_run_streams_record_comparable_request_evidence():
+    assert marked_table(CONVENTIONS, "run-stream-request-fields") == {
+        "request_origin": "required_saved_or_one_off",
+        "location": "required_normalized_string_or_null",
+        "limit": "required_integer_1_through_100",
+        "freshness": "required_saved_selector_or_null_for_one_off",
+        "published_on_or_after": "required_iso_date_or_null",
+        "legacy_missing_fields": "readable_but_query_health_ineligible",
     }

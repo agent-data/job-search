@@ -358,7 +358,10 @@ are the skills' own POSIX shell, no third-party dependency):
   "detail_model_origin":"configured_auto|configured_user|legacy_v1_selector|repair",
   "detail_model_binding_id":"<current binding id; null for legacy version 1>",
   "queries":[ {
-    "query_id":"…", "source":"<source>", "keywords":"…", "results_returned":25, "new":6,
+    "query_id":"…", "source":"<source>", "keywords":"…",
+    "request_origin":"saved|one_off", "location":"<normalized location sent|null>", "limit":25,
+    "freshness":"<saved recency selector|null for one_off>", "published_on_or_after":"<YYYY-MM-DD|null>",
+    "results_returned":25, "new":6,
     "pages_fetched":3, "rows_scanned":75, "unique_candidates":31, "selected_for_review":25,
     "has_more_at_stop":true,
     "stop_reason":"first_page_complete|target_reached|sources_exhausted|unpaginated|pagination_incomplete|source_failed",
@@ -502,6 +505,37 @@ Each `queries` item is one logical query/source stream. LinkedIn always uses `un
 for LinkedIn and for an incomplete pagination contract branch. `attempts` includes retries, and
 `request_ids` retains the observable request provenance. Never write a cursor, decoded cursor payload, or
 resumable continuation state to the stream or any other durable run-record field.
+
+Every stream also records the request it actually issued, so a later reader can tell whether two runs asked
+the same question. `request_origin` is `saved` when the stream ran the stored query and search settings
+unchanged, and `one_off` when a conversational override altered any of them for this run alone. `location`
+is the exact normalized location string sent with the request, or `null` when the request carried none.
+`limit` is the exact resolved per-call page size actually sent (1–100) — never the finite run target.
+`freshness` is the saved recency selector the stream ran under; it is `null` for a `one_off` request even
+when that request resolved an effective cutoff of its own. `published_on_or_after` is the effective cutoff
+actually sent, or `null` when the request sent none.
+
+<!-- query-strategy-contract:run-stream-request-fields -->
+| Field | Contract value |
+|---|---|
+| `request_origin` | `required_saved_or_one_off` |
+| `location` | `required_normalized_string_or_null` |
+| `limit` | `required_integer_1_through_100` |
+| `freshness` | `required_saved_selector_or_null_for_one_off` |
+| `published_on_or_after` | `required_iso_date_or_null` |
+| `legacy_missing_fields` | `readable_but_query_health_ineligible` |
+<!-- /query-strategy-contract:run-stream-request-fields -->
+
+A rolling cutoff moves with the calendar, so `published_on_or_after` is audit evidence of what this run
+asked for and never the basis for comparing runs: comparability keys off the saved selector, which keeps two
+runs a week apart under the same saved recency policy comparable even though their cutoffs differ. Only a
+stream whose `request_origin` is `saved` contributes to the repeated-thin assessment in `query-strategy.md`;
+a `one_off` stream is truthful audit evidence about that run alone.
+
+An older run record written before these five fields existed stays readable, and every existing reader keeps
+consuming it unchanged. A stream missing any of the five is not eligible for query-health comparison, so the
+run holding it is never one of the comparable runs that assessment reads. New records stay strict: a stream
+that omits one of them fails final artifact validation.
 
 `review_scope.target_new_postings` is a positive integer only in `finite` mode and `null` otherwise.
 `completed_first_pages` means every enabled stream completed its ordinary first-page branch;

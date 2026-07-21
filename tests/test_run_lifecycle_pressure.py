@@ -108,6 +108,12 @@ def test_lifecycle_fixture_happy_paths_close_only_after_valid_artifacts(
         "close_state": "complete",
         "health": "healthy",
     }
+    for query in record["queries"]:
+        assert query["request_origin"] == "saved"
+        assert query["location"] is None
+        assert query["limit"] == 25
+        assert query["freshness"] == "past-2-weeks"
+        assert query["published_on_or_after"] == "2026-07-03"
     digest = (workspace / "reports" / "2026-07-17-digest.md").read_text()
     assert digest.startswith("# Job search digest — 2026-07-17\n")
     assert "Run health: healthy\n" in digest
@@ -837,6 +843,60 @@ def test_fixture_run_record_validator_rejects_adversarial_schema_and_invariants(
         candidate = json.loads(json.dumps(original))
         mutate(candidate)
         assert validator.validate_run_record(candidate) is False, name
+
+
+def test_run_record_requires_comparable_request_evidence_on_every_stream(tmp_path):
+    """Query-health comparison across runs is only possible when each stream saved what it asked for."""
+    result, summary, workspace = drive(tmp_path, "happy_manual")
+    assert result.returncode == 0, result.stderr
+    namespace = runpy.run_path(str(FIXTURE))
+    validator = namespace["Coordinator"]("validate", workspace, "manual", "-")
+    original = json.loads((workspace / "runs" / (summary["run_id"] + ".json")).read_text())
+    request_fields = (
+        "request_origin", "location", "limit", "freshness", "published_on_or_after",
+    )
+    assert validator.validate_run_record(original) is True
+
+    for field in request_fields:
+        candidate = json.loads(json.dumps(original))
+        del candidate["queries"][0][field]
+        assert validator.validate_run_record(candidate) is False, field
+
+    mutations = [
+        ("invented_origin", {"request_origin": "adhoc"}),
+        ("empty_location", {"location": ""}),
+        ("limit_zero", {"limit": 0}),
+        ("limit_above_page_maximum", {"limit": 101}),
+        ("boolean_limit", {"limit": True}),
+        ("saved_without_selector", {"freshness": None}),
+        ("invented_selector", {"freshness": "past-3-weeks"}),
+        ("one_off_keeping_saved_selector", {"request_origin": "one_off"}),
+        ("cutoff_is_not_a_date", {"published_on_or_after": "2026-07"}),
+        ("cutoff_is_not_a_real_day", {"published_on_or_after": "2026-02-30"}),
+    ]
+    for name, update in mutations:
+        candidate = json.loads(json.dumps(original))
+        candidate["queries"][0].update(update)
+        assert validator.validate_run_record(candidate) is False, name
+
+    one_off = json.loads(json.dumps(original))
+    for query in one_off["queries"]:
+        query.update(request_origin="one_off", freshness=None)
+    assert validator.validate_run_record(one_off) is True
+
+    # A record written before these fields existed stays readable, but a NEW record may not omit them.
+    legacy = json.loads(json.dumps(original))
+    for query in legacy["queries"]:
+        for field in request_fields:
+            del query[field]
+    assert validator.validate_run_record(legacy) is False
+
+    conventions = " ".join(CONVENTIONS.read_text().split())
+    for fragment in [
+        "An older run record written before these five fields existed stays readable",
+        "A stream missing any of the five is not eligible for query-health comparison",
+    ]:
+        assert fragment in conventions, "request-evidence compatibility contract is missing: %s" % fragment
 
 
 def test_canonical_forbidden_model_vocabulary_pressures_both_run_record_fields(tmp_path):
