@@ -198,6 +198,7 @@ For the full `E-*` table with exact cause and fix wording: see `../../shared/ref
 | Every `E-*` error with cause + fix | `../../shared/references/errors.md` |
 | OS registry, workspace discovery, config recipes, scheduling | `../../shared/references/internals.md` |
 | agent-data CLI contract (routes, retry rules, listing ID, pricing/metering) | `../../shared/references/agent-data-contract.md` |
+| Query derivation, retuning, explanation, or thin-result troubleshooting | `../../shared/references/query-strategy.md` |
 | The active workspace path | the Discovery procedure — `../../shared/references/internals.md` |
 | Scheduling status | the registry's scheduling marker — `../../shared/references/internals.md` |
 | Customization and flexibility workflows | `references/customization.md` |

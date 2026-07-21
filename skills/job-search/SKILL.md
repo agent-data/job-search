@@ -53,6 +53,10 @@ Step 0 is mechanical — do it **silently**: no "discovery" / "OS state" / `regi
 reply (`../../shared/references/voice.md`). Your first user-facing words are the onboarding welcome (already said, above,
 before the playbook was opened) or the home view.
 
+Query work loads its own contract: whenever you derive or retune a search's queries, review the first run's
+retrieval volume, or assess a saved search's query health, read `../../shared/references/query-strategy.md`
+and follow it — it owns how a query portfolio is built and when to propose broader terms.
+
 ## Principles (apply in both modes)
 
 - **Conversational-first configuration.** The user changes anything — a query, how often it runs, their
