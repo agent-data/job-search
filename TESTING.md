@@ -86,7 +86,7 @@ in `-p` commands anyway so the skill is invoked deterministically.
 ```bash
 cd "$JSOS" && python3 -m pytest -q
 ```
-**Expected:** `603 passed` **and `0 failed`** — treat **`0 failed`** as the real gate (the exact count grows as
+**Expected:** `617 passed` **and `0 failed`** — treat **`0 failed`** as the real gate (the exact count grows as
 tests are added; bump this number when it does). Covers the doc linter, the philosophy guard, the release-integrity checks, the scripted-mechanics unit tests, the **eval-scenario validator +
 harness math** (`test_eval_harness.py`), and the fake-shim self-tests (incl. the `bad-query` scenario behind
 T7.12) — dev tooling only; the runtime state procedures are exercised by the live tests below and the skill evals.
@@ -865,7 +865,7 @@ entries carry a date mark; the first-Ashby-pass footnote is present.
 - ⬜ Scheduling correct (the composed `/loop <interval>` matches the pinned table per frequency; `/loop` sets `mechanism:loop`; **zero-Python user path** proven with python3 masked) (§9)
 - ⬜ **No numeric scores/weights, budget config, or invented charge** in files or unsolicited chat; accurate calls-first usage context is labeled, and users control frequency, sources, and review depth (§10)
 - ⬜ Docs match reality (install commands, error table, sample digest) (§11)
-- ⬜ Full regression green: `pytest` (**603**; gate on `0 failed`) + the eval structural gate (`eval_harness.py`) + all five skills' evals (**185** scenarios) (§0.3, §12)
+- ⬜ Full regression green: `pytest` (**617**; gate on `0 failed`) + the eval structural gate (`eval_harness.py`) + all five skills' evals (**185** scenarios) (§0.3, §12)
 - ⬜ Planned config slash-command tests are marked **N/A (pending build)**, not green (§13)
 - ⬜ Multi-source: live Ashby/Greenhouse/Lever rows; shim multi-source run shows per-source counts + first-pass footnote; one source down never blanks the run (§14)
 - ⬜ Live ATS phrase-sensitivity contract smoke (T14.1c) is **non-gating**: recorded green only after explicit approval for billable/network calls, otherwise `SKIPPED — authorization or network unavailable` (never as passed)

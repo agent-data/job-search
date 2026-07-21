@@ -329,7 +329,10 @@ fallback, and wording rules in `errors.md` rather than restating them here.
 
    LinkedIn is unpaginated by contract. Treat an Ashby/Greenhouse/Lever stream as cursor-capable only while
    each returned `data.pagination` object is valid; missing/malformed metadata takes the incomplete branch
-   even when its result rows are trustworthy.
+   even when its result rows are trustworthy. That branch governs **continuation**: in `first_page` mode
+   nothing continues, so a successful first page whose `data.pagination` is absent or malformed is not
+   incomplete — that stream ends on its ordinary first-page branch as `first_page_complete` with
+   `has_more_at_stop:null`.
 
    Pass each first-page result through **Attempt accounting** before interpreting it. Apply the existing
    search failures without changing their scope: retry only `retryable:true`; after retry
