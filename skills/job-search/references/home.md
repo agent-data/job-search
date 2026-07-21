@@ -50,6 +50,21 @@ Read just what the home view needs (all local):
 - **Deeper-coverage marker:** expand `<ws>` to its absolute path and read that exact workspace's entry from
   the registry `deeper_coverage_nudges` map (`internals.md` → Registry). Absence means no marker; another
   workspace's marker does not count.
+- **Query-health nudge marker:** read the registry's single `query_health_nudge` object (`internals.md` →
+  Registry). Absence means no query-health nudge has been shown. It only records what was already said —
+  it never proves anything about retrieval — and reading it never rewrites it.
+- **Query-health evidence (derived — local + unmetered):** skip this entirely when that marker's stored
+  `search_shape` still matches the current saved shape. Otherwise, and only if the workspace already holds
+  them, take the three newest **lifecycle-authoritative** run records — closed, complete, non-canary runs
+  that pass the artifact-authority procedure above — that are also *comparable* to today's saved search:
+  every stream carries the current request fields (`../../../shared/references/conventions.md` → the request
+  evidence every stream records) with `request_origin: saved`; the enabled queries, sources, locations,
+  limits, and saved `search.freshness` selector match `config.yaml` — that saved selector, never the rolling
+  cutoff a particular run happened to send; and for the source being judged, every enabled stream succeeded
+  (no `source_failed` or `pagination_incomplete` stop, and that source absent from `sources_failed`). Then sum
+  each source's raw `results_returned` across its enabled streams, per run. Fewer than three such records, a
+  record missing any request field, or a failed or one-off stream means there is nothing to assess — never
+  substitute an older, incomplete, or overridden run. This read is local and unmetered.
 - **Latest digest:** the exact digest derived by the selected run's fold — its date and **counts line**.
   Never select a digest independently by filename.
 - **Pipeline:** fold `<ws>/jobs.jsonl` per the fold operation in `conventions.md` → current jobs (one per (`source`, `source_id`),
@@ -295,6 +310,33 @@ first-run results.
   every later automatic nudge for that workspace, including after an unanswered display, decline, or deferral;
   the user can still ask for depth later. Scheduled runs write eligibility evidence only and never this
   shown/outcome marker.
+- **Query health — repeatedly thin retrieval (at most once per unchanged search shape).** Consider this only
+  when the three comparable records gathered above exist and, for a source with `Q` enabled queries, each of
+  those runs returned a source total of `0` through `Q - 1`; a total of `Q` or more in any of the three
+  settles it — say nothing. Only the raw `results_returned` sum activates this. New, deduplicated, selected,
+  detail-read, and relevance counts describe fit quality rather than retrieval health, and never trigger it.
+
+  That condition earns an assessment, not a nudge. Weigh how common the role family plausibly is, how tight
+  the requested location is, and how narrow the saved freshness window is: a rare specialty, a deliberately
+  tight search, or plausible market scarcity fully explains the volume, and saying nothing is then the right
+  outcome. Opening the home view is never a retune — the saved queries stay byte-for-byte untouched unless
+  the user accepts a proposal.
+
+  When it is worth saying, say it once for every qualifying source together: one evidence sentence naming the
+  affected source or sources and the raw volume observed — one evidence bullet instead when a long source
+  list would be hard to scan — then one question offering to propose broader role families. Keep the causal
+  claim honest with *may*: market supply and the active filters remain plausible explanations.
+
+  As soon as that nudge renders—and before awaiting a reply—atomically merge the single `query_health_nudge`
+  marker per `internals.md`, storing the current shape, the affected sources, and `outcome: shown`. Preserve
+  every unknown registry key. Change that outcome to `accepted` or `dismissed` only once the user has
+  actually accepted or declined. While the stored shape matches the current saved shape, show no further
+  query-health nudge; a confirmed query, location, limit, freshness, or source change makes a new shape,
+  which becomes assessable again after three new comparable runs of its own.
+
+  Even after the user says yes, nothing is written on that alone: route the proposed retune through the
+  **Retrieval-changing** row of **Applying your feedback** — the agent-data usage preview and the scoped
+  confirmation a persistent change requires — before writing `config.yaml`.
 - **Last run blocked/failed.** If the newest authorized closed run's `run_health` is `blocked`, select the
   rendering by the record's internal `E-*`/class but render only the structured **cause · preserved work ·
   next step · exact fix** — the home view is user-facing, so the raw `E-*` code never appears

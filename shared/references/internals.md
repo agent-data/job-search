@@ -164,6 +164,53 @@ does.
   nudges for that workspace, including after decline or deferral; the user can still request deeper coverage.
   Apply the ordinary registry write rules: merge into the current object, preserve every unknown registry
   key, and atomically replace the whole file.
+- **Read the query-health nudge marker:** read the registry's single `query_health_nudge` object; absence
+  means no query-health nudge has been shown yet. The marker records what was said and suppresses a repeat —
+  it is never evidence that retrieval is actually thin, so revalidate the authoritative run records
+  themselves (`run-lifecycle.md` → **Artifact authority for every reader**) before every query-health
+  decision. Reading never rewrites it.
+- **Set the query-health nudge marker:** only the **job-search** front door writes it, and only after it has
+  actually rendered the nudge to the user — the headless runner never writes it. Merge the object below into
+  the current registry per the write rules above: preserve every unknown registry key and atomically replace
+  the whole file. Several affected sources share one marker; list them all in `affected_sources`.
+
+Store the search shape explicitly, so a later read can compare it without re-deriving a hash: each enabled
+query's `id`, `keywords`, `location`, and `limit`, the enabled `sources`, and the saved `freshness` selector
+(that selector's enum is owned by `conventions.md`). Enabled retrieval configuration only — no preference
+prose, posting data, or credentials. The values below are schematic, not literals to copy:
+
+```json
+"query_health_nudge": {
+  "search_shape": {
+    "queries": [
+      {"id": "ai-eng", "keywords": "AI engineer", "location": null, "limit": 25}
+    ],
+    "sources": ["ashby"],
+    "freshness": "past-2-weeks"
+  },
+  "shown_at": "2026-07-21T12:00:00Z",
+  "affected_sources": ["ashby"],
+  "outcome": "shown"
+}
+```
+
+<!-- query-strategy-contract:registry-marker -->
+| Field | Contract value |
+|---|---|
+| `registry_key` | `query_health_nudge` |
+| `cardinality` | `one_marker_overwritten_by_new_qualifying_shape` |
+| `search_shape` | `enabled_queries_sources_and_saved_freshness` |
+| `shape_query_fields` | `id_keywords_location_limit` |
+| `evidence_role` | `suppression_index_not_nudge_authority` |
+| `write_when` | `after_user_facing_nudge_is_shown` |
+| `outcome` | `shown_or_accepted_or_dismissed` |
+| `unknown_registry_keys` | `preserved` |
+<!-- /query-strategy-contract:registry-marker -->
+
+Exactly one marker exists at a time. Write `outcome: "shown"` as the nudge renders; change it to `accepted`
+or `dismissed` only once that interaction has actually happened; and overwrite the whole marker when a later
+nudge qualifies under a different search shape. Registry state stays bounded however many shapes the search
+passes through.
 
 ## Workspace discovery & first-run detection
 **Run the shared script where a shell runtime exists:** `../scripts/mechanics/workspace-discovery.sh` prints

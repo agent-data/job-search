@@ -18,6 +18,8 @@ FRONT_DOOR = ROOT / "skills" / "job-search" / "SKILL.md"
 OPERATOR = ROOT / "skills" / "job-search-agent" / "SKILL.md"
 ONBOARDING = ROOT / "skills" / "job-search" / "references" / "onboarding.md"
 CONVENTIONS = ROOT / "shared" / "references" / "conventions.md"
+INTERNALS = ROOT / "shared" / "references" / "internals.md"
+HOME = ROOT / "skills" / "job-search" / "references" / "home.md"
 
 
 def marked_table(path, marker):
@@ -80,4 +82,29 @@ def test_new_run_streams_record_comparable_request_evidence():
         "freshness": "required_saved_selector_or_null_for_one_off",
         "published_on_or_after": "required_iso_date_or_null",
         "legacy_missing_fields": "readable_but_query_health_ineligible",
+    }
+
+
+def test_query_health_marker_is_bounded_explicit_and_written_only_after_showing():
+    assert marked_table(INTERNALS, "registry-marker") == {
+        "registry_key": "query_health_nudge",
+        "cardinality": "one_marker_overwritten_by_new_qualifying_shape",
+        "search_shape": "enabled_queries_sources_and_saved_freshness",
+        "shape_query_fields": "id_keywords_location_limit",
+        "evidence_role": "suppression_index_not_nudge_authority",
+        "write_when": "after_user_facing_nudge_is_shown",
+        "outcome": "shown_or_accepted_or_dismissed",
+        "unknown_registry_keys": "preserved",
+    }
+
+
+def test_repeated_thin_signal_is_a_contextual_assessment_trigger():
+    assert marked_table(STRATEGY, "repeated-thin") == {
+        "window": "three_newest_comparable_authoritative_runs",
+        "run_state": "closed_complete_non_canary",
+        "stream_state": "every_enabled_stream_for_source_successful",
+        "request_origin": "saved_only",
+        "shape": "queries_sources_locations_limits_and_freshness_unchanged",
+        "threshold": "source_total_results_returned_less_than_enabled_query_count_each_run",
+        "effect": "contextual_assessment_not_automatic_nudge",
     }

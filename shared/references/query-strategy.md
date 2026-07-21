@@ -94,12 +94,24 @@ change requires, then persist.
 ## The repeated-thin signal
 
 For an existing saved search, one deterministic condition decides when a contextual assessment is *warranted*.
-A source is a repeated-thin candidate only when all of these hold for the three newest comparable runs: each
-run is closed, complete, and not a canary; every enabled stream for that source succeeded in each run; every
-stream used the active saved request rather than an ad-hoc override; the saved queries, sources, locations,
-limits, and freshness policy are unchanged across all three; and in each run the source's total raw results
-across its enabled queries is under the number of enabled queries. So for `Q` enabled queries, a source total
-of `0` through `Q - 1` qualifies that run and `Q` or more does not. The count is deliberately raw — new,
+
+<!-- query-strategy-contract:repeated-thin -->
+| Field | Contract value |
+|---|---|
+| `window` | `three_newest_comparable_authoritative_runs` |
+| `run_state` | `closed_complete_non_canary` |
+| `stream_state` | `every_enabled_stream_for_source_successful` |
+| `request_origin` | `saved_only` |
+| `shape` | `queries_sources_locations_limits_and_freshness_unchanged` |
+| `threshold` | `source_total_results_returned_less_than_enabled_query_count_each_run` |
+| `effect` | `contextual_assessment_not_automatic_nudge` |
+<!-- /query-strategy-contract:repeated-thin -->
+
+A source is a repeated-thin candidate only when every row holds across the three newest comparable runs, each
+of them lifecycle-authoritative. `saved_only` excludes any stream that ran under an ad-hoc override, and the
+shape comparison keys off the saved freshness selector rather than the rolling cutoff each run happened to
+send (`conventions.md`). The threshold applies per run: for `Q` enabled queries, a source total of `0` through
+`Q - 1` qualifies that run and `Q` or more does not. The count is deliberately raw `results_returned` — new,
 deduplicated, selected, detail-read, and relevance counts can never activate it.
 
 The signal only asks for the assessment above; it decides nothing. A rare role, a deliberately tight location,
