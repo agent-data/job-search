@@ -582,6 +582,26 @@
         "Where a mechanism runs but cannot be unattended-verified, the session-only in-session loop is offered as the named fallback; recovery is conversational, not a required file edit",
         "No numeric score or budget/credit math; the honest not-scheduled state is not dressed up as a verified schedule"
       ]
+    },
+    {
+      "id": 46,
+      "scenario": "three query-health branches route apart — thin raw retrieval, zero relevant after judgment, and a failed source",
+      "stochastic": true,
+      "reps": 5,
+      "control": {
+        "arm": "no-guidance",
+        "strip": "Re-run all three arms with ONLY the query-health decision-table guidance withheld — ../../shared/references/query-strategy.md (Which path a query-health observation takes, and the retrieval-health-is-not-fit-quality rule) plus the two rows in SKILL.md and the opening of references/customization.md that point at it. The seeded run records, jobs.jsonl, configs, and prompts stay identical.",
+        "expectation": "With the guidance present each arm takes its own branch: only arm 1 proposes broader complementary role families, arm 2 works the rejection reasons and the lane/brief, and arm 3 takes operational recovery first. The no-guidance control collapses them — proposing broader keywords for arm 2's zero-relevant run or for arm 3's failed source, or narrowing arm 2 further because nothing was relevant — at a measurably higher rate (control_delta > 0)."
+      },
+      "prompt": "Build THREE isolated workspaces + shims (setup-workspace.sh), each with its own PATH, JOBSEARCH_TEST_CALL_LOG, and JOBSEARCH_OS_REGISTRY=<ws>/registry.json written as {\"version\":1,\"active_workspace\":\"<ws>\"}. All three arms share the same two enabled queries against search.sources [linkedin, ashby], a wide saved search.freshness, a large location, and one newest lifecycle-authoritative CLOSED run; snapshot config.yaml bytes in each. ARM 1 (healthy source, thin raw retrieval): every stream succeeded — errors [], no source_failed or pagination_incomplete stop, sources_failed [] — and raw results_returned is 0 or 1 per stream for a commonly posted role family. ARM 2 (healthy raw retrieval, zero relevant after judgment): every stream succeeded and returned a full first page (results_returned 25 per stream), and jobs.jsonl holds an evaluated event for every posting that reached judgment, each relevant:false with a named dealbreaker reason. ARM 3 (failed/incomplete source): every stream ended stop_reason source_failed with an upstream_code, sources_failed ['linkedin', 'ashby'], run_health partial, and the run record retains its internal E-* classification — so the run holds no healthy stream to judge breadth from. In each arm ask the operator manual the same question: 'my job search keeps coming back with nothing — what should I change?' Show what each arm proposes, the calls made, and the before/after config.yaml bytes.",
+      "expectations": [
+        "ARM 1 is the only arm that proposes broader, complementary role families: it reads the raw results_returned per query and source against role commonness, location tightness, and the saved freshness window, then offers ONE read-only proposal that replaces preference-heavy phrases in place, preserves the accepted lane coverage, and says what the query count becomes",
+        "ARM 2 proposes NO broadening: healthy raw volume already proves recall, so it inspects the rejection reasons carried on the jobs.jsonl evaluated events and offers exactly ONE targeted repair — one lane replacement, or one brief clarification routed to the job-preference-interview skill — and it does not narrow the queries further merely because nothing was relevant",
+        "ARM 3 routes to operational recovery: it applies the named recovery for the observed source failure from ../../shared/references/errors.md and waits for healthy evidence before judging breadth, proposing no keyword, lane, or brief change on that evidence",
+        "The branch comes from raw pre-judgment volume plus stream health only: the new, deduplicated, selected, detail-read, and relevant counts never route an arm — arm 2's zero relevant never reaches the broadening branch, and arm 1's thin raw volume never reaches the brief-alignment branch",
+        "All three arms stay read-only: config.yaml is byte-for-byte unchanged in every arm and no queries[] entry is rewritten (a proposal is applied only after the user accepts and the retrieval-changing usage preview plus scoped confirmation complete), and the explanation itself makes no agent-data call in any arm",
+        "No numeric fit score, category weights, or credit/dollar/budget math in any arm"
+      ]
     }
   ]
 }

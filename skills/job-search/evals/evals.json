@@ -697,6 +697,87 @@
         "The retry line follows the schedule state (disabled/unverified after rollback -> the schedule cannot be relied on until re-verified), never a promise of an automatic scheduled retry",
         "No numeric score or budget/credit math; no raw internal class or code reaches the user"
       ]
+    },
+    {
+      "id": 54,
+      "scenario": "phrase-sensitive first run — the derived coverage map retrieves where a mini-brief phrase cannot",
+      "stochastic": true,
+      "reps": 5,
+      "control": {
+        "arm": "no-guidance",
+        "strip": "Re-run the identical first-run prompt with ONLY the query-strategy guidance withheld — ../../shared/references/query-strategy.md plus the coverage-map step in references/onboarding.md -> Searches. The brief, the fixtures, the sandbox, and every other onboarding instruction stay byte-for-byte identical.",
+        "expectation": "With the guidance present the saved queries are broad complementary role families, so calls.jsonl carries ashby rows whose request.keywords are exactly 'product engineer' and 'AI engineer' and both fixture rows reach fit judgment as evaluated events; the no-guidance control saves a preference-intersection phrase shaped like 'founding product engineer AI startup', whose ashby calls return zero rows and produce no evaluated event for either fixture posting, at a measurably higher rate (control_delta > 0)."
+      },
+      "prompt": "Fresh sandbox (setup-onboarding.sh), env as in harness EXCEPT JOBSEARCH_TEST_SCENARIO=query-sensitive, and export JOBSEARCH_TEST_CALL_LOG=<tmp>/calls.jsonl. This source answers ONLY the exact keywords 'product engineer' and 'AI engineer' (exact after case/whitespace normalization — a broad phrase carrying one extra word is a miss) and returns a healthy empty result set for anything else; its ashby rows are 'Product Engineer' at Northwind Labs (source_id 4a1d7b92-3333-4eee-8fff-5aa6bb7cc8d9, published 2026-06-18) and 'AI Engineer' at Meridian Systems (source_id 9c5e2a41-4444-4bbb-9ccc-6dd7ee8ff9a0, published 2026-07-02). Invoke the job-search skill (first_run:true, source:none). The canned answer to the single free-form question is the dogfood brief: 'I'm an early/founding product engineer — I want to build the product at a seed-to-Series C AI startup, with real product ownership, direct founder access, and heavy coding-agent use day to day. Remote in the US.' HARNESS TWEAK (fixture stability, NOT behavior under test): immediately after setup writes config.yaml and before the first live run, the driver pins search.freshness: any, because the fixture rows carry fixed dates that the shipped rolling window would filter out by calendar drift. After the results, Scheduling: 'Not now'. Show the transcript beside calls.jsonl, config.yaml, preferences.md, and jobs.jsonl.",
+      "expectations": [
+        "The searches persisted in <tmp>/.job-search/config.yaml are the coverage map: every enabled queries[] entry's keywords is a broad role-family phrase in real posting vocabulary, and that set includes the phrases 'product engineer' and 'AI engineer' (compared case- and whitespace-normalized, as the source itself compares them); whatever count coverage closure produced is accepted — no query target and no cap is asserted in either direction",
+        "The phrase-stuffed mini-brief is never sent: no enabled queries[] keywords value and no calls.jsonl request.keywords value conjoins a role phrase with the brief's stage/ownership/founder-access/tooling evidence (nothing shaped like 'founding product engineer AI startup', 'early product engineer developer tools', or 'agent infrastructure product engineer'), and every search-jobs row's request.keywords equals one of the saved enabled queries[] keywords values — no unsaved phrase is sent. A single term that is itself posting vocabulary opening its own lane is not a violation",
+        "calls.jsonl holds at least one search-jobs row with source 'ashby' whose request.keywords is 'product engineer', and at least one with source 'ashby' whose request.keywords is 'AI engineer' (case- and whitespace-normalized equality, nothing broader or narrower) — the two phrases this source answers",
+        "The returned rows reach fit judgment: <tmp>/.job-search/jobs.jsonl carries an evaluated event for ashby source_id 4a1d7b92-3333-4eee-8fff-5aa6bb7cc8d9 and for ashby source_id 9c5e2a41-4444-4bbb-9ccc-6dd7ee8ff9a0, each with a verdict and reasoning; the stage, founder-access, ownership, and coding-agent criteria kept out of the keywords are enforced there and are still present in <tmp>/.job-search/preferences.md",
+        "No stream re-searches itself: for any derived phrase whose call returned zero rows, calls.jsonl holds no follow-up search-jobs row for that same query and source with altered keywords, a raised limit, or a cursor",
+        "NO numeric score, NO category weights, NO credit/dollar/budget math anywhere in the output"
+      ]
+    },
+    {
+      "id": 55,
+      "scenario": "mutually exclusive careers — four acceptable lanes each reach retrieval coverage",
+      "stochastic": true,
+      "reps": 5,
+      "control": {
+        "arm": "no-guidance",
+        "strip": "Re-run the identical first-run prompt with ONLY the query-strategy guidance withheld — ../../shared/references/query-strategy.md plus the coverage-map step in references/onboarding.md -> Searches; the brief, fixtures, and every other onboarding instruction are unchanged.",
+        "expectation": "With the guidance present config.yaml carries a distinct enabled query for each of the four mutually exclusive families (at least four), each traceable to its lane; the no-guidance control compresses them into two or three queries — one generic 'investment analyst'-shaped phrase standing in for several families, or a lane silently dropped — at a measurably higher rate (control_delta > 0)."
+      },
+      "prompt": "Fresh sandbox (setup-onboarding.sh), env as in harness, JOBSEARCH_TEST_SCENARIO=happy, and export JOBSEARCH_TEST_CALL_LOG=<tmp>/calls.jsonl. Invoke the job-search skill (first_run:true, source:none). The canned answer to the single free-form question names four job families the user would genuinely take, in their own words: 'I'd take any of four paths and I mean all four — private-equity investing, long/short public-equity investing, equity research, or corporate development inside an operating company. New York, or remote in the US. Base plus carry matters, and I will not take a pure back-office role.' Complete onboarding (after the results, Scheduling: 'Not now'). Show config.yaml, preferences.md, the checkpoint rendered before the live run, the questions asked before the results, and calls.jsonl.",
+      "expectations": [
+        "Every acceptable lane maps to retrieval coverage: each of the four named families — private-equity investing, long/short public-equity investing, equity research, and corporate development — is traceable to at least one enabled queries[] entry in <tmp>/.job-search/config.yaml whose keywords are that family's own posting vocabulary; no named family is missing from the persisted searches",
+        "The four are not compressed: no single enabled query stands in for two of these mutually exclusive families (their title vocabularies do not overlap), so config.yaml holds at least four enabled queries — two or three enabled queries fails this case — and no upper bound is asserted; nothing in the checkpoint or any saved artifact states a query target or cap",
+        "Exactly ONE confidence checkpoint precedes the first live run and makes the whole mapping visible — each of the four families appears beside the query that covers it — and before the first live results the only question asked is the single free-form sketch: no keyword question, no lane question, no 'which of these do you want' question",
+        "Fit criteria stay in the brief: no enabled keywords phrase carries compensation, carry, firm-size, stage, or culture evidence; the base-plus-carry preference and the back-office dealbreaker appear in <tmp>/.job-search/preferences.md instead",
+        "Retrieval matches the saved map: calls.jsonl holds one search-jobs row per (enabled query x enabled source), and the distinct request.keywords values across those rows are exactly the enabled queries[] keywords values — nothing is merged away at call time",
+        "NO numeric score, NO category weights, NO credit/dollar/budget math anywhere in the output"
+      ]
+    },
+    {
+      "id": 56,
+      "scenario": "redundant aliases merge while the distinct vocabulary lane survives",
+      "stochastic": true,
+      "reps": 5,
+      "control": {
+        "arm": "no-guidance",
+        "strip": "Re-run the identical first-run prompt with ONLY the query-strategy guidance withheld — ../../shared/references/query-strategy.md plus the coverage-map step in references/onboarding.md -> Searches; everything else is unchanged.",
+        "expectation": "With the guidance present the redundant product-engineering aliases collapse into one enabled query while the AI-engineering lane keeps its own; the no-guidance control either saves one query per alias (extra streams that add calls without adding lane coverage) or folds the AI-engineering lane into the product-engineering query, at a measurably higher rate (control_delta > 0)."
+      },
+      "prompt": "Fresh sandbox (setup-onboarding.sh), env as in harness, JOBSEARCH_TEST_SCENARIO=happy, and export JOBSEARCH_TEST_CALL_LOG=<tmp>/calls.jsonl. Invoke the job-search skill (first_run:true, source:none). The canned answer to the single free-form question hands over several aliases for ONE pool plus one genuinely different family: 'I'm a product engineer — some places call it product-minded software engineer, full-stack product engineer, or product software engineer, and they are all the same job to me. Separately I would also take AI engineering work — LLM and agent product work. Remote in the US.' Complete onboarding (after the results, Scheduling: 'Not now'). Show config.yaml, the checkpoint rendered before the live run, and calls.jsonl.",
+      "expectations": [
+        "The redundant aliases merge in the persisted artifact: <tmp>/.job-search/config.yaml holds ONE enabled query for the product-engineering pool, and 'product-minded software engineer', 'full-stack product engineer', and 'product software engineer' do not each appear as their own queries[] entry — no enabled query's candidate pool is already covered by another",
+        "The distinct vocabulary lane survives the merge: a separate enabled queries[] entry keeps the AI-engineering vocabulary, and this case fails equally if that lane is folded into the product-engineering query or dropped to shrink the portfolio",
+        "A merged alias costs nothing to run: calls.jsonl carries no search-jobs row whose request.keywords is one of the merged-away aliases, so the merge removes a stream per source per run rather than only tidying the display",
+        "The merge is visible, not silent: the single confidence checkpoint before the live run shows the merged aliases as covered by the retained product-engineering query, and before the first live results the only question asked is the single free-form sketch",
+        "The merge is justified by pool overlap, not by a count: no user-facing line and no saved artifact states a query target or cap",
+        "NO numeric score, NO category weights, NO credit/dollar/budget math anywhere in the output"
+      ]
+    },
+    {
+      "id": 57,
+      "scenario": "repeated thin saved shape — one combined nudge, nothing written before acceptance, silence stays legal",
+      "stochastic": true,
+      "reps": 5,
+      "control": {
+        "arm": "no-guidance",
+        "strip": "Re-run both arms with ONLY the query-health guidance withheld — ../../shared/references/query-strategy.md (the repeated-thin signal and the one-nudge-one-question rule) and the Query health bullet in references/home.md; the seeded runs, registries, configs, and prompts are identical.",
+        "expectation": "With the guidance present arm A renders at most one combined nudge with one question and writes nothing but the shown marker, while arm B is free to stay silent on identical counts; the no-guidance control misses the repeated-thin evidence entirely, fires a separate nudge per source, or edits config.yaml keywords without the scoped confirmation, at a measurably higher rate (control_delta > 0)."
+      },
+      "prompt": "PRE-SEED two independent returning workspaces A and B as in case 4 (config.yaml, preferences.md, jobs.jsonl, a 2026-06-05 digest), each with Q = 2 enabled queries, search.sources [linkedin, ashby], and a saved search.freshness. In A the two saved queries are preference-intersection phrases over commonly posted families in a large location ('founding product engineer AI startup' and 'early product engineer developer tools', location 'United States'); in B they are an exceptionally rare specialty in a deliberately tight location ('radio astronomy instrumentation engineer' and 'cryogenic detector engineer', location 'Green Bank, WV') under the same saved freshness. In BOTH, seed the THREE newest runs/<id>.json as closed, complete, non-canary, lifecycle-authoritative runs whose four streams (2 queries x 2 sources) all completed successfully — errors [], no source_failed or pagination_incomplete stop, sources_failed [] — and whose every stream carries the five request fields with request_origin 'saved' and location, limit, and freshness matching config.yaml exactly. Per run, each source's raw results_returned total is below Q: linkedin 1, 0, 1 and ashby 0, 1, 1 across the three runs. Write each registry as {\"version\":1,\"active_workspace\":\"<absolute workspace>\",\"query_sentinel\":\"preserve-exactly\"} with NO query_health_nudge marker, snapshot config.yaml and registry bytes in both, and export JOBSEARCH_TEST_CALL_LOG=<workspace>/calls.jsonl per arm. ARM A: invoke job-search (first_run:false); inspect the registry and config.yaml as soon as the nudge renders; answer 'yes, propose broader role families'; WITHHOLD the scoped confirmation the proposal asks for and inspect config.yaml and the marker again; then invoke job-search a second time. ARM B: invoke job-search once and inspect the registry and config bytes. Show the fake call log for both arms.",
+      "expectations": [
+        "The decision is read, not guessed: before rendering anything, the home reads the registry's single query_health_nudge object (absent), the three newest lifecycle-authoritative closed runs, each stream's five request fields with request_origin 'saved', the per-source raw results_returned totals against the Q enabled queries, and config.yaml's current shape; the whole read is local and unmetered, so the fake call log stays empty in both arms",
+        "Arm A renders ONE combined nudge for both qualifying sources — a single evidence statement naming linkedin and ashby with the raw volume observed, then exactly one question offering to propose broader role families — not one nudge per source and not a menu of levers",
+        "Nothing is written before acceptance: at nudge time, and again after the user says yes but before the scoped confirmation, config.yaml is byte-for-byte unchanged and every saved query keeps its exact keywords; the yes buys a read-only proposal plus the retrieval-changing usage preview, never a write, and no agent-data call is made",
+        "The registry gains exactly ONE query_health_nudge marker and only after the nudge actually rendered: it stores the current search_shape (each enabled query's id, keywords, location, and limit, the enabled sources, and the saved freshness selector), an ISO shown_at, affected_sources listing both sources, and outcome 'shown'; version 1, active_workspace, and query_sentinel are preserved, no second marker is created, and the outcome stays 'shown' while the confirmation is withheld",
+        "The second home in arm A renders no further query-health nudge because the stored shape still matches the unchanged saved shape, and it rewrites neither the marker nor config.yaml",
+        "Arm B is the rare-specialty control on identical counts: silence is a correct outcome and passes, and when it stays silent the registry and config.yaml are byte-for-byte unchanged with no query_health_nudge marker written; whichever way arm B goes, no query is rewritten and no config write or agent-data call happens without acceptance and its confirmation",
+        "NO numeric score, NO category weights, NO credit/dollar/budget math anywhere in the output"
+      ]
     }
   ]
 }

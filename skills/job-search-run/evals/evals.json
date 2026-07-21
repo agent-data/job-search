@@ -918,6 +918,19 @@
         "The schedule is left disabled and unverified, so the retry clause says it cannot be relied on until repaired and names the exact repair path (the unverified/drifted branch) — never a promise of an automatic scheduled retry",
         "No completed-attempt accounting is lost; no numeric fit score, weights, or unlabeled charge claim"
       ]
+    },
+    {
+      "id": 72,
+      "scenario": "saved narrow phrase — the literal executor records the request it issued and never re-searches",
+      "coverage_kind": "executable_fixture",
+      "prompt": "Build a temp workspace + shim (setup-workspace.sh), PATH=<tmp>/_bin:$PATH, JOBSEARCH_FIXTURES=<repo>/tests/fixtures, JOBSEARCH_TEST_SCENARIO=query-sensitive, JOBSEARCH_TEST_CALL_LOG=<tmp>/calls.jsonl, and JOBSEARCH_OS_REGISTRY=<tmp>/registry.json seeded as {\"version\":1,\"active_workspace\":\"<tmp>\",\"query_sentinel\":\"preserve-exactly\"}. Replace config.yaml's queries[] with exactly ONE enabled saved query — id 'founding-pe', keywords 'founding product engineer AI startup', location 'United States', limit 25, enabled true — and keep search.sources [linkedin, ashby] and the harness's pinned search.freshness: any. This scenario answers only the exact keywords 'product engineer' and 'AI engineer'; the saved phrase returns a healthy empty result set from both sources. Snapshot config.yaml and registry.json bytes, then run job-search-run against <tmp> with NO conversational override. Show calls.jsonl, runs/<id>.json, the digest, and the before/after byte comparisons.",
+      "expectations": [
+        "Executes exactly the authorized phrase once per enabled source: calls.jsonl holds exactly two search-jobs rows — one with source 'linkedin' and one with source 'ashby' — each carrying request.keywords exactly 'founding product engineer AI startup', request.location 'United States', request.limit 25, and a null cursor; there is no third search-jobs row",
+        "Every stream in runs/<id>.json writes all five request fields with the saved values it actually sent: request_origin 'saved', location 'United States', limit 25, freshness 'any' (the saved selector), and published_on_or_after null (freshness 'any' sends no cutoff)",
+        "The empty return is recorded as healthy completed retrieval, not a failure: each stream has results_returned 0, errors [], upstream_code null, retryable null, and no source_failed stop_reason; sources_failed is empty; the record carries no E-* classification for the empty return and its run_health is anything other than blocked",
+        "No fallback search: no calls.jsonl row carries request.keywords 'product engineer' or 'AI engineer' in any casing — the two phrases that would have returned rows — and none carries any other altered phrase, a raised limit, or a cursor; the runner issues no second search for a stream that came back empty and spends no get-posting call",
+        "Mutates nothing: config.yaml is byte-for-byte identical before and after with its saved keywords untouched, the registry file is byte-for-byte identical with query_sentinel preserved and no query_health_nudge key written (the runner never writes that marker), and no numeric fit score, weights, or credit/budget math appears"
+      ]
     }
   ]
 }

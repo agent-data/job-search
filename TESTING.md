@@ -27,7 +27,7 @@ The terminal state (per the AAS-T-10 ruling) is **a structural gate + automated 
 
 Verifying a host-specific action such as scheduling is now a **runtime config-time canary** check, replacing the deleted per-host **structural adapter validation**.
 
-What stays a **labeled TRANSITIONAL residual** (👤/🤖, driven by hand): the **behavioral cross-host matrix** — actually running a skill end-to-end on each of the seven hosts that are **not installable on the CI runner** (Codex/Cursor/opencode/Gemini/Copilot/Droid/Pi), and the **N ≥ 5 stochastic eval reps** (the discovery/verdict/injection/merge scenarios run against the shim to record real pass-rate + variance + the control delta). These are the **off-CI live-harness step** — expected, not a gap: CI proves the scenarios are *well-formed*; the behavioral reps prove they *pass*, and shrink as hosts become installable. A green structural gate must never be read as a passed behavioral matrix.
+What stays a **labeled TRANSITIONAL residual** (👤/🤖, driven by hand): the **behavioral cross-host matrix** — actually running a skill end-to-end on each of the seven hosts that are **not installable on the CI runner** (Codex/Cursor/opencode/Gemini/Copilot/Droid/Pi), and the **N ≥ 5 stochastic eval reps** (the discovery/verdict/injection/merge scenarios run against the shim to record real pass-rate + variance + the control delta). These are the **off-CI live-harness step** — expected, not a gap: CI proves the scenarios are *well-formed*; the behavioral reps prove they *pass*, and shrink as hosts become installable. A green structural gate must never be read as a passed behavioral matrix. One further labeled residual sits **outside** the gate entirely: the **separately authorized live ATS contract smoke** (T14.1c), which needs explicit approval for billable/network calls and is recorded as `SKIPPED — authorization or network unavailable` whenever it does not run — never as passed.
 
 ---
 
@@ -726,8 +726,8 @@ cd "$JSOS" && python3 scripts/eval_harness.py --root .   # "Eval harness: eval s
 ```
 
 Then ask Claude, for each skill, to **run its evals** (the `harness` in `skills/<skill>/evals/evals.json`; they use the
-fake-agent-data shim, so zero real credits) — **179 scenarios**:
-- `evaluate-job-fit` (5) · `job-search-run` (71) · `job-preference-interview` (5) · `job-search` (53) · `job-search-agent` (45).
+fake-agent-data shim, so zero real credits) — **185 scenarios**:
+- `evaluate-job-fit` (5) · `job-search-run` (72) · `job-preference-interview` (5) · `job-search` (57) · `job-search-agent` (46).
 
 Each suite now includes a **discovery** scenario (plant the skill among its siblings, drive a naive prompt, assert the
 right skill is selected and the confusable sibling is not — the four overlap pairs). The judgment-heavy **stochastic**
@@ -792,6 +792,51 @@ agent-data call f9a6ec16-0bfd-44d8-b3ee-073776745ee7 search-jobs \
 **Expected:** rows with `"source":"lever"`, `<company>:<uuid>` `source_id`s, `jobs.lever.co` URLs, and a populated `posted_at` (Lever's `salary_display` may carry HTML — treat as free text, never parse).
 **Result:** ⬜
 
+### T14.1c Live ATS phrase-sensitivity contract smoke — 👤 (LIVE · separately authorized · **not a merge gate**)
+
+**Never run this automatically, and never treat it as a gate.** Every merge-gating assertion about phrase
+sensitivity runs offline against the bundled shim (`JOBSEARCH_TEST_SCENARIO=query-sensitive`, `job-search`
+eval 54 and `job-search-run` eval 72) — that is what proves the *behavior*. This smoke checks only that the
+**live ATS contract still has the shape that behavior assumes**. It makes **billable, networked**
+`search-jobs` calls, so **get explicit approval for billable/network calls before running it**. Without that
+approval, without network, or without credits, record it verbatim as
+**`SKIPPED — authorization or network unavailable`** — a skipped smoke is **never** reported as passed, and a
+red one opens an investigation rather than blocking a merge.
+
+Send the **same** location, limit, freshness, and Ashby source three times, changing only `--keywords`:
+(1) the phrase-stuffed query, (2) `product engineer`, (3) `AI engineer`.
+```bash
+LISTING=f9a6ec16-0bfd-44d8-b3ee-073776745ee7
+FIELDS=id,source_id,source_url,title,company_name,location_display,posted_at,published_at,source
+CUTOFF=$(date -u -v-14d +%F)     # GNU: date -u -d '14 days ago' +%F — the shipped past-2-weeks window
+echo "observed: $(date -u +%F)"
+for KW in "founding product engineer AI startup" "product engineer" "AI engineer"; do
+  printf '\n### keywords=%s\n' "$KW"
+  agent-data call "$LISTING" search-jobs --keywords "$KW" --location "United States" \
+    --limit 25 --source ashby --published_on_or_after "$CUTOFF" --fields "$FIELDS"
+done
+```
+**Record** the exact request parameters sent, the number of rows each response returned, the effective date
+fields present on the returned rows (`published_at` / `posted_at` — the effective date is the later of the
+two), and the **observation date** (results are only interpretable against the day they were pulled):
+
+| Observed (UTC) | keywords | location · limit · cutoff · source | rows returned | effective date fields present |
+|---|---|---|---:|---|
+|  | `founding product engineer AI startup` | United States · 25 · `<cutoff>` · ashby |  |  |
+|  | `product engineer` | United States · 25 · `<cutoff>` · ashby |  |  |
+|  | `AI engineer` | United States · 25 · `<cutoff>` · ashby |  |  |
+
+**Grade the contract shape and the relative retrieval only — never an absolute count.** Market inventory is
+volatile, so no specific row count is a pass condition:
+- **Contract shape:** each response echoes `data.query.source: "ashby"` and the sent
+  `data.query.published_on_or_after`; every returned row carries `source: "ashby"`, a non-null `source_id`, a
+  `jobs.ashbyhq.com` `source_url`, and its effective date fields (both may be null — record that, don't fail it).
+- **Relative retrieval:** under identical parameters the two broad role families return **at least as many**
+  rows as the phrase-stuffed query. All three at zero on a quiet day, or equal counts, is **not** a failure —
+  re-run once before recording. The signal worth investigating is the stuffed phrase out-retrieving *both*
+  broad families, which would mean live phrase behavior moved away from what the shim encodes.
+**Result:** ⬜ / `SKIPPED — authorization or network unavailable`
+
 ### T14.2 Shim multi-source run — 🤖
 "Build the eval sandbox (§0.2), export `JOBSEARCH_TEST_SCENARIO=multi-source`, run
 job-search-run against the sandbox workspace, and show the digest + jobs.jsonl."
@@ -820,9 +865,10 @@ entries carry a date mark; the first-Ashby-pass footnote is present.
 - ⬜ Scheduling correct (the composed `/loop <interval>` matches the pinned table per frequency; `/loop` sets `mechanism:loop`; **zero-Python user path** proven with python3 masked) (§9)
 - ⬜ **No numeric scores/weights, budget config, or invented charge** in files or unsolicited chat; accurate calls-first usage context is labeled, and users control frequency, sources, and review depth (§10)
 - ⬜ Docs match reality (install commands, error table, sample digest) (§11)
-- ⬜ Full regression green: `pytest` (**603**; gate on `0 failed`) + the eval structural gate (`eval_harness.py`) + all five skills' evals (**179** scenarios) (§0.3, §12)
+- ⬜ Full regression green: `pytest` (**603**; gate on `0 failed`) + the eval structural gate (`eval_harness.py`) + all five skills' evals (**185** scenarios) (§0.3, §12)
 - ⬜ Planned config slash-command tests are marked **N/A (pending build)**, not green (§13)
 - ⬜ Multi-source: live Ashby/Greenhouse/Lever rows; shim multi-source run shows per-source counts + first-pass footnote; one source down never blanks the run (§14)
+- ⬜ Live ATS phrase-sensitivity contract smoke (T14.1c) is **non-gating**: recorded green only after explicit approval for billable/network calls, otherwise `SKIPPED — authorization or network unavailable` (never as passed)
 
 **Teardown:** `rm -rf "$JSOS_TEST"` and any `$T*`/`$SH*` dirs you kept.
 
