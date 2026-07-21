@@ -16,6 +16,7 @@ ROOT = pathlib.Path(__file__).resolve().parents[1]
 STRATEGY = ROOT / "shared" / "references" / "query-strategy.md"
 FRONT_DOOR = ROOT / "skills" / "job-search" / "SKILL.md"
 OPERATOR = ROOT / "skills" / "job-search-agent" / "SKILL.md"
+ONBOARDING = ROOT / "skills" / "job-search" / "references" / "onboarding.md"
 
 
 def marked_table(path, marker):
@@ -55,4 +56,16 @@ def test_portfolio_contract_has_coverage_closure_not_a_count_quota():
         "stop_when": "every_lane_covered_and_next_query_adds_no_meaningful_coverage",
         "query_count": "derived_no_universal_target_or_cap",
         "precision_owner": "job_preferences_brief_and_fit_judgment",
+    }
+
+
+def test_onboarding_applies_coverage_closure_at_one_existing_checkpoint():
+    assert marked_table(ONBOARDING, "onboarding-application") == {
+        "trigger": "new_search_or_user_approved_retune",
+        "input": "job_preferences_brief",
+        "artifact": "lane_to_query_coverage_map",
+        "result": "smallest_nonredundant_coverage_complete_portfolio",
+        "fixed_query_count": "prohibited",
+        "checkpoint": "existing_brief_and_search_interpretation_checkpoint",
+        "first_live_review": "contextual_raw_retrieval_assessment",
     }

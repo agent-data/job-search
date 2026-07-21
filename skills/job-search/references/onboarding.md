@@ -198,15 +198,35 @@ first-run question. If a run is ever attempted before a usable brief exists, tha
 You just built the brief, so you already know what they want. **Derive the searches from it — don't ask the
 user to name keywords.** They can retune anytime; the goal here is zero upfront homework.
 
-1. **Derive 2–3 queries from `preferences.md`.** Read the **Summary**, **Must-haves / dealbreakers**, and
-   **Strong preferences**, and turn them into a few complementary searches:
-   - **keywords** — the role/title and domain terms a job board would match (e.g. "AI engineer", "ML platform
-     engineer", "LLM engineer"). Give each query a *different* angle, not one near-duplicate.
+<!-- query-strategy-contract:onboarding-application -->
+| Field | Contract value |
+|---|---|
+| `trigger` | `new_search_or_user_approved_retune` |
+| `input` | `job_preferences_brief` |
+| `artifact` | `lane_to_query_coverage_map` |
+| `result` | `smallest_nonredundant_coverage_complete_portfolio` |
+| `fixed_query_count` | `prohibited` |
+| `checkpoint` | `existing_brief_and_search_interpretation_checkpoint` |
+| `first_live_review` | `contextual_raw_retrieval_assessment` |
+<!-- /query-strategy-contract:onboarding-application -->
+
+1. **Cover every role the brief would accept — the query count is an output, not a target.** Read the
+   **Summary**, **Must-haves / dealbreakers**, and **Strong preferences**, and map what they'd take onto
+   what job boards actually call it:
+   - **List the lanes.** Every materially distinct role the brief says they'd take is a lane, and job
+     families whose titles barely overlap are separate lanes. Leave none of them out.
+   - **keywords** — give each lane the words that actually appear in postings for it (e.g. "AI engineer",
+     "ML platform engineer"). Keep stage, ownership, culture, pay, and the rest of the brief out of the
+     phrase — they belong to fit judgment, not to retrieval.
+   - **Merge, then stop.** Fold away any query whose postings another query already returns, and stop as
+     soon as every lane is covered and the next query would add none. A narrow brief can close with a single
+     query; someone open to genuinely different careers needs each of them covered. Never derive toward a
+     number, and never pad or compress the map to reach one.
    - **location** — read it off the brief's location constraints: "remote within the US" → `United States`;
      "onsite in the SF Bay Area" → `San Francisco Bay Area`. If the brief allows both, cover each with its
-     own query. **If remote is a must-have, also fold the word `remote` into `keywords`** (e.g. "remote AI
-     engineer") — the search API has no remote filter, so without it the feed fills with onsite roles the
-     judge then has to cull.
+     own query. A remote requirement rides in `location` where the source contract can carry it
+     (`../../../shared/references/agent-data-contract.md`); never bolt "remote" onto every keyword phrase,
+     which suppresses the very postings it was meant to find.
 2. **Render them into the in-memory version-2 config candidate** per the `internals.md` "Add a query" recipe
    — never make the user open the file. One worked item — the `keywords` and `location` below are
    **illustrative; derive your own from
@@ -222,13 +242,15 @@ user to name keywords.** They can retune anytime; the goal here is zero upfront 
 3. **Show one compact confidence checkpoint — the brief and the searches — then go live.** Present, as a
    single short look before the first live run: the **provisional brief** rendered in the reply (per
    `../../../shared/references/voice.md` — no code fence, skip the front-matter lines) and the **search
-   interpretation** you derived — which sources, which queries, which locations. Make clear it's all fully
+   interpretation** you derived — which sources, which locations, and which of the roles they'd take each
+   query is there to find, so a missing lane or a doubled-up query is visible now. Make clear it's all fully
    editable, and that this is a **look, not a gate**: you're about to go live, not asking permission to
    (the run's consent is handled by the setup request + the §6 cost context, not a confirmation here). Name
-   the searches, e.g.:
+   each search and what it covers, e.g.:
 
-   > "From your preferences I'll search **LinkedIn and public Ashby company boards** for **'AI engineer' · 'ML platform engineer'** across **US-remote +
-   > the SF Bay Area**. I can add, retune, or drop any of these anytime — just say the word."
+   > "From your preferences I'll search **LinkedIn and public Ashby company boards** across **US-remote +
+   > the SF Bay Area**: **'AI engineer'** for the LLM product work you described, **'ML platform engineer'**
+   > for the platform side of it. I can add, retune, or drop any of these anytime — just say the word."
 
    Only if the brief is too thin to derive anything sensible (rare) do you ask one focused question to fill
    the gap — lead with derivation, never a blank "what should I search for?".
@@ -236,6 +258,14 @@ user to name keywords.** They can retune anytime; the goal here is zero upfront 
    for a different window any time) and the exact detail model selected during setup — both are tunable
    anytime just by asking. The config also comes preset with the default job sources (LinkedIn + Ashby
    company boards) — tunable anytime just by asking.
+
+**When the first live run (§6) comes back, read what these queries actually retrieved — in context.** How
+many raw results a query and source returned means nothing on its own: weigh it against how commonly that
+role is posted, how tight the location is, and how many concepts the phrase conjoins. Volume that is
+surprisingly thin for a widely posted role is worth naming once, with an offer to propose broader,
+complementary role families; the same volume for a rare specialty is just the market and says nothing about
+the terms. Either way the run stands as it ran — no automatic retry, no fallback query, no quietly widened
+search. A query change is a proposal the user accepts before anything is written.
 
 ### Parallel detail-read approval (approval-gating hosts only)
 
@@ -468,8 +498,11 @@ runs", "update my preferences", "show the latest digest").
       verbatim, free-form/inline) or from preferences already in the invocation; supplied material treated
       as background evidence, not auto-preferences; the deeper interview / import are later refinements, not
       first-run gates
-- [ ] 2–3 `queries[]` **derived from the brief** and written (no upfront keyword-picking); one compact
-      **confidence checkpoint** (provisional brief + search interpretation) shown before the live run
+- [ ] `queries[]` **derived from the brief** and written (no upfront keyword-picking) — every materially
+      distinct role the brief would accept covered in real posting vocabulary, queries that duplicate another
+      query's postings folded away, and **no query count aimed at**; one compact **confidence checkpoint**
+      (provisional brief + the search interpretation, each query tied to what it covers) shown before the
+      live run; the first run's raw volume then read in context, never auto-retried or auto-broadened
 - [ ] on an approval-gating host, if `search.parallel_detail_reads` was unset, the user was asked once about
       parallel subagents; the answer was rendered into `config.yaml`; on yes the host-specific subagent setup
       your host needs was performed (or the exact path + content was shown if blocked); the user saw
