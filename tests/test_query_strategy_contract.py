@@ -35,25 +35,44 @@ APPLICATION_SURFACES = (HOME, ONBOARDING, CUSTOMIZATION, RUN_LIFECYCLE)
 # satisfy the intra-reference duplication lint, and any file may do the same.
 _STRATEGY_PTR = re.compile(r"(?:\.\./)*(?:shared/)?references/query-strategy\.md")
 
-# A FIXED-COUNT query-derivation instruction, banned across every runtime surface. The portfolio contract
-# derives the count from coverage closure, so naming a number — the removed "Derive 2-3 queries", its
-# checklist twin, or the disguised "usually two or three queries" — is a regression, and the plan checked
-# for it only with a one-time manual scan. Every pattern requires the query/search noun in the same phrase,
-# which is what keeps this narrow instead of allowlisted: "a 2-3 sentence Summary" (conventions.md and
-# job-preference-interview, describing the BRIEF, not retrieval) is legitimate and must keep passing.
+# A RANGED query-derivation instruction, banned across every scanned surface. The portfolio contract
+# derives the count from coverage closure, so naming a range — the removed "Derive 2-3 queries", its
+# checklist twin, the disguised "usually two or three queries", or "writes 2-3 distinct queries" — is a
+# regression, and the plan checked for it only with a one-time manual scan. Every pattern requires the
+# query/search noun in the same phrase, at most one intervening adjective away, which is what keeps this
+# narrow instead of allowlisted: "a 2-3 sentence Summary" (conventions.md and job-preference-interview,
+# describing the BRIEF, not retrieval) is legitimate and must keep passing.
+#
+# SCOPE, deliberately RANGED (plus the one narrow `exactly N enabled queries` form) and never a bare single
+# count: "usually three queries" and "no more than four queries" are NOT caught. Extending the patterns to
+# catch them was measured and rejected — a bare `(\d+|one..five)\s+(\w+\s+)?(quer|search)` matches eight
+# legitimate live lines: query-strategy.md's own "One query may cover several lanes" and "it may be one
+# query for a narrow search", conventions.md's "one logical query/source stream", onboarding.md's "the
+# three searches below", agent-data-contract.md's `... search-jobs` CLI example and "one search row",
+# home.md's "one metered search call", and errors.md's "a 200 search response" — plus the reporting phrase
+# "Ran 3 searches" this module already pins as legal. Dropping "one" still leaves three of those hits.
+# Catching bare counts would therefore need suppressions or an allowlist; the test name states the ranged
+# scope instead, so a maintainer reads what the patterns actually deliver.
 _RANGE_DIGITS = r"\d+\s*(?:[-\u2010-\u2015]|\s+to\s+)\s*\d+"  # ASCII hyphen, U+2010..U+2015 dashes, or "to"
 _RANGE_WORDS = r"(?:one|two|three|four|five)\s+(?:or|to)\s+(?:one|two|three|four|five)"
-_FIXED_COUNT_QUERIES = (
+_RANGED_COUNT_QUERIES = (
     re.compile(rf"deriv\w*\s+{_RANGE_DIGITS}", re.I),
-    re.compile(rf"(?:{_RANGE_DIGITS}|{_RANGE_WORDS})\s+(?:quer|search)", re.I),
+    re.compile(rf"(?:{_RANGE_DIGITS}|{_RANGE_WORDS})\s+(?:\w+\s+)?(?:quer|search)", re.I),
     re.compile(r"exactly\s+(?:\d+|one|two|three|four|five)\s+enabled\s+quer", re.I),
 )
 
 
-def runtime_surfaces():
-    """Every shipped Markdown surface an agent reads at runtime: both SKILL.md runbooks and their
-    skill-local reference bodies, plus the shared reference layer."""
-    return sorted(ROOT.glob("skills/**/*.md")) + sorted((ROOT / "shared" / "references").glob("*.md"))
+def scanned_surfaces():
+    """Every shipped Markdown surface an agent reads at runtime — both SKILL.md runbooks and their
+    skill-local reference bodies, plus the shared reference layer — AND `docs/product-specs/*.md`.
+
+    The product specs are not runtime surfaces, but the stale "derives 2-3 searches" line this gate exists
+    to stop actually lived in `docs/product-specs/new-user-onboarding.md`: it matched the patterns and sat
+    outside a skills+shared-only glob, so the same regression could have silently returned there. The
+    directory is clean under these patterns today, so scanning it costs nothing."""
+    return (sorted(ROOT.glob("skills/**/*.md"))
+            + sorted((ROOT / "shared" / "references").glob("*.md"))
+            + sorted((ROOT / "docs" / "product-specs").glob("*.md")))
 
 
 def marked_table(path, marker):
@@ -153,25 +172,30 @@ def test_query_health_marker_is_bounded_explicit_and_written_only_after_showing(
     }
 
 
-def test_no_runtime_surface_prescribes_a_fixed_query_count():
-    """`query_count` is `derived_no_universal_target_or_cap`, so no runtime surface may instruct an agent
-    to derive a fixed number of queries. The plan verified that twice with a one-time manual `rg`, which
-    cannot stop "Derive 2-3 queries" from coming back; this is the standing gate."""
-    # controls — the four phrasings the plan's own scans looked for, in both dash forms
+def test_no_scanned_surface_prescribes_a_ranged_query_count():
+    """`query_count` is `derived_no_universal_target_or_cap`, so no scanned surface may instruct an agent
+    to derive a RANGE of queries. The plan verified that twice with a one-time manual `rg`, which cannot
+    stop "Derive 2-3 queries" from coming back; this is the standing gate. Bare single counts are outside
+    the patterns by measurement, not oversight — see the SCOPE note above `_RANGED_COUNT_QUERIES`."""
+    # controls — the plan's own scan phrasings in both dash forms, plus one intervening adjective
     for banned in ("Derive 2-3 queries", "Derive 2–3 queries", "2–3 queries", "2-3 queries",
-                   "usually two or three queries", "exactly two enabled queries"):
-        assert any(p.search(banned) for p in _FIXED_COUNT_QUERIES), banned
+                   "usually two or three queries", "exactly two enabled queries",
+                   "The skill writes 2–3 distinct queries", "two or three separate searches"):
+        assert any(p.search(banned) for p in _RANGED_COUNT_QUERIES), banned
     # control — a fixed count of BRIEF SENTENCES is not a query-derivation instruction and stays legal
     for legal in ("a 2–3 sentence **Summary**", "Ran 3 searches", "for a source with Q enabled queries"):
-        assert not any(p.search(legal) for p in _FIXED_COUNT_QUERIES), legal
+        assert not any(p.search(legal) for p in _RANGED_COUNT_QUERIES), legal
+    # control — the deliberate scope limit: a bare single count is documented as out of range, not caught
+    for uncaught in ("usually three queries", "no more than four queries"):
+        assert not any(p.search(uncaught) for p in _RANGED_COUNT_QUERIES), uncaught
 
     hits = []
-    for path in runtime_surfaces():
+    for path in scanned_surfaces():
         for lineno, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
-            if any(p.search(line) for p in _FIXED_COUNT_QUERIES):
+            if any(p.search(line) for p in _RANGED_COUNT_QUERIES):
                 hits.append(f"{path.relative_to(ROOT)}:{lineno}: {line.strip()}")
     assert not hits, (
-        "a runtime surface prescribes a fixed query count; the portfolio contract derives it from lane "
+        "a scanned surface prescribes a ranged query count; the portfolio contract derives it from lane "
         "coverage closure, so state the coverage rule instead of a number:\n" + "\n".join(hits))
 
 

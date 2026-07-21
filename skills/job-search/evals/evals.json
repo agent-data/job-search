@@ -502,7 +502,7 @@
         "Does NOT claim the magical moment / activation / a found match on the zero-relevant run: it says plainly that the search ran and what it learned (which sources and queries it covered, that nothing cleared the brief this pass) instead of presenting a matches list or implying setup is activated",
         "Offers EXACTLY ONE high-signal broadening suggestion — the single most promising change (e.g. relax the onsite-NYC location) — not a list or menu of broaden/tune levers that would fatigue the user into ignoring all of them",
         "On the user accepting the broadening, the fresh broader search is treated as a NEW run: it gives new calls-first agent-data cost context (the same one-or-two-sentence calls-first context, per the Agent-data usage decisions) BEFORE its first metered call, and never assumes a prior, possibly-consumed call was free",
-        "The broadened run then surfaces the now-relevant Acme 'Senior AI Engineer (Remote US)' as a match with its reasoning — broadening delivered a real match; the zero-relevant recovery is NOT framed as an error and is NOT the empty-search 'broaden keywords in config.yaml' message (postings were returned and judged, just none relevant)",
+        "The broadened run then surfaces the now-relevant Acme 'Senior AI Engineer (Remote US)' as a match with its reasoning — broadening delivered a real match; the zero-relevant recovery is NOT framed as an error and is NOT the empty-search zero-results handling, which checks stream completion and then offers broader, complementary role families (here postings were returned and judged, just none relevant)",
         "NO numeric score, NO weights, NO credit/dollar/budget math anywhere in the output"
       ]
     },

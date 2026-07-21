@@ -281,8 +281,11 @@ plan.
   re-indexed it). Judge from the summary instead and add a digest footnote: "1 posting's detail link had expired;
   judged from its summary." Not an error.
 - **Zero results — all already known:** reassuring, not an error — "No new postings — you've already seen all N of these."
-- **Zero results — literally empty:** actionable — "Searches ran but returned 0 results. Broaden keywords in
-  `config.yaml`, or check `agent-data call <listing> status`."
+- **Zero results — literally empty:** actionable, in this order — confirm every stream completed (a failed,
+  blocked, or incomplete one takes its named recovery above and says nothing about the terms), then read the
+  empty return in context — how commonly that role family is posted, how tight the location is, how narrow
+  the recency window is — and where it is surprisingly thin, offer to propose broader, complementary role
+  families, changing nothing until the user accepts.
 
 ### Detecting E-QUOTA vs E-NO-AUTH from the CLI
 Both surface as a non-zero `agent-data call`. Distinguish by: run `agent-data whoami` first (covers auth). If

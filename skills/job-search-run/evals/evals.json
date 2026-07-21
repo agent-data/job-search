@@ -27,7 +27,7 @@
       "scenario": "zero-empty",
       "prompt": "Same harness but JOBSEARCH_TEST_SCENARIO=zero-empty. Run job-search-run and show the digest.",
       "expectations": [
-        "Recognizes the literally-zero-results case and suggests broadening keywords or checking status",
+        "Recognizes the literally-zero-results case as a completed, non-error outcome (every enabled stream ran and returned nothing) and still ends on ONE actionable next step: an offer to propose broader, complementary role families for the user to accept — not a hand-edit of config.yaml keywords, and not an automatic re-search with different terms",
         "Spends no get-posting calls",
         "Exits 0 (a normal, non-error outcome)"
       ]
@@ -110,7 +110,7 @@
       "prompt": "Same harness, JOBSEARCH_TEST_SCENARIO=happy, but BEFORE running, pre-seed <tmp>/jobs.jsonl with prior evaluated events for both happy source_ids by running `printf '%s\\n' '{\"event\":\"evaluated\",\"source\":\"linkedin\",\"source_id\":\"1001\",\"status\":\"new\"}' >> <tmp>/jobs.jsonl` and `printf '%s\\n' '{\"event\":\"evaluated\",\"source\":\"linkedin\",\"source_id\":\"1002\",\"status\":\"new\"}' >> <tmp>/jobs.jsonl`, and the same for the ashby posting: `printf '%s\\n' '{\"event\":\"evaluated\",\"source\":\"ashby\",\"source_id\":\"0b7c2d33-2222-4ccc-9ddd-3ee4ff5aa6b7\",\"status\":\"new\"}' >> <tmp>/jobs.jsonl`. Then run job-search-run.",
       "expectations": [
         "Dedup finds all three search results already known → no NEW postings",
-        "Reassuring message in plain English (e.g. 'No new postings — you've already seen all N of these'): graded on intent — it reads as a normal already-seen outcome, NOT an error and NOT the empty-search 'broaden keywords' suggestion, and it exposes no internal-store jargon (the dedup mechanism is never surfaced to the user — no 'database'/'log'/'jsonl'-type wording)",
+        "Reassuring message in plain English (e.g. 'No new postings — you've already seen all N of these'): graded on intent — it reads as a normal already-seen outcome, NOT an error and NOT the empty-search offer of broader, complementary role families, and it exposes no internal-store jargon (the dedup mechanism is never surfaced to the user — no 'database'/'log'/'jsonl'-type wording)",
         "Spends no get-posting calls; writes no duplicate evaluated events; Run health healthy; exits 0"
       ]
     },
