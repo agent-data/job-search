@@ -48,7 +48,7 @@ Run the Discovery procedure (`../../shared/references/internals.md`) → a works
 - `first_run: false` → follow **`references/home.md`** (the returning-user home). Gather its state
   silently; the home view itself is your first words.
 
-That's the whole router. Everything else is in the two playbooks; read the one you routed to and follow it.
+That's the whole router: read the playbook you routed to and follow it.
 Step 0 is mechanical — do it **silently**: no "discovery" / "OS state" / `registry` / `first_run` talk in your
 reply (`../../shared/references/voice.md`). Your first user-facing words are the onboarding welcome (already said, above,
 before the playbook was opened) or the home view.

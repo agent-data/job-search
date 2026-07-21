@@ -1,9 +1,8 @@
 # Query strategy — deriving queries, judging retrieval health, broadening with consent
 
-This file governs query derivation, contextual retrieval-health assessment, and user-approved broadening: it
-is the single home for **what to search for and when to search wider**. The interactive front door and the
-operator manual load it directly; onboarding, the home view, and customization apply their part of it and
-never restate it.
+This file is the single home for **what to search for and when to search wider** — query derivation,
+contextual retrieval-health assessment, and user-approved broadening. The front door and the operator
+manual load it directly; onboarding, the home view, and customization apply their part, never restating it.
 
 **The rule:** Queries maximize plausible recall; the Job Preferences Brief supplies precision.
 
@@ -55,19 +54,16 @@ complementary role families (open the lanes): product engineering -> product eng
                                               AI engineering      -> AI engineer
 ```
 
-The broad queries are how plausible candidates reach judgment at all. What they do not cost is precision: the
-complete brief is still applied to every candidate that reaches fit evaluation.
+Broad queries cost no precision: the complete brief still judges every candidate they surface.
 
 ## Judging retrieval health in context
 
 A raw count means nothing by itself. Two results can be surprisingly thin for a broadly available role and
-entirely plausible for a rare specialty. Read the raw volume of each query and source — the count before
-deduplication, seen-item filtering, selection, and judgment, recorded per query stream in `conventions.md` —
-against all of:
+entirely plausible for a rare specialty. Read the raw volume of each query and source — the per-stream count
+before deduplication, seen-item filtering, selection, and judgment (`conventions.md`) — against all of:
 
 - **role commonness** — the plausible market supply for that role family;
-- **posting vocabulary** — how many concepts the phrase conjoins, and whether those words appear in real
-  postings;
+- **posting vocabulary** — how many concepts the phrase conjoins, and whether they occur in real postings;
 - **location** — how tight the requested location is;
 - **freshness** — how narrow the saved freshness selector is (its enum is owned by `conventions.md`);
 - **healthy-source evidence** — only completed, successful streams say anything about keyword quality, and a
@@ -97,19 +93,13 @@ describes fit and says nothing about breadth. Read the observation, then take it
 | `healthy_but_all_known` | `report_seen_results_and_leave_breadth_unchanged` |
 <!-- /query-strategy-contract:decision-table -->
 
-- **A source call failed, was blocked, or ended incomplete.** Operational health is unknown, so retrieval
-  says nothing yet. Apply that failure's named recovery in `errors.md` and wait for healthy evidence before
-  judging breadth.
-- **Raw retrieval is contextually or repeatedly thin.** The current phrases may be suppressing recall.
-  Propose broader, complementary role families.
-- **Raw retrieval is healthy but nothing is relevant.** Recall already exists; the lane or the brief
-  alignment is what is wrong, and zero relevant results never prove on their own that the terms were too
-  narrow. Inspect the rejection reasons, then propose one targeted lane replacement or one brief
-  clarification; broaden only where that evidence names a missing adjacent lane.
-- **The user wants fewer fetched postings from a healthy, noisy lane.** The narrowing is intentional. Offer
-  a narrower role term, location, lower limit, or a disabled query under the ordinary change semantics.
-- **Raw results are healthy but every candidate is already known.** The feed holds no unseen work. Say the
-  results were already seen and leave query breadth unchanged.
+The rows carry the decision; these notes carry only what a row cannot. A failed, blocked, or incomplete call
+takes that failure's named recovery in `errors.md` before breadth is judged at all. Thin raw volume says only
+that the phrases may be suppressing recall. Zero relevant results out of *healthy* raw volume never prove on
+their own that the terms were too narrow — recall already exists, so read the rejection reasons, propose one
+targeted lane replacement or one brief clarification, and broaden only where that evidence names a missing
+adjacent lane. An intentional narrowing is offered as a narrower role term, location, lower limit, or a
+disabled query under the ordinary change semantics.
 
 ## The repeated-thin signal
 

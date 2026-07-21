@@ -1073,8 +1073,26 @@ def test_run_record_query_stop_reason_is_exact_for_review_mode_and_outcome(tmp_p
             reason,
         )
 
-    bad_has_more = [
+    # `first_page` mode only: a successful first page whose board pagination metadata is
+    # absent or malformed still ends `first_page_complete`, and `has_more_at_stop` is `null`
+    # because no trustworthy metadata backs a boolean. `finite`/`all` cannot reach this stop
+    # reason at all, so the permission stays scoped to `first_page`.
+    valid_has_more = [
         ("first_page", "completed_first_pages", "first_page_complete", None),
+        ("first_page", "completed_first_pages", "first_page_complete", False),
+        ("first_page", "completed_first_pages", "first_page_complete", True),
+    ]
+    for mode, outcome, reason, has_more in valid_has_more:
+        candidate = board_record(mode, outcome, reason)
+        candidate["queries"][0]["has_more_at_stop"] = has_more
+        assert validator.validate_run_record(candidate) is True, (
+            mode,
+            outcome,
+            reason,
+            has_more,
+        )
+
+    bad_has_more = [
         ("finite", "target_reached", "target_reached", False),
         ("finite", "sources_exhausted", "sources_exhausted", True),
         ("all", "incomplete", "pagination_incomplete", True),

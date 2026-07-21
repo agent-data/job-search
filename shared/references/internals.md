@@ -166,8 +166,8 @@ does.
 - **Read the deeper-coverage nudge marker for workspace W:** expand W to its absolute path and look up that
   exact path in `deeper_coverage_nudges`; absence means no marker. The map is per absolute workspace, not
   global, and each marker's `workspace` value must equal its map key.
-- **Set the deeper-coverage nudge marker:** only the **job-search home view**, after it actually displays the
-  evidence-backed deeper-coverage nudge, merges
+- **Set the deeper-coverage nudge marker:** only the **job-search** front door, after it actually displays
+  the evidence-backed deeper-coverage nudge, merges
   `"deeper_coverage_nudges": {"<absolute W>": {"workspace":"<absolute W>", "shown_at":"<UTC ISO>", "outcome":"enabled|declined|deferred"}}`.
   Use `enabled` when the user enables deeper coverage, `declined` when they decline, and `deferred` when they
   leave it for later. The runner never writes this shown marker. A present marker suppresses later automatic

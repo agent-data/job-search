@@ -502,7 +502,10 @@ record written by `job-search-run`, including blocked records where a workspace 
 Each `queries` item is one logical query/source stream. LinkedIn always uses `unpaginated` with
 `has_more_at_stop:null`; no cursor-capable board may use `unpaginated`.
 `has_more_at_stop` is boolean only when valid board pagination metadata makes it trustworthy; write `null`
-for LinkedIn and for an incomplete pagination contract branch. `attempts` includes retries, and
+for LinkedIn and for an incomplete pagination contract branch. Because `first_page` mode continues nothing,
+a successful first page whose `data.pagination` is absent or malformed still stops `first_page_complete`
+there with `has_more_at_stop:null`; in `finite` and `all` modes that same metadata takes the incomplete
+branch. `attempts` includes retries, and
 `request_ids` retains the observable request provenance. Never write a cursor, decoded cursor payload, or
 resumable continuation state to the stream or any other durable run-record field.
 

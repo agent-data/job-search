@@ -1251,7 +1251,7 @@ class Coordinator:
                 return False
             if query["source"] != "linkedin":
                 expected_has_more = {
-                    "first_page_complete": (False, True),
+                    "first_page_complete": (False, True, None),
                     "target_reached": (True,),
                     "sources_exhausted": (False,),
                     "pagination_incomplete": (None,),
