@@ -545,7 +545,9 @@ fallback, and wording rules in `errors.md` rather than restating them here.
    `upstream_code`, and `retryable`. A valid board boolean is trustworthy at stop; LinkedIn and every
    untrustworthy/incomplete pagination branch use `null`. `pages_fetched`/`rows_scanned` count successful responses/rows;
    `unique_candidates` counts post-known, owned candidates; `selected_for_review` counts roles owned by that
-   stream. A valid board intentionally stopped after page 1 is `first_page_complete`; LinkedIn is
+   stream. A board stream intentionally stopped after page 1 is `first_page_complete`, including — in
+   `first_page` mode only — one whose successful first page carried absent or malformed `data.pagination`
+   (step 1); in `finite` and `all` modes that same metadata takes the incomplete branch instead. LinkedIn is
    `unpaginated`; a finite stream stopped early with trustworthy depth remaining is `target_reached`; a valid
    terminal board page is `sources_exhausted` (even if that same batch also satisfies the run target); and the
    two failure branches are `pagination_incomplete` and `source_failed`. Never write a cursor, page token,

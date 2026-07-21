@@ -4,12 +4,14 @@
 baseline, `d0ed626` is the plan, and the fourteen implementation commits `105c82c` … `fc70b9b` are the
 change under audit. 24 files, +1905/−56. `git diff --check 1e3dbe3...HEAD` is clean.
 
-**Audited against** the private authoring doctrine in `docs-private/prompt-style-guide/` (9 files, `PSG-*`)
-and `docs-private/agent-agnostic-skills/` (17 files, `AAS-*`). Every file in both directories was read in
-full; the four index files (`prompt-style-guide/09-checklist-and-rule-index.md`,
-`agent-agnostic-skills/13-anti-patterns.md`, `14-checklist-and-rule-index.md`, `16-tension-register.md`)
-were re-read last and govern every count and rule ID cited below. `docs-private/` remains untracked
-(`git ls-files docs-private` prints nothing) and is named nowhere under `skills/` or `shared/references/`.
+**Audited against** the private authoring doctrine held outside this repository: the prompt-style guide
+set (9 files, `PSG-*` rules) and the agent-agnostic-skills guide set (17 files, `AAS-*` rules). Every file
+in both sets was read in full; the four index chapters — the PSG checklist-and-rule index, and the AAS
+anti-pattern catalogue, checklist-and-rule index, and tension register — were re-read last and govern every
+count and rule ID cited below. Rule IDs are the citable handle throughout: a reader holding those guides
+can resolve every ID in this document against the four indexes and re-verify each disposition. Neither
+guide set is tracked in this repository, and neither is named anywhere under `skills/` or
+`shared/references/`.
 
 ## Index counts — expected vs actual
 
@@ -19,13 +21,13 @@ Verified by counting the indexes themselves:
 
 | Index | Expected | Actual | ID range |
 |---|---:|---:|---|
-| PSG PR checklist (`09`, Part 1) | 18 | **18** | Q1–Q18 |
-| PSG rule index (`09`, Part 2) | — | **101** | `PSG-F-01` … `PSG-SAFE-19` |
-| PSG anti-patterns (`08`) | 13 | **13** | `PSG-ANTI-01` … `PSG-ANTI-13` |
-| AAS pack checklist (`14`, Part 1) | 14 | **14** | Q1–Q14 |
-| AAS rule index (`14`, Part 2) | — | **122** | `AAS-PACK-01` … `AAS-TEST-16` |
-| AAS anti-patterns (`13`) | 42 | **42** | `AAS-ANTI-01` … `AAS-ANTI-42` |
-| AAS tension register (`16`) | 10 | **10** | `AAS-T-01` … `AAS-T-10` |
+| PSG PR checklist (index chapter, Part 1) | 18 | **18** | Q1–Q18 |
+| PSG rule index (index chapter, Part 2) | — | **101** | `PSG-F-01` … `PSG-SAFE-19` |
+| PSG anti-pattern catalogue | 13 | **13** | `PSG-ANTI-01` … `PSG-ANTI-13` |
+| AAS pack checklist (index chapter, Part 1) | 14 | **14** | Q1–Q14 |
+| AAS rule index (index chapter, Part 2) | — | **122** | `AAS-PACK-01` … `AAS-TEST-16` |
+| AAS anti-pattern catalogue | 42 | **42** | `AAS-ANTI-01` … `AAS-ANTI-42` |
+| AAS tension register | 10 | **10** | `AAS-T-01` … `AAS-T-10` |
 
 Every rule ID cited in this audit was resolved against those indexes before use.
 
@@ -292,12 +294,12 @@ python3 -m pytest -q -p no:cacheprovider tests/test_doc_lint.py tests/test_doc_l
 python3 -m pytest -q -p no:cacheprovider
   -> 617 passed in 743.51s (0:12:23)          # exit 0; matches the TESTING.md baseline exactly
 
-rg -n "docs-private|prompt-style-guide|agent-agnostic-skills" skills shared/references
+rg -n "prompt-style-guide|agent-agnostic-skills" skills shared/references
   -> no matches (exit 1)
-
-git ls-files docs-private
-  -> no output (0 lines)
 ```
+
+`git ls-files` over the private doctrine tree likewise returns no output (0 lines): the guides are read in
+place from outside this repository, and no part of them — path, chapter name, or prose — ships here.
 
 The four repairs touch Markdown only, so no test expectation moved and the count is unchanged from the
 branch baseline. The document gate was re-run a final time with this audit file present in `docs/`, since
