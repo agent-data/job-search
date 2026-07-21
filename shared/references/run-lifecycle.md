@@ -663,13 +663,21 @@ an activation boolean, activation timestamp, matching posting identity, or reaso
 
 A nonblocked run that fully evaluated at least one posting but made no valid `presented` transition — a
 zero-relevant run — does not meet activation's requirement that at least one relevant match be shown with
-reasoning, so it is honest diagnostic work, not activation. Do not claim activation, an early-look match, or
-the setup payoff for it, and do not present a matches list it does not have. Recover in a single move: say
-the search ran and what it learned (which sources and queries it covered, that nothing cleared the brief this
-pass), then offer exactly **one** high-signal broadening suggestion — the single change most likely to
-surface a real match, never a list of levers, which only fatigues the user into ignoring all of them. A fresh
-broader run the user accepts is a new run: it re-earns calls-first cost context before its first metered call
-(see [Agent-data usage decisions](internals.md#agent-data-usage-decisions)) and never assumes a prior,
+reasoning, so it is honest diagnostic work, not activation. It is nonetheless a truthful **completed**
+outcome, not a failure and not evidence that the search terms were too narrow: retrieval delivered postings
+and judgment rejected them, so the relevance count describes fit, not recall. Do not claim activation, an
+early-look match, or the setup payoff for it, and do not present a matches list it does not have.
+
+Recover in a single move: say the search ran and what it learned (which sources and queries it covered, that
+nothing cleared the brief this pass), then offer exactly **one** high-signal next step — the single change
+most likely to surface a real match, never a list of levers, which only fatigues the user into ignoring all
+of them. Choose that step by assessing query health (`query-strategy.md`), never from the relevance count
+alone: where the run's raw per-source volume was healthy, start from the rejection reasons — one targeted
+lane replacement, or one brief clarification — and reach for a broader role family only when that evidence
+names a missing adjacent lane, or when the raw volume was itself thin in context. The suggestion stays
+read-only until the user accepts it. A fresh run the user accepts is a new run: it re-earns calls-first cost
+context before its first metered call (see
+[Agent-data usage decisions](internals.md#agent-data-usage-decisions)) and never assumes a prior,
 possibly-consumed call was free. This is distinct from the two zero-**result** outcomes in
 [errors.md](errors.md) (all already known; literally empty): here postings were returned and judged, and none
 was a relevant match.

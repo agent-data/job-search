@@ -33,7 +33,16 @@ If the user wants the numbers saved, write them to a clearly-named side file (e.
 
 ## 2. Adding a custom filter or narrowing results
 
-Two routes depending on where you want the narrowing to happen:
+**Decide which direction the search actually needs first.** If results are thin, consider broadening the
+search queries — judged the way `query-strategy.md` (already loaded by this manual) judges thinness: in
+context, against healthy streams only, and offered as a proposal the user accepts rather than an edit you
+make. Raw volume — what each query and source returned before deduplication, seen-item filtering,
+selection, and judgment — is the only count that says anything about the search terms. Postings that
+arrive and then get rejected are the opposite signal: recall is fine, so work the lane or the brief rather
+than the phrase, and never narrow further merely because nothing was relevant.
+
+Everything below applies when the user actually wants **fewer** fetched postings from a healthy, noisy
+lane. Two routes, depending on where you want the narrowing to happen:
 
 **Source-side (fewer postings fetched):** Edit `queries[]` in `config.yaml`. Tighten `keywords`, add a `location`, lower `limit`, or set `enabled: false` to pause a query entirely. Lowering `limit` reduces rows returned by each call; disabling a query reduces the number of first-page calls. Both reduce noise before judgment runs.
 

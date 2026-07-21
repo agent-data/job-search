@@ -55,6 +55,8 @@ The OS state is plain files, and every operation on it is a pinned procedure in 
 | Read or change one-off/saved review depth (`max_new_postings_per_run`) | `../../shared/references/internals.md` → Config read/update recipes; `references/customization.md` → Review depth |
 | Explain recent agent-data usage without changing state | `references/customization.md` → Explaining agent-data usage; run fields in `../../shared/references/conventions.md` |
 | Read or write the one-time deeper-coverage marker | `../../shared/references/internals.md` → Registry write rules |
+| Judge query health (thin retrieval vs. thin fit) before proposing a retune | `../../shared/references/query-strategy.md` |
+| Read or write the single query-health nudge marker | `../../shared/references/internals.md` → Registry write rules |
 
 Any operation that surfaces, explains, activates, or verifies a run first applies
 `../../shared/references/run-lifecycle.md` → **Artifact authority for every reader**: invoke
@@ -182,8 +184,8 @@ For the full `E-*` table with exact cause and fix wording: see `../../shared/ref
 
 | Symptom | Likely cause | Fix |
 |---|---|---|
-| Runs complete but 0 matches even though real postings exist | Query keywords don't match the brief's must-haves | Broaden the query in `config.yaml`, or run the **job-preference-interview** skill to align the brief |
-| 0 results (literally empty) | Keywords too narrow or location too specific | Broaden `keywords` or `location` in the query |
+| Runs complete but 0 matches even though real postings exist | Retrieval was healthy; the lane or the brief is misaligned — zero relevant is a fit signal, not a shortage | Read the rejection reasons, then propose one targeted lane replacement, or run the **job-preference-interview** skill to align the brief (`../../shared/references/query-strategy.md`) |
+| 0 results (literally empty) | Either a stream failed, or the phrases are suppressing recall | Confirm every stream completed — a failure takes its named recovery in `../../shared/references/errors.md`; if they all completed, read the volume in context and offer broader, complementary role families for the user to accept |
 | Last run: blocked — E-QUOTA | agent-data rejected a call for quota/payment | Check account access at https://agent-data.motie.dev/settings/billing; existing matches are unaffected. Discuss frequency, sources, or review depth only if the user later asks how to make calls last |
 | Schedule isn't firing | The active schedule stopped (e.g. an in-session loop's session closed) | Check the scheduling marker in the registry (`../../shared/references/internals.md`); restart it with the run recipe composed for the host |
 | "Stale brief" nudge in the digest | `preferences.md` hasn't been updated in a long time | Run the **job-preference-interview** skill to refresh it |

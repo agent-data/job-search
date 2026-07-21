@@ -358,15 +358,22 @@ Handle whatever the run reports, in plain language:
   fix verbatim from `errors.md` and stop the magical framing. Do not improvise quota recovery, account
   state, or a different fix; the named-error table owns the current wording.
 - **Zero results, all already known** (only possible on an adopted workspace) → reassuring, not an error:
-  "No new postings — you've already seen all N of these."
-- **Zero results, literally empty** → actionable: offer to broaden the keywords in the query (and apply it
-  conversationally).
+  "No new postings — you've already seen all N of these." The feed simply holds no unseen work; leave the
+  queries as they are.
+- **Zero results, literally empty** → read what the streams actually did before touching a keyword. A
+  stream that failed, was blocked, or ended incomplete says nothing about the terms: take its named recovery
+  from `errors.md`, and judge breadth only once healthy streams have reported. When every stream completed,
+  weigh the empty return in context — a widely posted role family coming back with nothing is worth naming;
+  a rare specialty inside a tight location and a narrow recency window may just be the market. Where it's
+  worth naming, offer once to propose broader, complementary role families, and change nothing until they
+  accept — exactly as in §5, a query change is a proposal, never an edit you make on their behalf.
 - **Results found, but none relevant** → the search ran and judged real postings, but none cleared the
-  brief. Follow `../../../shared/references/run-lifecycle.md` → **Zero-relevant recovery**: say plainly that
-  it ran and what it learned, don't claim the magical moment, and offer exactly **one** high-signal way to
-  broaden — the single most promising change, not a menu of levers. If the user takes it, that broader search
-  is a fresh run: give it new calls-first cost context before its calls (recompute `B` and render it as in
-  this step, per the [Agent-data usage
+  brief. That's a completed outcome about **fit**, not proof the terms were too narrow. Follow
+  `../../../shared/references/run-lifecycle.md` → **Zero-relevant recovery**: say plainly that it ran and
+  what it learned, don't claim the magical moment, and offer exactly **one** high-signal next step — chosen
+  from the rejection reasons where retrieval itself came back healthy, not from the relevance count — never
+  a menu of levers. If the user takes it, that fresh search is a new run: give it new calls-first cost
+  context before its calls (recompute `B` and render it as in this step, per the [Agent-data usage
   decisions](../../../shared/references/internals.md#agent-data-usage-decisions)), then apply it
   conversationally. This isn't the empty-search case — postings came back and were judged.
 

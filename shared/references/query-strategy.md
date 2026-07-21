@@ -83,13 +83,33 @@ change requires, then persist.
 
 ## Which path a query-health observation takes
 
-| Observed state | What it means | The one next action |
-|---|---|---|
-| A source call failed, was blocked, or ended incomplete | Operational health is unknown | Apply that failure's named recovery in `errors.md`; wait for healthy evidence before judging breadth |
-| Raw retrieval is contextually or repeatedly thin | The current phrases may be suppressing recall | Propose broader, complementary role families |
-| Raw retrieval is healthy but nothing is relevant | Recall exists; the lane or the brief alignment is wrong | Inspect the rejection reasons, then propose one targeted lane replacement or brief clarification — broaden only if that evidence names a missing adjacent lane |
-| The user wants fewer fetched postings from a healthy, noisy lane | The narrowing is intentional | Offer a narrower role term, location, lower limit, or a disabled query under the ordinary change semantics |
-| Raw results are healthy but every candidate is already known | The feed holds no unseen work | Say the results were already seen and leave query breadth unchanged |
+**Retrieval health is not fit quality.** Raw volume is the only evidence about whether the phrases are
+suppressing recall; every count downstream of it — new, deduplicated, selected, detail-read, relevant —
+describes fit and says nothing about breadth. Read the observation, then take its one action:
+
+<!-- query-strategy-contract:decision-table -->
+| Field | Contract value |
+|---|---|
+| `failed_blocked_or_incomplete` | `operational_recovery_then_wait_for_healthy_evidence` |
+| `contextually_or_repeatedly_thin` | `propose_broader_complementary_role_families` |
+| `healthy_raw_but_zero_relevant` | `inspect_rejections_then_replace_lane_or_clarify_brief` |
+| `healthy_noisy_and_user_wants_less` | `intentional_narrowing` |
+| `healthy_but_all_known` | `report_seen_results_and_leave_breadth_unchanged` |
+<!-- /query-strategy-contract:decision-table -->
+
+- **A source call failed, was blocked, or ended incomplete.** Operational health is unknown, so retrieval
+  says nothing yet. Apply that failure's named recovery in `errors.md` and wait for healthy evidence before
+  judging breadth.
+- **Raw retrieval is contextually or repeatedly thin.** The current phrases may be suppressing recall.
+  Propose broader, complementary role families.
+- **Raw retrieval is healthy but nothing is relevant.** Recall already exists; the lane or the brief
+  alignment is what is wrong, and zero relevant results never prove on their own that the terms were too
+  narrow. Inspect the rejection reasons, then propose one targeted lane replacement or one brief
+  clarification; broaden only where that evidence names a missing adjacent lane.
+- **The user wants fewer fetched postings from a healthy, noisy lane.** The narrowing is intentional. Offer
+  a narrower role term, location, lower limit, or a disabled query under the ordinary change semantics.
+- **Raw results are healthy but every candidate is already known.** The feed holds no unseen work. Say the
+  results were already seen and leave query breadth unchanged.
 
 ## The repeated-thin signal
 

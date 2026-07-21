@@ -35,6 +35,26 @@ APPLICATION_SURFACES = (HOME, ONBOARDING, CUSTOMIZATION, RUN_LIFECYCLE)
 # satisfy the intra-reference duplication lint, and any file may do the same.
 _STRATEGY_PTR = re.compile(r"(?:\.\./)*(?:shared/)?references/query-strategy\.md")
 
+# A FIXED-COUNT query-derivation instruction, banned across every runtime surface. The portfolio contract
+# derives the count from coverage closure, so naming a number — the removed "Derive 2-3 queries", its
+# checklist twin, or the disguised "usually two or three queries" — is a regression, and the plan checked
+# for it only with a one-time manual scan. Every pattern requires the query/search noun in the same phrase,
+# which is what keeps this narrow instead of allowlisted: "a 2-3 sentence Summary" (conventions.md and
+# job-preference-interview, describing the BRIEF, not retrieval) is legitimate and must keep passing.
+_RANGE_DIGITS = r"\d+\s*(?:[-\u2010-\u2015]|\s+to\s+)\s*\d+"  # ASCII hyphen, U+2010..U+2015 dashes, or "to"
+_RANGE_WORDS = r"(?:one|two|three|four|five)\s+(?:or|to)\s+(?:one|two|three|four|five)"
+_FIXED_COUNT_QUERIES = (
+    re.compile(rf"deriv\w*\s+{_RANGE_DIGITS}", re.I),
+    re.compile(rf"(?:{_RANGE_DIGITS}|{_RANGE_WORDS})\s+(?:quer|search)", re.I),
+    re.compile(r"exactly\s+(?:\d+|one|two|three|four|five)\s+enabled\s+quer", re.I),
+)
+
+
+def runtime_surfaces():
+    """Every shipped Markdown surface an agent reads at runtime: both SKILL.md runbooks and their
+    skill-local reference bodies, plus the shared reference layer."""
+    return sorted(ROOT.glob("skills/**/*.md")) + sorted((ROOT / "shared" / "references").glob("*.md"))
+
 
 def marked_table(path, marker):
     text = path.read_text(encoding="utf-8")
@@ -130,6 +150,38 @@ def test_query_health_marker_is_bounded_explicit_and_written_only_after_showing(
         "write_when": "after_user_facing_nudge_is_shown",
         "outcome": "shown_or_accepted_or_dismissed",
         "unknown_registry_keys": "preserved",
+    }
+
+
+def test_no_runtime_surface_prescribes_a_fixed_query_count():
+    """`query_count` is `derived_no_universal_target_or_cap`, so no runtime surface may instruct an agent
+    to derive a fixed number of queries. The plan verified that twice with a one-time manual `rg`, which
+    cannot stop "Derive 2-3 queries" from coming back; this is the standing gate."""
+    # controls — the four phrasings the plan's own scans looked for, in both dash forms
+    for banned in ("Derive 2-3 queries", "Derive 2–3 queries", "2–3 queries", "2-3 queries",
+                   "usually two or three queries", "exactly two enabled queries"):
+        assert any(p.search(banned) for p in _FIXED_COUNT_QUERIES), banned
+    # control — a fixed count of BRIEF SENTENCES is not a query-derivation instruction and stays legal
+    for legal in ("a 2–3 sentence **Summary**", "Ran 3 searches", "for a source with Q enabled queries"):
+        assert not any(p.search(legal) for p in _FIXED_COUNT_QUERIES), legal
+
+    hits = []
+    for path in runtime_surfaces():
+        for lineno, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+            if any(p.search(line) for p in _FIXED_COUNT_QUERIES):
+                hits.append(f"{path.relative_to(ROOT)}:{lineno}: {line.strip()}")
+    assert not hits, (
+        "a runtime surface prescribes a fixed query count; the portfolio contract derives it from lane "
+        "coverage closure, so state the coverage rule instead of a number:\n" + "\n".join(hits))
+
+
+def test_query_health_decisions_distinguish_retrieval_from_fit():
+    assert marked_table(STRATEGY, "decision-table") == {
+        "failed_blocked_or_incomplete": "operational_recovery_then_wait_for_healthy_evidence",
+        "contextually_or_repeatedly_thin": "propose_broader_complementary_role_families",
+        "healthy_raw_but_zero_relevant": "inspect_rejections_then_replace_lane_or_clarify_brief",
+        "healthy_noisy_and_user_wants_less": "intentional_narrowing",
+        "healthy_but_all_known": "report_seen_results_and_leave_breadth_unchanged",
     }
 
 

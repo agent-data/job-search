@@ -100,10 +100,12 @@ without a usable brief, the error is `E-NO-PREFERENCES` (see
 
 ### 5. Searches and frequency (derived from the brief)
 
-The skill **derives** 2–3 searches from the brief it just built — it does not ask the user to name
-keywords — and writes them as `queries[]` entries into `config.yaml` (editing minimally, preserving
-comments and structure), then **acknowledges** what it saved and notes the searches are editable
-anytime. The user picks a run frequency in plain human terms — no credit math, no cost reasoning.
+The skill **derives** the searches from the brief it just built, covering every materially distinct role
+the brief would accept, so the query count falls out of that coverage rather than a fixed target. It does
+not ask the user to name keywords; it writes the searches as `queries[]` entries into `config.yaml`
+(editing minimally, preserving comments and structure), then **acknowledges** what it saved and notes the
+searches are editable anytime. The user picks a run frequency in plain human terms — no credit math, no
+cost reasoning.
 Config schema and the derive/edit recipes are owned by
 [`shared/references/internals.md`](../../shared/references/internals.md) and
 [`shared/references/conventions.md`](../../shared/references/conventions.md).

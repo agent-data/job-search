@@ -317,8 +317,9 @@ fallback, and wording rules in `errors.md` rather than restating them here.
    location sent, or `null` when none was; the resolved per-call `limit`; the saved recency selector, written
    as `null` for a `one_off` request even when that request resolved an effective cutoff; and the cutoff
    actually sent, or `null` when none was. Every continuation of that stream replays these bound values
-   unchanged. A healthy stream returning few rows or none has completed normally: record its truthful
-   evidence and never issue a second search with altered keywords.
+   unchanged. A source call that succeeds with zero or few rows is a **successful** stream that completed
+   normally — not a failure, not a partial run, and not a trigger: record its truthful evidence and never
+   issue a second search with altered keywords.
 
    Build every cursor-null call first, then dispatch all first pages as one concurrent batch. If the host has
    no concurrent-call primitive, execute that same prebuilt batch in stream order; later reconciliation still
@@ -545,7 +546,9 @@ fallback, and wording rules in `errors.md` rather than restating them here.
    `unpaginated`; a finite stream stopped early with trustworthy depth remaining is `target_reached`; a valid
    terminal board page is `sources_exhausted` (even if that same batch also satisfies the run target); and the
    two failure branches are `pagination_incomplete` and `source_failed`. Never write a cursor, page token,
-   decoded payload, or resume state.
+   decoded payload, or resume state. A successful stream that returned zero or few rows finalizes on its
+   ordinary completion branch and records exactly what it saw; finalization never rewrites, retries, or
+   widens the request that produced it, and leaves any broader search to a later user-approved retune.
 
    Persist `review_scope.mode`, `target_new_postings`, and `origin` from preflight, then derive its `outcome`
    after every stream settles in this precedence order so the outcomes are mutually exclusive:
