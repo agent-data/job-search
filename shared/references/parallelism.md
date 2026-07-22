@@ -1,5 +1,7 @@
 # Parallel by default — concurrency & delegating to subagents
 
+**Contents:** [Posting-detail model binding](#posting-detail-model-binding) · [Briefing a subagent](#briefing-a-subagent) · [The delegated return channel](#the-delegated-return-channel) · [The detail-read worker brief and return envelope](#the-detail-read-worker-brief-and-return-envelope)
+
 Independent work runs concurrently, not in sequence. When subtasks don't depend on each other — reading ten
 different documents, judging ten postings, running several searches — dispatch them **at once, in a single
 batch** of subagents, never a one-at-a-time loop. Time-to-value is a product feature, and parallelism is how

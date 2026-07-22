@@ -1,5 +1,7 @@
 # Run lifecycle, completion, recovery & local metrics
 
+**Contents:** [Durable ledger](#durable-ledger) · [Ordered phases](#ordered-phases) · [Event and posting vocabulary](#event-and-posting-vocabulary) · [Completion and close states](#completion-and-close-states) · [Scripted append and fold/check operations](#scripted-append-and-foldcheck-operations) · [Safe recovery and non-resumable search state](#safe-recovery-and-non-resumable-search-state) · [Privacy boundary](#privacy-boundary) · [Local metrics](#local-metrics)
+
 This is the single runtime contract for durable run progress, honest completion, safe recovery after context
 loss, and local product-milestone evidence. The final run-record and digest shapes remain in
 [conventions.md](conventions.md); workspace discovery remains in [internals.md](internals.md). Consumers

@@ -1,6 +1,8 @@
 # Workspace conventions & file contracts
 <!-- reference-resolution-marker:8f2a4c1e-single-home — this is the ONE canonical home; every skill reaches it in place. Asserted by tests/test_reference_resolution.py; do not remove. -->
 
+**Contents:** [`config.yaml`](#configyaml) · [`runs/detail-model-binding.json`](#runsdetail-model-bindingjson--current-private-binding-provenance) · [`jobs.jsonl`](#jobsjsonl--append-only-events-one-json-object-per-line) · [`runs/<run_id>.json`](#runsrun_idjson--audit-log) · [`preferences.md`](#preferencesmd--prose-brief-the-model-reads-this-no-machine-readable-contract-no-weights) · [Relevance vocabulary](#relevance-vocabulary-qualitative--no-numbers) · [Digest format](#digest-format-reportsdate-digestmd)
+
 The **workspace** (default the hidden `~/.job-search/`; an existing visible `~/job-search/` is **adopted**, not replaced — see `internals.md`) is PRIVATE per-user data — never committed to a public repo.
 
 Durable run progression, completion, recovery, and local milestone evidence are owned by

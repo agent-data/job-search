@@ -1,5 +1,7 @@
 # Query strategy — deriving queries, judging retrieval health, broadening with consent
 
+**Contents:** [Building a query portfolio](#building-a-query-portfolio) · [Judging retrieval health in context](#judging-retrieval-health-in-context) · [Which path a query-health observation takes](#which-path-a-query-health-observation-takes) · [The repeated-thin signal](#the-repeated-thin-signal) · [One nudge, one question](#one-nudge-one-question) · [A run never broadens itself](#a-run-never-broadens-itself)
+
 This file is the single home for **what to search for and when to search wider** — query derivation,
 contextual retrieval-health assessment, and user-approved broadening. The front door and the operator
 manual load it directly; onboarding, the home view, and customization apply their part, never restating it.

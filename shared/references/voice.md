@@ -1,5 +1,7 @@
 # Voice — how every skill talks to the user
 
+**Contents:** [Rules](#rules) · [Agent-data usage context](#agent-data-usage-context) · [Asking questions](#asking-questions--closed-choices-get-a-native-pick) · [Words that never reach the user](#words-that-never-reach-the-user) · [What stays verbatim](#what-stays-verbatim-deliberate-exceptions) · [Named errors](#named-errors--structured-never-the-code)
+
 **What the user sees — the premise every rule here derives from.** Everything a skill "says" reaches the
 user as one channel: the text of your replies, rendered as markdown wherever they happen to be reading it.
 They do **not** see your thinking, your tool calls, the raw results those calls return, the reference

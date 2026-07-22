@@ -1,5 +1,7 @@
 # Scheduling & consent
 
+**Contents:** [Mechanism](#mechanism-an-unattended-schedule-on-the-hosts-own-scheduler) · [Eligibility gates](#eligibility-gates--a-scheduler-qualifies-only-when-it-passes-every-one) · [The handoff](#the-handoff-one-decision-one-confirmation) · [Prove it works — the canary](#prove-it-works-before-recording-the-schedule--the-canary) · [Schedule health](#schedule-health-local-unmetered) · [Actions](#actions) · [Consent: where the line is](#consent-where-the-line-is)
+
 How the Job Search Agent schedules its recurring run, why the default is an **unattended** schedule that
 fires with no session open, and where the "never write the user's machine **without consent**" line is drawn.
 

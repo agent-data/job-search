@@ -1,5 +1,7 @@
 # Named errors (E-*) — cause + fix + what the user sees
 
+**Contents:** [Internal classification vs. user rendering](#internal-classification-vs-user-rendering) · [Retry language by schedule state](#retry-language-by-verified-schedule-state) · [E-BAD-CONFIG](#e-bad-config-value-rendering-and-preflight) · [E-PAGINATION-INCOMPLETE](#e-pagination-incomplete-branches-and-diagnostics) · [E-LIFECYCLE-INCOMPLETE](#e-lifecycle-incomplete-compaction-restart-and-non-resumable-search) · [E-QUOTA](#e-quota-usage-and-recovery)
+
 Every failure is named internally and visible — no silent failures. The E-* table owns established canonical
 errors. Exact-model binding failures use the narrow internal class below and the complete interactive repair
 rendering that follows it; the internal class is never shown as a raw user code. The durable

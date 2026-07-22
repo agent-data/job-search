@@ -1,5 +1,7 @@
 # agent-data Job Postings API — contract
 
+**Contents:** [Auth](#auth) · [Pricing and metering](#pricing-and-metering) · [Route: status](#route-status--run-this-first) · [Route: search-jobs](#route-search-jobs) · [Route: get-posting](#route-get-posting--needs-the-idsource_url-pair-from-one-search-row) · [Error envelope](#error-envelope-all-routes) · [Per-source quirks](#per-source-quirks-one-table-the-only-per-source-contract-surface)
+
 _Last verified:_ route docs and production behavior against the live CLI on 2026-07-15. Live pagination
 evidence covers first-page and exact one-hop continuation calls for Ashby, Greenhouse, and Lever; zero-result
 terminal envelopes for all three; and LinkedIn pagination omission plus non-retryable cursor rejection.

@@ -1,5 +1,7 @@
 # OS internals — registry, workspace discovery, config & scheduling
 
+**Contents:** [Registry](#registry-machine-managed-os-state--json-not-yaml) · [Workspace discovery & first-run detection](#workspace-discovery--first-run-detection) · [Never-clobber adoption](#never-clobber-adoption) · [Agent-data usage decisions](#agent-data-usage-decisions) · [Config read/update recipes](#config-readupdate-recipes-conversational-first-configyaml-is-yaml) · [Version-1 staged migration](#version-1-staged-migration) · [Exact-model repair](#exact-model-repair) · [Scheduling setup](#scheduling-setup) · [Schedule health](#schedule-health) · [Local support summary](#local-support-summary)
+
 The "OS state" that survives across sessions so any skill finds the user's data identically. The host agent performs these procedures itself, with its own file-read/write and shell
 tools, plus the exact shell lines below. Never hard-code or re-derive the
 paths and precedence rules — follow the procedures as written; they are the contract every skill shares.

@@ -553,3 +553,36 @@ def test_every_mechanics_script_resolves_in_place_on_host(host):
     assert any_ptr, (
         f"{host}: no mechanics-script pointer found in any SKILL.md or shared/references body — the "
         f"P4/T4.2 invoke-or-prose-fallback wiring is missing")
+
+
+# ------------------------------------------------------ internal reference maps (AAS-BOUND-05)
+
+MAPPED_REFERENCES = (
+    "shared/references/conventions.md",
+    "shared/references/errors.md",
+    "shared/references/internals.md",
+    "shared/references/run-lifecycle.md",
+    "shared/references/voice.md",
+    "shared/references/parallelism.md",
+    "shared/references/query-strategy.md",
+    "shared/references/agent-data-contract.md",
+    "skills/job-search-agent/references/scheduling-and-consent.md",
+)
+
+
+def test_every_large_reference_carries_an_internal_map():
+    """AAS-BOUND-05: a reference over ~100 lines gets a ToC so a partial read reveals its scope."""
+    for rel in MAPPED_REFERENCES:
+        path = ROOT / rel
+        lines = path.read_text(encoding="utf-8").split("\n")
+        assert len(lines) > 100, f"{rel} is no longer large; drop it from MAPPED_REFERENCES"
+        head = "\n".join(lines[:6])
+        assert "**Contents:**" in head, f"{rel} has no `**Contents:**` map in its first 6 lines"
+        anchors = [a for a in re.findall(r"\]\(#([a-z0-9-]+)\)", head)]
+        assert len(anchors) >= 3, f"{rel} map has {len(anchors)} anchors; expected one per `##` section"
+        slugs = {
+            re.sub(r"[^a-z0-9 -]", "", m.group(1).lower()).replace(" ", "-")
+            for m in re.finditer(r"^## (.+)$", path.read_text(encoding="utf-8"), re.M)
+        }
+        for anchor in anchors:
+            assert anchor in slugs, f"{rel} map anchor #{anchor} matches no `##` heading"
