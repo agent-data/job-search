@@ -53,3 +53,16 @@ All three of these were written during this project:
 | "the same mistake at two removes" | the same error showed up in two different places |
 | "gates that can see the defect" | gates that actually catch these bugs |
 | "the pack has an ownership metaphor, not a boundary" | nothing in the pack stops one skill doing another skill's work |
+
+## Never state a measurable fact without measuring it
+
+If a number, a count, a size, or a "this file contains X" claim can be settled with `grep`, `wc`, or a
+one-line script, run it before writing the sentence. Do not estimate, recall, or infer.
+
+This applies inside plans and design docs, not only in chat. Eleven blocking defects in the 2026-07-22
+audit-remediation plan came from sentences like "the invariants are already in `run-lifecycle.md`" (13
+of the 14 were not), "the two files over 5,000 words" (there are four), and "nineteen substrings"
+(there are eighteen). Each was one command away from being caught, and each was written as settled
+fact. The full set is in `docs/superpowers/reviews/2026-07-22-plan-conflict-sweep.md`.
+
+When you cite a measurement, cite the command that produced it, so a reader can re-run it.
