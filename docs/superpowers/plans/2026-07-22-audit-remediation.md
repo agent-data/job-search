@@ -167,6 +167,18 @@ In `skills/job-search-run/SKILL.md`, in the `## References` list, append to the 
 Run: `python3 -m pytest tests/test_reference_resolution.py -q`
 Expected: PASS
 
+> **As built (do not re-run Task 1).** Two review waves hardened the gate beyond the code in Step 1
+> above, which is left as executed for the record. The shipped gate: extracts with `\]\(#([^)]+)\)` so a
+> malformed anchor fails rather than being skipped; asserts the map equals the file's `##` slugs in file
+> order (not a `>= 3` floor); builds those slugs fence-aware; imports `doc_lint.slugify` rather than
+> re-implementing it; watches **12** files (the nine here plus `onboarding.md`, `home.md`,
+> `customization.md`); and searches a 30-line head window. Later tasks that add a `##` section to any
+> watched file **must** add its map entry in the same commit, or the gate fails.
+>
+> Also corrected: the Step 4 premise "the two files over 5,000 words" was a measurement error. Four
+> exceed it — `internals.md` 9,127, `onboarding.md` 6,145, `conventions.md` 5,981, `run-lifecycle.md`
+> 5,937. `run-lifecycle.md` got its hint in the fix wave; `onboarding.md`'s is folded into Task 3.
+
 - [ ] **Step 6: Run the doc gate and commit**
 
 ```bash
@@ -451,6 +463,12 @@ In `skills/job-search-agent/SKILL.md` line 3, replace the opening `The operator 
 ```text
 Configure, customize, extend, or troubleshoot the Job Search Agent itself, and explain how it works — the operator manual.
 ```
+
+- [ ] **Step 6a: Add the missing grep hint (carried from Task 1)**
+
+`skills/job-search/references/onboarding.md` is 6,145 words — larger than either file that already got a
+hint — and its pointer in `skills/job-search/SKILL.md` has none. Append to that pointer, matching the
+wording used in the runner's References list: `Large: grep \`^## \` for the section list.` (AAS-BOUND-05)
 
 - [ ] **Step 7: Run the tests to verify they pass**
 
@@ -1563,6 +1581,14 @@ SKILL_LOCAL_ORIGINALS = {
 Run: `python3 -m pytest tests/test_reference_resolution.py::test_no_fanned_reference_copy_remains -q`
 Expected: PASS both before your edit (four files, none present yet) and after Step 4 (six files, all
 allowlisted).
+
+- [ ] **Step 2b: Register both new references with the map gate**
+
+Task 1's gate watches a fixed `MAPPED_REFERENCES` tuple and asserts each entry is over 100 lines, carries
+a `**Contents:**` line in its first 30, and that the map equals the file's `##` slugs in file order. Add
+both new files to that tuple in this same commit. If one lands at or under 100 lines, do **not** delete
+the entry to satisfy the tripwire — record in your report that it was too small to warrant a map and
+leave it out of the tuple deliberately. (AAS-BOUND-05)
 
 - [ ] **Step 3: Create the retrieval reference**
 
