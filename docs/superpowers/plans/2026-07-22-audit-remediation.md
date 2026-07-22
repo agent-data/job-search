@@ -25,6 +25,7 @@ Every task's requirements implicitly include this section.
 - Every rule ID cited in a task must appear in the commit message for that task, exactly as cited.
 - **Test cadence.** Before every commit, run the test files covering the change (each task names them) plus `python3 scripts/doc_lint.py --root .` and `python3 scripts/philosophy_guard.py --root .` — both take seconds. The **full** `python3 -m pytest -q` (~8 minutes) runs at each phase boundary — after Tasks 1, 6, 11, 16, 26, 27 — and in Task 28. Never report a test result you did not run.
 - **Branch.** All work lands on `feat/recall-oriented-query-strategy`, continuing from `7adb0c3`. Do not create a branch.
+- **Line numbers are advisory; the quoted text governs.** Every task cites line numbers as they stood when the plan was written. Earlier tasks shift them — Task 1 alone moved nine files by +2. Always locate an edit by the quoted content, never by the line number. If the quoted text is not found, stop and report rather than editing by position.
 
 ## File Structure
 
@@ -105,10 +106,10 @@ def test_every_large_reference_carries_an_internal_map():
         assert len(lines) > 100, f"{rel} is no longer large; drop it from MAPPED_REFERENCES"
         head = "\n".join(lines[:6])
         assert "**Contents:**" in head, f"{rel} has no `**Contents:**` map in its first 6 lines"
-        anchors = [a for a in re.findall(r"\]\(#([a-z0-9-]+)\)", head)]
+        anchors = [a for a in re.findall(r"\]\(#([a-z0-9_-]+)\)", head)]
         assert len(anchors) >= 3, f"{rel} map has {len(anchors)} anchors; expected one per `##` section"
         slugs = {
-            re.sub(r"[^a-z0-9 -]", "", m.group(1).lower()).replace(" ", "-")
+            re.sub(r"[^a-z0-9 _-]", "", m.group(1).lower()).replace(" ", "-")
             for m in re.finditer(r"^## (.+)$", path.read_text(encoding="utf-8"), re.M)
         }
         for anchor in anchors:
