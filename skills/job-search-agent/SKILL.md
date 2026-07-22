@@ -1,6 +1,6 @@
 ---
 name: job-search-agent
-description: The operator manual for the Job Search Agent — configure, customize, extend, or troubleshoot the agent itself, or explain how it works. Use when the user asks how the agent works, why a run failed, what it can do, or how to change its behavior — a query, schedule, recency, review depth, usage, detail-read model, or parallel reads — "how does my job search agent work", "explain my agent-data usage", "why did the run fail", "how do I change/add/customize …", "change how often it runs". Not for daily use — onboarding, the home view, and running a search are job-search; the search pass itself is job-search-run.
+description: Configure, customize, extend, or troubleshoot the Job Search Agent itself, and explain how it works — the operator manual. Use when the user asks how the agent works, why a run failed, what it can do, or what is configurable and how it would change — a query, schedule, recency, review depth, usage, detail-read model, or parallel reads — "how does my job search agent work", "explain my agent-data usage", "why did the run fail", "what can I change about how it runs", "how would I add a source". This skill documents a change; applying one the user asks for in conversation is job-search's ("change how often it runs" → job-search). Not for daily use — onboarding and the home view are job-search; the search pass itself is job-search-run.
 ---
 
 # Job Search Agent

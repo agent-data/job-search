@@ -1,6 +1,6 @@
 ---
 name: job-search
-description: Set up, check on, and steer the user's job search — the front door and home screen. Use when they want to start or set up a job search, see status, matches, the latest digest, or the pipeline, or change what they're looking for — "set up job search", "start my job search", "I'm looking for a new job", "check my job search", "show me my matches", "what's new in my pipeline", or /job-search. First run reaches real live matches fast — a one-question sketch, then live postings — with no setup ceremony; afterward it shows the job-search home with quick actions. Not for a fresh headless pull ("check for new jobs" → job-search-run) or for configuring/troubleshooting the agent itself (→ job-search-agent).
+description: The front door and home screen for the user's job search — setup, status, matches, pipeline, and steering what they're looking for. Use when they want to start or set up a job search, see status, matches, the latest digest, or the pipeline, or change what they're looking for — "set up job search", "start my job search", "I'm looking for a new job", "check my job search", "show me my matches", "what's new in my pipeline". First run reaches real live matches with no setup ceremony, by handing the search to job-search-run and each verdict to evaluate-job-fit. Not the skill that pulls postings ("check for new jobs" → job-search-run), judges one posting ("is this a good fit?" → evaluate-job-fit), rebuilds the preferences brief (→ job-preference-interview), or configures the agent itself (→ job-search-agent).
 ---
 
 # job-search
@@ -11,13 +11,20 @@ description: Set up, check on, and steer the user's job search — the front doo
 The **OS shell** for Job Search OS — the front door you run when you want to set the system up or check on
 it. Mental model: this skill is the **login shell + home screen**; the **registry** is the OS state that
 remembers your workspace and schedule; `job-search-run` is the **scheduled job** that pulls and judges
-postings; `job-preference-interview` is the tool that **builds the brief** the runner reads. You drive
-everything from here and delegate the heavy lifting to those skills.
+postings; `evaluate-job-fit` is the **judge** that decides whether one posting fits;
+`job-preference-interview` is the tool that **builds the brief** both of them read. You drive everything
+from here and delegate the work itself to those skills.
 
-Not the place for a non-interactive run — that's `job-search-run` — or for changing the system's wiring,
-which is `job-search-agent`'s manual (see the note above).
+**You never search the job source, judge a posting, or write `jobs.jsonl`, a run record, or a digest
+here** — `job-search-run` owns the pull and `evaluate-job-fit` owns the verdict
+(`../../shared/references/ownership.md`). The boundary is drawn by action, not by whether you were
+invoked interactively: an interactive pull is still a pull, and a verdict reached in conversation is
+still a verdict. About to call the job source, decide whether a posting is a match, or append an
+`evaluated` event? Stop — invoke the owner instead. A hand-rolled search writes no ledger, so nothing
+downstream can tell its result from a real run; a verdict reached without that skill's rubric skips the
+adjacency rule that keeps a broadened match out of the top band.
 
-This skill has two modes and almost no logic of its own — it **routes**, then follows a playbook:
+This skill has two modes — it **routes**, then follows a playbook:
 
 - **First run** → walk the user through onboarding end-to-end, ending with real, relevance-judged matches.
 - **Returning** → show the job-search home (latest digest, new matches, pipeline) with conversational quick
@@ -32,9 +39,10 @@ Run the Discovery procedure (`../../shared/references/internals.md`) → a works
 (`registry | default | legacy | none`).
 
 - `first_run: true` → **say the welcome, then** follow **`references/onboarding.md`** (the first-run
-  playbook). Greet the moment discovery reports `first_run: true` — emit the welcome as a message **now**,
-  before your next tool call: before you open the playbook, before any check, long before the end of the
-  turn. The pull to defer it is strong — finish the silent prep, batch the talking into one final message.
+  playbook). Large: grep `^## ` for the section list. Greet the moment discovery reports
+  `first_run: true` — emit the welcome as a message **now**, before your next tool call: before you open
+  the playbook, before any check, long before the end of the turn. The pull to defer it is strong —
+  finish the silent prep, batch the talking into one final message.
   Resist it: that batching is this skill's known failure mode, and whatever goes wrong next (a failed
   check, a blocked install) must land on a user who has already been greeted and told what's happening.
   About to run a tool without having greeted? Stop — greet first. The welcome — hit these beats in your own
@@ -59,6 +67,10 @@ and follow it — it owns how a query portfolio is built and when to propose bro
 
 ## Principles (apply in both modes)
 
+- **Delegate the pull and the verdict.** Searching the job source is `job-search-run`'s and a fit verdict
+  is `evaluate-job-fit`'s, in every mode — invoke the owner rather than doing either here, and if an owner
+  can't run, stop and name the repair instead of standing in for it
+  (`../../shared/references/ownership.md`).
 - **Conversational-first configuration.** The user changes anything — a query, how often it runs, their
   preferences, the schedule — by **chatting with you**. You apply it by reading `<workspace>/config.yaml`,
   editing it minimally (preserving comments and structure), and writing it back, following the recipes in
@@ -89,7 +101,8 @@ recipes, and the verbatim scheduling block), `../../shared/references/convention
 schema, `jobs.jsonl` statuses, digest format + counts line), `../../shared/references/errors.md` (every named error),
 `../../shared/references/voice.md` (how every reply talks to the user — plain English, zero-context first-run asks,
 render documents inline), `../../shared/references/update.md` (cached update signal + update banner), and
-`../../shared/references/agent-data-contract.md` (the source contract `job-search-run` honors), plus
+`../../shared/references/agent-data-contract.md` → **Auth** and **Pricing and metering** only (the
+prerequisites and tier facts onboarding renders; the routes are `job-search-run`'s, not yours), plus
 `../../shared/references/run-lifecycle.md` (invoke `lifecycle-fold.sh` and require `closed=true` for the
 candidate's exact run_id before any record/digest is surfaced or a canary is trusted). These are the source of
 truth; this skill never restates their details from memory.

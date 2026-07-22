@@ -1,6 +1,6 @@
 ---
 name: job-search-run
-description: Run one headless, non-interactive job-search pass that finds and judges new postings and writes a digest. Use to run the scheduled search, check for new jobs, or to run a search on demand — "run a job search now", "pull jobs now", "do a fresh search", or when invoked by a schedule. (For interactive setup or the home view, use job-search; for a single pasted posting, use evaluate-job-fit.)
+description: One headless, non-interactive job-search pass over the saved workspace, producing a digest of newly judged postings. Use to run the scheduled search, check for new jobs, or to run a search on demand — "run a job search now", "pull jobs now", "do a fresh search", or when invoked by a schedule. (For interactive setup or the home view, use job-search; for a single pasted posting, use evaluate-job-fit.)
 ---
 
 # job-search-run

@@ -452,3 +452,243 @@ def test_triage_line_bounds_the_summary_scan():
         assert carve_out in runner, (
             f"the runner's `Never` cell drops {carve_out!r} — inside the block it is the only thing "
             f"telling a reader the summary scan is still sanctioned: {runner!r}")
+
+
+# ---------------------------------------------------------- the boundary as the front door states it
+
+FRONT_DOOR = ROOT / "skills" / "job-search" / "SKILL.md"
+RUNNER = ROOT / "skills" / "job-search-run" / "SKILL.md"
+AGENT_MANUAL = ROOT / "skills" / "job-search-agent" / "SKILL.md"
+SOURCE_CONTRACT = ROOT / "shared" / "references" / "agent-data-contract.md"
+
+# A host's slash-command token — `/job-search`, `/run` — as opposed to a path segment
+# (`shared/references/voice.md`), a spelled alternative (`weak/moderate/strong`, `and/or`), or a home
+# path (`~/.job-search/`): a slash that OPENS a word and is not itself preceded by one. Broader than the
+# one token this task removed, because AAS-TRIG-05 is about host presentation in general — the next one
+# added will not be `/job-search`. Proven both ways on fixtures before it is trusted over real files.
+_SLASH_TOKEN = re.compile(r"(?<![\w/.~])/[a-z][\w-]*")
+
+
+def _frontmatter(path):
+    """The YAML frontmatter block of a SKILL.md, exclusive of its `---` fences."""
+    match = re.match(r"---\n(.*?)\n---\n", path.read_text(encoding="utf-8"), re.S)
+    assert match, f"{path.relative_to(ROOT)} does not open with a YAML frontmatter block"
+    return match.group(1)
+
+
+def _frontmatter_description(path):
+    """The one-line `description:` a host loads to route, whitespace-collapsed.
+
+    Read from INSIDE the frontmatter fence rather than from anywhere in the file, and rejected when the
+    value is a YAML block indicator: a description re-authored as a folded scalar (`description: >-`,
+    text on the lines beneath) leaves two characters on this line, and every substring assertion below
+    would then run against `>-` and pass while asserting nothing about what the host actually reads.
+    The length floor closes the same hole from the other side — a description gutted to a stub has to
+    stop being a description before it stops being checked."""
+    match = re.search(r"^description:[ \t]*(\S.*?)[ \t]*$", _frontmatter(path), re.M)
+    assert match, f"{path.relative_to(ROOT)} has no `description:` in its frontmatter"
+    description = " ".join(match.group(1).split())
+    assert not re.fullmatch(r"[|>][-+0-9]*", description), (
+        f"{path.relative_to(ROOT)}: `description:` holds the YAML block indicator {description!r}, so "
+        f"its text lives on the lines beneath and every check here would read two characters")
+    assert len(description) >= 120, (
+        f"{path.relative_to(ROOT)}: description is {len(description)} characters — too short to carry a "
+        f"capability, its triggers, and its sibling exclusions: {description!r}")
+    return description
+
+
+def _section(path, heading):
+    """The body of one `## ` section — heading line excluded — up to the next `## ` or EOF."""
+    match = re.search(rf"^## {re.escape(heading)}[ \t]*$\n(.*?)(?=^## |\Z)",
+                      path.read_text(encoding="utf-8"), re.S | re.M)
+    assert match, f"{path.relative_to(ROOT)} has no `## {heading}` section"
+    return match.group(1)
+
+
+def test_front_door_fences_the_boundary_by_action():
+    """PSG-SUB-12 + PSG-F-09: an observable trigger, not a virtue, and not keyed to interactivity.
+
+    The live failure: during an INTERACTIVE onboarding the front door called the job source, judged the
+    postings, and wrote the digest and job rows itself — which the file's only exclusion ("Not the place
+    for a non-interactive run") does not cover, because an interactive pull is not a non-interactive
+    run. Deleting that sentence is not the fix, and asserting its absence does not test for one: any
+    reword satisfies it. What is pinned here is the replacement — the boundary restated by ACTION, with
+    the evasions enumerated and an owner named for each."""
+    body = FRONT_DOOR.read_text(encoding="utf-8")
+    prose = _normalized_prose(FRONT_DOOR)
+
+    # The sentinel Task 6's eval greps for, matched RAW against the file: it has to survive as one
+    # literal unwrapped run of text, which the whitespace-collapsed check below cannot tell you.
+    assert "never search the job source, judge a posting, or write" in body, (
+        "the fenced prohibition is gone, or the line was re-wrapped mid-sentinel — Task 6's eval greps "
+        "this exact string out of the file, so it has to stay on one line")
+
+    # Everything below is scoped to the fence PARAGRAPH, not to the file. A file-wide check passes on a
+    # fence whose pointer or reason has been moved off to some other paragraph — and the compact
+    # restatement in Principles, which is supposed to be the bookend, is enough to satisfy one on its
+    # own. Each part has to be where the agent is standing when it decides.
+    fenced = [block for block in re.split(r"\n[ \t]*\n", body) if "never search the job source" in block]
+    assert len(fenced) == 1, (
+        f"the fenced prohibition appears in {len(fenced)} paragraphs, expected exactly one — Principles "
+        f"carries the compact restatement, not a second copy of this paragraph")
+    fence = " ".join(fenced[0].split())
+
+    assert "../../shared/references/ownership.md" in fence, (
+        "the fence no longer points at the canonical ownership contract from inside the paragraph that "
+        "states the prohibition")
+    for clause in (
+        "`job-search-run` owns the pull and `evaluate-job-fit` owns the verdict",
+        "The boundary is drawn by action, not by whether you were invoked interactively",
+        "an interactive pull is still a pull, and a verdict reached in conversation is still a verdict",
+        "About to call the job source, decide whether a posting is a match, or append an `evaluated` "
+        "event? Stop — invoke the owner instead.",
+        "A hand-rolled search writes no ledger",
+    ):
+        assert clause in fence, f"the fence no longer says {clause!r}"
+
+    assert "Not the place for a non-interactive run" not in prose, "interactivity-keyed exclusion survived"
+    assert "non-interactive" not in prose, (
+        "the front door draws its boundary in terms of interactivity again — the discriminator is the "
+        "ACTION (the clauses pinned above), and this word only ever appeared here inside the exclusion "
+        "that let an interactive pull through")
+    assert "almost no logic of its own" not in prose, "virtue phrasing survived; PSG-F-09 wants a trigger"
+    assert "This skill has two modes — it **routes**, then follows a playbook" in prose, (
+        "the observable trigger that replaced the virtue phrasing is gone too")
+
+
+def test_front_door_bookends_the_prohibition_in_its_principles():
+    """PSG-SUB-12: state a hard prohibition where the decision gets made, at both ends of the file.
+
+    The fence at the top is read once, on the way to the router. **Principles** is the block that
+    applies in both modes and is where the live failure's decision — "just pull it myself, they are
+    waiting" — is actually taken. Scoped to the BULLET, not the file and not even the section: the
+    paragraph at the top of the file carries the same words, and the section's closing read-list names
+    `job-search-run` too, so either could mask a deleted bullet in a wider check."""
+    principles = _section(FRONT_DOOR, "Principles (apply in both modes)")
+    bullets = [f"- {chunk}" for chunk in re.split(r"^- ", principles, flags=re.M)[1:]]
+    carrying = [bullet for bullet in bullets if "../../shared/references/ownership.md" in bullet]
+    assert len(carrying) == 1, (
+        f"{len(carrying)} of the {len(bullets)} Principles bullets point at the ownership contract, "
+        f"expected exactly one — Principles is where the prohibition is bookended for both modes")
+    bullet = " ".join(carrying[0].split())
+
+    for owner in ("`job-search-run`", "`evaluate-job-fit`"):
+        assert owner in bullet, (
+            f"the Principles bullet forbids the work without naming {owner} as the owner to hand it to")
+    assert "in every mode" in bullet, (
+        "the Principles bullet no longer says the prohibition holds in every mode — the qualifier is "
+        "what stops an interactive first run reading as the exception")
+
+
+def test_front_door_no_longer_mandates_the_whole_source_contract():
+    """Means with no gate: the front door was REQUIRED to read the file carrying the literal
+    `search-jobs` / `get-posting` invocations.
+
+    Narrowed, not dropped — onboarding renders the prerequisite and tier facts from it. An
+    absence-only assertion would be satisfied by deleting the read outright, which breaks onboarding;
+    this pins the narrowing, and pins the two named sections to headings that actually exist."""
+    prose = _normalized_prose(FRONT_DOOR)
+    assert ("`../../shared/references/agent-data-contract.md` → **Auth** and **Pricing and metering** "
+            "only") in prose, "the mandatory source-contract read is not narrowed to its two sections"
+    assert "the routes are `job-search-run`'s, not yours" in prose, (
+        "the narrowing no longer says whose the routes are")
+    assert "(the source contract `job-search-run` honors), plus" not in prose, (
+        "the whole-contract read is back")
+    contract = SOURCE_CONTRACT.read_text(encoding="utf-8")
+    for heading in ("## Auth", "## Pricing and metering"):
+        assert re.search(rf"^{re.escape(heading)}[ \t]*$", contract, re.M), (
+            f"the front door narrows its read to `{heading[3:]}`, which "
+            f"{SOURCE_CONTRACT.relative_to(ROOT)} no longer has as a `##` section")
+
+
+def test_front_door_description_routes_to_every_overlapping_sibling():
+    """AAS-TRIG-03 + PSG-TOOL-03: name the sibling AND the criterion that discriminates it.
+
+    Naming alone is what the description already did for `job-search-run` while the body pulled anyway,
+    so each pair below has to land in ONE clause — the shape a host router can act on. A bare mention
+    somewhere in the sentence does not satisfy it."""
+    desc = _frontmatter_description(FRONT_DOOR)
+    for criterion, sibling in (
+        ("check for new jobs", "job-search-run"),
+        ("is this a good fit?", "evaluate-job-fit"),
+        ("rebuilds the preferences brief", "job-preference-interview"),
+        ("configures the agent itself", "job-search-agent"),
+    ):
+        assert re.search(rf"{re.escape(criterion)}[^.;]*→ {re.escape(sibling)}(?![\w-])", desc), (
+            f"the front-door description does not route {criterion!r} to {sibling} in one clause: {desc!r}")
+    assert "handing the search to job-search-run and each verdict to evaluate-job-fit" in desc, (
+        "AAS-ANTI-10: the description still presents the live pull as the front door's own act, which "
+        "is the half of it an agent executes in place of the body")
+
+
+def test_no_shared_description_carries_host_slash_syntax():
+    """AAS-TRIG-05 / AAS-LANG-02: slash syntax belongs in the host manifests.
+
+    The pattern is proven on fixtures first, both ways. A pattern that quietly stopped matching would
+    pass over five clean descriptions and go on passing over a dirty one; a pattern that over-matched
+    would fire on `weak/moderate/strong` and get loosened until it caught nothing."""
+    dirty = 'or /job-search. Not for a fresh headless pull'
+    clean = "weak/moderate/strong, Must-haves/dealbreakers, and/or ~/.job-search/, shared/references/x.md"
+    assert _SLASH_TOKEN.search(dirty), "the slash-token pattern no longer matches the token it removed"
+    assert not _SLASH_TOKEN.findall(clean), (
+        f"the slash-token pattern fires on ordinary prose: {_SLASH_TOKEN.findall(clean)}")
+
+    for path in sorted(ROOT.glob("skills/*/SKILL.md")):
+        desc = _frontmatter_description(path)
+        assert "/job-search" not in desc, (
+            f"{path.relative_to(ROOT)} description carries a host slash token")
+        assert not _SLASH_TOKEN.search(desc), (
+            f"{path.relative_to(ROOT)} description carries the host slash token "
+            f"{_SLASH_TOKEN.search(desc).group(0)!r} — the syntax is the host's, and the shared "
+            f"description is read by hosts that spell it differently or not at all")
+
+
+def test_descriptions_open_with_a_capability_not_a_workflow():
+    """AAS-TRIG-01 + PSG-TOOL-01: the opening says what the skill IS, not the steps it runs.
+
+    Each negative is paired with the opening that has to be there instead, because an absence check
+    alone is satisfied by any reword — including one that re-opens with a different workflow."""
+    front = _frontmatter_description(FRONT_DOOR)
+    assert front.startswith("The front door and home screen for the user's job search"), (
+        f"the front-door description no longer opens with its capability: {front[:96]!r}")
+    assert "a one-question sketch, then live postings" not in front, (
+        "the ordered-workflow clause survived in the front-door description")
+
+    runner = _frontmatter_description(RUNNER)
+    assert runner.startswith("One headless, non-interactive job-search pass"), (
+        f"the runner's description no longer opens with its capability: {runner[:96]!r}")
+
+    manual = _frontmatter_description(AGENT_MANUAL)
+    assert manual.startswith("Configure"), (
+        f"the manual's description no longer opens verb-first like its siblings: {manual[:96]!r}")
+
+
+def test_agent_manual_routes_applying_a_change_to_the_front_door():
+    """PSG-TOOL-03 + AAS-TRIG-03: the manual documents a change; `job-search` applies one.
+
+    `ownership.md` gives applying a config change to `job-search`, and gives `job-search-agent` no
+    `Instead` for one — so a description that claims "how do I change/add/customize …" routes an agent
+    to a contract that neither forbids the action nor sends it anywhere."""
+    desc = _frontmatter_description(AGENT_MANUAL)
+    assert re.search(r"applying[^.]*→ job-search(?![\w-])", desc), (
+        f"the manual's description does not route APPLYING a change to the front door: {desc!r}")
+    assert "how do I change/add/customize" not in desc, (
+        "the manual still claims applying a change as one of its own triggers")
+
+    # The other half of the pair lives in the contract. Without this, the assertion above could go on
+    # agreeing with a rule that had been rewritten or removed one file over.
+    assert ("`job-search-agent` owns the manual for what is configurable and how; `job-search` is where "
+            "a config change the user asks for gets applied.") in _normalized_prose(OWNERSHIP), (
+        "the contract no longer splits documenting a change from applying one, so the routing asserted "
+        "above agrees with nothing")
+
+
+def test_front_door_hints_how_to_navigate_its_largest_playbook():
+    """AAS-BOUND-05: `references/onboarding.md` is the largest file this skill points at (6k words) and
+    its pointer carried no navigation hint, while both large files the runner points at do.
+
+    Pinned to the POINTER rather than to the file, so a hint that drifts onto some other reference — or
+    onto a bare mention of onboarding further down — does not satisfy it."""
+    prose = _normalized_prose(FRONT_DOOR)
+    assert re.search(r"`references/onboarding\.md`.{0,120}grep `\^## ` for the section list", prose), (
+        "the first-run playbook pointer carries no `grep `^## `` hint")
