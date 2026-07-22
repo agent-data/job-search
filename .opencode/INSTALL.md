@@ -57,8 +57,10 @@ opencode
 
 ## Updating
 
-OpenCode installs package plugins under `~/.cache/opencode/node_modules/`. Bun may reuse a cached git
-resolution, so restarting OpenCode does not guarantee that a moving branch has updated.
+OpenCode installs package plugins under `~/.cache/opencode/packages/`. Bun may reuse a cached git
+resolution, so restarting OpenCode does not guarantee that a moving branch has updated. To force a
+fresh install, delete the package's directory under `~/.cache/opencode/packages/` and restart
+OpenCode.
 
 For reproducible installs, append a commit SHA to the specification and change that SHA when you want to
 upgrade:
@@ -77,7 +79,9 @@ upgrade:
 2. Verify the plugin line in your `opencode.json`
 3. Look for `failed to load plugin` and the accompanying error
 4. Confirm the configured revision exists in the repository
-5. Make sure you are using a recent version of OpenCode
+5. If the plugin was first installed before the fix you need, delete its directory under
+   `~/.cache/opencode/packages/` and restart OpenCode — Bun reuses the cached git resolution
+6. Make sure you are using a recent version of OpenCode
 
 **Skills not found**
 
