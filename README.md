@@ -123,15 +123,22 @@ ln -s "$(pwd)/job-search" ~/.cursor/plugins/local/job-search
 
 ### opencode
 
-Add the plugin to the `plugin` array in your global or project-level `opencode.json`, then restart opencode:
+Add Job Search to the `plugin` array in your global OpenCode config at
+`~/.config/opencode/opencode.json`, or to an `opencode.json` in a project where you want to use it:
 
 ```json
 {
+  "$schema": "https://opencode.ai/config.json",
   "plugin": ["job-search@git+https://github.com/agent-data/job-search.git"]
 }
 ```
 
-See [`.opencode/INSTALL.md`](.opencode/INSTALL.md) for local development and troubleshooting.
+Restart OpenCode, then start with: **“Set up my job search.”** OpenCode installs the git package with
+Bun and the plugin registers the five bundled skills. If your config already has plugins, add this entry
+to the existing array rather than replacing it.
+
+See [`.opencode/INSTALL.md`](.opencode/INSTALL.md) for verification, revision pinning, local development,
+and troubleshooting.
 
 ### Gemini CLI
 
