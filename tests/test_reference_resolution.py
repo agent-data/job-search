@@ -586,28 +586,26 @@ MAPPED_REFERENCES = (
     "skills/job-search-agent/references/customization.md",
 )
 
-# How far into a file the `**Contents:**` map may sit. Wide enough for a body that opens with framing
-# prose before its map (onboarding.md puts it on line 22), tight enough that a map buried mid-document —
-# where a partial read would never see it — still fails.
-CONTENTS_WINDOW = 30
-
-# Every anchor on the map line, whatever characters it holds. Deliberately NOT a restricted class: an
-# anchor the class would not match (`#config.yaml`, `#Ordered-phases`) is exactly the mistake this gate
-# exists to catch, and a narrower pattern would skip it silently instead of failing.
+# Every anchor in the map, whatever characters it holds. Deliberately NOT a restricted class: an anchor
+# the class would not match (`#config.yaml`, `#Ordered-phases`) is exactly the mistake this gate exists to
+# catch, and a narrower pattern would skip it silently instead of failing.
 _MAP_ANCHOR = re.compile(r"\]\(#([^)]+)\)")
 
 _FENCE = re.compile(r"^(?:```|~~~)")
 
+_MAP_MARKER = "**Contents:**"
 
-def _section_slugs(text):
-    """github-slugger slugs of the `##` headings, in file order, ignoring fenced code blocks.
 
-    Fence-awareness is load-bearing: conventions.md embeds a sample digest whose fenced body contains
-    `## Strong matches` and friends. Those are illustrative text, not link targets — an entry pointing at
-    one would render as a dead link, so they must not count as sections."""
-    slugs = []
+def _unfenced_lines(text):
+    """(index, line) for every line OUTSIDE a fenced code block — the single fence-tracking walk here.
+
+    Fence-awareness is load-bearing twice over. conventions.md embeds a sample digest whose fenced body
+    contains `## Strong matches` and friends: illustrative text, not link targets, so an entry pointing at
+    one would render as a dead link and they must not count as sections. The same holds for the map
+    itself — a `**Contents:**` line shown inside a fenced example is a picture of a map, not this file's
+    map, and mistaking it for one would gate the file against the wrong entries."""
     fence = None
-    for line in text.split("\n"):
+    for index, line in enumerate(text.split("\n")):
         marker = _FENCE.match(line.strip())
         if marker:
             token = marker.group(0)[0]
@@ -616,9 +614,39 @@ def _section_slugs(text):
             elif fence == token:
                 fence = None
             continue
-        if fence is None and line.startswith("## "):
-            slugs.append(doc_lint.slugify(line[3:]))
-    return slugs
+        if fence is None:
+            yield index, line
+
+
+def _sections(text):
+    """(line index, github-slugger slug) per `##` heading, in file order, ignoring fenced code blocks."""
+    return [(index, doc_lint.slugify(line[3:]))
+            for index, line in _unfenced_lines(text) if line.startswith("## ")]
+
+
+def _section_slugs(text):
+    """github-slugger slugs of the `##` headings, in file order, ignoring fenced code blocks."""
+    return [slug for _, slug in _sections(text)]
+
+
+def _map_block(text):
+    """The map's full LOGICAL extent -> (line index of its `**Contents:**` line, joined text).
+
+    A map is a paragraph, not a physical line. Markdown permits wrapping and this repo's own list style
+    wraps, so the entries continue onto every contiguous non-blank line that follows. Reading only the
+    first physical line would report the wrapped-off entries as missing — pointing at a defect that does
+    not exist, and inviting a "fix" that re-adds them above the duplicates it leaves behind.
+
+    Returns (None, "") when the file has no map outside a fenced block."""
+    lines = text.split("\n")
+    unfenced = dict(_unfenced_lines(text))
+    for index, line in unfenced.items():
+        if _MAP_MARKER in line:
+            end = index + 1
+            while end in unfenced and unfenced[end].strip():
+                end += 1
+            return index, "\n".join(lines[index:end])
+    return None, ""
 
 
 def test_every_large_reference_carries_an_internal_map():
@@ -634,12 +662,16 @@ def test_every_large_reference_carries_an_internal_map():
             f"{rel} is now under 100 lines and no longer needs a map. Removing it from "
             f"MAPPED_REFERENCES drops it from this gate for good — decide that deliberately and record "
             f"why, do not delete the entry to make CI green")
-        head = lines[:CONTENTS_WINDOW]
-        map_lines = [line for line in head if "**Contents:**" in line]
-        assert map_lines, (
-            f"{rel} has no `**Contents:**` map in its first {CONTENTS_WINDOW} lines")
-        anchors = _MAP_ANCHOR.findall(map_lines[0])
-        slugs = _section_slugs(text)
+        map_index, map_text = _map_block(text)
+        assert map_index is not None, (
+            f"{rel} has no `**Contents:**` map outside a fenced code block")
+        anchors = _MAP_ANCHOR.findall(map_text)
+        assert anchors, (
+            f"{rel} has an EMPTY `**Contents:**` map — no `](#...)` entries at all. A file whose `##` "
+            f"headings were demoted to `###` would otherwise pass this gate vacuously, matching an empty "
+            f"map against an empty section list")
+        sections = _sections(text)
+        slugs = [slug for _, slug in sections]
         missing = [s for s in slugs if s not in anchors]
         extra = [a for a in anchors if a not in slugs]
         faults = []
@@ -653,3 +685,12 @@ def test_every_large_reference_carries_an_internal_map():
         assert not faults, f"{rel} map is not one entry per `##` section: {'; '.join(faults)}"
         assert anchors == slugs, (
             f"{rel} map lists its sections out of order; expected file order {slugs}, got {anchors}")
+        # The map sits above every section, per the published interface ("immediately after the H1"). Tied
+        # to the first `##` rather than a line-count window: a window big enough for a body that opens
+        # with framing prose is also big enough for a map to drift below an early section and stay green.
+        # `anchors` is non-empty and equals `slugs`, so `sections` is non-empty here.
+        first_section_index = sections[0][0]
+        assert map_index < first_section_index, (
+            f"{rel} puts its `**Contents:**` map on line {map_index + 1}, BELOW the first `##` heading "
+            f"(line {first_section_index + 1}). The map must precede every section or a partial read "
+            f"reaches content before it learns the file's scope")
