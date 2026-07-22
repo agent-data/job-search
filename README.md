@@ -114,10 +114,11 @@ Use `$job-search` if you need the skill shortcut.
 
 ### Cursor
 
-Clone the repository, then open the cloned folder in Cursor. Cursor loads the bundled skills from `.cursor-plugin/`.
+Clone the repository, then symlink it into Cursor's local plugins directory:
 
 ```bash
 git clone https://github.com/agent-data/job-search
+ln -s "$(pwd)/job-search" ~/.cursor/plugins/local/job-search
 ```
 
 ### opencode
