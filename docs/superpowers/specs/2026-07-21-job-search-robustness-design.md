@@ -1,9 +1,9 @@
 ---
 type: design-doc
 title: "Robust intent preservation, delegated ownership, and verifiable job-search runs"
-status: current
+status: superseded
 verified: partial
-last_reviewed: 2026-07-21
+last_reviewed: 2026-07-22
 code_refs: [ARCHITECTURE.md, TESTING.md, docs/design-docs/core-beliefs.md, docs-private/agent-agnostic-skills, docs-private/prompt-style-guide, shared/references/conventions.md, shared/references/internals.md, shared/references/parallelism.md, shared/references/query-strategy.md, shared/references/run-lifecycle.md, shared/scripts/mechanics/event-log-append.sh, skills/evaluate-job-fit/SKILL.md, skills/job-search/SKILL.md, skills/job-search/references/onboarding.md, skills/job-search-run/SKILL.md, scripts/eval_harness.py, tests/test_mechanics_scripts.py, tests/test_query_strategy_contract.py]
 claimed_paths: [skills/job-search, skills/job-search-run, skills/evaluate-job-fit, shared/references, shared/scripts/mechanics, scripts, tests, docs/superpowers/reviews, ARCHITECTURE.md, TESTING.md]
 owner_area: Skills & references
@@ -11,6 +11,17 @@ repos: [job-search-os]
 ---
 
 # Robust intent preservation, delegated ownership, and verifiable job-search runs
+
+> **SUPERSEDED (2026-07-22) — not approved, do not implement.** Replaced in full by
+> [`2026-07-22-audit-remediation-design.md`](2026-07-22-audit-remediation-design.md), which responds to
+> the same dogfood session but starts from the verified findings in
+> [`docs/superpowers/reviews/2026-07-22-plugin-style-audit.md`](../reviews/2026-07-22-plugin-style-audit.md).
+> That audit located the failures in a missing ownership boundary, a closed must-have classifier list,
+> and hand-copied contracts that drifted — causes reachable with corrected instructions plus contract
+> tests. The replacement therefore inherits nothing from this document: config v3, search-plan receipts,
+> preference fingerprints, must-have evidence matrices, and workspace bundle authority are all dropped.
+> The line below reading "The design is approved" refers to this document's own review and no longer
+> holds.
 
 This design responds to a failed first-run dogfood session on the
 `feat/recall-oriented-query-strategy` branch. The user asked for roles at early-stage startups or small

@@ -1,5 +1,12 @@
 # Job Search Robustness Implementation Plan
 
+> **SUPERSEDED (2026-07-22) — do not implement.** Replaced in full by
+> [`docs/superpowers/specs/2026-07-22-audit-remediation-design.md`](../specs/2026-07-22-audit-remediation-design.md),
+> which starts from the findings in
+> [`docs/superpowers/reviews/2026-07-22-plugin-style-audit.md`](../reviews/2026-07-22-plugin-style-audit.md)
+> and inherits nothing from this plan. Config v3, search-plan receipts, preference fingerprints,
+> must-have evidence matrices, and bundle authority are explicitly not part of the replacement.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Preserve user must-haves through retrieval and judgment, enforce runner/evaluator ownership, reject noncanonical artifacts, and prove the complete first-run workflow with executed behavioral evidence.
