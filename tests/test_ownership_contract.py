@@ -24,9 +24,15 @@ HANDOFF_VERBS = ("invoke", "route", "return", "fail", "stop", "hand", "delegate"
 # table uses, so a fault message and the paragraph it enforces say the same words.
 # `Exclusively owns` phrases are the claim; `Never` phrases are the prohibition — different vocabularies
 # because a cell that OWNS the pull says "metered calls" while a cell that FORBIDS it says "job source".
+# Each `owns` tuple holds the natural ways a cell says it owns that action, so the gate asks whether the
+# claim is still legible rather than whether one blessed phrase survived: a single-phrase vocabulary
+# couples the contract to the runner's current wording, and any later rewrite of its responsibilities goes
+# RED for saying the same thing differently. Kept narrow enough that only a cell claiming THIS action
+# matches, and asymmetric to the `never` phrases so a prohibition cannot read as a claim.
 PULL, VERDICT = "searching the job source", "a fit verdict"
 CLAIMS = {
-    PULL: {"owner": "`job-search-run`", "owns": ("metered calls",),
+    PULL: {"owner": "`job-search-run`",
+           "owns": ("metered calls", "the pull", "searching the job source"),
            "never": ("job source", "a search")},
     VERDICT: {"owner": "`evaluate-job-fit`", "owns": ("relevance", "dealbreakers"),
               "never": ("judg", "verdict")},
@@ -35,10 +41,14 @@ CLAIMS = {
 # `Exclusively owns` is an enumeration, not a residual claim. "everything else" is the shape a cell takes
 # when someone stops enumerating: it swallows every other row's exclusive territory while the header still
 # says *exclusively*, so the table contradicts itself and no reader can tell who owns what.
+# Matched on word boundaries, not as bare substrings: "etc" is a substring of `fetching` and `sketch` —
+# both words this pack uses about itself — so an unbounded match fires on a legitimate rewrite and reports
+# a residual claim that is not there, which is worse than missing one because the message misdirects.
 RESIDUAL_CLAIMS = ("everything", "anything", "all else", "the rest", "whatever", "etc")
 
 _FENCE = re.compile(r"^(?:```|~~~)")
 _CODE_SPAN = re.compile(r"`[^`]*`")
+_PARENTHETICAL = re.compile(r"\([^()]*\)")
 
 
 def _marked_block(path, marker):
@@ -104,6 +114,23 @@ def _claims(cell, action):
     return any(phrase in cell.lower() for phrase in CLAIMS[action]["owns"])
 
 
+def _bans(cell, action):
+    """Whether a `Never` cell forbids `action`, ignoring its parenthesized carve-outs.
+
+    A carve-out names the action it excepts, so it carries the very words the ban is matched on: the
+    runner's cell ends `(one bounded exception: **Triage is not a verdict**, below)`, and a cell reduced
+    to that parenthetical alone would satisfy a bare substring check while forbidding nothing. The ban has
+    to survive outside its own exception."""
+    outside = _PARENTHETICAL.sub(" ", cell).lower()
+    return any(phrase in outside for phrase in CLAIMS[action]["never"])
+
+
+def _residual_claims(cell):
+    """The residual-claim words this `Exclusively owns` cell uses, matched whole."""
+    lowered = cell.lower()
+    return [word for word in RESIDUAL_CLAIMS if re.search(rf"\b{re.escape(word)}\b", lowered)]
+
+
 def _row_faults(block):
     """Every fault in the ownership table — shape AND content.
 
@@ -130,6 +157,14 @@ def _row_faults(block):
        `job-preference-interview` or both from `job-search-agent` — the exact failure class those two rows
        were added to close — with the whole file still green. Scoped to skill rows because the prose scopes
        it to skills: `mechanics scripts` is a validator, and forbidding it to search is not the claim.
+
+    4. The runner forbids the verdict. Rule 3 exempts any row that owns one of the two actions, so the
+       runner's `Never` — the contract's second-most load-bearing prohibition, and the one standing between
+       the skill that already holds every posting and judging them — was pinned by non-emptiness alone and
+       could be deleted with the suite green. Checked with rule 3's own VERDICT vocabulary so the two
+       cannot drift, and chained to it so exactly one of the two always reads that cell. Deliberately not
+       mirrored onto `evaluate-job-fit`: the prose carves out reading one posting's detail as not a search,
+       so the judge legitimately carries no source prohibition.
 
     Factored out of the test so the detection itself can be exercised against known-corrupt samples
     (`test_row_fault_detection_is_not_vacuous`). A structural gate that only ever sees the good input
@@ -160,7 +195,7 @@ def _row_faults(block):
         elif never and _lead_word(never) in HANDOFF_VERBS:
             faults.append(f"{row[0]}: `Never` opens with the handoff verb {_lead_word(never)!r} — it reads "
                           f"as an instruction, not a prohibition: {never!r}")
-        residual = [word for word in RESIDUAL_CLAIMS if word in owns.lower()]
+        residual = _residual_claims(owns)
         if residual:
             faults.append(f"{row[0]}: `Exclusively owns` claims {residual[0]!r} — a residual claim "
                           f"swallows every other row's exclusive territory; enumerate the actions this "
@@ -168,12 +203,19 @@ def _row_faults(block):
         # Rule 3 — a skill that owns neither of the two contested actions must forbid both.
         if row[0].startswith("`") and not (_claims(owns, PULL) or _claims(owns, VERDICT)):
             for action in (PULL, VERDICT):
-                if not any(phrase in never.lower() for phrase in CLAIMS[action]["never"]):
+                if not _bans(never, action):
                     faults.append(
                         f"{row[0]}: `Exclusively owns` claims neither the pull nor the verdict, so its "
                         f"`Never` must forbid both — it carries no clause about {action}, which belongs "
                         f"to {CLAIMS[action]['owner']}; say so with one of "
                         f"{CLAIMS[action]['never']}: {never!r}")
+        # Rule 4 — the runner owns the pull, so rule 3 exempts its row and never reads its `Never`.
+        elif row[0] == CLAIMS[PULL]["owner"] and not _bans(never, VERDICT):
+            faults.append(
+                f"{row[0]}: `Never` drops the fit-verdict ban — owning the pull exempts this row from "
+                f"the both-prohibitions rule above, so this cell is the only thing keeping the skill that "
+                f"holds every posting out of {VERDICT}, which belongs to {CLAIMS[VERDICT]['owner']}; say "
+                f"so with one of {CLAIMS[VERDICT]['never']}: {never!r}")
 
     # Rule 2 — one claimant each, and it is the row the prose names.
     for action in (PULL, VERDICT):
@@ -307,7 +349,7 @@ def test_the_table_states_the_pattern_its_never_column_encodes():
 
 
 def test_row_fault_detection_is_not_vacuous():
-    """Prove the gate above can actually go RED, on the nine corruptions it exists to catch.
+    """Prove the gate above can actually go RED, on the ten corruptions it exists to catch.
 
     Samples 4 and 5 are the ones a shape-only check waved through: a `Never`/`Instead` swap on the runner's
     row, which turns the prohibition into the instruction, and a filler alternative that satisfies
@@ -317,7 +359,11 @@ def test_row_fault_detection_is_not_vacuous():
     from `job-preference-interview`, both prohibitions deleted from `job-search-agent`, the runner's and the
     judge's `Owns` cells swapped so the table contradicts its own `Never` column, and the front door's
     `Owns` reduced to a residual claim. The first two are the failure class those two rows were ADDED to
-    close, on the two rows that added them."""
+    close, on the two rows that added them.
+
+    Sample 10 is the one that survived all of those: the runner's `Never` reduced to its own parenthetical
+    carve-out. Rule 3 exempted the row, and the carve-out names the verdict it excepts — so the cell still
+    read as forbidding one, and the ban deleted cleanly with the suite green."""
     good = _marked_block(OWNERSHIP, MARKER)
     header, rows = _rows(good)
     assert header == COLUMNS and len(rows) == len(OWNERS)
@@ -340,8 +386,11 @@ def test_row_fault_detection_is_not_vacuous():
 
     unsourced = [list(row) for row in rows]             # the brief-writer no longer forbidden to search
     unsourced[by_owner["`job-preference-interview`"]][2] = "judge a posting against the brief it just wrote"
-    unfenced = [list(row) for row in rows]              # the manual forbidden neither pull nor verdict
-    unfenced[by_owner["`job-search-agent`"]][2] = "write run artifacts"
+    unguarded = [list(row) for row in rows]             # the manual forbidden neither pull nor verdict
+    unguarded[by_owner["`job-search-agent`"]][2] = "write run artifacts"
+    unbanned = [list(row) for row in rows]              # the runner's ban reduced to its own carve-out
+    unbanned[by_owner["`job-search-run`"]][2] = (
+        "(one bounded exception: **Triage is not a verdict**, below)")
     traded = [list(row) for row in rows]                # the pull and the verdict change hands
     traded[by_owner["`job-search-run`"]][1], traded[by_owner["`evaluate-job-fit`"]][1] = (
         rows[by_owner["`evaluate-job-fit`"]][1], rows[by_owner["`job-search-run`"]][1])
@@ -355,7 +404,8 @@ def test_row_fault_detection_is_not_vacuous():
         (_table(inverted), "that is a destination"),
         (_table(filler), "it is not an alternative"),
         (_table(unsourced), "no clause about searching the job source"),
-        (_table(unfenced), "no clause about a fit verdict"),
+        (_table(unguarded), "no clause about a fit verdict"),
+        (_table(unbanned), "`Never` drops the fit-verdict ban"),
         (_table(traded), "gives searching the job source to"),
         (_table(residual), "a residual claim"),
     ):
