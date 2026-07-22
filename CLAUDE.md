@@ -32,3 +32,24 @@ It takes three readings to extract one simple fact. Say it plainly instead:
 > picks up `detail-model-binding.json`, which isn't a run.
 
 If a sentence needs a second reading to yield its point, rewrite it.
+
+## Never use an idiom to state a simple fact
+
+No idiom, figure of speech, or literary phrase standing in for a plain statement — however common or
+obvious the phrase seems. If you mean "the same error showed up in two different places", write that.
+Do not write "the same mistake at two removes".
+
+The clear, unambiguous version is always better. There is no case where a reader benefits from
+decoding a figure of speech to reach a fact you could have stated directly. Being understood on the
+first reading is the whole goal; nothing is traded away by writing plainly.
+
+Personification is the same failure: a gate does not see, a contract does not know, a test does not
+care. Say what the code does.
+
+All three of these were written during this project:
+
+| Written | Should have been |
+|---|---|
+| "the same mistake at two removes" | the same error showed up in two different places |
+| "gates that can see the defect" | gates that actually catch these bugs |
+| "the pack has an ownership metaphor, not a boundary" | nothing in the pack stops one skill doing another skill's work |
