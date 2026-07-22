@@ -3,47 +3,69 @@
 ## Prerequisites
 
 - [opencode](https://opencode.ai) installed
-- Your `agent-data` API key set (see the README's Installation step 1)
+
+Job Search checks for the `agent-data` CLI and authentication during onboarding. You do not need to
+configure either one before installing the plugin.
 
 ## Installation
 
-Add Job Search to the `plugin` array in your `opencode.json` (global or project-level):
+Add Job Search to the `plugin` array in one of these files:
+
+- `~/.config/opencode/opencode.json` to make it available in every project
+- `opencode.json` in a project root to make it available only in that project
 
 ```json
 {
+  "$schema": "https://opencode.ai/config.json",
   "plugin": ["job-search@git+https://github.com/agent-data/job-search.git"]
 }
 ```
 
-Restart opencode. The plugin installs through opencode's plugin manager and registers the
-Job Search skills.
+If the file already contains plugins, add the Job Search entry to its existing `plugin` array instead of
+replacing the array.
 
-Verify by asking opencode to run the **job-search** skill.
+Restart OpenCode. OpenCode passes the git package specification to Bun, installs the whole repository in
+its package cache, and loads the package entry point. The plugin then registers the bundled `skills/`
+directory; keeping the whole repository together allows each skill to resolve `shared/references/`.
+
+Start with:
+
+> **Set up my job search.**
+
+Installation succeeded when OpenCode loads the **job-search** skill and begins the `agent-data`
+prerequisite check. To inspect plugin loading directly, run:
+
+```bash
+opencode run --print-logs "Use the job-search skill to set up my job search."
+```
+
+The logs must not contain `failed to load plugin` or `Plugin export is not a function`.
 
 opencode uses its own plugin install. If you also use Claude Code, Codex, or another harness,
 install Job Search separately for each one.
 
 ## Running from a local clone instead
 
-If you'd rather not use the git-backed package, clone the repo and run opencode from inside it —
-the bundled plugin (`.opencode/plugins/job-search.js`) registers the skills:
+For local development, clone the repository and run OpenCode from its root. OpenCode automatically loads
+the bundled `.opencode/plugins/job-search.js` file, which registers that clone's skills:
 
 ```bash
 git clone https://github.com/agent-data/job-search
-cd job-search && opencode
+cd job-search
+opencode
 ```
 
 ## Updating
 
-opencode installs Job Search through a git-backed package spec. Some opencode and Bun versions
-pin the resolved git dependency in a lockfile or cache, so a restart may not pick up the newest
-commit. If updates don't appear, clear opencode's package cache or reinstall the plugin.
+OpenCode installs package plugins under `~/.cache/opencode/node_modules/`. Bun may reuse a cached git
+resolution, so restarting OpenCode does not guarantee that a moving branch has updated.
 
-To pin a specific revision, append a ref (a branch or commit SHA) to the spec:
+For reproducible installs, append a commit SHA to the specification and change that SHA when you want to
+upgrade:
 
 ```json
 {
-  "plugin": ["job-search@git+https://github.com/agent-data/job-search.git#main"]
+  "plugin": ["job-search@git+https://github.com/agent-data/job-search.git#<commit-sha>"]
 }
 ```
 
@@ -51,14 +73,18 @@ To pin a specific revision, append a ref (a branch or commit SHA) to the spec:
 
 **Plugin not loading**
 
-1. Check logs: `opencode run --print-logs "hello" 2>&1 | grep -i job-search`
+1. Check logs: `opencode run --print-logs "hello"`
 2. Verify the plugin line in your `opencode.json`
-3. Make sure you're on a recent version of opencode
+3. Look for `failed to load plugin` and the accompanying error
+4. Confirm the configured revision exists in the repository
+5. Make sure you are using a recent version of OpenCode
 
 **Skills not found**
 
-1. Ask opencode to list its skills
+1. Ask OpenCode to list its skills
 2. Confirm the plugin is loading (see above)
+3. Confirm **job-search**, **job-search-run**, **job-preference-interview**, **evaluate-job-fit**, and
+   **job-search-agent** are listed
 
 ## Getting help
 
