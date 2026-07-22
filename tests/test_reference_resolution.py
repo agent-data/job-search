@@ -578,10 +578,10 @@ def test_every_large_reference_carries_an_internal_map():
         assert len(lines) > 100, f"{rel} is no longer large; drop it from MAPPED_REFERENCES"
         head = "\n".join(lines[:6])
         assert "**Contents:**" in head, f"{rel} has no `**Contents:**` map in its first 6 lines"
-        anchors = [a for a in re.findall(r"\]\(#([a-z0-9-]+)\)", head)]
+        anchors = [a for a in re.findall(r"\]\(#([a-z0-9_-]+)\)", head)]
         assert len(anchors) >= 3, f"{rel} map has {len(anchors)} anchors; expected one per `##` section"
         slugs = {
-            re.sub(r"[^a-z0-9 -]", "", m.group(1).lower()).replace(" ", "-")
+            re.sub(r"[^a-z0-9 _-]", "", m.group(1).lower()).replace(" ", "-")
             for m in re.finditer(r"^## (.+)$", path.read_text(encoding="utf-8"), re.M)
         }
         for anchor in anchors:
