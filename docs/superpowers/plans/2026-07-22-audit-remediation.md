@@ -18,12 +18,13 @@ Every task's requirements implicitly include this section.
 - Implementation baseline is commit `4a51818`; review runtime changes with `git diff 4a51818...HEAD`.
 - **Stdlib only.** No new runtime or test dependencies (AAS-DIST-05).
 - **No numeric scores.** No fit score, weight, percentage, or category arithmetic may enter `preferences.md`, `jobs.jsonl`, a digest, `config.yaml`, or `templates/`. `scripts/philosophy_guard.py` enforces this.
-- **No config schema change.** `version: 2` stays; no `version: 3`, no migration, no new `config.yaml` key. The only new persisted key anywhere is the registry's `update_check.consent` (Task 25).
+- **No config schema change.** `version: 2` stays; no `version: 3`, no migration, no new `config.yaml` key. The only new persisted key anywhere is the registry's `update_check.consent` (Task 27).
 - **No new skills.** Five skills in, five skills out (AAS-BOUND-07).
 - **One canonical home per fact.** A fact moved into a reference is *deleted* from its old location, never left behind as a copy (AAS-BOUND-03).
 - **Never delete a failing assertion to make CI green.** If a pin fails after a move, re-point it at the fact's new canonical home. Retiring an invariant under cover of a refactor is the one move this plan forbids outright.
 - Every rule ID cited in a task must appear in the commit message for that task, exactly as cited.
-- After every task: `python3 -m pytest -q` (takes ~8 minutes), `python3 scripts/philosophy_guard.py --root .`, and `python3 scripts/doc_lint.py --root .` must all pass before committing.
+- **Test cadence.** Before every commit, run the test files covering the change (each task names them) plus `python3 scripts/doc_lint.py --root .` and `python3 scripts/philosophy_guard.py --root .` — both take seconds. The **full** `python3 -m pytest -q` (~8 minutes) runs at each phase boundary — after Tasks 1, 6, 11, 16, 26, 27 — and in Task 28. Never report a test result you did not run.
+- **Branch.** All work lands on `feat/recall-oriented-query-strategy`, continuing from `7adb0c3`. Do not create a branch.
 
 ## File Structure
 
@@ -1536,6 +1537,32 @@ def test_runner_references_exist_and_carry_load_triggers():
 Run: `python3 -m pytest tests/test_reference_resolution.py::test_runner_references_exist_and_carry_load_triggers -q`
 Expected: FAIL — `skills/job-search-run/references/retrieval-and-selection.md not created`
 
+- [ ] **Step 2a: Extend the fanned-copy allowlist (do this in the same task)**
+
+`tests/test_reference_resolution.py::test_no_fanned_reference_copy_remains` asserts the only `*.md`
+under `skills/*/references/` are the four in `SKILL_LOCAL_ORIGINALS`, so creating the two new files
+turns it red. That guard exists to catch **shared-reference twins and adapter copies** — its docstring
+says so — not to ban legitimate skill-local originals. Extend the allowlist; do not weaken the
+assertion, which keeps proving the no-twin property for all six files.
+
+```python
+SKILL_LOCAL_ORIGINALS = {
+    "skills/job-search/references/home.md",
+    "skills/job-search/references/onboarding.md",
+    "skills/job-search-agent/references/customization.md",
+    "skills/job-search-agent/references/scheduling-and-consent.md",
+    # Added 2026-07-22 by the audit remediation: phase-local references split out of the runner
+    # body (AAS-BOUND-02). Originals, not copies — neither restates a shared/references file; both
+    # carry material that had no home outside skills/job-search-run/SKILL.md.
+    "skills/job-search-run/references/retrieval-and-selection.md",
+    "skills/job-search-run/references/accounting.md",
+}
+```
+
+Run: `python3 -m pytest tests/test_reference_resolution.py::test_no_fanned_reference_copy_remains -q`
+Expected: PASS both before your edit (four files, none present yet) and after Step 4 (six files, all
+allowlisted).
+
 - [ ] **Step 3: Create the retrieval reference**
 
 Create `skills/job-search-run/references/retrieval-and-selection.md` with this header, then **move** (cut, do not copy) these blocks out of `skills/job-search-run/SKILL.md` into it, in this order: the stream-construction detail and frozen-request rules from Loop step 1; the request-evidence schematic; the reconciliation ordering list; the mode/selection table; the finite allocator; the pagination scratch rules; the continuation branch table; and the stream-record field paragraph from step 5.
@@ -2370,13 +2397,23 @@ Append to `tests/test_release_integrity.py`:
 ```python
 def test_undeclared_version_bearing_files_are_flagged(tmp_path):
     """AAS-DIST-01: a version string outside VERSION_MANIFESTS that disagrees is silent staleness."""
-    import check_release_integrity as cri
     (tmp_path / ".claude-plugin").mkdir()
     (tmp_path / ".claude-plugin" / "plugin.json").write_text('{"version": "0.7.0"}', encoding="utf-8")
     (tmp_path / "CHANGELOG.md").write_text("## [0.6.0] — 2026-07-15\n", encoding="utf-8")
-    hits = cri.check_undeclared_version(str(tmp_path))
-    assert any("CHANGELOG.md" in h for h in hits)
+    result = run_check(tmp_path, "--check-undeclared-version")
+    assert result.returncode != 0
+    assert "CHANGELOG.md" in result.stdout + result.stderr
+
+
+def test_agreeing_version_bearing_file_passes(tmp_path):
+    (tmp_path / ".claude-plugin").mkdir()
+    (tmp_path / ".claude-plugin" / "plugin.json").write_text('{"version": "0.7.0"}', encoding="utf-8")
+    (tmp_path / "CHANGELOG.md").write_text("## [0.7.0] — 2026-07-22\n", encoding="utf-8")
+    assert run_check(tmp_path, "--check-undeclared-version").returncode == 0
 ```
+
+This file drives the script as a **subprocess** through its existing `run_check(root, *args)` helper — it
+never imports it. Follow that pattern; do not add an import-based test.
 
 - [ ] **Step 2: Run the test to verify it fails**
 
@@ -2520,13 +2557,148 @@ the judge buried its boundary as the third sentence of Method step 2."
 
 ---
 
-### Task 24: The remaining prompt-craft and pack-doc corrections
+### Task 24: Host-capability and consent corrections
 
-**Rules:** PSG-F-01 (MUST — re-derive the visibility contract per harness) · PSG-F-02 (MUST — every length budget gets a relaxation condition) · PSG-F-07 (SHOULD — anchor tone in a concrete human-role image) · PSG-TOOL-05 (MUST — document optionality and default behavior) · PSG-TOOL-10 (CONSIDER — spell out both boolean branches) · PSG-TOOL-13 (CONSIDER — document the output schema to the same standard) · PSG-ANTI-07 (a host-capability assumption asserted as universal) · AAS-PORT-04 (SHOULD — native-first, fallback-second) · AAS-PORT-05 (SHOULD — consent-gate any machine write) · AAS-SKILL-09 (CONSIDER — declare a shipped engine script read-only) · AAS-FORM-09 (SHOULD — fail-closed self-audit) · AAS-FORM-10 (SHOULD — pair every prohibition with the alternative) · AAS-PACK-04 (SHOULD — frame the pack as an implementation of the standard) · AAS-PACK-06 (CONSIDER — gate outside contributions) · AAS-AUTO-06 (SHOULD — declare the pack's precedence below user configuration).
+**Rules:** PSG-ANTI-07 (a host-capability assumption asserted as universal) · AAS-LANG-03 (SHOULD — conditionalize host-dependent capabilities with a named fallback) · AAS-PORT-04 (SHOULD — order native-path-first, fallback-second) · AAS-PORT-05 (SHOULD — consent-gate any machine-level write) · AAS-SKILL-09 (CONSIDER — declare a shipped engine script read-only).
 
-**Files:** `shared/references/voice.md`, `shared/references/conventions.md`, `shared/references/internals.md`, `shared/references/parallelism.md`, `skills/job-search/references/onboarding.md`, `skills/job-search/references/home.md`, `skills/job-search-agent/SKILL.md`, `AGENTS.md`, `CONTRIBUTING.md`, `TESTING.md`
+**Files:**
+- Modify: `skills/job-search-run/SKILL.md` (worker re-emit; References block), `shared/references/parallelism.md`
+- Modify: `shared/references/internals.md` (schedule read-back ordering)
+- Modify: `skills/job-search/references/onboarding.md`, `skills/job-search/references/home.md` (subagent profile)
+- Test: `tests/test_reference_resolution.py`
 
-- [ ] **Step 1: Host-scope the visibility premise** — `shared/references/voice.md:5-8`
+**Interfaces:**
+- Consumes: nothing from earlier tasks. Touches the runner body only after Task 14 settled its size.
+
+- [ ] **Step 1: Write the failing test**
+
+Append to `tests/test_reference_resolution.py`:
+
+```python
+def test_host_dependent_capabilities_name_their_fallback():
+    """PSG-ANTI-07 + AAS-LANG-03: a primitive most hosts lack cannot be an unconditional step."""
+    for rel in ("skills/job-search-run/SKILL.md", "shared/references/parallelism.md"):
+        text = " ".join((ROOT / rel).read_text(encoding="utf-8").split())
+        assert "ask that same worker to re-emit" not in text, (
+            f"{rel} still assumes every host can re-query a finished worker")
+        assert "Treat it as unaccounted evidence, which blocks completion" in text
+
+
+def test_mechanics_scripts_are_declared_read_only():
+    """AAS-SKILL-09: a bundled engine script is a reproducibility contract."""
+    runner = (ROOT / "skills" / "job-search-run" / "SKILL.md").read_text(encoding="utf-8")
+    assert "read-only: never modify one or write a one-off replacement" in runner
+
+
+def test_schedule_readback_is_ordered_native_first():
+    """AAS-PORT-04: agents anchor on the first concrete command they see."""
+    text = (ROOT / "shared" / "references" / "internals.md").read_text(encoding="utf-8")
+    idx = text.index("read it back")
+    window = text[idx:idx + 320]
+    assert window.index("bound mechanism's own inspect") < window.index("crontab -l")
+```
+
+- [ ] **Step 2: Run the test to verify it fails**
+
+Run: `python3 -m pytest tests/test_reference_resolution.py -q -k "host_dependent or read_only or native_first"`
+Expected: FAIL — `skills/job-search-run/SKILL.md still assumes every host can re-query a finished worker`
+
+- [ ] **Step 3: Make the worker re-emit capability-conditional** — `skills/job-search-run/SKILL.md`, `shared/references/parallelism.md`
+
+Replace `A missing return is not evidence of zero calls: ask that same worker to re-emit its retained producer result without another agent-data call before consolidation.` with:
+
+```markdown
+A missing return is not evidence of zero calls. Treat it as unaccounted evidence, which blocks
+completion — that is the honest default. Only where your host can re-query a finished worker may you
+request its retained result; never make a second producer call to replace it.
+```
+
+- [ ] **Step 4: Reorder the schedule read-back native-first** — `shared/references/internals.md:831`
+
+Replace the read-back clause with: `read it back with the bound mechanism's own inspect (the registry records which), falling back to `crontab -l` / `launchctl list` for an OS-bound job`.
+
+- [ ] **Step 5: Show the subagent profile before writing it** — `skills/job-search/references/onboarding.md:290-293` and `home.md:148-150`
+
+Replace the post-hoc disclosure with: show the exact path and content **before** the write, write only on the yes that saw it, and state that it is user-removable.
+
+- [ ] **Step 6: Declare the mechanics scripts read-only** — `skills/job-search-run/SKILL.md` References block
+
+Add: `The bundled mechanics scripts under `../../shared/scripts/mechanics/` are read-only: never modify one or write a one-off replacement. If a script cannot do what a run needs, use its pinned prose fallback and report the gap.`
+
+- [ ] **Step 7: Run the tests and commit**
+
+Run: `python3 -m pytest tests/test_reference_resolution.py tests/test_run_lifecycle_pressure.py -q && python3 scripts/doc_lint.py --root .`
+Expected: PASS
+
+```bash
+git add skills shared tests/test_reference_resolution.py
+git commit -m "fix(hosts): conditionalize host-dependent steps and consent-gate the profile write (PSG-ANTI-07, AAS-LANG-03, AAS-PORT-04, AAS-PORT-05, AAS-SKILL-09)
+
+Re-querying a finished worker was stated unconditionally in a file that
+hedges every other primitive; the schedule read-back listed the OS fallback
+before the native inspect; the subagent profile was written on a yes that
+never mentioned it; seven bundled mechanics scripts carried no read-only
+declaration."
+```
+
+---
+
+### Task 25: Voice premise, budgets, and guidance form
+
+**Rules:** PSG-F-01 (MUST — open with the rendering/visibility contract, re-derived per harness) · PSG-F-02 (MUST — quantify every length limit with a countable budget *and* a relaxation condition) · PSG-F-07 (SHOULD — anchor tone in a concrete human-role image) · AAS-FORM-09 (SHOULD — gate completion claims with a fail-closed self-audit) · AAS-FORM-10 (SHOULD — pair every prohibition with the alternative or the consequence).
+
+**Files:**
+- Modify: `shared/references/voice.md` (premise, narration budget, reader persona)
+- Modify: `skills/job-search/references/onboarding.md` (checklist close, duration prohibition)
+- Test: `tests/test_reference_resolution.py`
+
+**Interfaces:**
+- Consumes: nothing. `voice.md` is untouched by every other task in this plan.
+
+- [ ] **Step 1: Write the failing test**
+
+Append to `tests/test_reference_resolution.py`:
+
+```python
+VOICE = ROOT / "shared" / "references" / "voice.md"
+ONBOARDING_REF = ROOT / "skills" / "job-search" / "references" / "onboarding.md"
+
+
+def test_visibility_premise_is_host_scoped():
+    """PSG-F-01: the premise is re-derived per harness, not asserted as universal."""
+    text = VOICE.read_text(encoding="utf-8")
+    assert "They do **not** see your thinking, your tool calls" not in text
+    assert "depends on the host" in text
+    assert "write the reply so it stands alone" in text
+
+
+def test_narration_budget_carries_a_relaxation_condition():
+    """PSG-F-02: a countable budget with no flip condition reads as a hard ceiling."""
+    assert "Relax this only when a stage genuinely needs more" in VOICE.read_text(encoding="utf-8")
+
+
+def test_voice_anchors_tone_in_a_reader_persona():
+    """PSG-F-07: parallelism.md does this for the subagent channel; the user channel had none."""
+    assert "keep an eye on the market for them" in VOICE.read_text(encoding="utf-8")
+
+
+def test_onboarding_checklist_fails_closed():
+    """AAS-FORM-09: an unchecked box needs a defined consequence."""
+    assert "Can't check every box? Onboarding isn't done" in ONBOARDING_REF.read_text(encoding="utf-8")
+
+
+def test_duration_prohibition_is_paired_with_its_alternative():
+    """AAS-FORM-10: a bare prohibition leaves the substitute behavior undetermined."""
+    text = " ".join(ONBOARDING_REF.read_text(encoding="utf-8").split())
+    assert "a duration you can't observe becomes a promise you break" in text
+```
+
+- [ ] **Step 2: Run the test to verify it fails**
+
+Run: `python3 -m pytest tests/test_reference_resolution.py -q -k "visibility or narration_budget or reader_persona or fails_closed or duration"`
+Expected: FAIL — `assert 'depends on the host' in text`
+
+- [ ] **Step 3: Host-scope the visibility premise** — `shared/references/voice.md:5-8`
 
 Replace `They do **not** see your thinking, your tool calls, the raw results those calls return, the reference files you read, or the system's internal vocabulary — only the words you put in a reply.` with:
 
@@ -2537,11 +2709,11 @@ that follows holds either way — **write the reply so it stands alone**, becaus
 call still should not have to read one to understand what happened.
 ```
 
-- [ ] **Step 2: Add the relaxation condition** — `shared/references/voice.md:25`
+- [ ] **Step 4: Add the relaxation condition** — `shared/references/voice.md:25`
 
 Append to rule 3: `Relax this only when a stage genuinely needs more — a blocked install, a named error, or a question you must ask to continue.`
 
-- [ ] **Step 3: Add the reader persona** — `shared/references/voice.md:10`
+- [ ] **Step 5: Add the reader persona** — `shared/references/voice.md:10`
 
 Append after the plain-English sentence:
 
@@ -2550,7 +2722,80 @@ Write for someone who asked you to keep an eye on the market for them — intere
 reading on their phone between other things. Not a log file, and not a colleague who knows the system.
 ```
 
-- [ ] **Step 4: Gloss the underdocumented fields** — `shared/references/conventions.md`
+- [ ] **Step 6: Close the onboarding checklist fail-closed** — `skills/job-search/references/onboarding.md:491`
+
+Append after the last checklist box: `Can't check every box? Onboarding isn't done — go back to the box that failed before showing the home view.`
+
+- [ ] **Step 7: Pair the bare prohibition** — `skills/job-search/references/onboarding.md:50`
+
+Replace `don't tell the user how long anything will take.` with `say what you're doing, not how long it will take — a duration you can't observe becomes a promise you break.`
+
+- [ ] **Step 8: Run the tests and commit**
+
+Run: `python3 -m pytest tests/test_reference_resolution.py -q && python3 scripts/doc_lint.py --root .`
+Expected: PASS
+
+```bash
+git add shared/references/voice.md skills/job-search/references/onboarding.md tests/test_reference_resolution.py
+git commit -m "fix(voice): host-scope the premise, budget the narration, anchor the persona (PSG-F-01, PSG-F-02, PSG-F-07, AAS-FORM-09, AAS-FORM-10)
+
+voice.md asserted 'nothing offscreen reaches the user' as universal, which
+is false on this repo's own primary host. The narration budget had no
+relaxation condition, the user channel had no reader persona, the
+onboarding checklist had no fail-closed consequence, and the duration ban
+named no substitute."
+```
+
+---
+
+### Task 26: Schema glosses and pack-level docs
+
+**Rules:** PSG-TOOL-05 (MUST — document each parameter with optionality and default behavior) · PSG-TOOL-10 (CONSIDER — spell out both branches of every boolean) · PSG-TOOL-13 (CONSIDER — document the output schema to the same standard as inputs) · AAS-PACK-04 (SHOULD — frame the pack as an implementation of the shared standard) · AAS-PACK-06 (CONSIDER — gate outside contributions with a disclosure + generality test) · AAS-AUTO-06 (SHOULD — declare the pack's precedence below user configuration) · AAS-ANTI-32 (a loose alternation that cannot distinguish a violation from allowed text).
+
+**Files:**
+- Modify: `shared/references/conventions.md`, `shared/references/agent-data-contract.md` (field glosses)
+- Modify: `AGENTS.md`, `CONTRIBUTING.md`, `skills/job-search-agent/SKILL.md` (pack-level docs)
+- Modify: `TESTING.md` (anchored philosophy grep)
+- Test: `tests/test_reference_resolution.py`
+
+**Interfaces:**
+- Consumes: the `skills/job-search-agent/SKILL.md` stance list, already edited by Tasks 3 and 22 — add to it, do not rewrite it.
+
+- [ ] **Step 1: Write the failing test**
+
+Append to `tests/test_reference_resolution.py`:
+
+```python
+def test_every_config_field_documents_optionality_and_default():
+    """PSG-TOOL-05 + PSG-TOOL-10: the schema owner states optionality and both boolean branches."""
+    text = (ROOT / "shared" / "references" / "conventions.md").read_text(encoding="utf-8")
+    for field in ("queries[].id", "queries[].enabled", "schedule.timezone",
+                  "notify.digest_path_template", "workspace.master_resume_path"):
+        assert f"`{field}`" in text, f"{field} has no labelled schema entry"
+    assert "omit to treat the query as enabled" in text
+    assert "false when every must-have was either confirmed" in text
+
+
+def test_pack_declares_the_standard_and_its_precedence():
+    """AAS-PACK-04 + AAS-AUTO-06."""
+    assert "agentskills.io" in (ROOT / "AGENTS.md").read_text(encoding="utf-8")
+    manual = (ROOT / "skills" / "job-search-agent" / "SKILL.md").read_text(encoding="utf-8")
+    assert "outrank these skills, which outrank host defaults" in manual
+
+
+def test_contributing_gates_outside_contributions():
+    """AAS-PACK-06."""
+    text = (ROOT / "CONTRIBUTING.md").read_text(encoding="utf-8")
+    assert "disclose" in text.lower()
+    assert "would this help someone whose job search looks nothing like yours" in text
+```
+
+- [ ] **Step 2: Run the test to verify it fails**
+
+Run: `python3 -m pytest tests/test_reference_resolution.py -q -k "optionality or precedence or contributions"`
+Expected: FAIL — `queries[].id has no labelled schema entry`
+
+- [ ] **Step 3: Gloss the underdocumented fields** — `shared/references/conventions.md`
 
 In the `config.yaml` section, give `queries[].id`, `queries[].enabled`, `schedule.timezone`, `notify.digest_path_template`, and `workspace.master_resume_path` a labeled entry each using the fixed vocabulary, e.g.:
 
@@ -2561,37 +2806,7 @@ In the `config.yaml` section, give `queries[].id`, `queries[].enabled`, `schedul
 
 Gloss the false branch of `needs_human_check`: `false when every must-have was either confirmed from the posting or observably violated.` Gloss `search_status`, `data.warnings[]`, and `data.status` in `agent-data-contract.md`, or drop them from the returns list if the client never consumes them.
 
-- [ ] **Step 5: Make the worker re-emit capability-conditional** — `skills/job-search-run/SKILL.md`, `shared/references/parallelism.md`
-
-Replace `A missing return is not evidence of zero calls: ask that same worker to re-emit its retained producer result without another agent-data call before consolidation.` with:
-
-```markdown
-A missing return is not evidence of zero calls. Treat it as unaccounted evidence, which blocks
-completion — that is the honest default. Only where your host can re-query a finished worker may you
-request its retained result; never make a second producer call to replace it.
-```
-
-- [ ] **Step 6: Reorder the schedule read-back native-first** — `shared/references/internals.md:831`
-
-Replace the read-back clause with: `read it back with the bound mechanism's own inspect (the registry records which), falling back to `crontab -l` / `launchctl list` for an OS-bound job`.
-
-- [ ] **Step 7: Show the subagent profile before writing it** — `skills/job-search/references/onboarding.md:290-293` and `home.md:148-150`
-
-Replace the post-hoc disclosure with: show the exact path and content **before** the write, write only on the yes that saw it, and state that it is user-removable.
-
-- [ ] **Step 8: Declare the mechanics scripts read-only** — `skills/job-search-run/SKILL.md` References block
-
-Add: `The bundled mechanics scripts under `../../shared/scripts/mechanics/` are read-only: never modify one or write a one-off replacement. If a script cannot do what a run needs, use its pinned prose fallback and report the gap.`
-
-- [ ] **Step 9: Close the onboarding checklist fail-closed** — `skills/job-search/references/onboarding.md:491`
-
-Append after the last checklist box: `Can't check every box? Onboarding isn't done — go back to the box that failed before showing the home view.`
-
-- [ ] **Step 10: Pair the bare prohibition** — `skills/job-search/references/onboarding.md:50`
-
-Replace `don't tell the user how long anything will take.` with `say what you're doing, not how long it will take — a duration you can't observe becomes a promise you break.`
-
-- [ ] **Step 11: Add the pack-level doc lines**
+- [ ] **Step 4: Add the pack-level doc lines**
 
 To `AGENTS.md`'s "Start here": `This pack implements the Agent Skills standard (<https://agentskills.io>); its five skills are ordinary spec-conformant skills, portable to any host that reads them.`
 
@@ -2599,31 +2814,31 @@ To `skills/job-search-agent/SKILL.md`'s stance list: `**Your configuration wins.
 
 To `CONTRIBUTING.md`, a short section requiring contributors to disclose the model/harness used for agent-authored changes and to apply the generality test ("would this help someone whose job search looks nothing like yours?").
 
-- [ ] **Step 12: Anchor the TESTING.md grep** — `TESTING.md:681`
+- [ ] **Step 5: Anchor the TESTING.md grep** — `TESTING.md:681`
 
 Replace the loose alternation with patterns anchored to the artifact fields that may not carry a number — the digest bands line, `jobs.jsonl` keys, and `config.yaml` keys — rather than free transcript text, and delete the over-match concession at line 689.
 
-- [ ] **Step 13: Run everything and commit**
+- [ ] **Step 6: Run the tests and commit**
 
-Run: `python3 -m pytest -q && python3 scripts/doc_lint.py --root . && python3 scripts/philosophy_guard.py --root .`
-Expected: all pass
+Run: `python3 -m pytest tests/test_reference_resolution.py -q && python3 scripts/doc_lint.py --root . && python3 scripts/philosophy_guard.py --root .`
+Expected: PASS
 
 ```bash
-git add shared skills AGENTS.md CONTRIBUTING.md TESTING.md
-git commit -m "fix(prompts): remaining style-guide corrections (PSG-F-01, PSG-F-02, PSG-F-07, PSG-TOOL-05, PSG-TOOL-10, PSG-TOOL-13, PSG-ANTI-07, AAS-PORT-04, AAS-PORT-05, AAS-SKILL-09, AAS-FORM-09, AAS-FORM-10, AAS-PACK-04, AAS-PACK-06, AAS-AUTO-06)
+git add shared AGENTS.md CONTRIBUTING.md skills/job-search-agent/SKILL.md TESTING.md tests/test_reference_resolution.py
+git commit -m "docs(pack): gloss the schema fields, declare the standard and precedence (PSG-TOOL-05, PSG-TOOL-10, PSG-TOOL-13, AAS-PACK-04, AAS-PACK-06, AAS-AUTO-06, AAS-ANTI-32)
 
-Host-scopes the visibility premise, adds the missing relaxation condition
-and reader persona, glosses the fields the schema owner left to inference,
-makes the worker re-emit capability-conditional, orders the schedule
-read-back native-first, moves the subagent-profile disclosure before the
-write, and adds the standard-framing, precedence, and contribution lines."
+Five config fields were shown only by example while the runner branches on
+one of them; needs_human_check glossed only its true branch; the pack never
+framed itself as an Agent Skills implementation, never declared that user
+configuration outranks it, and had no contribution disclosure gate. Anchors
+TESTING.md's over-matching philosophy grep to the artifact fields."
 ```
 
 ---
 
 # Phase 5 — Consent for the update check
 
-### Task 25: Ask once before checking for updates
+### Task 27: Ask once before checking for updates
 
 **Rules:** AAS-ANTI-36 (undisclosed network egress from a local-first pack) · AAS-AUTO-02 (SHOULD — default to the reversible action; spend consent on the one-way door) · PSG-COMM-10 (SHOULD — talk-first for outward-facing actions) · AAS-PORT-05 (SHOULD — consent-gate any machine-level effect).
 
@@ -2716,7 +2931,7 @@ absent or declined means no fetch and no banner."
 
 # Phase 6 — Close
 
-### Task 26: Run the full matrix and record the evidence honestly
+### Task 28: Run the full matrix and record the evidence honestly
 
 **Rules:** AAS-TEST-02 (SHOULD — cheap gating tier separate from expensive opt-in tier) · AAS-TEST-08 (SHOULD — run 5+ reps; report rates; treat variance as signal) · AAS-TEST-15 (CONSIDER — label live-verified vs structural-guess guidance) · PSG-COMM-09 (MUST — report outcomes faithfully, skips disclosed).
 
@@ -2773,10 +2988,10 @@ ownership model and the runner's new shape."
 
 ## Self-review
 
-**Spec coverage.** Every section of the design maps to a task: Track A → Tasks 2-6; Track B → Tasks 7-11; Track C → Tasks 1, 12-16; Track D → Tasks 17-24; Track E → Task 25; the verification plan and rollout → Task 26. The design's C5 decline (AAS-FORM-08) is recorded in the spec and deliberately has no task.
+**Spec coverage.** Every section of the design maps to a task: Track A → Tasks 2-6; Track B → Tasks 7-11; Track C → Tasks 1, 12-16; Track D → Tasks 17-26; Track E → Task 27; the verification plan and rollout → Task 28. The design's C5 decline (AAS-FORM-08) is recorded in the spec and deliberately has no task.
 
 **Sequencing.** Task 1 precedes the runner split because relocating depth into unmapped references is the failure the split exists to avoid. Tasks 2-11 precede Tasks 12-16 so the runner is thinned once, against its final content. Task 18's size gate lands after Task 14 brings the runner under budget — turning it on earlier would red the build.
 
-**Known cross-task couplings.** Task 12 and Task 14 both cut from `skills/job-search-run/SKILL.md`; run them in order and re-measure between. Task 15's tri-state collapse touches a file Task 13 also edits; Task 15 runs after. Task 18's `test_the_real_pack_is_within_budget` will fail if Task 14 is skipped.
+**Known cross-task couplings.** Task 12 and Task 14 both cut from `skills/job-search-run/SKILL.md`; run them in order and re-measure between. Task 15's tri-state collapse touches a file Task 13 also edits; Task 15 runs after. Task 18's `test_the_real_pack_is_within_budget` will fail if Task 14 is skipped. Task 13 must extend `SKILL_LOCAL_ORIGINALS` in the same commit that creates the two runner references, or `test_no_fanned_reference_copy_remains` goes red. Tasks 3, 22, and 26 each append to `skills/job-search-agent/SKILL.md`'s stance list — add, never rewrite.
 
 **Type and name consistency.** `scan_skill_frontmatter(root)` and `scan_skill_size(root)` (Task 18) return `list[str]` and are called with that signature in `tests/test_skill_frontmatter.py`. `check_undeclared_version(root)` (Task 22) returns `list[str]`. `_gates_from_contract()` (Task 19) returns `tuple[str, ...]` bound to the module-level `GATES` the existing tests already consume. The marker names `ownership-contract:skill-roles` and `intent-contract:preservation` are used identically in their creating and consuming tasks.
