@@ -33,7 +33,8 @@ Read these before running, and follow them exactly:
 - `../../shared/references/errors.md` — every E-* with the exact cause+fix wording.
 - `../../shared/references/conventions.md` — file schemas + digest format. Large: grep `^## ` for the
   section list, `^### ` inside `runs/<run_id>.json` for the record's sub-contracts.
-- `../../shared/references/run-lifecycle.md` — coordinator-only ledger, phase, recovery, and completion contract.
+- `../../shared/references/run-lifecycle.md` — coordinator-only ledger, phase, recovery, and completion
+  contract. Large: grep `^## ` for the section list.
 - `../../shared/references/build-stamp.md` — local build version + content hash to write into run records.
 - `../../shared/references/parallelism.md` — parallel-by-default + how to brief a subagent.
 - `../../shared/references/voice.md` — how any user-facing line is worded (see **Narrating** below).

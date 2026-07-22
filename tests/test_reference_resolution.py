@@ -21,6 +21,7 @@ manifest and would go RED for any host that ever shipped skills-only.
 import json
 import pathlib
 import re
+from importlib import util as _util
 
 import pytest
 
@@ -30,6 +31,19 @@ MECH = ROOT / "shared" / "scripts" / "mechanics"
 LIFECYCLE = SHARED / "run-lifecycle.md"
 LIFECYCLE_LEDGER_PATH = "runs/.lifecycle-{run_id}.jsonl"
 LIFECYCLE_METRICS_PATH = "{workspace}/metrics.json"
+
+
+def _load_doc_lint():
+    """scripts/doc_lint.py owns the canonical github-slugger `slugify` — the SAME function that generates
+    these anchors elsewhere in the repo. Import it rather than hand-rolling a second algorithm that would
+    drift on non-ASCII word characters and on non-space whitespace."""
+    spec = _util.spec_from_file_location("doc_lint", ROOT / "scripts" / "doc_lint.py")
+    mod = _util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+doc_lint = _load_doc_lint()
 
 # Unique marker planted in the ONE canonical home (shared/references/conventions.md).
 MARKER = "reference-resolution-marker:8f2a4c1e-single-home"
@@ -567,22 +581,75 @@ MAPPED_REFERENCES = (
     "shared/references/query-strategy.md",
     "shared/references/agent-data-contract.md",
     "skills/job-search-agent/references/scheduling-and-consent.md",
+    "skills/job-search/references/onboarding.md",
+    "skills/job-search/references/home.md",
+    "skills/job-search-agent/references/customization.md",
 )
+
+# How far into a file the `**Contents:**` map may sit. Wide enough for a body that opens with framing
+# prose before its map (onboarding.md puts it on line 22), tight enough that a map buried mid-document —
+# where a partial read would never see it — still fails.
+CONTENTS_WINDOW = 30
+
+# Every anchor on the map line, whatever characters it holds. Deliberately NOT a restricted class: an
+# anchor the class would not match (`#config.yaml`, `#Ordered-phases`) is exactly the mistake this gate
+# exists to catch, and a narrower pattern would skip it silently instead of failing.
+_MAP_ANCHOR = re.compile(r"\]\(#([^)]+)\)")
+
+_FENCE = re.compile(r"^(?:```|~~~)")
+
+
+def _section_slugs(text):
+    """github-slugger slugs of the `##` headings, in file order, ignoring fenced code blocks.
+
+    Fence-awareness is load-bearing: conventions.md embeds a sample digest whose fenced body contains
+    `## Strong matches` and friends. Those are illustrative text, not link targets — an entry pointing at
+    one would render as a dead link, so they must not count as sections."""
+    slugs = []
+    fence = None
+    for line in text.split("\n"):
+        marker = _FENCE.match(line.strip())
+        if marker:
+            token = marker.group(0)[0]
+            if fence is None:
+                fence = token
+            elif fence == token:
+                fence = None
+            continue
+        if fence is None and line.startswith("## "):
+            slugs.append(doc_lint.slugify(line[3:]))
+    return slugs
 
 
 def test_every_large_reference_carries_an_internal_map():
-    """AAS-BOUND-05: a reference over ~100 lines gets a ToC so a partial read reveals its scope."""
+    """AAS-BOUND-05: a reference over ~100 lines gets a ToC so a partial read reveals its scope.
+
+    The map must be COMPLETE and CURRENT: exactly one entry per `##` section, in file order. A section
+    added without a map entry is the failure this catches — a partial reader would never learn it exists."""
     for rel in MAPPED_REFERENCES:
         path = ROOT / rel
-        lines = path.read_text(encoding="utf-8").split("\n")
-        assert len(lines) > 100, f"{rel} is no longer large; drop it from MAPPED_REFERENCES"
-        head = "\n".join(lines[:6])
-        assert "**Contents:**" in head, f"{rel} has no `**Contents:**` map in its first 6 lines"
-        anchors = [a for a in re.findall(r"\]\(#([a-z0-9_-]+)\)", head)]
-        assert len(anchors) >= 3, f"{rel} map has {len(anchors)} anchors; expected one per `##` section"
-        slugs = {
-            re.sub(r"[^a-z0-9 _-]", "", m.group(1).lower()).replace(" ", "-")
-            for m in re.finditer(r"^## (.+)$", path.read_text(encoding="utf-8"), re.M)
-        }
-        for anchor in anchors:
-            assert anchor in slugs, f"{rel} map anchor #{anchor} matches no `##` heading"
+        text = path.read_text(encoding="utf-8")
+        lines = text.split("\n")
+        assert len(lines) > 100, (
+            f"{rel} is now under 100 lines and no longer needs a map. Removing it from "
+            f"MAPPED_REFERENCES drops it from this gate for good — decide that deliberately and record "
+            f"why, do not delete the entry to make CI green")
+        head = lines[:CONTENTS_WINDOW]
+        map_lines = [line for line in head if "**Contents:**" in line]
+        assert map_lines, (
+            f"{rel} has no `**Contents:**` map in its first {CONTENTS_WINDOW} lines")
+        anchors = _MAP_ANCHOR.findall(map_lines[0])
+        slugs = _section_slugs(text)
+        missing = [s for s in slugs if s not in anchors]
+        extra = [a for a in anchors if a not in slugs]
+        faults = []
+        if missing:
+            faults.append(
+                f"no map entry for `##` section(s) {', '.join('#' + s for s in missing)}")
+        if extra:
+            faults.append(
+                f"map anchor(s) {', '.join('#' + a for a in extra)} match no `##` heading "
+                f"(dead link, misspelled slug, or a fenced pseudo-heading)")
+        assert not faults, f"{rel} map is not one entry per `##` section: {'; '.join(faults)}"
+        assert anchors == slugs, (
+            f"{rel} map lists its sections out of order; expected file order {slugs}, got {anchors}")
