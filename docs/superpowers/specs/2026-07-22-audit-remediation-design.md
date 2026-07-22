@@ -129,12 +129,24 @@ one marked block:
 <!-- /ownership-contract:skill-roles -->
 ```
 
+Every skill in the pack gets a row, not only the three the audit found colliding: a table that claims
+exclusivity while omitting skills asserts ownership over territory the absentees hold, and its load
+trigger is reachable from them.
+
 | Skill | Exclusively owns | Never | Instead |
 |---|---|---|---|
-| `job-search` | setup, status, the home view, routing, config edits, feedback routing | calls the job source · judges a posting · writes `jobs.jsonl`, `runs/*.json`, or a digest | invoke `job-search-run` for the pull; invoke `evaluate-job-fit` for a verdict |
-| `job-search-run` | preflight, metered calls, orchestration, validated persistence, finalization | produce a fit verdict from its own rubric | route every semantic judgment to `evaluate-job-fit` |
-| `evaluate-job-fit` | relevance, must-have assessment, band, reasoning, dealbreakers, unknowns | write workspace state or change retrieval config | return the envelope; the coordinator persists |
+| `job-search` | setup, status, the home view, routing, applying the config changes a user asks for in conversation, feedback routing | calls the job source · judges a posting · writes `jobs.jsonl`, `runs/*.json`, or a digest | invoke `job-search-run` for the pull — it writes those artifacts; invoke `evaluate-job-fit` for a verdict |
+| `job-search-run` | preflight, metered calls, orchestration, validated persistence, finalization | produce a fit verdict from its own rubric (one bounded exception: **Triage is not a verdict**, A2 below) | route every semantic judgment to `evaluate-job-fit` |
+| `evaluate-job-fit` | relevance, must-have assessment, band, reasoning, dealbreakers, unknowns | write workspace state or change retrieval configuration | return the envelope; the coordinator persists it |
+| `job-preference-interview` | the Job Preferences Brief's content — building, refining, deepening, and importing it | judge a posting against the brief it just wrote · call the job source · change retrieval configuration | invoke `evaluate-job-fit` for a verdict; the front door applies config changes |
+| `job-search-agent` | explaining how the system works, troubleshooting a run, and the customization and extension playbooks | run a search · judge a posting · write run artifacts | invoke `job-search-run` for a pull; invoke `evaluate-job-fit` for a verdict |
 | mechanics scripts | schema, append, fold, and binding validation | make a semantic fit or query-quality judgment | fail closed and return to the caller |
+
+Beneath the table, the file names the pattern the `Never` column encodes rather than leaving a reader to
+induce it: **searching the job source belongs to `job-search-run`, and a fit verdict belongs to
+`evaluate-job-fit`** — so every skill that owns neither carries both prohibitions. (`evaluate-job-fit`
+reads one posting's detail to judge it; reading one posting is not a search.) That sentence is the
+invariant CI enforces row by row, so it cannot be a claim the table quietly stops satisfying.
 
 The file also carries the two owner-unavailable rules: if the runner is unavailable the front door
 **stops and names the repair** and does not imitate it; if the judge is unavailable the runner **stops

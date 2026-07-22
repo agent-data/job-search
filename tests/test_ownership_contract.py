@@ -19,6 +19,24 @@ SKILLS = tuple(owner.strip("`") for owner in OWNERS if owner.startswith("`"))
 HANDOFF_VERBS = ("invoke", "route", "return", "fail", "stop", "hand", "delegate", "defer", "queue",
                  "escalate", "ask", "use")
 
+# The two actions the whole contract turns on, each claimed in `Exclusively owns` by exactly one row and
+# forbidden in `Never` by every skill row that claims neither. Keyed by the phrase the prose beneath the
+# table uses, so a fault message and the paragraph it enforces say the same words.
+# `Exclusively owns` phrases are the claim; `Never` phrases are the prohibition — different vocabularies
+# because a cell that OWNS the pull says "metered calls" while a cell that FORBIDS it says "job source".
+PULL, VERDICT = "searching the job source", "a fit verdict"
+CLAIMS = {
+    PULL: {"owner": "`job-search-run`", "owns": ("metered calls",),
+           "never": ("job source", "a search")},
+    VERDICT: {"owner": "`evaluate-job-fit`", "owns": ("relevance", "dealbreakers"),
+              "never": ("judg", "verdict")},
+}
+
+# `Exclusively owns` is an enumeration, not a residual claim. "everything else" is the shape a cell takes
+# when someone stops enumerating: it swallows every other row's exclusive territory while the header still
+# says *exclusively*, so the table contradicts itself and no reader can tell who owns what.
+RESIDUAL_CLAIMS = ("everything", "anything", "all else", "the rest", "whatever", "etc")
+
 _FENCE = re.compile(r"^(?:```|~~~)")
 _CODE_SPAN = re.compile(r"`[^`]*`")
 
@@ -34,14 +52,14 @@ def _marked_block(path, marker):
     return match.group(1)
 
 
-def _prose(path):
+def _normalized_prose(path):
     """Whitespace-collapsed file text, for pinning a SENTENCE rather than a line.
 
     The contract is hard-wrapped, so "does not imitate the runner" spans a line break on disk and a raw
     `in text` check fails on wrapping alone — a phantom failure that says nothing about the contract, and
     that would return every time a sentence is re-flowed. Collapsing runs of whitespace keeps the pin on
-    the words. Mirrors `_normalized_prose` in tests/test_usage_context_contract.py, which exists for
-    exactly this reason. No wording is weakened: any edit to the words themselves still goes RED."""
+    the words. Same name and same body as the helper in tests/test_usage_context_contract.py, which exists
+    for exactly this reason. No wording is weakened: any edit to the words themselves still goes RED."""
     return " ".join(path.read_text(encoding="utf-8").split())
 
 
@@ -81,17 +99,37 @@ def _named_owners(cell):
     return [owner for owner in OWNERS if owner.startswith("`") and owner in cell]
 
 
+def _claims(cell, action):
+    """Whether an `Exclusively owns` cell claims `action` (`PULL` or `VERDICT`)."""
+    return any(phrase in cell.lower() for phrase in CLAIMS[action]["owns"])
+
+
 def _row_faults(block):
     """Every fault in the ownership table — shape AND content.
 
     Shape: wrong header, wrong owner set or order, a row with the wrong number of cells, or any empty cell.
 
-    Content: the two columns have to stay the two KINDS of sentence they are. An `Instead` cell must send
-    the agent somewhere — naming an owner skill, or opening with a handoff verb it can act on unaided. A
-    `Never` cell must forbid, so it may not name another owner (that is a destination, and destinations
-    belong one column over) nor open with a handoff verb. Shape alone passed the two corruptions this gate
-    exists to stop: swapping `Never` with `Instead` on the runner's row — which makes the contract MANDATE
-    the exact behavior it was written to forbid — and reducing an `Instead` cell to `TBD`.
+    Content, three rules:
+
+    1. The two columns have to stay the two KINDS of sentence they are. An `Instead` cell must send the
+       agent somewhere — naming an owner skill, or opening with a handoff verb it can act on unaided. A
+       `Never` cell must forbid, so it may not name another owner (that is a destination, and destinations
+       belong one column over) nor open with a handoff verb. Shape alone passed the two corruptions that
+       first motivated this: swapping `Never` with `Instead` on the runner's row — which makes the contract
+       MANDATE the exact behavior it was written to forbid — and reducing an `Instead` cell to `TBD`.
+
+    2. The pull and the verdict are each claimed in `Exclusively owns` by exactly one row, the one the
+       prose beneath the table names, and no cell claims residual territory. Checking that column for
+       non-emptiness alone let two corruptions through: SWAPPING the runner's and the judge's `Owns` cells,
+       which makes the table say the judge owns the metered calls and the runner owns the verdict while the
+       `Never` cells one column over still say the opposite; and replacing the front door's cell with
+       "everything else", which claims every other row's exclusive territory in two words.
+
+    3. THE invariant the contract asserts in prose — every skill that owns neither the pull nor the verdict
+       carries BOTH prohibitions. Untested, the source prohibition could be deleted from
+       `job-preference-interview` or both from `job-search-agent` — the exact failure class those two rows
+       were added to close — with the whole file still green. Scoped to skill rows because the prose scopes
+       it to skills: `mechanics scripts` is a validator, and forbidding it to search is not the claim.
 
     Factored out of the test so the detection itself can be exercised against known-corrupt samples
     (`test_row_fault_detection_is_not_vacuous`). A structural gate that only ever sees the good input
@@ -103,6 +141,7 @@ def _row_faults(block):
     owners = tuple(row[0] for row in rows)
     if owners != OWNERS:
         faults.append(f"owner rows are {owners}, expected {OWNERS}")
+    whole = [row for row in rows if len(row) == len(COLUMNS)]
     for row in rows:
         if len(row) != len(COLUMNS):
             faults.append(f"{row[0]}: {len(row)} cells, expected {len(COLUMNS)}")
@@ -111,7 +150,7 @@ def _row_faults(block):
             if not cell:
                 faults.append(f"{row[0]}: empty `{column}` cell")
         cells = dict(zip(COLUMNS, row))
-        never, instead = cells["Never"], cells["Instead"]
+        owns, never, instead = cells["Exclusively owns"], cells["Never"], cells["Instead"]
         if instead and not (_named_owners(instead) or _lead_word(instead) in HANDOFF_VERBS):
             faults.append(f"{row[0]}: `Instead` names no owner and opens with no handoff verb "
                           f"{HANDOFF_VERBS} — it is not an alternative: {instead!r}")
@@ -121,6 +160,29 @@ def _row_faults(block):
         elif never and _lead_word(never) in HANDOFF_VERBS:
             faults.append(f"{row[0]}: `Never` opens with the handoff verb {_lead_word(never)!r} — it reads "
                           f"as an instruction, not a prohibition: {never!r}")
+        residual = [word for word in RESIDUAL_CLAIMS if word in owns.lower()]
+        if residual:
+            faults.append(f"{row[0]}: `Exclusively owns` claims {residual[0]!r} — a residual claim "
+                          f"swallows every other row's exclusive territory; enumerate the actions this "
+                          f"skill owns instead: {owns!r}")
+        # Rule 3 — a skill that owns neither of the two contested actions must forbid both.
+        if row[0].startswith("`") and not (_claims(owns, PULL) or _claims(owns, VERDICT)):
+            for action in (PULL, VERDICT):
+                if not any(phrase in never.lower() for phrase in CLAIMS[action]["never"]):
+                    faults.append(
+                        f"{row[0]}: `Exclusively owns` claims neither the pull nor the verdict, so its "
+                        f"`Never` must forbid both — it carries no clause about {action}, which belongs "
+                        f"to {CLAIMS[action]['owner']}; say so with one of "
+                        f"{CLAIMS[action]['never']}: {never!r}")
+
+    # Rule 2 — one claimant each, and it is the row the prose names.
+    for action in (PULL, VERDICT):
+        claimants = [row[0] for row in whole if _claims(row[1], action)]
+        if claimants != [CLAIMS[action]["owner"]]:
+            faults.append(
+                f"{CLAIMS[action]['owner']}: `Exclusively owns` gives {action} to "
+                f"{claimants or 'no row at all'} — exactly one row claims it, and the prose beneath the "
+                f"table says it is this one; name it there with one of {CLAIMS[action]['owns']}")
     return faults
 
 
@@ -157,7 +219,13 @@ def _shipped_surfaces():
     contract quote the marked block, but they quote it inside code fences and spans, which
     `_quotation_free` removes; excluding the whole directory to dodge two quotations would blind the gate
     to every real duplicate a design doc could grow. `.superpowers/` and `docs-private/` stay out because
-    neither ships."""
+    neither ships.
+
+    What widening the scan buys is bounded, and the bound is the marker: this gate matches on
+    `<!-- ownership-contract:skill-roles -->`, so it finds a copy that was pasted WITH its markers and is
+    blind to one that was retyped without them. A marker-less restatement of the table — the design doc
+    carried a four-row one that drifted out of date — is out of its reach by construction, and stays a
+    matter for review."""
     return (sorted(ROOT.glob("skills/**/*.md"))
             + sorted(ROOT.glob("shared/**/*.md"))
             + sorted(ROOT.glob("templates/**/*.md"))
@@ -187,9 +255,19 @@ def test_ownership_contract_is_single_homed():
     surfaces = _shipped_surfaces()
     assert len(surfaces) >= 20, f"the shipped-surface scan collapsed to {len(surfaces)} files"
     assert OWNERSHIP in surfaces, "the scan does not reach the contract's own home"
-    quoters = [p for p in surfaces if str(p.relative_to(ROOT)).startswith("docs/")
-               and f"<!-- {MARKER} -->" in p.read_text(encoding="utf-8")]
-    assert quoters, "docs/ no longer quotes the block — the fence-stripping walk is now unexercised"
+
+    # The stripping walk is proven on a fixture, not on live `docs/` prose. Asserting that some file in
+    # `docs/` still quotes the block made a legitimate cleanup of the plan or the design doc go RED with a
+    # message about the walk rather than about a duplicate — a gate coupled to prose it has no stake in.
+    marker = f"<!-- {MARKER} -->"
+    fixture = "\n".join(["```text", marker, "```",
+                         f"the marker is also named inline as `{marker}` here",
+                         marker])
+    kept = _quotation_free(fixture).count(marker)
+    assert kept == 1, (
+        f"_quotation_free kept {kept} markers of a fixture holding one fenced, one inline-span and one "
+        f"bare — only the bare one is a second home: {_quotation_free(fixture)!r}")
+
     hits = sorted(
         p.relative_to(ROOT)
         for p in surfaces
@@ -214,12 +292,32 @@ def test_every_prohibition_is_paired_with_an_alternative():
     assert _row_faults(_marked_block(OWNERSHIP, MARKER)) == []
 
 
-def test_row_fault_detection_is_not_vacuous():
-    """Prove the gate above can actually go RED, on the five corruptions it exists to catch.
+def test_the_table_states_the_pattern_its_never_column_encodes():
+    """The paragraph beneath the table is what `_row_faults` rule 3 enforces, so it has to survive.
 
-    The last two are the ones a shape-only check waved through: a `Never`/`Instead` swap on the runner's
+    Deleted, the table still reads as five rows of unrelated prohibitions, and the reader has to induce
+    the pattern the contract is actually for. The check runs both ways: this pins the claim, `_row_faults`
+    pins the table against it, and neither can drift without the other going RED."""
+    text = _normalized_prose(OWNERSHIP)
+    for sentence in ("searching the job source belongs to `job-search-run`, and a fit verdict belongs to "
+                     "`evaluate-job-fit`.",
+                     "Every skill that owns neither carries both prohibitions.",
+                     "reading one posting is not a search"):
+        assert sentence in text, f"the pairing paragraph no longer says {sentence!r}"
+
+
+def test_row_fault_detection_is_not_vacuous():
+    """Prove the gate above can actually go RED, on the nine corruptions it exists to catch.
+
+    Samples 4 and 5 are the ones a shape-only check waved through: a `Never`/`Instead` swap on the runner's
     row, which turns the prohibition into the instruction, and a filler alternative that satisfies
-    non-emptiness while telling the agent nothing."""
+    non-emptiness while telling the agent nothing.
+
+    Samples 6-9 are the ones the shipped gate waved through even after that: the source prohibition deleted
+    from `job-preference-interview`, both prohibitions deleted from `job-search-agent`, the runner's and the
+    judge's `Owns` cells swapped so the table contradicts its own `Never` column, and the front door's
+    `Owns` reduced to a residual claim. The first two are the failure class those two rows were ADDED to
+    close, on the two rows that added them."""
     good = _marked_block(OWNERSHIP, MARKER)
     header, rows = _rows(good)
     assert header == COLUMNS and len(rows) == len(OWNERS)
@@ -240,12 +338,26 @@ def test_row_fault_detection_is_not_vacuous():
     filler = [list(row) for row in rows]                # the judge's alternative reduced to filler
     filler[by_owner["`evaluate-job-fit`"]][3] = "TBD"
 
+    unsourced = [list(row) for row in rows]             # the brief-writer no longer forbidden to search
+    unsourced[by_owner["`job-preference-interview`"]][2] = "judge a posting against the brief it just wrote"
+    unfenced = [list(row) for row in rows]              # the manual forbidden neither pull nor verdict
+    unfenced[by_owner["`job-search-agent`"]][2] = "write run artifacts"
+    traded = [list(row) for row in rows]                # the pull and the verdict change hands
+    traded[by_owner["`job-search-run`"]][1], traded[by_owner["`evaluate-job-fit`"]][1] = (
+        rows[by_owner["`evaluate-job-fit`"]][1], rows[by_owner["`job-search-run`"]][1])
+    residual = [list(row) for row in rows]              # the front door claims the whole table
+    residual[by_owner["`job-search`"]][1] = "everything else"
+
     for sample, expected in (
         (_table(gutted), "empty `Instead` cell"),
         (_table(dropped), "owner rows are"),
         (renamed, "header is"),
         (_table(inverted), "that is a destination"),
         (_table(filler), "it is not an alternative"),
+        (_table(unsourced), "no clause about searching the job source"),
+        (_table(unfenced), "no clause about a fit verdict"),
+        (_table(traded), "gives searching the job source to"),
+        (_table(residual), "a residual claim"),
     ):
         faults = _row_faults(sample)
         assert any(expected in fault for fault in faults), f"{expected!r} not caught: {faults}"
@@ -268,13 +380,25 @@ def test_front_door_row_routes_to_both_sibling_owners():
 
 
 def test_owner_unavailable_rules_forbid_imitation():
-    text = _prose(OWNERSHIP)
+    text = _normalized_prose(OWNERSHIP)
     assert "does not imitate the runner" in text
     assert "no inline mini-rubric" in text
 
 
 def test_triage_line_bounds_the_summary_scan():
     """A2: the cheap scan may reject only on a structured field that contradicts a must-have."""
-    text = _prose(OWNERSHIP)
+    text = _normalized_prose(OWNERSHIP)
     assert "structured summary field explicitly contradicts a must-have" in text
     assert "queues for the judge" in text
+
+    # The carve-out has to live INSIDE the marked block, because the block is the quotable unit: a skill
+    # that copies the table into its own context carries the runner's `Never` cell verbatim, and without
+    # the pointer that cell reads as an unqualified ban on the summary scan the runner is supposed to run.
+    # Pinned on the cell, not on the file, so deleting it from the cell cannot be masked by the section
+    # heading of the same name further down.
+    _, rows = _rows(_marked_block(OWNERSHIP, MARKER))
+    runner = {row[0]: row for row in rows}["`job-search-run`"][2]
+    for carve_out in ("one bounded exception", "Triage is not a verdict"):
+        assert carve_out in runner, (
+            f"the runner's `Never` cell drops {carve_out!r} — inside the block it is the only thing "
+            f"telling a reader the summary scan is still sanctioned: {runner!r}")
