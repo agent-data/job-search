@@ -466,6 +466,15 @@ In `skills/job-search-agent/SKILL.md` line 3, replace the opening `The operator 
 Configure, customize, extend, or troubleshoot the Job Search Agent itself, and explain how it works — the operator manual.
 ```
 
+- [ ] **Step 6b: Reconcile job-search-agent's description with the ownership contract (carried from Task 2)**
+
+`skills/job-search-agent/SKILL.md:3` still claims "how do I change/add/customize …" and "change how often
+it runs" as its own triggers, while `shared/references/ownership.md` assigns *applying* a config change to
+`job-search` — and gives `job-search-agent` no `Instead` destination for one. An agent routed there by that
+description reads a contract that neither forbids nor routes the action. Fix the description to own
+*explaining what is configurable and how*, and to route the act of changing it to `job-search`. Do not edit
+`ownership.md` (Task 2 owns it). (PSG-TOOL-03, AAS-TRIG-03)
+
 - [ ] **Step 6a: Add the missing grep hint (carried from Task 1)**
 
 `skills/job-search/references/onboarding.md` is 6,145 words — larger than either file that already got a
