@@ -27,6 +27,30 @@ def seed_manifests(root, version="1.2.3"):
     write_json(root / ".factory-plugin" / "plugin.json", {"name": "job-search", "version": version})
     write_json(root / "gemini-extension.json", {"name": "job-search", "version": version})
     write_json(root / "package.json", {"name": "job-search", "version": version})
+    write_yaml_manifest(root / "plugin.yaml", version)
+
+
+def write_yaml_manifest(path, version):
+    path.write_text(
+        'manifest_version: 1\nname: job-search\nversion: "%s"\nkind: standalone\n' % version
+    )
+
+
+def test_yaml_manifest_version_sync_fails_on_mismatch(tmp_path):
+    seed_manifests(tmp_path, "1.2.3")
+    write_yaml_manifest(tmp_path / "plugin.yaml", "1.2.4")
+    r = run_check(tmp_path, "--check-version-sync")
+    assert r.returncode == 1
+    assert "plugin.yaml" in r.stdout
+    assert "1.2.4" in r.stdout
+
+
+def test_yaml_manifest_missing_version_line_fails(tmp_path):
+    seed_manifests(tmp_path, "1.2.3")
+    (tmp_path / "plugin.yaml").write_text("manifest_version: 1\nname: job-search\n")
+    r = run_check(tmp_path, "--check-version-sync")
+    assert r.returncode == 1
+    assert "plugin.yaml" in r.stdout
 
 
 def init_git_repo(root):
@@ -77,6 +101,7 @@ def test_runtime_surface_change_requires_claude_version_bump(tmp_path):
     write_json(tmp_path / ".factory-plugin" / "plugin.json", {"name": "job-search", "version": "1.2.4"})
     write_json(tmp_path / "gemini-extension.json", {"name": "job-search", "version": "1.2.4"})
     write_json(tmp_path / "package.json", {"name": "job-search", "version": "1.2.4"})
+    write_yaml_manifest(tmp_path / "plugin.yaml", "1.2.4")
     r = run_check(tmp_path, "--check-version-bump", "--base", base)
     assert r.returncode == 0, r.stdout + r.stderr
 
@@ -119,6 +144,7 @@ def test_shared_scripts_change_is_runtime_surface_requiring_version_bump(tmp_pat
                      ".cursor-plugin/plugin.json", ".factory-plugin/plugin.json",
                      "gemini-extension.json", "package.json"):
         write_json(tmp_path / manifest, {"name": "job-search", "version": "1.2.4"})
+    write_yaml_manifest(tmp_path / "plugin.yaml", "1.2.4")
     r = run_check(tmp_path, "--check-version-bump", "--base", base)
     assert r.returncode == 0, r.stdout + r.stderr
 

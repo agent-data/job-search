@@ -17,6 +17,7 @@ VERSION_MANIFESTS = (
     pathlib.Path(".factory-plugin/plugin.json"),
     pathlib.Path("gemini-extension.json"),
     pathlib.Path("package.json"),
+    pathlib.Path("plugin.yaml"),
 )
 PRIMARY_MANIFEST = pathlib.Path(".claude-plugin/plugin.json")
 SEMVER_RE = re.compile(r"^\d+\.\d+\.\d+$")
@@ -52,6 +53,30 @@ def _read_json_at_revision(root, rel, revision):
         return None, f"{rel.as_posix()}: invalid JSON at {revision} ({e})"
 
 
+_YAML_VERSION_RE = re.compile(r"""^version:[ \t]*["']?([^"'\s#]+)["']?[ \t]*$""", re.MULTILINE)
+
+
+def _read_manifest_version(path):
+    """Return (version, error) from a JSON manifest or a top-level YAML version line.
+
+    Stdlib-only on purpose: Python ships no YAML parser, so the Hermes manifest's
+    version is read as a line, not parsed as YAML.
+    """
+    if path.suffix in (".yaml", ".yml"):
+        try:
+            text = path.read_text(encoding="utf-8")
+        except OSError as e:
+            return None, f"{_rel(path)}: cannot read ({e})"
+        match = _YAML_VERSION_RE.search(text)
+        if not match:
+            return None, f"{_rel(path)}: missing top-level version line"
+        return match.group(1), None
+    data, err = _read_json_file(path)
+    if err:
+        return None, err
+    return str(data.get("version", "")).strip(), None
+
+
 def _version_tuple(version):
     if not SEMVER_RE.match(version):
         return None
@@ -62,11 +87,10 @@ def _manifest_versions(root):
     versions = {}
     hits = []
     for rel in VERSION_MANIFESTS:
-        data, err = _read_json_file(root / rel)
+        version, err = _read_manifest_version(root / rel)
         if err:
             hits.append(err)
             continue
-        version = str(data.get("version", "")).strip()
         if not version:
             hits.append(f"{rel.as_posix()}: missing non-empty version")
             continue
