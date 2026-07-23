@@ -77,7 +77,7 @@ These expectations apply to every listed agent:
 | Recurring scheduler | `cron` or `launchd`, with a session loop fallback |
 | Modes | interactive and background (headless) |
 
-Job Search is compatible with Claude Code, Codex, Cursor, opencode, Gemini CLI, GitHub Copilot CLI, Factory Droid, and Pi.
+Job Search is compatible with Claude Code, Codex, Cursor, opencode, Gemini CLI, GitHub Copilot CLI, Factory Droid, Pi, and Hermes Agent.
 
 The primary model is inherited from the session that creates the job. Setup records an exact detail-review model, and scheduled runs reuse it. A recurring schedule is recorded only after the agent tests the actual invocation and confirms that it can reach agent-data and write the workspace.
 
@@ -167,6 +167,17 @@ pi install git:github.com/agent-data/job-search
 ```
 
 For an editable local install, run `pi -e /path/to/job-search`.
+
+### Hermes Agent
+
+Copy and paste the following into a new Hermes Agent session:
+
+```text
+Retrieve and follow the installation instructions at:
+https://raw.githubusercontent.com/agent-data/job-search/main/INSTALL_FOR_HERMES.md
+```
+
+After installation, start a new Hermes Agent session and use the Quickstart sentence above.
 
 ## For contributors
 

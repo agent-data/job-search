@@ -131,7 +131,7 @@ stamp (`shared/references/build-stamp.md`) and never copies references into the 
 
 **Distribution.** One `skills/` tree, read in place, ships to every harness via a per-harness manifest —
 `.claude-plugin/`, `.codex-plugin/`, `.cursor-plugin/`, `.factory-plugin/`, `gemini-extension.json`,
-`package.json`. There is **no per-host adapter layer**: each host resolves its own tools, models, scheduler,
+`package.json`, and the root `plugin.yaml` + `__init__.py` (Hermes Agent). There is **no per-host adapter layer**: each host resolves its own tools, models, scheduler,
 and permissions from the neutral action-language in the pinned procedures, then verifies the result rather
 than looking up a host-specific recipe. Every supported host installs the whole pack tree, so
 `shared/references/` resolves from each skill in place; the contracts are identical across all harnesses.
