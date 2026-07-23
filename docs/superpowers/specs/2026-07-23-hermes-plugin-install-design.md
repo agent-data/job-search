@@ -191,7 +191,7 @@ relative path against HERMES_HOME (fact 9) — and compare absolute paths;
 relative form (it moves with the active profile). Verify: `hermes config get
 skills.external_dirs` re-parses the saved file through Hermes's own reader, and `test -d` the
 resolved directory — a nonexistent directory is silently skipped at scan time (fact 9), so
-this check is load-bearing.
+the `test -d` is what catches a wrong path.
 
 **Step 5 — Verify (layered; the final report says which layers ran).**
 
@@ -257,9 +257,8 @@ https://raw.githubusercontent.com/agent-data/job-search/main/INSTALL_FOR_HERMES.
 After installation, start a new Hermes Agent session and use the Quickstart sentence above.
 ````
 
-(In the real README this closing line links “Quickstart” to the existing `#quickstart`
-section anchor; the link is spelled out here as plain text only because this spec file has no
-such heading for the linter to resolve.)
+(The closing line stays plain text: the approved flow text uses no link here, and the
+Installation intro above it already carries the linked Quickstart pointer.)
 
 Support-matrix sentence becomes “…, Factory Droid, Pi, and Hermes Agent.” Both ship in the
 same change (structural-verification decision below).
