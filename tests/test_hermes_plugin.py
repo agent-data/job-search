@@ -48,3 +48,65 @@ def test_manifest_declares_no_env_or_tools():
     assert "requires_env" not in text
     assert "provides_tools" not in text
     assert "provides_hooks" not in text
+
+
+class StubCtx:
+    """Records register_skill calls; any other ctx attribute access fails the test."""
+
+    def __init__(self):
+        self.skills = []
+
+    def register_skill(self, name, path, description=""):
+        self.skills.append((name, pathlib.Path(path)))
+
+    def __getattr__(self, attr):
+        raise AssertionError(f"adapter touched unexpected ctx attribute: {attr}")
+
+
+def _load_adapter(path):
+    spec = importlib.util.spec_from_file_location("job_search_hermes_adapter", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def _synthetic_tree(tmp_path):
+    """A minimal complete install: the real adapter + empty SKILL.mds + required dirs."""
+    root = tmp_path / "job-search"
+    for name in SKILLS:
+        (root / "skills" / name).mkdir(parents=True)
+        (root / "skills" / name / "SKILL.md").write_text("---\nname: x\n---\n", encoding="utf-8")
+    for rel in ("shared/references", "shared/scripts/mechanics", "templates"):
+        (root / rel).mkdir(parents=True)
+    shutil.copy2(ADAPTER, root / "__init__.py")
+    return root
+
+
+def test_register_registers_exactly_the_five_skills():
+    ctx = StubCtx()
+    _load_adapter(ADAPTER).register(ctx)
+    assert [name for name, _ in ctx.skills] == list(SKILLS)
+    for name, path in ctx.skills:
+        assert path == ROOT / "skills" / name / "SKILL.md"
+        assert path.is_file()
+
+
+def test_missing_skill_dir_fails_naming_it(tmp_path):
+    root = _synthetic_tree(tmp_path)
+    shutil.rmtree(root / "skills" / "evaluate-job-fit")
+    with pytest.raises(RuntimeError, match=r"skills/evaluate-job-fit/SKILL\.md"):
+        _load_adapter(root / "__init__.py").register(StubCtx())
+
+
+def test_missing_shared_references_fails_naming_it(tmp_path):
+    root = _synthetic_tree(tmp_path)
+    shutil.rmtree(root / "shared" / "references")
+    with pytest.raises(RuntimeError, match=r"shared/references"):
+        _load_adapter(root / "__init__.py").register(StubCtx())
+
+
+def test_error_names_the_force_reinstall_recovery(tmp_path):
+    root = _synthetic_tree(tmp_path)
+    shutil.rmtree(root / "templates")
+    with pytest.raises(RuntimeError, match=r"hermes plugins install agent-data/job-search --force"):
+        _load_adapter(root / "__init__.py").register(StubCtx())
