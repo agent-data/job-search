@@ -838,8 +838,14 @@ Change the manifest list so it ends:
 
 - [ ] **Step 4: Confirm no other live doc enumerates the supported hosts**
 
-Run: `grep -rn "Factory Droid" --include="*.md" . 2>/dev/null | grep -v docs-private | grep -v node_modules | grep -v ".opencode"`
+Run: `grep -rn -F "Factory Droid" --include="*.md" . 2>/dev/null | grep -vF node_modules`
 Expected: hits only in `README.md` (edited above), `docs/design-docs/multi-harness-portability.md` (historical dossier — leave as-is), `docs/exec-plans/completed/` (historical — leave as-is), and `docs/superpowers/` (spec + this plan). If any other live doc lists the hosts, update it the same way as the README sentence.
+
+Also check the two host/manifest counts that this branch makes stale — they live in a file the
+host-name grep above does not reach:
+`grep -n -F -e "6 manifest" -e "seven host" TESTING.md`. `TESTING.md:26` counts the manifests
+release integrity syncs (now seven — six JSON plus `plugin.yaml`) and `TESTING.md:30` counts the
+hosts not installable on the CI runner (now eight, with Hermes Agent). Update both.
 
 - [ ] **Step 5: Run doc_lint and commit**
 
