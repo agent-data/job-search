@@ -4,6 +4,19 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.0] — 2026-07-23
+
+### Added
+- **Hermes Agent support.** Job Search installs on Hermes Agent with
+  `hermes plugins install agent-data/job-search --enable`, through a root-level Hermes adapter:
+  `plugin.yaml`, `__init__.py` (verifies the installed tree, then registers the five skills under
+  `job-search:<name>` fallback names), `after-install.md`, and the agent-facing
+  `INSTALL_FOR_HERMES.md` guide, which makes the skills discoverable by their normal names via
+  `skills.external_dirs` and verifies the install end to end. The README gains a Hermes Agent
+  install section and the support matrix now lists Hermes Agent. Structurally verified; every
+  guide claim is cited against hermes-agent v0.19.0 source.
+- Release integrity now version-syncs the Hermes `plugin.yaml` alongside the six JSON manifests.
+
 ## [0.6.0] — 2026-07-15
 
 ### Added
