@@ -30,7 +30,7 @@ pending-build tests to live.
 
 ## P2 — turn-off doesn't clear the schedule marker (`TODO-SCHED-OFF`) — ✅ resolved (closed 2026-06-11)
 **Resolved.** The clear-the-marker operation exists and the turn-off flow calls it: the scheduling marker's
-set/clear procedures are pinned in [`../../shared/references/internals.md`](../../shared/references/internals.md)
+set/clear procedures are pinned in `shared/references/runbook.md`
 (Registry → scheduling marker; the former `osctl.py set-unscheduled` was its script-era shape), the turn-off
 flow in [`the front door skill`](../../skills/job-search/SKILL.md) clears the marker so it reads
 `installed: false`, and [`TESTING.md` T4.4](../../TESTING.md) asserts it. No stale marker is left; closed.
@@ -38,7 +38,7 @@ flow in [`the front door skill`](../../skills/job-search/SKILL.md) clears the ma
 
 ## P3 — jobs.jsonl grows unboundedly; the in-context fold cost grows with it (`TODO-JOBS-COMPACTION`)
 **What:** The home view's pipeline folds `jobs.jsonl` in-context (per the fold operation in
-[`../../shared/references/conventions.md`](../../shared/references/conventions.md)); a long-lived workspace
+`shared/references/runbook.md`); a long-lived workspace
 accumulates events without bound, so the read cost of the fold grows with history.
 **Why:** Watch-only for now — realistic logs (hundreds of postings) fold cheaply, the append-only design is
 the corruption-safety property we keep, and compaction would add a mutating code path with real risk.
@@ -51,12 +51,12 @@ postings") that writes a new file and never edits in place. Do not build preempt
 ## P3 — untested config fields & edges (partially resolved)
 **Resolved 2026-07-17 — `schedule.timezone` runtime behavior + interrupted-run recovery.** `schedule.timezone`
 now carries a runtime contract and CI-executable coverage: the schedule-health derivation in
-[`../../shared/references/internals.md`](../../shared/references/internals.md) (§ Schedule health) computes the
+`shared/references/runbook.md` (§ Schedule health) computes the
 expected fire instants **in the configured timezone** (DST-aware via stdlib `zoneinfo`), and
-[`tests/test_schedule_health.py`](../../tests/test_schedule_health.py) pins the 30-minute grace boundary, the
+`tests/test_schedule_health.py` pins the 30-minute grace boundary, the
 one-vs-two missed-fire thresholds, and a daily fire across a daylight-saving transition against fixed clocks —
 so it is no longer informational-only. Interrupted-run recovery (a hard-kill mid-run) was contracted by the
-recovery map in [`../../shared/references/run-lifecycle.md`](../../shared/references/run-lifecycle.md)
+recovery map in `shared/references/runbook.md`
 (`open_before_selection_settled` → close `interrupted` and restart cleanly) and exercised by
 `tests/test_run_lifecycle_pressure.py` until 2026-07-30, when that suite was retired; the same recovery
 behavior is now graded end to end by the `kill-midrun` behavior eval (row B9 in `evals/behaviors.md`).
@@ -66,15 +66,15 @@ behavior is now graded end to end by the `kill-midrun` behavior eval (row B9 in 
 **Impact:** the two open surfaces carry **zero tests** (no hit in `tests/` for `desktop_notify_on_block` or any
 two-overlapping-run case) — a regression ships silently and only surfaces in the field; blast radius stays low
 because the append-only `jobs.jsonl` contract
-([`../../shared/references/conventions.md`](../../shared/references/conventions.md)) bounds the corruption risk.
+(`shared/references/runbook.md`) bounds the corruption risk.
 **How to apply:** Add a targeted test for the desktop-notify path and an overlapping-run guard when those
 surfaces are exercised in the field.
-**Linked tests:** resolved portions — [`tests/test_schedule_health.py`](../../tests/test_schedule_health.py)
+**Linked tests:** resolved portions — `tests/test_schedule_health.py`
 (timezone/DST + grace) and the `kill-midrun` behavior eval, row B9 in `evals/behaviors.md` (interrupted
 recovery); none yet for the two open surfaces.
 
 ## P3 — schedule-line accepts an out-of-range --time (`TODO-TIME-RANGE`) — ✅ resolved (obsolete)
-**Resolved 2026-06-08 by removal.** The cron/launchd generators no longer exist — scheduling is native `/loop` (see [`../../shared/references/internals.md`](../../shared/references/internals.md)). The `/loop` line is composed from `schedule.frequency` alone (no `--time`), so there is no time value to range-check. No action needed.
+**Resolved 2026-06-08 by removal.** The cron/launchd generators no longer exist — scheduling is native `/loop` (see `shared/references/runbook.md`). The `/loop` line is composed from `schedule.frequency` alone (no `--time`), so there is no time value to range-check. No action needed.
 
 ## Wave 2 inherits (multi-source)
 
@@ -104,7 +104,7 @@ no defined winner — the collapsed role could show either status.
 **Linked tests:** none (watch item).
 
 ### P3 — run-health `<why>` can't name a two-of-three source loss (`TODO-WHY-ENUM-MULTILOSS`)
-**Resolved 2026-07-06 by [2026-07-06-multi-source-reconciliation-greenhouse-lever](completed/2026-07-06-multi-source-reconciliation-greenhouse-lever.md).** With Greenhouse + Lever now in routine use, the `<why>` vocabulary gained a "several — but not all — sources lost, each named in `search.sources` order" band (`conventions.md` digest format, `job-search-run` step 5, `errors.md` E-UPSTREAM-STRETCH), so a partial-but-multiple loss is named exactly. Kept as a resolved record.
+**Resolved 2026-07-06 by [2026-07-06-multi-source-reconciliation-greenhouse-lever](completed/2026-07-06-multi-source-reconciliation-greenhouse-lever.md).** With Greenhouse + Lever now in routine use, the `<why>` vocabulary gained a "several — but not all — sources lost, each named in `search.sources` order" band (`shared/references/runbook.md` digest format, `job-search-run` step 5, `errors.md` E-UPSTREAM-STRETCH), so a partial-but-multiple loss is named exactly. Kept as a resolved record.
 **What:** The run-health `<why>` vocabulary names one lost source or "all sources unavailable"; it can't
 say two of three sources were lost (e.g. LinkedIn and Ashby down while Workday survives).
 **Why:** With the two default sources the only cases are "one lost" or "all lost", both already covered.
@@ -272,7 +272,7 @@ non-release-blocking.
 diagnostic captures even though normal searches and workspace artifacts need only the resulting local auth;
 the exposure is limited to credential setup and does not make the release's search flow incorrect.
 **How to apply:** First pin one producer- and host-supported secret handoff in
-[`agent-data-contract.md`](../../shared/references/agent-data-contract.md), then update onboarding to use it,
+`shared/references/agent-data.md`, then update onboarding to use it,
 redact all auth command/error rendering, and exercise the real handoff with sentinel-key absence assertions.
 Keep `agent-data init --api-key <KEY> -y` documented as the local fallback until the replacement is available,
 and continue to verify readiness only through `agent-data whoami`.
@@ -284,7 +284,7 @@ arms and the onboarding harness with sentinel-key leak assertions when the safe 
 **What:** Record the checked version/build and check time plus the version/build and time last reminded.
 Suppress the same update reminder during a documented backoff interval; let a newer version/build or a
 compatibility blocker bypass backoff; honor explicit update checks; and never auto-update.
-**Why:** [`update.md`](../../shared/references/update.md) already caches remote checks for 24 hours but renders
+**Why:** `update.md` already caches remote checks for 24 hours but renders
 the same available-update banner on every home view. Repetition can train users to ignore the signal; because
 the banner is advisory and compatibility failures remain independently visible, reminder backoff is P3 and
 explicitly non-release-blocking.
@@ -303,7 +303,7 @@ blocker bypass, and explicit-check bypass, with an assertion that no update comm
 ### P2 — source/frequency increases lack credit-aware previews (`TODO-USAGE-PREVIEW-LEVERS`)
 **What:** Extend the pagination flow's decision-time usage preview to source additions and frequency
 increases, without adding a monetary budget control.
-**Why:** The [shared config recipes](../../shared/references/internals.md) now make review-depth increases
+**Why:** The `shared config recipes` now make review-depth increases
 preview their known first-page call baseline and uncertain additions, but the adjacent outcome levers can
 also increase recurring metered work without the same scoped preview.
 **Impact:** a user can broaden sources or raise cadence without seeing the added-call shape before the
@@ -322,7 +322,7 @@ the depth-preview pattern only; add source/frequency increase arms and extend [`
 consumer accounting model to that producer contract and update the dated contract, fake shim, errors,
 evals, and historical interpretation together. Successful attempts, including a successful retry, continue
 to follow producer-authoritative metering status.
-**Why:** Today's [pinned producer contract](../../shared/references/agent-data-contract.md) consistently treats
+**Why:** Today's `pinned producer contract` consistently treats
 non-quota failures as metered; changing only one layer after the producer cutover would make local call
 totals and explanations disagree.
 **Impact:** there is no current defect. After the upstream change, stale inference could overstate actual
@@ -341,7 +341,7 @@ pin current metering, quota, retry, and comparable-history effects.
 
 ### P2 — metrics.json is contract-specified but no shipped surface writes it (`TODO-METRICS-WIRING`)
 **What:** Wire the `{workspace}/metrics.json` writes the local-metrics contract in
-[`../../shared/references/run-lifecycle.md`](../../shared/references/run-lifecycle.md) (§ Local metrics)
+`shared/references/runbook.md` (§ Local metrics)
 already specifies: the **front door** must create the per-attempt `setups[]` record and write
 `onboarding_started_at` + `agent_data_ready_at`, and **schedule setup** must write `schedule_verified_at`
 after its green canary. The runner's four milestone writes (`first_live_call_at`,
@@ -358,7 +358,7 @@ fails no gate (the durations degrade to "unavailable" exactly as specified), but
 evidence — relevant to T9.4 — cannot be measured** until the front-door and schedule-setup writes are wired.
 **How to apply:** Add the front-door create-attempt + `onboarding_started_at`/`agent_data_ready_at` writes
 and the schedule-setup `schedule_verified_at` write per the owner table and write rules in
-[`../../shared/references/run-lifecycle.md`](../../shared/references/run-lifecycle.md) (§ Local metrics —
+`shared/references/runbook.md` (§ Local metrics —
 atomic whole-file, write-once, append-new-setup-record, never overwrite history). Classify this as **the
 priority to wire before the live / T9.4 measurement lane**, distinct from and ahead of the pre-existing P3
 credential/backoff debt above. Do **not** wire it as part of this review — this entry is the conscious

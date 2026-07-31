@@ -26,7 +26,7 @@ Job Search gets live postings through the [agent-data](https://agent-data.dev) c
 1. If the CLI is missing, the agent offers to install it with `npm install -g agent-data`. If a global install needs different permissions, it gives you the exact command to run.
 2. If authentication is missing, the agent helps you create an API key, runs `agent-data init --api-key <KEY> -y`, and verifies it with `agent-data whoami`. The agent-data CLI stores the key in its own config, outside this repository.
 
-Agent-data offers a 100-call monthly free tier; the example below uses 9 metered calls. Before a choice increases expected usage, Job Search previews the change. After each run, it reports actual attempts. Any dollar amount is labeled as a pay-as-you-go equivalent, not an account charge. See the [agent-data contract](shared/references/agent-data-contract.md) or your [billing page](https://agent-data.motie.dev/settings/billing) for current details.
+Agent-data offers a 100-call monthly free tier; the example below uses 9 metered calls. Before a choice increases expected usage, Job Search previews the change. After each run, it reports actual attempts. Any dollar amount is labeled as a pay-as-you-go equivalent, not an account charge. See [what a run spends](shared/references/agent-data.md) or your [billing page](https://agent-data.motie.dev/settings/billing) for current details.
 
 ## What a run looks like
 

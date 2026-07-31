@@ -3,7 +3,7 @@ title: Multi-Harness Portability — Research Dossier (Codex · Cursor · openco
 status: aspirational
 verified: partial
 last_reviewed: 2026-07-22
-code_refs: [shared/references/internals.md, shared/references/conventions.md, shared/references/voice.md, shared/references/parallelism.md, shared/references/errors.md, shared/references/agent-data-contract.md, skills/job-search/SKILL.md, skills/job-search-agent/SKILL.md, skills/job-search-run/SKILL.md, scripts/build.sh, .claude-plugin/plugin.json, .opencode/plugins/job-search.js, docs/design-docs/codex-portability.md]
+code_refs: [skills/job-search/SKILL.md, skills/job-search-agent/SKILL.md, skills/job-search-run/SKILL.md, .claude-plugin/plugin.json, .opencode/plugins/job-search.js, docs/design-docs/codex-portability.md]
 ---
 # Multi-Harness Portability — Research Dossier
 
@@ -45,7 +45,7 @@ work's importance. Adapter cells name the *mechanism*; the literal recipe string
 **Cross-platform invariant (all seven):** the agent-data CLI is harness-independent — every skill
 shells out to it identically (it lives on PATH, unauthenticated-by-machine until `agent-data init`
 sets the key). The only universal sandbox caveat: the binary + its network egress must be permitted
-inside each host's sandbox/approval mode. See [agent-data-contract.md](../../shared/references/agent-data-contract.md).
+inside each host's sandbox/approval mode. See `agent-data-contract.md`.
 
 **Distribution pattern shared by all seven:** ONE `skills/` tree, read in place by each host's native
 plugin/skill manager, plus a thin hand-committed per-platform manifest — **no per-platform bundle
@@ -64,7 +64,7 @@ kind + severity. **Kinds:** `slash-recipe`, `loop-scheduling`, `headless-invocat
 `agent-data-init`, `plugin-distribution`, `claude-naming-framing`.
 
 > **THE FOUR HAND-AUTHORED PER-SKILL REFERENCES — the prior doc's blind spot.**
-> [`scripts/build.sh`](../../scripts/build.sh) fans `shared/references/*.md` into each skill's
+> `scripts/build.sh` fans `shared/references/*.md` into each skill's
 > `references/`, but the four files below live **inside a skill** and are **NOT synced** — they must
 > each be neutralized **in place**, by hand: **`skills/job-search/references/onboarding.md`**,
 > **`skills/job-search-agent/references/scheduling-and-consent.md`**,

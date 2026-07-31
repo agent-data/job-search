@@ -4,7 +4,7 @@
 # Given the workspace event log <jobs.jsonl> and a <source>, read candidate source_ids on stdin
 # (one per line) and print only those NOT already recorded as an event for that source.
 #
-# Reproduces the pinned "Known ids" dedup contract in shared/references/conventions.md §jobs.jsonl:
+# The "known ids" dedup step the run skill calls:
 # grep the `"source":"S"` events, extract `"source_id"`, take the value, unique-sort — that is the
 # known set; the NEW set is the candidates minus it. Missing jobs file = empty known set (every
 # candidate is new). Blank candidate lines (a null source_id can't be deduped) are skipped. This is

@@ -4,7 +4,7 @@ How Job Search stays trustworthy: a deterministic core, named failures, bounded 
 and failures that surface where the user will actually see them. This doc describes the
 *mechanisms*. It does **not** restate any runtime contract — every concrete value (error
 wording, run-health states, the frequency enum, the `run_id` format, the digest counts line,
-config field names, the job-status enum) is owned by [shared/references/](../shared/references/conventions.md)
+config field names, the job-status enum) is owned by `shared/references/`
 and linked here. When a number or a literal matters, follow the link to its source of truth.
 
 For the principles behind these mechanisms see
@@ -14,7 +14,7 @@ For the principles behind these mechanisms see
 **TL;DR (reading this mid-incident).** Run-health states and *how a blocked run surfaces without a
 trustworthy exit code* both live in [§4](#4-run-health--blocked-surfacing--visible-without-the-exit-code);
 the named `E-*` errors themselves (cause + fix wording) are not in this doc — they are in
-[`shared/references/errors.md`](../shared/references/errors.md). Jump by symptom:
+`shared/references/errors.md`. Jump by symptom:
 
 | If you're chasing… | Go to |
 |---|---|
@@ -45,9 +45,9 @@ Re-running is therefore safe — nothing is overwritten in place, and a crash mi
 worst leave a trailing partial line, never a corrupted record. The schema of those events, the
 event-line contract, the operations (known-ids / append / fold), and the on-disk layout
 (`jobs.jsonl`, `runs/<id>.json`) are owned by
-[../shared/references/conventions.md](../shared/references/conventions.md); the scheduling
+`shared/references/runbook.md`; the scheduling
 artifacts, the registry write rules, and the discovery precedence are owned by
-[../shared/references/internals.md](../shared/references/internals.md).
+`shared/references/runbook.md`.
 
 Because the deterministic pieces are isolated from the LLM judgment, the parts that *can* be
 proven correct *are* — the model is left to do only what genuinely needs judgment (relevance),
@@ -59,8 +59,8 @@ cursor or page signature stops making trustworthy progress, so a bad continuatio
 restart at page one. Once continuation begins, the candidate pool moves through a private run-scoped
 scratch file in bounded chunks; handled success, partial, and quota exits all remove it, and a later
 run deletes stale scratch rather than resuming it. The exact progress and lifecycle contracts live in
-[../shared/references/conventions.md](../shared/references/conventions.md), with failure branches in
-[../shared/references/errors.md](../shared/references/errors.md).
+`shared/references/runbook.md`, with failure branches in
+`../shared/references/errors.md`.
 
 ## 2. No silent failures — every blocked path is named
 
@@ -70,7 +70,7 @@ a run can hit: a missing or unauthenticated CLI, a missing config or preferences
 config written by an incompatible future version, an unreachable or degraded job source, a
 malformed query, a repeated upstream outage, and a reached API limit. The complete catalogue —
 every code, its trigger, the exact user-facing wording, and its effect on the run — is owned by
-[../shared/references/errors.md](../shared/references/errors.md). This doc deliberately does not
+`../shared/references/errors.md`. This doc deliberately does not
 reproduce any code or its message; the catalogue is the single source of truth and the runner
 follows it verbatim.
 
@@ -78,7 +78,7 @@ An interrupted continuation is degraded rather than hidden: the run keeps trustw
 already scanned, marks the affected stream and overall depth incomplete, continues healthy streams,
 and surfaces the named partial-depth error in the digest. It never claims exhaustive coverage or
 persists a cursor for later resumption. The branch conditions and diagnostics are owned by
-[../shared/references/errors.md](../shared/references/errors.md).
+`../shared/references/errors.md`.
 
 That "name it, never swallow it" rule is a core belief, enforced in review and by the linters —
 see **No silent failures — named errors** in
@@ -93,14 +93,14 @@ failure (the 502s) is retried with bounded exponential backoff and jitter; a det
 client error (a bad field, an invalid request, a stale id/URL pair) is **never** retried,
 because retrying it would only waste a metered call and still fail. The exact attempt count,
 the backoff schedule, and which codes are retryable are owned by
-[../shared/references/agent-data-contract.md](../shared/references/agent-data-contract.md) —
+`shared/references/agent-data.md` —
 paraphrased here, authoritative there.
 
 Retries are also **bounded across the run**, not just per call — the circuit-breaker. If the
 job source keeps failing search after search, the run stops searching rather than hammering a
 struggling upstream, and reports what it managed to gather. That repeated-outage condition is a
 named error (the upstream-stretch case) in
-[../shared/references/errors.md](../shared/references/errors.md); a single stale detail link, by
+`../shared/references/errors.md`; a single stale detail link, by
 contrast, is an expected non-error that falls back to summary-only judgment with a footnote
 rather than failing the run. The strategy in one line: be patient with transient failures, give
 up immediately on deterministic ones, and break the circuit when an upstream is clearly down.
@@ -110,21 +110,21 @@ attempt is classified once; retries and charged failures remain diagnostic subse
 and a quota-rejected attempt stay outside the metered total. That same local ledger supplies the
 calls-first digest line and the exact prior-work count when quota stops a run, avoiding both double
 counting and an invented account charge. The canonical counting rules live in
-[../shared/references/agent-data-contract.md](../shared/references/agent-data-contract.md), and the
-stored record shape lives in [../shared/references/conventions.md](../shared/references/conventions.md).
+`shared/references/agent-data.md`, and the
+stored record shape lives in `shared/references/runbook.md`.
 
 ## 4. Run health & blocked surfacing — visible without the exit code
 
 Every run records a **health state** in its `runs/<id>.json` audit record, and the digest leads
 with that state. The set of states and the digest's health line are owned by
-[../shared/references/conventions.md](../shared/references/conventions.md) and
-[../shared/references/errors.md](../shared/references/errors.md) — this doc does not list them.
+`shared/references/runbook.md` and
+`../shared/references/errors.md` — this doc does not list them.
 
 The important reliability property is *how* a blocked run reaches the user. It does **not** rely
 on the process exit code: a headless `claude -p` invocation returns `0` even when the run was
 blocked (a skill cannot set the host process's exit status), so a headless run's `$?` is not a
 trustworthy signal and the docs never tell the user to check it. Instead, a blocked run surfaces
-three records-based ways, all owned by [../shared/references/errors.md](../shared/references/errors.md):
+three records-based ways, all owned by `../shared/references/errors.md`:
 
 - the **blocked digest** — the named error's cause + fix replaces the match list as the body;
 - a **desktop notification** on a blocked run (toggled by a notify setting in `config.yaml`); and
@@ -182,7 +182,7 @@ is [../TESTING.md](../TESTING.md).
 
 The knowledge base is held to the same standard as the code. Two stdlib guards run in CI:
 [../scripts/doc_lint.py](../scripts/doc_lint.py) checks that every live KB doc links the
-[../shared/references/](../shared/references/conventions.md) source of truth instead of restating
+`../shared/references/` source of truth instead of restating
 a contract literal, that every Markdown link resolves, and that the section indexes stay
 complete — and [../scripts/philosophy_guard.py](../scripts/philosophy_guard.py) fails the build
 if numeric score math, a budget/cost control, or an unverified actual-charge claim leaks into shipped

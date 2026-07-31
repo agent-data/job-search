@@ -654,8 +654,7 @@ def test_validator_flags_fixed_time_empty_checks(tmp_path):
 
 
 # The milestone fixed-time fixtures this file used to require of job-search-run went away with the
-# run-lifecycle milestone timestamps themselves (metrics.json and the ledger) in the 2026-07-30
-# rewrite. The validator's fixed_time rules are still covered by the unit tests above and by the
+# per-phase milestone timestamps themselves (metrics.json and the ledger) in the 2026-07-30 rewrite. The validator's fixed_time rules are still covered by the unit tests above and by the
 # schedule-health liveness fixtures in the test just before this comment.
 
 

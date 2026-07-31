@@ -60,7 +60,7 @@ live under the temp dir.
 
 **Isolation pre-flight — run before any destructive/live test (cheap insurance).** Prove the redirect is live so
 nothing can reach your real data (this evaluates the same registry expression the skills' Discovery procedure
-uses — `shared/references/internals.md`):
+uses — `shared/references/runbook.md`):
 ```bash
 REG="${JOBSEARCH_OS_REGISTRY:-${XDG_CONFIG_HOME:-${JOBSEARCH_OS_HOME:-$HOME}/.config}/job-search/config.json}"
 case "$REG" in "$JSOS_TEST"/*) echo "isolation OK → registry $REG" ;; *) echo "LEAK: registry $REG outside $JSOS_TEST" ;; esac
@@ -90,9 +90,12 @@ in `-p` commands anyway so the skill is invoked deterministically.
 ```bash
 cd "$JSOS" && python3 -m pytest -q
 ```
-**Expected:** `547 passed` **and `0 failed`** — treat **`0 failed`** as the real gate. The count moves in both
-directions: it grows when tests are added and it dropped by 141 on 2026-07-30 when the documentation-prose
-suites were retired. Update the number here whenever it changes. Covers the doc linter, the philosophy guard,
+**Expected:** `377 passed` **and `0 failed`** — treat **`0 failed`** as the real gate. The count moves in both
+directions: it grows when tests are added, it dropped by 141 on 2026-07-30 when the documentation-prose
+suites were retired, and it dropped by 177 more on 2026-07-31 when the shared reference corpus and the
+structures it defined (the exact-model binding sidecar, the version-1 migration, the lifecycle ledger, the
+eight-state schedule health) were deleted with the tests that read them. Update the number here whenever it
+changes. Covers the doc linter, the philosophy guard,
 the release-integrity checks, the scripted-mechanics unit tests, the workspace validator
 (`test_validate_workspace.py`), the eval-case lint (`test_eval_cases.py`), the **eval-scenario validator +
 harness math** (`test_eval_harness.py`), and the fake-shim self-tests (incl. the `bad-query` scenario behind
@@ -140,7 +143,7 @@ cd "$JSOS" && python3 -m pytest -q tests/test_reference_resolution.py
 ```
 **Expected:** `0 failed` — the shared contracts live **once** under `shared/references/` and resolve in place
 from each skill (skills point at `../../shared/references/<file>.md`); there are **no per-skill bundled copies**.
-The build is stamp-only: `./scripts/build.sh` regenerates `shared/references/build-stamp.md` and nothing else.
+Nothing is generated into `skills/` or `shared/`, so there is no build step to re-run.
 **Result:** ⬜
 
 ### T1.4 Trigger resolves — 🤖
@@ -353,8 +356,7 @@ ls -t "$JSOS_TEST/.job-search/reports/"*.md | head -1   # a digest exists / was 
 (Run health line, counts line, Strong→Moderate→Weak); the summary lands in `cron.log`. Fresh matches **or** a clean
 "you've already seen all N of these" dedup digest are both passes (dedup if T5.1 already searched this workspace);
 0 live results → §0.4 fallback.
-**Cross-check** `/loop` runs this same skill headlessly each interval — per the interval table in
-`shared/references/internals.md`, daily composes to
+**Cross-check** `/loop` runs this same skill headlessly each interval — daily composes to
 `/loop 24h /job-search:job-search-run` (loose-skill installs → `/loop 24h /job-search-run`).
 **Result:** ⬜
 
@@ -615,7 +617,7 @@ guarantee; the config-time **canary is not yet exercised here** (it is the runti
 ### T9.1 The composed `/loop` line matches the pinned interval table — 🤖
 In a sandboxed session, for each frequency ask: **"if my schedule were <frequency>, what's the exact /loop
 line?"** (or read it off the scheduling offers in T2.1/T4.3).
-**Expected:** exactly the interval table in `shared/references/internals.md` → Scheduling setup —
+**Expected:** the interval each cadence in `templates/config.example.yaml` maps to —
 `hourly → /loop 1h …`, `every-2-hours → /loop 2h …`, `every-6-hours → /loop 6h …`, `daily → /loop 24h …`,
 `weekly → /loop 168h …`; the target is `/job-search:job-search-run` in this plugin suite (bare
 `/job-search-run` only for loose-skill installs). Any other interval or target is a ❌.
@@ -714,8 +716,8 @@ include the digest's reasoning line and any "confirm" warning.
 
 ### T11.1 README ↔ reality
 Open `$JSOS/README.md`: the install commands match what you ran (`claude --plugin-dir`, `/plugin install
-job-search@agent-data` gated "once published"); the troubleshooting table matches `shared/references/errors.md`
-(spot-check 3 rows).
+job-search@agent-data` gated "once published"); the troubleshooting table matches what the skills
+actually do when a run is blocked (spot-check 3 rows).
 **Result:** ⬜
 
 ### T11.2 Sample digest ↔ real digest
@@ -733,8 +735,8 @@ cd "$JSOS" && python3 scripts/eval_harness.py --root .   # "Eval harness: eval s
 ```
 
 Then ask Claude, for each skill, to **run its evals** (the `harness` in `skills/<skill>/evals/evals.json`; they use the
-fake-agent-data shim, so zero real credits) — **179 scenarios**:
-- `evaluate-job-fit` (5) · `job-search-run` (71) · `job-preference-interview` (5) · `job-search` (53) · `job-search-agent` (45).
+fake-agent-data shim, so zero real credits) — **51 scenarios**:
+- `evaluate-job-fit` (5) · `job-search-run` (18) · `job-preference-interview` (5) · `job-search` (14) · `job-search-agent` (9).
 
 Each suite now includes a **discovery** scenario (plant the skill among its siblings, drive a naive prompt, assert the
 right skill is selected and the confusable sibling is not — the four overlap pairs). The judgment-heavy **stochastic**
@@ -827,7 +829,7 @@ entries carry a date mark; the first-Ashby-pass footnote is present.
 - ⬜ Scheduling correct (the composed `/loop <interval>` matches the pinned table per frequency; `/loop` sets `mechanism:loop`; **zero-Python user path** proven with python3 masked) (§9)
 - ⬜ **No numeric scores/weights, budget config, or invented charge** in files or unsolicited chat; accurate calls-first usage context is labeled, and users control frequency, sources, and review depth (§10)
 - ⬜ Docs match reality (install commands, error table, sample digest) (§11)
-- ⬜ Full regression green: `pytest` (**547**; gate on `0 failed`) + the eval structural gate (`eval_harness.py`) + all five skills' evals (**179** scenarios) (§0.3, §12)
+- ⬜ Full regression green: `pytest` (**377**; gate on `0 failed`) + the eval structural gate (`eval_harness.py`) + all five skills' evals (**51** scenarios) (§0.3, §12)
 - ⬜ Planned config slash-command tests are marked **N/A (pending build)**, not green (§13)
 - ⬜ Multi-source: live Ashby/Greenhouse/Lever rows; shim multi-source run shows per-source counts + first-pass footnote; one source down never blanks the run (§14)
 

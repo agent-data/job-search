@@ -193,7 +193,7 @@ Run every check. The final report states which checks ran and their results.
 6. **References resolve in place.**
 
    ```bash
-   test -f "$HERMES_HOME/plugins/job-search/skills/job-search/../../shared/references/internals.md" && echo refs-ok
+   test -f "$HERMES_HOME/plugins/job-search/skills/job-search/../../shared/references/runbook.md" && echo refs-ok
    test -x "$HERMES_HOME/plugins/job-search/shared/scripts/mechanics/workspace-discovery.sh" && echo scripts-ok
    ```
 

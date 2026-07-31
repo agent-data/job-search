@@ -36,14 +36,14 @@ page coverage take effect immediately.
 
 For the exact config recipes (how to add a query, change frequency, update the brief, or change
 review depth) and the preview arithmetic,
-see [`../shared/references/internals.md`](../shared/references/internals.md).
+see `shared/references/runbook.md`.
 
 For the product philosophy behind this (prose-over-knobs, conversational-first),
 see [`design-docs/core-beliefs.md`](design-docs/core-beliefs.md).
 
 How skills speak — the plain-English outcome-first voice, the banned internal vocabulary,
 and the render-inline rule for briefs and digests — is owned by
-[`../shared/references/voice.md`](../shared/references/voice.md).
+`../shared/references/voice.md`.
 
 ---
 
@@ -65,10 +65,10 @@ sees at a glance:
   the latest digest's Run health line as a fallback.
 - **Latest digest summary** — the date and the counts line from the newest digest.
 - **Pipeline counts** — totals grouped by job status (the status vocabulary is owned by
-  [`conventions.md`](../shared/references/conventions.md)) and how many need a human check.
+  `shared/references/runbook.md`) and how many need a human check.
 - **One-time deeper-coverage offer** — only after the latest local run provides the qualifying
   evidence, and never again after it is shown; the marker and eligibility rules are owned by
-  [`internals.md`](../shared/references/internals.md).
+  `shared/references/runbook.md`.
 - **Quick actions** — conversational prompts: run a search now, add or edit a query,
   change frequency or review depth, explain usage, update preferences, toggle the schedule,
   show the latest digest.
@@ -104,7 +104,7 @@ links, incomplete deeper coverage, partial failures, and a brief-age nudge when 
 
 The **exact digest format** (section layout, counts line shape, run-health vocabulary,
 footnote conventions) is owned by
-[`../shared/references/conventions.md`](../shared/references/conventions.md) — refer
+`shared/references/runbook.md` — refer
 there; it is not reproduced here.
 
 For how the digest is produced (the search loop, dedup, evaluation, detail reads,
@@ -127,7 +127,7 @@ silent failures, and the user never sees a code token. The internal name lives o
 record and the operator manual.
 
 Full error catalog with exact cause+fix wording, and the internal-vs-user rendering rule:
-[`../shared/references/errors.md`](../shared/references/errors.md).
+`../shared/references/errors.md`.
 
 ---
 
@@ -148,4 +148,4 @@ it is user-facing; users never interact with those files directly.
 
 For the full surface and how the scheduling mechanisms and canary work, see
 [`../ARCHITECTURE.md`](../ARCHITECTURE.md) and
-[`../shared/references/internals.md`](../shared/references/internals.md) (Scheduling setup).
+`shared/references/runbook.md` (Scheduling setup).

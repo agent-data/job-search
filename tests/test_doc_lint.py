@@ -160,7 +160,7 @@ def test_code_refs_missing_fails(tmp_path):
 def test_dup_pointer_with_link_passes(tmp_path):
     d = tmp_path / "docs"; d.mkdir()
     (d / "a.md").write_text(
-        "Frequencies live in [conventions.md](../shared/references/conventions.md); "
+        "Frequencies live in [runbook.md](../shared/references/runbook.md); "
         "it lists every-2-hours among others.\n")
     r = run_lint(tmp_path, "--only", "no-shared-reference-duplication")
     assert r.returncode == 0, r.stdout + r.stderr

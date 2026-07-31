@@ -1,8 +1,8 @@
 #!/bin/sh
 # workspace-discovery.sh — resolve the active workspace, its source, and whether this is a first run.
 #
-# Reproduces the pinned precedence in shared/references/internals.md §"Workspace discovery & first-run
-# detection", honoring $JOBSEARCH_OS_REGISTRY, $XDG_CONFIG_HOME, $JOBSEARCH_OS_HOME, $HOME exactly as
+# Reproduces the workspace-discovery precedence in shared/references/runbook.md §"Find the
+# workspace", honoring $JOBSEARCH_OS_REGISTRY, $XDG_CONFIG_HOME, $JOBSEARCH_OS_HOME, $HOME exactly as
 # the pinned expressions do:
 #   1. Registry parses with a non-empty active_workspace W  -> W, source=registry; first_run only if W
 #      has no config.yaml. The registry wins UNCONDITIONALLY — never fall through, even when W lacks a

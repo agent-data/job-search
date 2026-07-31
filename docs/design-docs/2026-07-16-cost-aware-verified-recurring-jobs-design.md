@@ -4,7 +4,7 @@ title: "Cost-aware decisions, explicit models, and canary-verified recurring job
 status: current
 verified: partial
 last_reviewed: 2026-07-16
-code_refs: [shared/references/agent-data-contract.md, shared/references/internals.md, shared/references/conventions.md, shared/references/parallelism.md, shared/references/errors.md, skills/job-search/SKILL.md, skills/job-search-agent/SKILL.md, skills/job-search-run/SKILL.md, templates/config.example.yaml, tests/fake-agent-data]
+code_refs: [skills/job-search/SKILL.md, skills/job-search-agent/SKILL.md, skills/job-search-run/SKILL.md, templates/config.example.yaml, tests/fake-agent-data]
 claimed_paths: [skills, shared/references, templates, tests, docs/design-docs]
 owner_area: Skills & references
 repos: [job-search-os]

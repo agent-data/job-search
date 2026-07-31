@@ -13,13 +13,13 @@ truth. The install lays down the whole pack tree, so each skill resolves them **
 
 **Edit the source:**
 
-- Shared references live in **`shared/references/*.md`** (dev tooling lives in `scripts/` — `build.sh` plus
-  the Python linters; none of it ships in the skills).
+- Shared references live in **`shared/references/*.md`** (dev tooling lives in `scripts/` — the Python
+  linters and the eval harness; none of it ships in the skills).
 - Edit the file in `shared/references/` and you're done — every skill sees the change, because they all
   resolve the same file.
 
-`./scripts/build.sh` is **stamp-only**: it regenerates `shared/references/build-stamp.md` (the deterministic
-build stamp) and nothing else. It does **not** copy or sync references into the skills.
+Nothing is generated into `skills/` or `shared/`: there is no build step, and no file there is a copy of
+another.
 
 A skill's own `SKILL.md` and its `evals/` are **authored originals**, not generated — edit them in
 place.
@@ -102,11 +102,11 @@ brief, `config.yaml`, or `jobs.jsonl`. Keep them intact:
 - **Usage context, not budget controls.** Users choose outcomes — frequency, sources, and review depth — and
   see exact usage context before added metered work plus actual calls after each run. Accurate calls-first
   context is expected; a `budget`, `credits`, or `cost` config field, hard monetary cap, or invented actual
-  charge is not. Pricing and metering facts live only in `shared/references/agent-data-contract.md`.
+  charge is not. Pricing and metering facts live only in `shared/references/agent-data.md`.
 - **Private and local.** The user workspace is private PII with a deny-all `.gitignore` and is never
   committed. No personal data belongs in this repo.
-- **Every blocked path is a named error.** No silent failures: if something can't proceed, name the exact
-  `E-*` from `shared/references/errors.md` with its cause + fix.
+- **Every blocked path is named.** No silent failures: if something can't proceed, say what stopped it and
+  what fixes it, at the step that hit it.
 
 If a change would add a score, a weight, or a monetary budget control, it's almost certainly the wrong
 direction — open an issue to discuss first. When a choice changes metered work, give accurate calls-first

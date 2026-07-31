@@ -3,7 +3,7 @@ title: New-User Onboarding
 status: current
 verified: partial
 last_reviewed: 2026-07-19
-code_refs: [skills/job-search/SKILL.md, shared/references/internals.md]
+code_refs: [skills/job-search/SKILL.md]
 ---
 
 # New-User Onboarding
@@ -26,7 +26,7 @@ are only invocable namespaced; bare `/job-search` for loose-skill installs). On 
 procedure to read the workspace state. When discovery reports `first_run: true` the skill routes to the
 first-run playbook; when `first_run: false` it routes to the returning-user home. The routing
 logic and both playbooks are owned by [`skills/job-search/SKILL.md`](../../skills/job-search/SKILL.md);
-the discovery procedure by [`shared/references/internals.md`](../../shared/references/internals.md).
+the discovery procedure by `shared/references/runbook.md`.
 
 ## The onboarding flow
 
@@ -34,7 +34,7 @@ The full playbook lives in
 [`skills/job-search/SKILL.md`](../../skills/job-search/SKILL.md).
 This section names each step and points to the owning reference; it does not restate mechanics.
 Every ask follows the zero-context voice rules owned by
-[`shared/references/voice.md`](../../shared/references/voice.md) — one short line of plain-English
+`shared/references/voice.md` — one short line of plain-English
 context (what the thing is, why it's asked), then the question; internal vocabulary never reaches
 the user.
 
@@ -61,18 +61,18 @@ the install, that's a one-line handoff, not an error: the agent gives the exact 
 (`! npm install -g agent-data`) and resumes once it lands. Then — and starting here when the CLI was
 present but unauthenticated — the agent walks the user through generating an API key (with explicit
 steps), authenticates with the contract's `agent-data init --api-key <KEY> -y` line (the same on
-every host — see [`shared/references/agent-data-contract.md`](../../shared/references/agent-data-contract.md)
+every host — see `shared/references/agent-data.md`
 → Auth), and verifies with `agent-data whoami` before continuing. The API key is requested only at
 this connect step, never before the install. The internal codes for
 this state (`E-NO-AGENT-DATA`, `E-NO-AUTH`, owned by
-[`shared/references/errors.md`](../../shared/references/errors.md)) are never shown to the user. The
+`shared/references/errors.md`) are never shown to the user. The
 **headless runner** (`job-search-run`) can't prompt, so it still halts on these with a blocked digest.
 
 ### 3. Workspace creation or adoption
 
 The skill runs the workspace-discovery procedure to find the workspace path and first-run status. The
 discovery order, never-clobber adoption rule, and registry write rules are owned by
-[`shared/references/internals.md`](../../shared/references/internals.md).
+`shared/references/runbook.md`.
 
 - **Adopt** an existing workspace: record it in the registry; additively create only missing
   subdirectories; never overwrite existing `config.yaml`, `preferences.md`, or `jobs.jsonl`.
@@ -96,7 +96,7 @@ chooses one path:
 
 Either path ends with `preferences.md` present at the workspace path. If a run is attempted
 without a usable brief, the error is `E-NO-PREFERENCES` (see
-[`shared/references/errors.md`](../../shared/references/errors.md)).
+`shared/references/errors.md`).
 
 ### 5. Searches and frequency (derived from the brief)
 
@@ -105,8 +105,8 @@ keywords — and writes them as `queries[]` entries into `config.yaml` (editing 
 comments and structure), then **acknowledges** what it saved and notes the searches are editable
 anytime. The user picks a run frequency in plain human terms — no credit math, no cost reasoning.
 Config schema and the derive/edit recipes are owned by
-[`shared/references/internals.md`](../../shared/references/internals.md) and
-[`shared/references/conventions.md`](../../shared/references/conventions.md).
+`shared/references/runbook.md` and
+`shared/references/runbook.md`.
 
 ### 6. First live search — the magical moment
 
@@ -121,7 +121,7 @@ that surfacing works is owned by
 [`../RELIABILITY.md`](../RELIABILITY.md#4-run-health--blocked-surfacing--visible-without-the-exit-code).
 Onboarding-specific note: the likeliest blocks here are `E-QUOTA` (the only point where API
 limits surface, reactively) and `E-SERVICE-DOWN`, both catalogued in
-[`shared/references/errors.md`](../../shared/references/errors.md).
+`shared/references/errors.md`.
 
 ### 7. Schedule offer
 
@@ -133,7 +133,7 @@ user's explicit yes — and the scheduling marker is recorded as running **only 
 canary** proves the real invocation works; a failed canary records nothing and stays honest that it
 is not scheduled. The agent composes the schedule and the run recipe for its own host (there is no
 per-host recipe to look up). The scheduling protocol, eligibility gates, and canary are owned by
-[`shared/references/internals.md`](../../shared/references/internals.md) (Scheduling setup).
+`shared/references/runbook.md` (Scheduling setup).
 
 ## What the user sees / success criteria
 
@@ -144,7 +144,7 @@ At the end of onboarding all of the following are true:
   `preferences.md`, and `jobs.jsonl` — all created or adopted without hand-editing.
 - An **optional recurring schedule** is running and recorded in the OS registry if the user consented
   and its config-time canary passed (the agent resolves the mechanism for its own host; see
-  [`shared/references/internals.md`](../../shared/references/internals.md) → Scheduling setup).
+  `shared/references/runbook.md` → Scheduling setup).
 
 On a **returning session**, discovery reports `first_run: false` because
 `config.yaml` exists in the workspace, and the skill routes to the home view (latest digest,
@@ -154,7 +154,7 @@ pipeline, quick actions) instead of restarting onboarding.
 
 All failure paths are named internally with an `E-*` code and reach the user as a plain cause + fix,
 never the raw code. Wording and fixes are owned by
-[`shared/references/errors.md`](../../shared/references/errors.md); they are not restated here.
+`shared/references/errors.md`; they are not restated here.
 
 - **Missing prerequisites** — `agent-data` missing or unauthenticated. Interactive onboarding
   **remediates** (immediate install — no user input — then guided key + auth) rather than halting;

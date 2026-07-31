@@ -9,9 +9,9 @@ into a workspace that never touches source control.
 This doc is the **structural map**: the OS model, the five product **domains**, the five architectural
 **layers**, and how packages depend on each other and data flows through a run. It is deliberately a map,
 not the territory — the binding details live elsewhere and are linked, never restated. For the full design
-specs see [docs/design-docs/index.md](docs/design-docs/index.md); the runtime contracts (errors, config,
-conventions, the agent-data API, OS internals) are the single source of truth under
-[shared/references/](shared/references/internals.md). Read [AGENTS.md](AGENTS.md) first for the agent-facing
+specs see [docs/design-docs/index.md](docs/design-docs/index.md); the runtime contracts — the workspace
+and the run contract in `runbook.md`, the job-postings API in `agent-data.md` — are the single source of
+truth under `shared/references/`. Read [AGENTS.md](AGENTS.md) first for the agent-facing
 entry point. Companion grading: [docs/QUALITY_SCORE.md](docs/QUALITY_SCORE.md) scores every domain × layer.
 
 ## The "OS" model
@@ -25,11 +25,12 @@ The product framing is an operating system whose userland is your job search:
 | Shared libraries | `shared/references/` — the contracts and pinned procedures the host agent executes |
 | Filesystem | the private per-user workspace (default `~/.job-search/`), never committed |
 | System calls | the agent-data CLI — the one job source the runner shells out to |
-| Cron | the schedule — an unattended machine schedule (`cron`/`launchd`, or the host's own scheduler) the agent composes for its host and gates on consent; an in-session loop is the named fallback. See [shared/references/internals.md](shared/references/internals.md) → Scheduling setup |
+| Cron | the schedule — an unattended machine schedule (`cron`/`launchd`, or the host's own scheduler) the agent composes for its host and gates on consent; an in-session loop is the named fallback. See [shared/references/runbook.md](shared/references/runbook.md) → Running it unattended |
 
-Where the OS state lives and how the workspace is discovered is specified in
-[shared/references/internals.md](shared/references/internals.md); the on-disk file layout is in
-[shared/references/conventions.md](shared/references/conventions.md).
+Where the OS state lives, how the workspace is discovered, and what each file in it holds are specified in
+[shared/references/runbook.md](shared/references/runbook.md); the exact shape of each file is carried by the
+examples in [templates/](templates/) and checked by
+[shared/scripts/mechanics/validate-workspace.sh](shared/scripts/mechanics/validate-workspace.sh).
 
 ## Product domains
 
@@ -39,23 +40,26 @@ the `shared/references/` file that owns its contract.
 ### discovery-search
 Find postings: run each saved query against the agent-data Job Postings API, dedup new results against the
 local record of already-seen postings, and respect retry / outage rules. Implemented by the [job-search-run](skills/job-search-run/SKILL.md)
-skill over the `jobs.jsonl` operations in [shared/references/conventions.md](shared/references/conventions.md)
-(dedup + persistence). The CLI routes, fields, and retry
-semantics are owned by [shared/references/agent-data-contract.md](shared/references/agent-data-contract.md).
+skill over the `jobs.jsonl` operations in
+[shared/scripts/mechanics/dedup.sh](shared/scripts/mechanics/dedup.sh) and
+[shared/scripts/mechanics/event-log-append.sh](shared/scripts/mechanics/event-log-append.sh) (dedup +
+persistence). The CLI routes, per-source quirks, retry rules, and what a call costs are owned by
+[shared/references/agent-data.md](shared/references/agent-data.md).
 
 ### preferences-judgment
 Capture what the user wants and judge postings against it — qualitatively, never numerically. The
 [job-preference-interview](skills/job-preference-interview/SKILL.md) skill builds the prose brief; the
 [evaluate-job-fit](skills/evaluate-job-fit/SKILL.md) skill reads that brief next to a posting and returns a
-relevance verdict. The brief shape and the relevance vocabulary are defined in
-[shared/references/conventions.md](shared/references/conventions.md).
+relevance verdict. The brief shape is shown by
+[templates/preferences.example.md](templates/preferences.example.md), and the relevance vocabulary is
+defined by the [evaluate-job-fit](skills/evaluate-job-fit/SKILL.md) skill that returns it.
 
 ### workspace-state
 Persist everything durably and discoverably: the workspace, config, the append-only job-event log, run
 audit logs, and digests. The engines are pinned procedures executed natively by the host agent: the registry +
-workspace-discovery rules in [shared/references/internals.md](shared/references/internals.md) and the
-event-log operations in [shared/references/conventions.md](shared/references/conventions.md), which also
-owns the file contracts.
+workspace-discovery rules in [shared/references/runbook.md](shared/references/runbook.md), which also
+maps what each file holds, and the event-log operations in
+[shared/scripts/mechanics/event-log-append.sh](shared/scripts/mechanics/event-log-append.sh).
 
 ### scheduling-consent
 Run on a cadence the user controls: the agent advocates an **unattended** machine schedule (`cron`/`launchd`
@@ -65,14 +69,18 @@ SILENT or un-consented privileged write. The
 config-time canary proves the schedule actually runs, records the schedule marker in the registry; the agent
 resolves the concrete mechanism for its own host (there is no per-host adapter). The consent-gated stance is an instruction-level design rule carried by every skill
 ([docs/SECURITY.md](docs/SECURITY.md), [core-beliefs.md](docs/design-docs/core-beliefs.md) Belief 7), not a
-runtime control. The cadence options live in [shared/references/internals.md](shared/references/internals.md).
+runtime control. The cadence options live in [templates/config.example.yaml](templates/config.example.yaml),
+and the cron line for each is composed by
+[shared/scripts/mechanics/schedule-line.sh](shared/scripts/mechanics/schedule-line.sh).
 
 ### error-surfacing
-Make every failure named and visible — no silent failures. Each blocked path is a named `E-*` error whose
-durable guarantee is two file-backed channels — the blocked digest and the home view — plus a
-capability-gated attention-pull alert (fires only when the host has such a channel). The full catalog (codes,
-cause + fix wording, run effect, run-health states) is owned by
-[shared/references/errors.md](shared/references/errors.md); the runner enforces it.
+Make every failure named and visible — no silent failures. A run that stops early still closes: it writes a
+run record saying what stopped it and a digest the user reads, which are the two file-backed channels the
+home view surfaces, plus a capability-gated attention-pull alert (fires only when the host has such a
+channel). Each skill names the failures its own flow can hit, in plain language next to the step that hits
+them — the `E-*` code catalog was retired on 2026-07-31. The API failures every flow shares — which
+responses can be retried, and when to stop spending calls on one — are in
+[shared/references/agent-data.md](shared/references/agent-data.md).
 
 ## Architectural layers
 
@@ -81,20 +89,16 @@ Five canonical layers describe *how the system is built*, bottom-up.
 ### deterministic-core
 The pinned contracts for the non-judgment work the skills must not improvise: the registry schema + write
 rules, the workspace-discovery precedence, the scheduling marker, and the `jobs.jsonl` operations
-(known-ids / append / fold). They are defined once — as exact procedures and portable shell one-liners in
-[shared/references/internals.md](shared/references/internals.md) and
-[shared/references/conventions.md](shared/references/conventions.md) — and the host agent executes them with
-its native tools. No helper binary or script ships with the skills.
+(known-ids / append / fold). They are defined once — as the recipes in
+[shared/references/runbook.md](shared/references/runbook.md) and as the POSIX shell scripts under
+[shared/scripts/mechanics/](shared/scripts/mechanics/) — and the host agent runs them with its native tools.
 
 ### shared-references
-The single source of truth for every runtime contract:
-[errors.md](shared/references/errors.md), [conventions.md](shared/references/conventions.md),
-[agent-data-contract.md](shared/references/agent-data-contract.md),
-[internals.md](shared/references/internals.md), and the durable run and local-metrics contract in
-[run-lifecycle.md](shared/references/run-lifecycle.md). The install lays down the whole pack tree, so these
-resolve in place from each skill — nothing is fanned into per-skill copies;
-[scripts/build.sh](scripts/build.sh) only regenerates the build stamp
-(`shared/references/build-stamp.md`).
+The single source of truth for every runtime contract, in two files:
+[runbook.md](shared/references/runbook.md) (the workspace, what each file holds, how one run opens and
+closes, what stays off disk) and [agent-data.md](shared/references/agent-data.md) (the CLI, the per-source
+quirks, retries, what a call costs). The install lays down the whole pack tree, so both resolve in place
+from each skill — nothing is fanned into per-skill copies.
 
 ### skill-layer
 The five programs: [job-search](skills/job-search/SKILL.md) (front door / home view),
@@ -120,14 +124,13 @@ See [TESTING.md](TESTING.md) for the matrix.
 ## Package layering & data flow
 
 **Dependency direction.** Skills depend downward only: a skill reads
-[shared/references/](shared/references/conventions.md) for its contracts and the pinned procedures it
+`shared/references/` for its contracts and the pinned procedures it
 executes. The references depend on nothing in the skills, so contracts stay authoritative and verifiable in
 isolation.
 
-**Single source of truth + the build.** Authors edit `shared/references/*.md`; there is nothing to sync.
-The install lays down the whole pack tree, so those files resolve in place from each skill — there are **no
-per-skill bundled copies**. [scripts/build.sh](scripts/build.sh) is stamp-only: it regenerates the build
-stamp (`shared/references/build-stamp.md`) and never copies references into the skills.
+**Single source of truth.** Authors edit `shared/references/*.md`; there is nothing to sync. The install
+lays down the whole pack tree, so those files resolve in place from each skill — there are **no per-skill
+bundled copies**, and no build step writes into `skills/` or `shared/`.
 
 **Distribution.** One `skills/` tree, read in place, ships to every harness via a per-harness manifest —
 `.claude-plugin/`, `.codex-plugin/`, `.cursor-plugin/`, `.factory-plugin/`, `gemini-extension.json`,
@@ -139,12 +142,12 @@ Install steps are in [README.md](README.md).
 
 **Headless run flow.** A scheduled pass runs [job-search-run](skills/job-search-run/SKILL.md): free preflight
 gates (CLI present, config, auth, brief, service status), then one metered search per enabled query, dedup via
-the known-ids operation ([shared/references/conventions.md](shared/references/conventions.md)), qualitative
+the known-ids operation ([shared/scripts/mechanics/dedup.sh](shared/scripts/mechanics/dedup.sh)), qualitative
 judgment per new posting, detail reads for the promising
 ones, and finally a persisted run record plus a digest. Any blocked gate writes a named-error record so the
 next home view surfaces it. Detail and failure modes are in
 [docs/product-specs/index.md](docs/product-specs/index.md) and
-[shared/references/errors.md](shared/references/errors.md).
+[shared/references/agent-data.md](shared/references/agent-data.md).
 
 **Onboarding flow.** On first run [job-search](skills/job-search/SKILL.md) walks the user end-to-end —
 prereqs, workspace, the preferences interview, queries + cadence, a first live search, and optional
@@ -158,11 +161,11 @@ When you need an exact runtime detail, go to its owner — do not reproduce it h
 
 | Need | Owner |
 |---|---|
-| Named errors, run-health states, surfacing | [shared/references/errors.md](shared/references/errors.md) |
-| Workspace layout, `config.yaml`, jobs log, digest format | [shared/references/conventions.md](shared/references/conventions.md) |
-| Run lifecycle, completion, recovery, local metrics | [shared/references/run-lifecycle.md](shared/references/run-lifecycle.md) |
-| agent-data CLI: routes, fields, retry rules, listing id | [shared/references/agent-data-contract.md](shared/references/agent-data-contract.md) |
-| Registry, workspace discovery, config recipes, scheduling | [shared/references/internals.md](shared/references/internals.md) |
+| Workspace layout, registry, workspace discovery, the run contract, the scratch rule | [shared/references/runbook.md](shared/references/runbook.md) |
+| agent-data CLI: routes, per-source quirks, retry rules, listing id, what a call costs | [shared/references/agent-data.md](shared/references/agent-data.md) |
+| The exact shape of `config.yaml`, a run record, a `jobs.jsonl` line, the brief | [templates/](templates/) |
+| Whether a workspace on disk is well formed | [shared/scripts/mechanics/validate-workspace.sh](shared/scripts/mechanics/validate-workspace.sh) |
+| How each skill behaves | its `SKILL.md`, graded by the evals in [evals/](evals/) |
 
 Contributor workflow and the green-gate commands are in [CONTRIBUTING.md](CONTRIBUTING.md) and
 [TESTING.md](TESTING.md); planned work is tracked in [docs/exec-plans/index.md](docs/exec-plans/index.md).

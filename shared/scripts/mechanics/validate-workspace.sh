@@ -45,8 +45,8 @@ if [ ! -d "$WS" ]; then
 fi
 
 # A run id is a UTC timestamp with dashes where a time would use colons: 2026-07-16T14-30-00Z.
-# Run-record filenames carry it. `runs/` holds other .json files too — detail-model-binding.json is
-# one — so a file counts as a run record only when its name matches this.
+# Run-record filenames carry it. `runs/` holds files that are not run records, so a file counts as a
+# run record only when its whole name matches this.
 RUN_ID_RE='^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}-[0-9]{2}-[0-9]{2}Z$'
 # Run-record timestamps are UTC with a trailing Z. An offset such as +00:00 names the same instant
 # but fails: with one written form, comparing two timestamps is a plain string compare.

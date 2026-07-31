@@ -3,7 +3,7 @@ title: Core Beliefs — Agent-First Operating Principles
 status: current
 verified: partial
 last_reviewed: 2026-07-15
-code_refs: [scripts/philosophy_guard.py, scripts/doc_lint.py, scripts/build.sh, tests/test_philosophy_guard.py, tests/test_reference_resolution.py, tests/test_mechanics_scripts.py, shared/scripts/mechanics/dedup.sh, .github/workflows/ci.yml, shared/references/internals.md, shared/references/conventions.md]
+code_refs: [scripts/philosophy_guard.py, scripts/doc_lint.py, tests/test_philosophy_guard.py, tests/test_reference_resolution.py, tests/test_mechanics_scripts.py, shared/scripts/mechanics/dedup.sh, .github/workflows/ci.yml]
 ---
 # Core Beliefs — Agent-First Operating Principles
 
@@ -26,7 +26,7 @@ Each belief is written in four parts:
 - **How to verify** — the exact command to run or file to inspect.
 
 The runtime contracts these beliefs *protect* (the named errors, the config schema, the digest, the
-status vocabulary, the frequency lever) are owned by [shared/references/](../../shared/references/conventions.md)
+status vocabulary, the frequency lever) are owned by `shared/references/`
 and are linked, never restated here — this doc is a live design-doc subject to the
 `no-shared-reference-duplication` rule in [scripts/doc_lint.py](../../scripts/doc_lint.py).
 
@@ -41,7 +41,7 @@ and are linked, never restated here — this doc is a live design-doc subject to
   default output (`examples/`, `templates/`) for fit scores / weights / points and fails the build;
   it runs in CI ([.github/workflows/ci.yml](../../.github/workflows/ci.yml)) and as
   `tests/test_philosophy_guard.py`. The relevance vocabulary it protects is defined in
-  [shared/references/conventions.md](../../shared/references/conventions.md). A score a user explicitly
+  `shared/references/conventions.md`. A score a user explicitly
   asks for *in chat* is fine — it just must never be written into a digest, brief, or the job log.
 - **How to verify.** `python3 scripts/philosophy_guard.py --root .` → `Philosophy guard: clean.`
 
@@ -56,10 +56,10 @@ and are linked, never restated here — this doc is a live design-doc subject to
 - **Enforced by.** [scripts/philosophy_guard.py](../../scripts/philosophy_guard.py) rejects any
   `budget` / `credits` / `cost` config field, cost knob, or unverified actual-charge claim in shipped
   output while allowing accurate calls-first usage context. The outcome levers and usage-record
-  contract live in [shared/references/conventions.md](../../shared/references/conventions.md), the
+  contract live in `shared/references/conventions.md`, the
   reactive quota error and its fix are owned by
-  [shared/references/errors.md](../../shared/references/errors.md), and canonical pricing/metering facts
-  live only in [shared/references/agent-data-contract.md](../../shared/references/agent-data-contract.md).
+  `shared/references/errors.md`, and canonical pricing/metering facts
+  live only in `shared/references/agent-data-contract.md`.
 - **How to verify.** `python3 scripts/philosophy_guard.py --root .` → `Philosophy guard: clean.`
 
 ## 3. Private & local
@@ -71,7 +71,7 @@ and are linked, never restated here — this doc is a live design-doc subject to
   workspace.
 - **Enforced by.** The workspace gitignore *template* ships a deny-all (`*` then `!.gitignore`) that
   the first-run setup copies in; the file layout and "never committed" contract are owned by
-  [shared/references/conventions.md](../../shared/references/conventions.md). Beyond the template this
+  `shared/references/conventions.md`. Beyond the template this
   is **cultural** — there is no CI check that scans for committed PII, so review must catch it.
 - **How to verify.** Inspect `templates/workspace.gitignore` (the deny-all template) and confirm no
   workspace contents are tracked.
@@ -87,10 +87,10 @@ and are linked, never restated here — this doc is a live design-doc subject to
   did nothing.
 - **Enforced by.** The named-error catalogue, the three surfacing channels, and the rule that a HALT
   writes a blocked record (because a headless `claude -p` exits 0 even when blocked) are all owned by
-  [shared/references/errors.md](../../shared/references/errors.md). The behavior is exercised by the
+  `shared/references/errors.md`. The behavior is exercised by the
   job-search-run skill's evals (the quota / service-down / no-auth / no-preferences / config-version
   halt scenarios in `skills/job-search-run/evals/evals.json`).
-- **How to verify.** Read [shared/references/errors.md](../../shared/references/errors.md); then run
+- **How to verify.** Read `shared/references/errors.md`; then run
   the job-search-run evals (ask Claude to "run the evals for job-search-run") and confirm each blocked
   scenario writes its internal classification and blocked record while user-visible artifacts carry cause +
   fix without leaking a bounded internal-class token.
@@ -105,7 +105,7 @@ and are linked, never restated here — this doc is a live design-doc subject to
   compose-by-reference model, AAS-PACK-02/BOUND-03). Where a host cannot resolve a path outside a
   skill's own directory, the build assembles that host's self-contained copies from the single source
   (AAS-DIST-03) — a generated copy, never hand-maintained.
-- **Enforced by.** [scripts/build.sh](../../scripts/build.sh) (assembly only where a host needs it;
+- **Enforced by.** `scripts/build.sh` (assembly only where a host needs it;
   today every host resolves in place, so it regenerates only the content-hash build stamp),
   [scripts/doc_lint.py](../../scripts/doc_lint.py)'s intra-reference duplication check
   (`no-shared-reference-duplication`, which guards `shared/references/` and the skill-local originals
@@ -134,13 +134,13 @@ and are linked, never restated here — this doc is a live design-doc subject to
 - **Enforced by.** The mechanics are bundled as portable POSIX-`sh` scripts under
   `shared/scripts/mechanics/` (dedup, the event log, schedule-line composition, workspace discovery),
   each reproducing — and paired with — the pinned prose contract owned by
-  [shared/references/internals.md](../../shared/references/internals.md) (registry, discovery,
-  scheduling marker) and [shared/references/conventions.md](../../shared/references/conventions.md)
+  `shared/references/internals.md` (registry, discovery,
+  scheduling marker) and `shared/references/conventions.md`
   (the `jobs.jsonl` event-line contract + operations); the runner invokes the script where a shell
   runtime exists and follows the named prose fallback otherwise. `tests/test_mechanics_scripts.py`
   pins the scripted form to the contract; the skill evals assert on the artifacts those procedures
   produce (registry bytes, event lines). The "read the record, not the exit code" contract is owned by
-  [shared/references/errors.md](../../shared/references/errors.md).
+  `shared/references/errors.md`.
 - **How to verify.** Run `python3 -m pytest tests/test_mechanics_scripts.py` (the scripted mechanics
   reproduce their pinned contracts) plus the skill evals (e.g. "run the evals for job-search-run") and
   the TESTING.md state/discovery checks; confirm registry writes and `jobs.jsonl` lines match the
@@ -170,17 +170,17 @@ and are linked, never restated here — this doc is a live design-doc subject to
   before the schedule is called active (`PSG-SUB-06`, prove it works, not that it exists). The
   unattended-first model (session loop as its named fallback), the "cloud schedulers don't qualify" test,
   and the canary spec are owned by `skills/job-search-agent/references/scheduling-and-consent.md` and
-  [shared/references/internals.md](../../shared/references/internals.md) (Scheduling setup).
+  `shared/references/internals.md` (Scheduling setup).
 - **Enforced by.** **Instruction-level + evals** — there is no runtime hook. The stance asserts **no
   silent / un-consented privileged write**, and now that the advocated default is an unattended schedule (a
   real machine change) the same gate covers it: shown first, approved on a yes, user-removable. The
   unattended-first model, the in-session-loop fallback, the "cloud schedulers don't qualify" test, and the
   mandatory **config-time canary** are pinned in
-  [shared/references/internals.md](../../shared/references/internals.md) (Scheduling setup) and
+  `shared/references/internals.md` (Scheduling setup) and
   `skills/job-search-agent/references/scheduling-and-consent.md`, and stated user-facing in
   [docs/SECURITY.md](../SECURITY.md). The canary's proof routes through the **written record** — success
   read from the run artifact, not the process exit code (belief 6) — the same no-silent-failure channel
-  owned by [shared/references/errors.md](../../shared/references/errors.md). Exercised by the job-search
+  owned by `shared/references/errors.md`. Exercised by the job-search
   evals (scheduling is verified via the offered yes/no, the composed schedule line for the cadence, and the
   registry marker — not by an enforced prohibition).
 - **How to verify.** Run the job-search evals and confirm the agent *offers* scheduling as a yes/no,
@@ -189,7 +189,7 @@ and are linked, never restated here — this doc is a live design-doc subject to
   crontab/launchd runs in tests), the canary's "prove the real invocation before recording" gate is
   verified by inspecting the pinned flow in
   `skills/job-search-agent/references/scheduling-and-consent.md` +
-  [shared/references/internals.md](../../shared/references/internals.md) (marker set only after Verify passed —
+  `shared/references/internals.md` (marker set only after Verify passed —
   a green canary for the unattended schedule, or the loop fallback's observed first-fire run record); a green
   eval reflects the consent + compose + record behavior, not an enforced prohibition or a
   live canary.
@@ -204,8 +204,8 @@ and are linked, never restated here — this doc is a live design-doc subject to
 - **Enforced by.** **Cultural / by design** — this is a product principle, not a linted rule. It is
   upheld by the skills (the front door and interview drive configuration through conversation) and by
   keeping the config human-only; the file's shape is documented in
-  [shared/references/conventions.md](../../shared/references/conventions.md) as the escape hatch.
-- **How to verify.** Inspect [shared/references/conventions.md](../../shared/references/conventions.md)
+  `shared/references/conventions.md` as the escape hatch.
+- **How to verify.** Inspect `shared/references/conventions.md`
   (human-terms-only config) and confirm the config-editing skills are conversational.
 
 ## 9. Config version stability
@@ -216,12 +216,12 @@ and are linked, never restated here — this doc is a live design-doc subject to
   real breaking changes — and detecting "config written by a newer version" as a named, fixable error
   — keeps upgrades safe.
 - **Enforced by.** The config-version named error (its cause + fix) is owned by
-  [shared/references/errors.md](../../shared/references/errors.md), exercised by the config-version
+  `shared/references/errors.md`, exercised by the config-version
   halt eval in `skills/job-search-run/evals/evals.json`. That the *major* version implies a breaking
   change is the release rule in [CONTRIBUTING.md](../../CONTRIBUTING.md#versioning--bump-it-every-release).
   Whether a feature *deserves* a bump is a **cultural** judgment, not a linted gate.
 - **How to verify.** Read the config-version row in
-  [shared/references/errors.md](../../shared/references/errors.md); run the config-version eval and
+  `shared/references/errors.md`; run the config-version eval and
   confirm it halts and writes a blocked record.
 
 ## 10. Prose over knobs
@@ -232,12 +232,12 @@ and are linked, never restated here — this doc is a live design-doc subject to
   strong preferences / nice-to-haves captures importance structurally, which the model can reason over
   far better than a tuned scoring table — and it keeps belief 1 honest at the input side.
 - **Enforced by.** The prose-brief shape (the buckets, "no weights", the qualitative vocabulary) is
-  owned by [shared/references/conventions.md](../../shared/references/conventions.md);
+  owned by `shared/references/conventions.md`;
   [scripts/philosophy_guard.py](../../scripts/philosophy_guard.py) backstops the *output* side by
   rejecting numeric scoring. The "importance = bucket" framing is restated in
   [CONTRIBUTING.md](../../CONTRIBUTING.md#project-philosophy-please-dont-regress-these). There is no
   linter over the brief's prose itself, so this is partly **cultural**.
-- **How to verify.** Inspect [shared/references/conventions.md](../../shared/references/conventions.md)
+- **How to verify.** Inspect `shared/references/conventions.md`
   (the prose brief sections, no machine-readable contract); run `python3 scripts/philosophy_guard.py
   --root .` for the output backstop.
 
@@ -250,10 +250,10 @@ and are linked, never restated here — this doc is a live design-doc subject to
   the user. Treating docs as a product means they are linked, fresh, and checked like code.
 - **Enforced by.** [scripts/doc_lint.py](../../scripts/doc_lint.py) lints the knowledge base — links
   resolve, frontmatter and `code_refs` are valid, indexes are complete, and live docs don't duplicate
-  the [shared/references/](../../shared/references/conventions.md) source of truth — and runs in CI
+  the `shared/references/` source of truth — and runs in CI
   ([.github/workflows/ci.yml](../../.github/workflows/ci.yml)). The structural map and the docs-as-
   product framing live in [ARCHITECTURE.md](../../ARCHITECTURE.md). That every error names its fix is
-  the contract in [shared/references/errors.md](../../shared/references/errors.md).
+  the contract in `shared/references/errors.md`.
 - **How to verify.** `python3 scripts/doc_lint.py --root .` → `Doc lint: clean.`
 
 ## 12. Parallel by default
@@ -273,13 +273,13 @@ and are linked, never restated here — this doc is a live design-doc subject to
   assign a separate worker model, setup saves the exact primary model and runtime evaluates sequentially. A
   well-briefed subagent makes judgment calls — a terse one returns shallow, generic work.
 - **Enforced by.** **Cultural / by design** — no linter for parallelism. The principle and the subagent-briefing
-  guidance are owned by [shared/references/parallelism.md](../../shared/references/parallelism.md) (bundled into
+  guidance are owned by `shared/references/parallelism.md` (bundled into
   every skill); `job-search-run` embodies it (scan → parallel per-posting fan-out by default, sequential only
   where the host lacks the primitive or awaits subagent approval → consolidate; the `search.detail_model` and
-  parallel-approval knobs live in [shared/references/conventions.md](../../shared/references/conventions.md)).
-  Setup-time model selection is owned by [shared/references/internals.md](../../shared/references/internals.md);
+  parallel-approval knobs live in `shared/references/conventions.md`).
+  Setup-time model selection is owned by `shared/references/internals.md`;
   exact runtime authority is owned by `parallelism.md` and `skills/job-search-run/SKILL.md`.
-- **How to verify.** Inspect [shared/references/parallelism.md](../../shared/references/parallelism.md) and
+- **How to verify.** Inspect `shared/references/parallelism.md` and
   `skills/job-search-run/SKILL.md`; confirm mutually-independent work is dispatched concurrently by default
   (sequential only where the host lacks the primitive or awaits subagent approval), and that the fallback
   still evaluates every queued item with the exact saved model.

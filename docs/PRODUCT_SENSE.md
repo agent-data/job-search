@@ -46,8 +46,8 @@ add metered work, the agent gives the exact known call baseline and names what r
 after every run, it reports actual calls first. Accurate, clearly labeled usage context is expected,
 but a `budget`, `credits`, or `cost` config field and a hard monetary cap are not. Canonical pricing
 and metering facts live in
-[shared/references/agent-data-contract.md](../shared/references/agent-data-contract.md); quota recovery
-wording lives in [shared/references/errors.md](../shared/references/errors.md). See the **Usage context,
+`shared/references/agent-data.md`; quota recovery
+wording lives in `shared/references/errors.md`. See the **Usage context,
 not budget controls** belief in [docs/design-docs/core-beliefs.md](design-docs/core-beliefs.md).
 
 ### Privacy as a promise
@@ -55,7 +55,7 @@ not budget controls** belief in [docs/design-docs/core-beliefs.md](design-docs/c
 The workspace is the user's private data — preferences, matched postings, run logs, resumes. It
 ships with a deny-all `.gitignore` and setup refuses to scaffold inside a directory whose `.git`
 points at a public remote. The workspace layout and the "never committed" contract are owned by
-[shared/references/conventions.md](../shared/references/conventions.md). For how this is enforced
+`shared/references/runbook.md`. For how this is enforced
 (culturally and mechanically), see the **Private & local** belief in
 [docs/design-docs/core-beliefs.md](design-docs/core-beliefs.md).
 
@@ -102,14 +102,14 @@ decision.
   product previews decision-relevant usage, reports actual calls after a run, and keeps frugal-by-
   behavior design (dedup, summary-first judgment, selective detail reads); it does not add a
   `budget`, `credits`, or `cost` config field. Current pricing and metering facts stay single-homed in
-  [shared/references/agent-data-contract.md](../shared/references/agent-data-contract.md), while a quota
-  limit remains a named, actionable error in [shared/references/errors.md](../shared/references/errors.md).
+  `shared/references/agent-data.md`, while a quota
+  limit remains a named, actionable error in `shared/references/errors.md`.
 
 - **Multi-source aggregation — shipped 2026-07; the non-goal's own trigger fired.** This entry
   previously refused multi-source aggregation "before a second source exists," naming the seam
   as sufficient. That condition ended when the Job Postings API shipped per-source selection
   (Ashby, Greenhouse, and Lever live) — see the contract in
-  [shared/references/agent-data-contract.md](../shared/references/agent-data-contract.md). We added client-side fan-out over that one
+  `shared/references/agent-data.md`. We added client-side fan-out over that one
   parameterized contract — per-source circuit breakers, a composite dedup key, conservative
   cross-source merging — **not** a source-plugin system; the seam held as designed. Still
   refused: a descriptor/plugin layer — reconsidered when the fourth and fifth sources
@@ -117,7 +117,7 @@ decision.
   per-source contract (YAGNI).
 
 - **A dedicated pipeline/triage-board skill.** The `status` field on each job event (tracked in
-  [shared/references/conventions.md](../shared/references/conventions.md)) and the per-run digest
+  `shared/references/runbook.md`) and the per-run digest
   cover the v1 tracking need. A full triage board is meaningful only once the user has accumulated
   enough matches and an established workflow; building it now would be premature.
 

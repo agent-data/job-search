@@ -149,26 +149,15 @@ def test_shared_scripts_change_is_runtime_surface_requiring_version_bump(tmp_pat
     assert r.returncode == 0, r.stdout + r.stderr
 
 
-def test_eval_and_generated_stamp_changes_do_not_require_bump(tmp_path):
+def test_eval_only_changes_do_not_require_bump(tmp_path):
     init_git_repo(tmp_path)
     seed_manifests(tmp_path, "1.2.3")
     eval_path = tmp_path / "skills" / "job-search" / "evals" / "evals.json"
     eval_path.parent.mkdir(parents=True)
     eval_path.write_text("{}\n")
-    stamp_path = tmp_path / "shared" / "references" / "build-stamp.md"
-    stamp_path.parent.mkdir(parents=True)
-    stamp_path.write_text("# stamp\n")
     commit_all(tmp_path, "base")
     base = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=tmp_path, text=True).strip()
 
     eval_path.write_text('{"changed": true}\n')
-    stamp_path.write_text("# changed stamp\n")
     r = run_check(tmp_path, "--check-version-bump", "--base", base)
     assert r.returncode == 0, r.stdout + r.stderr
-
-
-def test_ci_build_noop_check_includes_canonical_stamp():
-    text = (ROOT / ".github" / "workflows" / "ci.yml").read_text()
-    assert "git status --porcelain skills shared/references/build-stamp.md" in text
-    assert "git --no-pager diff --stat skills shared/references/build-stamp.md" in text
-    assert "shared/references/build-stamp.md" in text

@@ -245,27 +245,25 @@ def scan_code_refs(root):
 # Distinctive literals OWNED by shared/references/*. A live KB doc reproducing one of these
 # (without linking the source on the same line) is duplicating a contract that will drift.
 #
-# Each entry is (regex, label, owner). `owner` is the repo-relative single canonical home for the
-# facts that were deliberately SINGLE-HOMED (P2/T2.1 + the source-enum reconciliation) and so are
-# also enforced ACROSS the reference layer (owner-aware): any non-owner reference file that restates
-# an owned literal without a resolving pointer is flagged. `owner=None` = guarded in KB docs only
-# (display / config enums the runbooks and config-write recipes legitimately restate — e.g. the
-# frequency/status/digest-counts enums — are intentionally NOT reference-layer-enforced). Of the
-# T2.1 config tables, the `freshness` enum IS owner-enforced (single-homed at conventions.md:29,
-# every other mention points, zero KB-doc hits — latent like run-health); `detail_model` and the
-# `limit` default are deliberately NOT signatured — the `fast | balanced | high | inherit` token
-# appears in live design docs, and the limit default's API-20-vs-template-25 tokens are shared with
-# agent-data-contract.md, so signaturing either would false-positive rather than catch drift.
+# Each entry is (regex, label, owner). `owner` is the repo-relative single canonical home for a fact
+# that a shared reference owns, and such an entry is also enforced ACROSS the reference layer
+# (owner-aware): any non-owner reference file that restates an owned literal without a resolving
+# pointer is flagged. `owner=None` = guarded in KB docs only, which is where every token below sits
+# except the job sources. The frequency, freshness and config-field tokens are written by
+# templates/config.example.yaml; the digest counts line by the run skill's digest template; the
+# run_id format by validate-workspace.sh. None of those is a shared reference, so a KB doc restating
+# one has no reference file to point at, and the reference-layer arm has nothing to compare. The job
+# source enum's home is shared/references/agent-data.md, which names the four sources in prose
+# rather than in this pipe form — so a shared reference that writes the pipe form is restating a
+# fact it does not own.
 DUP_SIGNATURES = [
     (re.compile(r"every-2-hours"), "frequency enum", None),
-    (re.compile(r"any \| past-week \| past-2-weeks \| past-month"), "freshness enum",
-     "shared/references/conventions.md"),
+    (re.compile(r"any \| past-week \| past-2-weeks \| past-month"), "freshness enum", None),
     (re.compile(r"YYYY-MM-DDTHH-MM-SSZ"), "run_id format", None),
     (re.compile(r"interested\W+applied\W+rejected"), "job status enum", None),
-    (re.compile(r"degraded \(job sources flaky\)"), "run-health states",
-     "shared/references/conventions.md"),
+    (re.compile(r"degraded \(job sources flaky\)"), "run-health states", None),
     (re.compile(r"linkedin \| ashby \| greenhouse \| lever"), "job source enum",
-     "shared/references/agent-data-contract.md"),
+     "shared/references/agent-data.md"),
     (re.compile(r"strong\s*·\s*\d+\s*moderate"), "digest counts line", None),
     (re.compile(r"desktop_notify_on_block"), "config field", None),
     (re.compile(r"API limit for this period has been reached"), "E-QUOTA verbatim", None),

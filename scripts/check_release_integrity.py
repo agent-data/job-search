@@ -135,17 +135,13 @@ def _git_changed_paths(root, base):
     return sorted(paths), hits
 
 
-def _is_generated_stamp(path):
-    return pathlib.PurePosixPath(path).name == "build-stamp.md"
-
-
 def _is_skill_eval(path):
     parts = pathlib.PurePosixPath(path).parts
     return len(parts) >= 4 and parts[0] == "skills" and parts[2] == "evals"
 
 
 def _is_runtime_surface(path):
-    if _is_generated_stamp(path) or _is_skill_eval(path):
+    if _is_skill_eval(path):
         return False
     return (
         path.startswith("skills/")
