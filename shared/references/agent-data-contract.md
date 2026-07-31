@@ -47,14 +47,14 @@ account/pricing probe was run.
 | Option | Included metered calls | Effective value |
 |---|---:|---:|
 | `free_tier` | `100_calls_per_month` | `no_charge` |
-| `pay_as_you_go` | `purchased_as_needed` | `$0.008_per_metered_call;$5_adds_625_calls` |
-| `monthly_subscription_$30` | `4,000_per_month` | `$0.0075_per_call_if_fully_used` |
-| `monthly_subscription_$100` | `15,000_per_month` | `about_$0.0067_per_call_if_fully_used` |
-| `monthly_subscription_$200` | `40,000_per_month` | `$0.005_per_call_if_fully_used` |
+| `paid_plans` | `see_agent-data.md` | `see_agent-data.md` |
 <!-- /agent-data-metering-contract:pricing -->
 
+The paid plans' included-call counts and per-call rates live in one place, [agent-data.md](agent-data.md#what-a-run-spends),
+so a rate change is a one-file edit; read them there.
+
 The underscore-delimited cells are stable contract tokens: read them as ordinary spaces when explaining
-the options. Subscription effective rates assume full use. Search and detail attempts are metered external
+the options. Search and detail attempts are metered external
 calls, so use call count as the primary usage measure and do not infer an actual charge without live account
 data. The action classification, usage preview, and confirmation rules that consume these facts live in
 [Agent-data usage decisions](internals.md#agent-data-usage-decisions).
