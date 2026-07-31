@@ -18,13 +18,14 @@ parameters ride as flags after the slug, one flag per parameter.
 
 `agent-data docs <listing-id>` is the authority on which routes exist, what each parameter is
 called, and which fields come back. It is free, so read it once per run and take the shapes from
-that output rather than from memory. Two routes carry a search: `search-jobs` returns a page of
-summary rows in `data.results[]`, and `get-posting` returns one posting's full text. Adding
-`--dry-run` to a `call` prints the resolved request and spends nothing.
+that output rather than from memory. The listing has three routes: `search-jobs` returns a page of
+summary rows in `data.results[]`, `get-posting` returns one posting's full text, and `status`
+reports service health. Adding `--dry-run` to a `call` prints the resolved request and spends
+nothing.
 
-One call reaches one source, named by `--source` (linkedin, ashby, greenhouse, or lever; omitted,
-the service answers as linkedin). The run does its own fan-out, merge, and duplicate check, so one
-query across three enabled sources is three calls.
+One call reaches one source, named by `--source` (linkedin, ashby, greenhouse, or lever). Omit the
+flag and the search runs against linkedin. The run does its own fan-out, merge, and duplicate
+check, so one query across three enabled sources is three calls.
 
 ## Quirks that change a call
 
@@ -35,13 +36,14 @@ query across three enabled sources is three calls.
 | ashby, greenhouse, and lever match relaxed full text — all terms rank first, then progressively fewer down to a floor of half the terms — so off-topic rows are ordinary output | Judge each row from its title and company first, and spend a detail read only on the survivors |
 | `keywords` is the one required search parameter; it takes up to 8 terms, and a trailing `*` makes a term a prefix | Send the terms the user's brief names, and let `--limit` (default 20, max 100) size the page |
 | A row's `id` and `source_url` work only as the pair they arrived in — `id` is a short-lived pairing token, while `source_id` is the value that stays stable within its source — and a mismatched pair returns a non-retryable 400 | Copy both from the same row exactly as they arrived; a rejected pair falls back to judging that posting from its summary row |
-| Paging works through `--cursor` on ashby, greenhouse, and lever, and LinkedIn rejects a cursor with a non-retryable 400 | Take the next page from `data.pagination.next_cursor` while `has_more` is true, replaying every other flag exactly as sent; for LinkedIn, the first page is the page |
+| Paging works through `--cursor` on ashby, greenhouse, and lever, and LinkedIn rejects a cursor with a non-retryable 400 | Take the next page from `data.pagination.next_cursor` while `has_more` is true, replaying every other flag exactly as sent; LinkedIn returns one page, and there is no next page to fetch |
+| An older service deployment ignores `--source` and answers as linkedin, so a search aimed at another source comes back holding linkedin rows | After every search, compare the echoed `data.query.source` against the source you asked for (an absent echo counts as linkedin); when the two differ, file the returned rows under the source that actually answered, and skip the rest of that source's queries this run |
 | ashby leaves `posted_at` null and carries the date in `published_at`; greenhouse and lever fill both; LinkedIn fills `posted_at` and leaves `published_at` null | Take freshness from whichever of the two is present, and from the later one when both are |
-| `salary_display` is free text on every source and arrives as raw HTML on some lever rows; `employment_type` comes back as FULL_TIME, FullTime, or Full-time depending on the source | Show these as they arrived and read them as text |
+| `salary_display` is free text on every source and arrives as raw HTML on some lever rows; `employment_type` comes back as FULL_TIME, FullTime, or Full-time depending on the source | Strip any markup from `salary_display` and quote the remaining text as the posting wrote it; read `employment_type` as text, since its casing differs per source |
 | A detail read returns `missing_fields[]`, naming what the page did not yield | Report each as a detail the posting leaves unstated |
 | `source_url` on ashby, greenhouse, and lever is the live apply page; LinkedIn's carries tracking params | Link it as where the user applies |
 | The `status` route bills a metered call, and what it reports is one global health number rather than per-source readiness | `whoami` answers the preflight question (`api_key_set`) locally and free, which is what a run needs before its first search |
-| The free tier includes 100 calls a month; once it is spent the API answers `403 insufficient_credits`, and that rejected call is unmetered | Stop metered work and tell the user the monthly allowance is spent, that their saved matches are untouched, and that calls resume at the monthly reset or with an account change at https://agent-data.motie.dev/settings/billing |
+| The free tier includes 100 calls a month; once it is spent the API answers `403 insufficient_credits`, and that rejected call is unmetered | Stop metered work and tell the user the allowance has been reached, so this run cannot continue until calls are available; their saved matches are unaffected, and their account at https://agent-data.motie.dev/settings/billing is where to check |
 
 ## Reading one posting
 
@@ -58,14 +60,14 @@ value removes an inference step. `--fields` is optional and trims the response.
 Branch on the response's `retryable` boolean. The service collapses most 4xx failures into
 `validation_error` and names the offending field in `error.param`, so several different problems
 share one code string, while the boolean carries the one thing that decides the next move: whether
-trying again can work. A `retryable: true` response — the 503 upstream failures — earns up to
-3 attempts with backoff near 1s, 3s, and 7s. A `retryable: false` response is answered by changing
-the request or dropping that step.
+trying again can work. When `retryable` is true — the 503 upstream failures — retry up to 3 times
+with backoff near 1s, 3s, and 7s. When `retryable` is false, change the request before calling
+again, or drop that step.
 
-Every attempt bills, failures and retries included, so a failure that keeps repeating keeps
-costing calls. Two consecutive retryable failures on one source end that operation for that source this run: for
-searches, drop that source and keep the others going; for detail reads, judge that source's
-remaining postings from their summary rows.
+Every attempt bills, retries included, so a failure that keeps repeating keeps costing calls. A
+call counts as failed once its retries are exhausted, and two failed calls in a row on one source
+end that operation for that source this run: for searches, drop that source and keep the others
+going; for detail reads, judge that source's remaining postings from their summary rows.
 
 ## What a run spends
 
