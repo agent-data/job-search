@@ -39,7 +39,7 @@ check, so one query across three enabled sources is three calls.
 | Paging works through `--cursor` on ashby, greenhouse, and lever, and LinkedIn rejects a cursor with a non-retryable 400 | Take the next page from `data.pagination.next_cursor` while `has_more` is true, replaying every other flag exactly as sent; LinkedIn returns one page, and there is no next page to fetch |
 | An older service deployment ignores `--source` and answers as linkedin, so a search aimed at another source comes back holding linkedin rows | After every search, compare the echoed `data.query.source` against the source you asked for (an absent echo counts as linkedin); when the two differ, file the returned rows under the source that actually answered, and skip the rest of that source's queries this run |
 | ashby leaves `posted_at` null and carries the date in `published_at`; greenhouse and lever fill both; LinkedIn fills `posted_at` and leaves `published_at` null | Take freshness from whichever of the two is present, and from the later one when both are |
-| `salary_display` is free text on every source and arrives as raw HTML on some lever rows; `employment_type` comes back as FULL_TIME, FullTime, or Full-time depending on the source | Strip any markup from `salary_display` and quote the remaining text as the posting wrote it; read `employment_type` as text, since its casing differs per source |
+| `salary_display` is free text on every source and arrives as raw HTML on some lever rows; `employment_type` comes back as FULL_TIME, FullTime, or Full-time depending on the source | Strip any markup from `salary_display` and quote the remaining text as written; read `employment_type` as text, since its casing differs per source |
 | A detail read returns `missing_fields[]`, naming what the page did not yield | Report each as a detail the posting leaves unstated |
 | `source_url` on ashby, greenhouse, and lever is the live apply page; LinkedIn's carries tracking params | Link it as where the user applies |
 | The `status` route bills a metered call, and what it reports is one global health number rather than per-source readiness | `whoami` answers the preflight question (`api_key_set`) locally and free, which is what a run needs before its first search |
@@ -60,14 +60,14 @@ value removes an inference step. `--fields` is optional and trims the response.
 Branch on the response's `retryable` boolean. The service collapses most 4xx failures into
 `validation_error` and names the offending field in `error.param`, so several different problems
 share one code string, while the boolean carries the one thing that decides the next move: whether
-trying again can work. When `retryable` is true — the 503 upstream failures — retry up to 3 times
-with backoff near 1s, 3s, and 7s. When `retryable` is false, change the request before calling
-again, or drop that step.
+trying again can work. When `retryable` is true — the 503 upstream failures — make up to 3 attempts
+in all, waiting about 1s and then about 3s between them, adding jitter to each wait. When
+`retryable` is false, change the request before calling again, or drop that step.
 
 Every attempt bills, retries included, so a failure that keeps repeating keeps costing calls. A
-call counts as failed once its retries are exhausted, and two failed calls in a row on one source
-end that operation for that source this run: for searches, drop that source and keep the others
-going; for detail reads, judge that source's remaining postings from their summary rows.
+call counts as failed once its 3 attempts are spent, and two retryable failures in a row on one
+source end that operation for that source this run: for searches, drop that source and keep the
+others going; for detail reads, judge that source's remaining postings from their summary rows.
 
 ## What a run spends
 
