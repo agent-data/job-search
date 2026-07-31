@@ -26,8 +26,8 @@ replacing the array.
 
 Restart OpenCode. OpenCode passes the git package specification to Bun, installs the whole repository in
 its package cache, and loads the package entry point. The plugin then registers the bundled `skills/`
-directory; keeping the whole repository together lets each skill reach the `job-search-runbook` and
-`agent-data-reference` skills.
+directory; keeping the whole repository together lets any skill reach whichever of `job-search-runbook`
+and `agent-data-reference` it needs.
 
 Start with:
 

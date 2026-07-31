@@ -68,7 +68,9 @@ or the host's own scheduler) it composes for its host — an in-session loop is 
 SILENT or un-consented privileged write. The
 [job-search](skills/job-search/SKILL.md) skill offers setup from the pinned interval table and, once the
 config-time canary proves the schedule actually runs, records the schedule marker in the registry; the agent
-resolves the concrete mechanism for its own host (there is no per-host adapter). The consent-gated stance is an instruction-level design rule carried by every skill
+resolves the concrete mechanism for its own host (there is no per-host adapter). The consent-gated stance is
+an instruction-level design rule carried by the `job-search` skill — the only one that installs a schedule —
+and by the `job-search-runbook` skill it reads for the unattended invocation
 ([docs/SECURITY.md](docs/SECURITY.md), [core-beliefs.md](docs/design-docs/core-beliefs.md) Belief 7), not a
 runtime control. The cadence options live in
 [skills/job-search/templates/config.example.yaml](skills/job-search/templates/config.example.yaml),
@@ -108,8 +110,8 @@ The five programs a user reaches: [job-search](skills/job-search/SKILL.md) (fron
 [job-preference-interview](skills/job-preference-interview/SKILL.md) (brief builder),
 [evaluate-job-fit](skills/evaluate-job-fit/SKILL.md) (single-posting judge), and
 [job-search-agent](skills/job-search-agent/SKILL.md) (the operator manual). Skills hold playbooks and
-prose; they execute the deterministic core's pinned procedures and defer every contract to the two
-reference skills above.
+prose; they execute the deterministic core's pinned procedures and defer every contract to whichever of the
+two reference skills above owns it.
 
 ### hooks-guards
 CI guardrails (dev-side only — nothing executable ships to user machines):
@@ -131,9 +133,9 @@ Because those runs cost real metered calls they are a local release gate, not a 
 
 ## Package layering & data flow
 
-**Dependency direction.** Skills depend downward only: a skill invokes `job-search-runbook` and
-`agent-data-reference` for its contracts and the pinned procedures it executes. Those two depend on
-nothing in the other five, so contracts stay authoritative and verifiable in isolation.
+**Dependency direction.** Skills depend downward only: a skill invokes whichever of `job-search-runbook` and
+`agent-data-reference` carries the contract or pinned procedure it needs. Those two depend on nothing in the
+other five, so contracts stay authoritative and verifiable in isolation.
 
 **Single source of truth.** Authors edit the two reference skills; there is nothing to sync. The install
 lays down the whole pack tree, so every skill can invoke them — there are **no per-skill bundled

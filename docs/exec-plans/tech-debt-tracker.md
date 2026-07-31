@@ -31,7 +31,7 @@ to fix it, and never adds a numeric/budget field. Then flip §13's pending-build
 ## P2 — turn-off doesn't clear the schedule marker (`TODO-SCHED-OFF`) — ✅ resolved (closed 2026-06-11)
 **Resolved, and since strengthened.** The registry's `scheduling` marker — the booleans `installed` and
 `verified`, plus `mechanism` and `scheduler_id` — is described in
-`shared/references/runbook.md` (the file table; the former
+the `job-search-runbook` skill (§ What each file holds; the former
 `osctl.py set-unscheduled` was its script-era shape). The turn-off recipe in
 [the front door skill](../../skills/job-search/SKILL.md) now undoes the install the way it was made — the cron
 line deleted, the launchd job unloaded and its file removed, or the host's own removal command — *and then*
@@ -40,8 +40,8 @@ clears the marker, so the machine job and the marker go together rather than lea
 **Linked tests:** [`TESTING.md`](../../TESTING.md) T4.4 (marker assertion), §13 T13.3.
 
 ## P3 — jobs.jsonl grows unboundedly; the in-context fold cost grows with it (`TODO-JOBS-COMPACTION`)
-**What:** The home view's pipeline folds `jobs.jsonl` in-context (per the fold operation in
-`shared/references/runbook.md`); a long-lived workspace
+**What:** The home view's pipeline folds `jobs.jsonl` in-context (per the fold operation in the
+`job-search-runbook` skill); a long-lived workspace
 accumulates events without bound, so the read cost of the fold grows with history.
 **Why:** Watch-only for now — realistic logs (hundreds of postings) fold cheaply, the append-only design is
 the corruption-safety property we keep, and compaction would add a mutating code path with real risk.
@@ -53,13 +53,13 @@ postings") that writes a new file and never edits in place. Do not build preempt
 
 ## P3 — untested config fields & edges (partially resolved)
 **Resolved 2026-07-17 — `schedule.timezone` runtime behavior + interrupted-run recovery.** `schedule.timezone`
-now carries a runtime contract and CI-executable coverage: the schedule-health derivation in
-`shared/references/runbook.md` (§ Schedule health) computes the
-expected fire instants **in the configured timezone** (DST-aware via stdlib `zoneinfo`), and
+gained a runtime contract and CI-executable coverage: the schedule-health derivation, then in
+`shared/references/runbook.md` (§ Schedule health) and dropped with that corpus in the 0.8.0 overhaul, computed
+the expected fire instants **in the configured timezone** (DST-aware via stdlib `zoneinfo`), and
 `tests/test_schedule_health.py` pins the 30-minute grace boundary, the
 one-vs-two missed-fire thresholds, and a daily fire across a daylight-saving transition against fixed clocks —
 so it is no longer informational-only. Interrupted-run recovery (a hard-kill mid-run) was contracted by the
-recovery map in `shared/references/runbook.md`
+recovery map then in `shared/references/runbook.md`
 (`open_before_selection_settled` → close `interrupted` and restart cleanly) and exercised by
 `tests/test_run_lifecycle_pressure.py` until 2026-07-30, when that suite was retired; the same recovery
 behavior is now graded end to end by the `kill-midrun` behavior eval (row B9 in `evals/behaviors.md`).
@@ -69,7 +69,7 @@ behavior is now graded end to end by the `kill-midrun` behavior eval (row B9 in 
 **Impact:** the two open surfaces carry **zero tests** (no hit in `tests/` for `desktop_notify_on_block` or any
 two-overlapping-run case) — a regression ships silently and only surfaces in the field; blast radius stays low
 because the append-only `jobs.jsonl` contract
-(`shared/references/runbook.md`) bounds the corruption risk.
+(the `job-search-runbook` skill) bounds the corruption risk.
 **How to apply:** Add a targeted test for the desktop-notify path and an overlapping-run guard when those
 surfaces are exercised in the field.
 **Linked tests:** resolved portions — `tests/test_schedule_health.py`
@@ -77,7 +77,7 @@ surfaces are exercised in the field.
 recovery); none yet for the two open surfaces.
 
 ## P3 — schedule-line accepts an out-of-range --time (`TODO-TIME-RANGE`) — ✅ resolved (obsolete)
-**Resolved 2026-06-08 by removal.** The cron/launchd generators no longer exist — scheduling is native `/loop` (see `shared/references/runbook.md`). The `/loop` line is composed from `schedule.frequency` alone (no `--time`), so there is no time value to range-check. No action needed.
+**Resolved 2026-06-08 by removal.** The cron/launchd generators no longer exist — scheduling is native `/loop` (see the `job-search-runbook` skill, § Running it unattended). The `/loop` line is composed from `schedule.frequency` alone (no `--time`), so there is no time value to range-check. No action needed.
 
 ## Wave 2 inherits (multi-source)
 
@@ -107,7 +107,7 @@ no defined winner — the collapsed role could show either status.
 **Linked tests:** none (watch item).
 
 ### P3 — run-health `<why>` can't name a two-of-three source loss (`TODO-WHY-ENUM-MULTILOSS`)
-**Resolved 2026-07-06 by [2026-07-06-multi-source-reconciliation-greenhouse-lever](completed/2026-07-06-multi-source-reconciliation-greenhouse-lever.md).** With Greenhouse + Lever now in routine use, the `<why>` vocabulary gained a "several — but not all — sources lost, each named in `search.sources` order" band (`shared/references/runbook.md` digest format, `job-search-run` step 5, `errors.md` E-UPSTREAM-STRETCH), so a partial-but-multiple loss is named exactly. (The `errors.md` row cited at the time is gone: the run now
+**Resolved 2026-07-06 by [2026-07-06-multi-source-reconciliation-greenhouse-lever](completed/2026-07-06-multi-source-reconciliation-greenhouse-lever.md).** With Greenhouse + Lever now in routine use, the `<why>` vocabulary gained a "several — but not all — sources lost, each named in `search.sources` order" band (the digest format the `job-search-runbook` skill pins, `job-search-run` step 5, `errors.md` E-UPSTREAM-STRETCH), so a partial-but-multiple loss is named exactly. (The `errors.md` row cited at the time is gone: the run now
 names each lost source in the digest, in the words the user reads, with no code behind it.) Kept as a resolved
 record.
 **What:** The run-health `<why>` vocabulary names one lost source or "all sources unavailable"; it can't
@@ -132,13 +132,13 @@ version-identity collision that caused the miss.
 
 ### P1 — content changes ship under an unchanged version; runs don't self-identify their build (`TODO-SKILL-BUILD-STAMP`) — ✅ part (a) resolved, part (b) obsolete (closed 2026-07-31)
 **Resolved / obsolete.** Part (a) shipped: `scripts/check_release_integrity.py --check-version-bump` fails a
-pull request when `skills/`, `shared/references/`, or `shared/scripts/` changed without a forward bump in
-`.claude-plugin/plugin.json`, and CI runs it. Part (b) shipped in 0.4.0 as
+pull request when anything under `skills/` other than a skill's own `evals/` changed without a forward bump in
+`.claude-plugin/plugin.json` (`_is_runtime_surface`), and CI runs it. Part (b) shipped in 0.4.0 as
 `shared/references/build-stamp.md` and was deleted in the 0.8.0 overhaul, along with `scripts/build.sh` and
 `scripts/build_stamp.py`: there is no build step any more, so there is no build to identify — the version in
 the seven manifests is the whole artifact identity. Kept as a resolved record.
-**Original proposal:** (a) A CI gate that fails when anything under `skills/` or `shared/references/` changes without a
-version bump in `.claude-plugin/plugin.json`. (b) A **build-stamp** (version + short content-hash + git sha)
+**Original proposal:** (a) A CI gate that fails when anything under `skills/` or the then-current
+`shared/references/` changes without a version bump in `.claude-plugin/plugin.json`. (b) A **build-stamp** (version + short content-hash + git sha)
 emitted in the run summary and written to `runs/<run_id>.json`, so any run is traceable to a concrete artifact.
 **Why:** The repo and the installed cache both read `0.3.0` with divergent skill content; the stale cache is
 what executed, so the shipped multi-source update was silently not run.
@@ -229,7 +229,7 @@ own model.)
 ### P2 — no in-product signal that a newer plugin version exists (`TODO-UPDATE-AVAILABLE`) — ⏸️ reopened, was shipped then removed (2026-07-31)
 **Reopened.** The update banner shipped in 0.4.0 for Claude Code and Codex and was removed in the 0.8.0
 overhaul with `shared/references/update.md` — no shipped file checks for a newer version today
-(`git grep -niE "update available|newer version" -- skills/ shared/` returns nothing). Whether it comes back
+(`git grep -niE "update available|newer version" -- skills/` returns nothing). Whether it comes back
 is a product call: every host now has its own plugin manager that reports staleness, so the in-product banner
 may be duplicated work. The proposal below stands as written except that it no longer depends on
 `TODO-SKILL-BUILD-STAMP` — compare the manifest version, which is the only build identity left.
@@ -292,8 +292,8 @@ non-release-blocking.
 **Impact:** A user connecting agent-data during onboarding can leave the key in host-managed transcripts or
 diagnostic captures even though normal searches and workspace artifacts need only the resulting local auth;
 the exposure is limited to credential setup and does not make the release's search flow incorrect.
-**How to apply:** First pin one producer- and host-supported secret handoff in
-`shared/references/agent-data.md`, then update onboarding to use it,
+**How to apply:** First pin one producer- and host-supported secret handoff in the
+`agent-data-reference` skill, then update onboarding to use it,
 redact all auth command/error rendering, and exercise the real handoff with sentinel-key absence assertions.
 Keep `agent-data init --api-key <KEY> -y` documented as the local fallback until the replacement is available,
 and continue to verify readiness only through `agent-data whoami`.
@@ -369,26 +369,26 @@ it was going to supply are now taken from the live evals instead — `run_eval.p
 with elapsed wall-clock seconds and writes timings to `result.json`, and `evals/baseline/` holds the committed
 aggregates that behavior row B14 compares each run against. No user workspace ever contained a `metrics.json`,
 so there is nothing to migrate. Kept as a resolved record.
-**Original proposal:** Wire the `{workspace}/metrics.json` writes the local-metrics contract in
-`shared/references/runbook.md` (§ Local metrics)
-already specifies: the **front door** must create the per-attempt `setups[]` record and write
+**Original proposal:** Wire the `{workspace}/metrics.json` writes the local-metrics contract then in
+`shared/references/runbook.md` (§ Local metrics), dropped with that corpus in the 0.8.0 overhaul,
+specified: the **front door** must create the per-attempt `setups[]` record and write
 `onboarding_started_at` + `agent_data_ready_at`, and **schedule setup** must write `schedule_verified_at`
 after its green canary. The runner's four milestone writes (`first_live_call_at`,
 `first_relevant_match_ready_at`, `early_results_shown_at`, `run_completed_at`) already have guarded prose,
 but they target a file the front door never creates.
 **Why:** T1.3 landed the metrics contract as prose only, and T5.1 rewrote onboarding without a metric-write
 step, so no shipped skill/script/template ever creates `metrics.json` or appends a setup record — a `grep`
-across `skills/**` and `shared/scripts/**` finds the timestamp keys only in eval *expectations*, never in a
-SKILL.md, reference, template, or mechanic that performs the write.
+across `skills/**` finds the timestamp keys nowhere at all — since the 0.8.0 overhaul they survive only in
+this tracker and two design docs, never in a SKILL.md, template, or script that performs the write.
 **Impact:** `metrics.json` is never created, so the runner's own guarded writes no-op against an absent file
 and all three derived durations — `time_to_help`, `first_match_review_latency`, `total_run_time` — are
 permanently reported "unavailable" (their absent-endpoint contract). Non-blocking: it breaks no flow and
 fails no gate (the durations degrade to "unavailable" exactly as specified), but release **time-to-help
 evidence — relevant to T9.4 — cannot be measured** until the front-door and schedule-setup writes are wired.
 **How to apply:** Add the front-door create-attempt + `onboarding_started_at`/`agent_data_ready_at` writes
-and the schedule-setup `schedule_verified_at` write per the owner table and write rules in
-`shared/references/runbook.md` (§ Local metrics —
-atomic whole-file, write-once, append-new-setup-record, never overwrite history). Classify this as **the
+and the schedule-setup `schedule_verified_at` write per the owner table and write rules then in
+`shared/references/runbook.md` (§ Local metrics — atomic whole-file, write-once,
+append-new-setup-record, never overwrite history), which went with that corpus in the 0.8.0 overhaul. Classify this as **the
 priority to wire before the live / T9.4 measurement lane**, distinct from and ahead of the pre-existing P3
 credential/backoff debt above. Do **not** wire it as part of this review — this entry is the conscious
 deferral; the wiring is a separate follow-up decision.

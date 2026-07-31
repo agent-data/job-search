@@ -37,8 +37,8 @@ field lists from that file here — it is the single source of truth.
 This repository contains no personal data. All shipped examples (`examples/`) use synthetic,
 fictional postings and preferences. The [`../CONTRIBUTING.md`](../CONTRIBUTING.md) project
 philosophy section states the "private and local" rule and names the mechanism that backs it: the
-`scripts/philosophy_guard.py` script scans shipped output (`examples/` and every skill's
-`templates/`) and fails
+`scripts/philosophy_guard.py` script scans shipped output (`examples/` plus every
+`skills/*/templates/` directory there is) and fails
 CI if it finds numeric scores, budget fields, or other artifacts that would indicate real personal
 data had leaked into a generated example.
 
