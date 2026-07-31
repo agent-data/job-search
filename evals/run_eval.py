@@ -9,7 +9,7 @@ every output line with elapsed wall-clock seconds, then captures the produced wo
 into evals/results/<ts>-<name>-<model>/ and restores the stash. Runner pattern proven in
 the 2026-07-30 census evals: Popen + readline loop + timeout kill.
 """
-import argparse, json, os, re, shutil, subprocess, sys, threading, time
+import argparse, glob, json, os, re, shutil, signal, subprocess, sys, threading, time
 
 import yaml
 
@@ -33,6 +33,16 @@ def fetch_live_posting():
     return detail.stdout[:6000]
 
 
+def kill_group(proc):
+    """SIGKILL the child's whole process group, so tool subprocesses (e.g. a hanging Bash
+    call) die with it and nothing can write into the restored real workspace afterwards.
+    The child is spawned with start_new_session=True, so its pid is the group id."""
+    try:
+        os.killpg(proc.pid, signal.SIGKILL)
+    except ProcessLookupError:
+        pass  # group already gone
+
+
 def scan_for_kill(line, regex, pending):
     """Track tool_use blocks whose name+input match regex; True when one's result arrives."""
     try:
@@ -54,37 +64,41 @@ def run_session(prompt, model, cwd, transcript, timeout_s, kill_regex=None):
     """One `claude -p` session; returns {"rc", "wall_s", "timeout_killed", "event_killed"}."""
     cmd = ["claude", "-p", prompt, "--model", model, "--allowedTools", ALLOWED,
            "--permission-mode", "acceptEdits", "--verbose", "--output-format", "stream-json"]
-    proc = subprocess.Popen(cmd, cwd=cwd, text=True,
+    proc = subprocess.Popen(cmd, cwd=cwd, text=True, start_new_session=True,
                             stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
     t0, state, pending = time.time(), {"timeout": False, "event": False}, set()
 
     def backstop():  # kills a child that hangs producing no output past the timeout
         state["timeout"] = True
-        proc.kill()
+        kill_group(proc)
 
     watchdog = threading.Timer(timeout_s + 60, backstop)
     watchdog.daemon = True
     watchdog.start()
-    with open(transcript, "a") as f:
-        while True:
-            line = proc.stdout.readline()
-            if not line and proc.poll() is not None:
-                break
-            if line:
-                f.write(json.dumps({"t": round(time.time() - t0, 2),
-                                    "line": line.rstrip()[:20000]}) + "\n")
-                if kill_regex and not state["event"] and scan_for_kill(line, kill_regex, pending):
-                    state["event"] = True
-                    proc.kill()
-            if time.time() - t0 > timeout_s and not (state["timeout"] or state["event"]):
-                state["timeout"] = True
-                proc.kill()
-    watchdog.cancel()
     try:
-        rc = proc.wait(timeout=30)
-    except subprocess.TimeoutExpired:
-        proc.kill()
-        rc = -99
+        with open(transcript, "a") as f:
+            while True:
+                line = proc.stdout.readline()
+                if not line and proc.poll() is not None:
+                    break
+                if line:
+                    f.write(json.dumps({"t": round(time.time() - t0, 2),
+                                        "line": line.rstrip()[:20000]}) + "\n")
+                    if kill_regex and not state["event"] and scan_for_kill(line, kill_regex, pending):
+                        state["event"] = True
+                        kill_group(proc)
+                if time.time() - t0 > timeout_s and not (state["timeout"] or state["event"]):
+                    state["timeout"] = True
+                    kill_group(proc)
+    finally:
+        # The whole child group must be dead before the caller swaps workspaces back,
+        # on every exit path — clean, killed, or an exception from the read loop.
+        watchdog.cancel()
+        kill_group(proc)
+        try:
+            rc = proc.wait(timeout=30)
+        except subprocess.TimeoutExpired:
+            rc = -99
     return {"rc": rc, "wall_s": round(time.time() - t0, 1),
             "timeout_killed": state["timeout"], "event_killed": state["event"]}
 
@@ -97,6 +111,12 @@ def main():
                     help="terminate the child after the first tool call whose name+input "
                          "matches REGEX completes (overrides the case file's kill_after_event)")
     args = ap.parse_args()
+    leftovers = sorted(glob.glob(WORKSPACE + ".stash-*"))
+    if leftovers:
+        sys.exit("refusing to run: %s exists — a previous eval run did not restore it, or "
+                 "another eval run is in progress (runs are one at a time). If it holds your "
+                 "real workspace, move it back to %s; otherwise remove it. Then rerun."
+                 % (leftovers[0], WORKSPACE))
     with open(os.path.join(EVALS_DIR, "cases", args.case + ".yaml")) as f:
         case = yaml.safe_load(f)
     if args.model not in case["models"]:

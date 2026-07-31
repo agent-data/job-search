@@ -864,9 +864,11 @@ each post-rewrite run against.
 
 Notes for running:
 
-- The runner moves a real `~/.job-search` aside before the session and restores it after. If
-  a crashed runner leaves `~/.job-search.stash-<ts>` behind, move it back to `~/.job-search`
-  by hand.
+- The runner moves a real `~/.job-search` aside before the session and restores it after.
+  Eval runs are one at a time: the runner refuses to start while any
+  `~/.job-search.stash-<ts>` exists (a leftover from a crashed or still-running eval). If a
+  crashed runner left one behind, move it back to `~/.job-search` by hand (or remove it if
+  it isn't your real workspace), then rerun.
 - Cases with `workspace: seeded` copy `evals/seeds/<case>/` into place and fail with a clear
   message when that seed directory is missing; the task that first runs such a case creates
   its seed.
