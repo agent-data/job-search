@@ -497,34 +497,25 @@ def test_onboarding_eval_expects_a_bound_runnable_v2_workspace_before_running():
     assert "session_inheritance" in effects
 
 
-def test_runner_eval_fixture_is_valid_and_eval_39_structurally_pins_fail_closed_matrix():
+def test_runner_eval_fixture_pins_calls_first_context_and_a_validator_checked_close():
+    """What the runner's shim fixtures pin about usage decisions, after the 2026-07-30 rewrite
+    replaced the model-binding and config-version fixtures (that apparatus is retired): the setup
+    script points discovery at a private workspace served by the fake shim, the happy case requires
+    the calls-first context before the first metered call, and the quota case requires the
+    allowance message."""
     setup = RUNNER_SETUP.read_text(encoding="utf-8")
-    assert "version: 2/version: 1" in setup
-    assert 'detail_model: "balanced"' in setup
+    assert "registry.json" in setup          # discovery lands on the built workspace
+    assert "fake-agent-data" in setup        # every case runs against the shim, spending nothing
 
     evals = _eval("job-search-run")["evals"]
-    newer = next(case for case in evals if case["id"] == 12)
-    assert "version: 1/version: 3" in newer["prompt"]
+    happy = next(case for case in evals if case["id"] == 1)
+    joined = " ".join(happy["expectations"]).lower()
+    assert "before the first search-jobs call" in joined
+    assert "free monthly allowance" in joined
+    assert "validate-workspace.sh --post-close exits 0" in joined
 
-    fail_closed = next(case for case in evals if case["id"] == 39)
-    assert fail_closed["coverage_kind"] == "structural_contract"
-    assert fail_closed["executable_host_controls"] is False
-    assert "structural" in fail_closed["scenario"].lower()
-    assert "run job-search-run headlessly in every arm" not in fail_closed["prompt"].lower()
-    scenario = (fail_closed["prompt"] + " " + " ".join(fail_closed["expectations"])).lower()
-    for branch in (
-        "missing selector",
-        "invalid selector",
-        "tier roster unavailable",
-        "tier resolution unavailable",
-        "inherit primary unknown",
-        "exact dispatch unsupported",
-        "exact dispatch refused",
-        "preserves config bytes",
-        "never substitute",
-        "detail_model_binding_unavailable",
-    ):
-        assert branch in scenario
+    quota = next(case for case in evals if "quota" in case["scenario"])
+    assert "monthly allowance is spent" in " ".join(quota["expectations"]).lower()
 
 
 def test_parallel_choice_is_folded_into_initial_model_binding_not_a_later_refresh():
@@ -617,10 +608,12 @@ def test_behavioral_evals_keep_computed_equivalents_unconditionally_non_charge()
     assert "authoritative live account data is unavailable in this scenario" in expectations
 
 
-def test_t2_2_effect_evals_cover_all_six_fake_only_red_cases():
+def test_t2_2_effect_evals_cover_the_fake_only_red_cases():
+    """The runner's per-attempt accounting case left this set with the attempt ledger it graded
+    (the 2026-07-30 rewrite counts calls in the run record instead); what the runner's fixtures now
+    pin about usage lives in test_runner_eval_fixture_pins_calls_first_context... above."""
     search = _eval("job-search")
     agent = _eval("job-search-agent")
-    runner = _eval("job-search-run")
 
     search_by_id = {case["id"]: case for case in search["evals"]}
     assert "first metered row" in " ".join(search_by_id[1]["expectations"])
@@ -642,11 +635,6 @@ def test_t2_2_effect_evals_cover_all_six_fake_only_red_cases():
     assert "no second-attempt metered row" in " ".join(canary["expectations"])
     assert all("fake" in case["prompt"].lower() or "shim" in case["prompt"].lower()
                for case in (increases, decreases, canary))
-
-    actual_attempts = next(case for case in runner["evals"] if case["id"] == 30)
-    joined = " ".join(actual_attempts["expectations"])
-    assert "producer-authoritative metered field" in joined
-    assert "failed original and failed retry" in joined
 
     # The canonical one-off rule replaces the older redundant-confirmation eval behavior.
     for case_id in (6, 8):

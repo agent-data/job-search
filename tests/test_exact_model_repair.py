@@ -2194,22 +2194,20 @@ def test_model_repair_user_rendering_is_complete_and_conversational():
     }
 
 def test_exact_model_repair_eval_matrix_is_structural_and_executable():
+    """The runner half of this matrix (its repair and lifecycle fixtures, ids 42-51) left with the
+    model-binding and ledger apparatus in the 2026-07-30 job-search-run rewrite; the front door and
+    the agent skill still own exact-model repair, and their fixtures are what this checks."""
     home = _evals("job-search")
     agent = _evals("job-search-agent")
-    runner = _evals("job-search-run")
-    runner_repair = [case for case in runner if 42 <= case["id"] <= 46]
-    runner_lifecycle = [case for case in runner if 47 <= case["id"] <= 51]
     # Select the exact-model-repair fixtures by id (not a trailing positional slice) so appended
-    # onboarding/scheduling evals do not shift them, mirroring the runner_repair/runner_lifecycle
-    # precedent above (agent scheduling-eligibility evals 22+ land after this repair family).
+    # onboarding/scheduling evals do not shift them (agent scheduling-eligibility evals 22+ land
+    # after this repair family).
     home_repair = [case for case in home if 25 <= case["id"] <= 31]
     agent_repair = [case for case in agent if 15 <= case["id"] <= 21]
     assert [case["id"] for case in home_repair] == [25, 26, 27, 28, 29, 30, 31]
     assert [case["id"] for case in agent_repair] == [15, 16, 17, 18, 19, 20, 21]
-    assert [case["id"] for case in runner_repair] == [42, 43, 44, 45, 46]
     home_matrix = " ".join(case["scenario"].lower() for case in home_repair)
     agent_matrix = " ".join(case["scenario"].lower() for case in agent_repair)
-    runner_matrix = " ".join(case["scenario"].lower() for case in runner_repair)
     for phrase in (
         "primary-only",
         "detail-only",
@@ -2229,14 +2227,6 @@ def test_exact_model_repair_eval_matrix_is_structural_and_executable():
         "exact staged binding provenance",
     ):
         assert phrase in agent_matrix
-    for phrase in (
-        "expired primary",
-        "expired detail",
-        "both expired",
-        "substitution bait",
-        "exact dispatch refusal",
-    ):
-        assert phrase in runner_matrix
     override_case = next(case for case in home if case["id"] == 28)
     override_text = " ".join(
         [override_case["prompt"], *override_case["expectations"]]
@@ -2274,13 +2264,5 @@ def test_exact_model_repair_eval_matrix_is_structural_and_executable():
         "candidate-bound failure scenario",
     ):
         assert phrase in provenance_text
-    refusal_case = next(case for case in runner if case["id"] == 46)
-    refusal_text = " ".join(
-        [refusal_case["prompt"], *refusal_case["expectations"]]
-    ).lower()
-    assert "roster membership" in refusal_text
-    assert "preserves completed attempt accounting" in refusal_text
     assert all(case.get("coverage_kind") == "executable_fixture" for case in home_repair)
     assert all(case.get("coverage_kind") == "executable_fixture" for case in agent_repair)
-    assert [case["id"] for case in runner_lifecycle] == [47, 48, 49, 50, 51]
-    assert all(case.get("coverage_kind") == "executable_fixture" for case in runner_lifecycle)

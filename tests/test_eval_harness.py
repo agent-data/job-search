@@ -78,8 +78,10 @@ def test_discovery_scenarios_cover_the_four_overlap_pairs():
 
 
 def test_named_judgment_scenarios_are_stochastic():
-    """The audit-named judgment-heavy scenarios (fit verdicts, injection, cross-source merge)
-    must be repped + controlled — not left single-shot (AAS-TEST-08)."""
+    """The audit-named judgment-heavy scenarios (fit verdicts, injection) must be repped +
+    controlled — not left single-shot (AAS-TEST-08). The cross-source merge scenario left the
+    runner's fixtures with the merge/pagination machinery when job-search-run was rewritten on the
+    marker+record contract; the near-duplicate collapse that replaced it is deterministic."""
     loaded = eh.load_evals(str(ROOT))
 
     def scenario(skill, sid):
@@ -88,7 +90,6 @@ def test_named_judgment_scenarios_are_stochastic():
     named = [
         ("evaluate-job-fit", 1), ("evaluate-job-fit", 2), ("evaluate-job-fit", 3),  # fit verdicts
         ("job-search-run", 13),   # injection-resistance
-        ("job-search-run", 19),   # cross-source merge
     ]
     for skill, sid in named:
         e = scenario(skill, sid)
@@ -662,14 +663,10 @@ def test_real_suite_schedule_health_scenarios_carry_a_liveness_fixed_time():
         assert "liveness" in ft.get("checks", []), f"{skill}#{e['id']} fixed_time must check liveness"
 
 
-def test_real_suite_has_milestone_fixed_time_fixtures():
-    """The run-lifecycle milestone-timestamp scenarios pin a deterministic clock."""
-    loaded = eh.load_evals(str(ROOT))
-    milestone = [
-        e for e in loaded["job-search-run"][1]["evals"]
-        if isinstance(e.get("fixed_time"), dict) and "milestone" in e["fixed_time"].get("checks", [])
-    ]
-    assert milestone, "job-search-run must carry milestone fixed-time fixtures"
+# The milestone fixed-time fixtures this file used to require of job-search-run went away with the
+# run-lifecycle milestone timestamps themselves (metrics.json and the ledger) in the 2026-07-30
+# rewrite. The validator's fixed_time rules are still covered by the unit tests above and by the
+# schedule-health liveness fixtures in the test just before this comment.
 
 
 # ---------------------------------------------------------------------------
@@ -768,15 +765,17 @@ def test_cli_check_artifacts_flags_a_stale_run_marker(tmp_path):
 # T9.1: the crown-jewel judgment-heavy set stays stochastic (reps>=5 + control)
 # ---------------------------------------------------------------------------
 def test_crown_jewel_judgment_scenarios_are_marked_stochastic():
-    """The baited-shortcut resistance scenarios whose verdict is model-judgment (fair-share
-    selection, stop-after-first-match resistance) must be repped + controlled, alongside the
-    fit-verdict / injection / merge set already locked above (AAS-TEST-08)."""
+    """The baited-shortcut resistance scenario whose verdict is model-judgment — every posting on
+    the read list judged, with no early stop after the first strong match — must be repped +
+    controlled, alongside the fit-verdict / injection set locked above (AAS-TEST-08). The
+    weighted fair-share selection scenario left with the finite-allocator machinery in the
+    job-search-run rewrite."""
     loaded = eh.load_evals(str(ROOT))
 
     def scenario(skill, sid):
         return next(e for e in loaded[skill][1]["evals"] if e["id"] == sid)
 
-    for skill, sid in [("job-search-run", 34), ("job-search-run", 60)]:
+    for skill, sid in [("job-search-run", 15)]:
         e = scenario(skill, sid)
         assert e.get("stochastic") is True, f"{skill}#{sid} should be stochastic"
         assert e.get("reps", 0) >= eh.MIN_REPS, f"{skill}#{sid} reps < {eh.MIN_REPS}"

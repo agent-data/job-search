@@ -1005,28 +1005,10 @@ def test_canonical_contract_pins_passive_compatibility_transaction_and_cutoff():
     )
 
 
-def test_evals_keep_case_39_structural_and_add_executable_migration_pressure():
-    runner_cases = _evals("job-search-run")
-    structural = next(case for case in runner_cases if case["id"] == 39)
-    assert structural["coverage_kind"] == "structural_contract"
-    assert structural["executable_host_controls"] is False
-
-    executable = [case for case in runner_cases if case.get("coverage_kind") == "executable_fixture"]
-    joined = json.dumps(executable).lower()
-    for token in (
-        "fake-host-capabilities",
-        "passive",
-        "ordinary version-1 headless",
-        "tier-roster-unavailable",
-        "tier-resolution-unavailable",
-        "primary-unknown",
-        "exact-dispatch-unsupported",
-        "exact-dispatch-refused",
-        "config bytes",
-        "detail-model-binding.json",
-    ):
-        assert token in joined
-
+def test_evals_carry_executable_migration_pressure():
+    """The runner's version-1 model-selector fixtures left with that apparatus in the 2026-07-30
+    job-search-run rewrite (nothing reads search.detail_model any more), so the migration pressure
+    this test tracks is the front door's."""
     search_cases = _evals("job-search")
     passive_home = next(case for case in search_cases if case["id"] == 15)
     assert "fresh update_check cache" in passive_home["prompt"].lower()

@@ -392,22 +392,27 @@ def test_marker_present_in_single_home():
 
 @pytest.mark.parametrize("host", sorted(HOST_MANIFESTS))
 def test_every_skill_reaches_the_marked_home_on_host(host):
-    """Positive proof that resolution lands on the ONE marked source, not a stray copy: each of the five
-    skills' SKILL.md reaches shared/references/conventions.md in place, and that file carries the marker."""
+    """Positive proof that resolution lands on the ONE marked source tree, not a stray copy: each of
+    the five skills' SKILL.md points at a shared reference that resolves in place into
+    shared/references/, the directory carrying the marker. Which reference a skill cites is that
+    skill's own business — a rewritten skill may cite runbook.md and agent-data.md and no longer
+    cite conventions.md — so the marker proves the DIRECTORY reached is the single home."""
     ok, reason = _ships_shared(HOST_MANIFESTS[host])
     assert ok, f"{host}: {reason}"
+    marked = [p.name for p in sorted(SHARED.glob("*.md")) if MARKER in p.read_text(encoding="utf-8")]
+    assert marked, "no file under shared/references/ carries the resolution marker"
     for skill_md in sorted((ROOT / "skills").glob("*/SKILL.md")):
-        reached = False
+        reached = []
         for ptr in _pointers(skill_md):
-            if ptr.endswith("shared/references/conventions.md"):
-                target = (skill_md.parent / ptr).resolve()
-                assert target.exists(), f"{host}: {skill_md.relative_to(ROOT)} -> `{ptr}` dangling"
-                assert MARKER in target.read_text(encoding="utf-8"), (
-                    f"{host}: {skill_md.relative_to(ROOT)} -> `{ptr}` did not reach the marked home")
-                reached = True
+            if "shared/references" not in ptr:
+                continue
+            target = (skill_md.parent / ptr).resolve()
+            assert target.exists(), f"{host}: {skill_md.relative_to(ROOT)} -> `{ptr}` dangling"
+            if target.parent == SHARED:
+                reached.append(ptr)
         assert reached, (
-            f"{host}: {skill_md.relative_to(ROOT)} makes no in-place conventions.md pointer to the "
-            f"single home")
+            f"{host}: {skill_md.relative_to(ROOT)} makes no in-place pointer into the single home "
+            f"shared/references/ (marker carried by {marked})")
 
 
 def test_no_fanned_reference_copy_remains():
