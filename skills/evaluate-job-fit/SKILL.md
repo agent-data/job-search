@@ -13,9 +13,12 @@ relevance judgment** — never a numeric score, never category weights.
 Scope: exactly one posting. Batches are job-search-run's job — it invokes this skill once per posting.
 
 ## Inputs
-- The brief: find the active workspace with the **Discovery procedure** in `../../shared/references/internals.md` and read its `config.yaml:workspace.preferences_path` (default `preferences.md`); `--workspace <path>` overrides. If a posting is supplied without a workspace (discovery reports `first_run`), accept a brief pasted by the user.
+- The brief: preferences live at the path `workspace.preferences_path` names in `config.yaml`
+  (default `preferences.md`) inside the workspace the registry names (default `~/.job-search`); a
+  caller that hands you the path — job-search-run briefs every detail worker with one — names it
+  directly. With no workspace yet, judge against a brief the user pastes.
 - The posting: a pasted job description, a saved `source_id` from `jobs.jsonl`, or a `source_url`+`posting_id`
-  pair to read fresh via agent-data `get-posting` (see `../../shared/references/agent-data-contract.md`; disclose that this
+  pair to read fresh via agent-data `get-posting` (see `../../shared/references/agent-data.md`; disclose that this
   reads one posting before doing it).
 
 ## Method (model inference — read, reason, judge)
@@ -34,7 +37,7 @@ Scope: exactly one posting. Batches are job-search-run's job — it invokes this
    - **A must-have can't be confirmed from the posting → do NOT reject.** Keep it, set
      `needs_human_check: true`, add the unstated must-have to `unknowns`, and write the exact open
      question into the `reasoning` field (e.g. "Remote not stated — confirm before applying"). There is
-     no separate question field; the question lives in `reasoning`, per `../../shared/references/conventions.md`.
+     no separate question field; the question lives in `reasoning`.
    - **Otherwise `relevant: true`**, and assign a coarse band:
      - `strong` — hits the must-haves and most strong preferences.
      - `moderate` — solid alignment with some gaps.
@@ -52,11 +55,6 @@ numerically; if comp matters and isn't clearly stated, it's an unknown.
 
 ## Output
 Return BOTH a short human summary AND this object (used by job-search-run when evaluating in batch).
-When job-search-run dispatches this skill as a cold detail worker, return the full dispatch envelope defined in
-`../../shared/references/parallelism.md` — the dispatched `run_id`/`source`/`source_id`, a `status`, this
-judgment object as the verdict fields, and the detail-call attempt attribution — as plain text on the
-**delegated return channel** in your final message: never a sidecar file, no fenced code block, no
-confirmation/politeness preamble, no progress chatter. The envelope schema lives there; do not restate it here.
 The summary is 1–2 sentences: the verdict + the deciding factor — e.g. "Strong match — remote-US
 senior IC in Python; comp not stated."
 
@@ -69,7 +67,6 @@ senior IC in Python; comp not stated."
   "needs_human_check": <true|false>,
   "posted_at_extracted": "<ISO date>" }  // optional — only when both published_at and posted_at were null and the JD stated a date
 ```
-`match` is `null` when `relevant` is false. Bands and vocabulary are defined in `../../shared/references/conventions.md`.
 
 ## Consistency
 Judge dealbreakers before alignment; cite evidence; prefer "unknown" over guessing. When unsure between two
