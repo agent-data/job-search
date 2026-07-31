@@ -44,7 +44,8 @@ the skill that writes each one, listed in
 - **Why.** Job fit is a judgment, not an arithmetic. A number invites false precision and tuning a
   rubric instead of writing better preferences; the qualitative vocabulary keeps the reasoning legible.
 - **Enforced by.** [scripts/philosophy_guard.py](../../scripts/philosophy_guard.py) scans shipped
-  default output (`examples/`, `templates/`) for fit scores / weights / points and fails the build;
+  default output (`examples/` and every skill's `templates/`) for fit scores / weights / points and
+  fails the build;
   it runs in CI ([.github/workflows/ci.yml](../../.github/workflows/ci.yml)) and as
   `tests/test_philosophy_guard.py`. The relevance vocabulary it protects is defined by the
   [evaluate-job-fit](../../skills/evaluate-job-fit/SKILL.md) skill that returns it, and one judged

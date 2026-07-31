@@ -7,12 +7,12 @@ is allowed, as is salary display text. Honored-on-request scores live only in ch
 committed artifacts — so this scans the shipped examples and the copyable templates, not user
 conversations or prose that defines the philosophy.
 
-Each template now lives inside the one skill that copies it, so the scan covers every
-`skills/*/templates/` directory as well as the root-level ones.
+Each template lives inside the one skill that copies it, so the scan walks `examples/` plus every
+`skills/*/templates/` directory. There is no longer a root-level `templates/` to walk.
 """
 import argparse, glob, os, re, sys
 
-SCAN_DIRS = ("examples", "templates")
+SCAN_DIRS = ("examples",)
 SCAN_GLOBS = (os.path.join("skills", "*", "templates"),)
 PATTERNS = [
     (re.compile(r"\bfit score\b", re.I), "fit score"),
@@ -35,7 +35,7 @@ NEGATED_ACTUAL_CHARGE_PREFIX = re.compile(
 
 
 def scan_bases(root):
-    """Every directory the guard walks: the root-level ones, plus each skill's own templates/."""
+    """Every directory the guard walks: `examples/`, plus each skill's own templates/."""
     bases = [os.path.join(root, d) for d in SCAN_DIRS]
     for pattern in SCAN_GLOBS:
         bases.extend(sorted(glob.glob(os.path.join(root, pattern))))

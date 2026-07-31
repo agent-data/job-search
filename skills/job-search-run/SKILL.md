@@ -74,8 +74,8 @@ agent-data.md's `get-posting` recipe.
 
 Append one line per row to `<workspace>/jobs.jsonl` by piping the single-line event JSON into
 this skill's `scripts/event-log-append.sh <workspace>/jobs.jsonl`, which checks the line and skips a
-pair the log already holds. Its `templates/jobs-event.example.json` is one such line with every
-field filled — copy that field set, and fill it from this run:
+pair the log already holds. This skill's `templates/jobs-event.example.json` is one such line with
+every field filled — copy that field set, and fill it from this run:
 
 - `event` is `evaluated`, `run_id` is this run's id, and `status` starts at `new`.
 - `source`, `source_id`, `title`, `company_name`, `location_display`, `salary_display`, and

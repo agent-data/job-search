@@ -37,7 +37,8 @@ field lists from that file here — it is the single source of truth.
 This repository contains no personal data. All shipped examples (`examples/`) use synthetic,
 fictional postings and preferences. The [`../CONTRIBUTING.md`](../CONTRIBUTING.md) project
 philosophy section states the "private and local" rule and names the mechanism that backs it: the
-`scripts/philosophy_guard.py` script scans shipped output (`examples/`, `templates/`) and fails
+`scripts/philosophy_guard.py` script scans shipped output (`examples/` and every skill's
+`templates/`) and fails
 CI if it finds numeric scores, budget fields, or other artifacts that would indicate real personal
 data had leaked into a generated example.
 
@@ -103,7 +104,7 @@ The deny-all workspace gitignore template is the primary guard against accidenta
 Beyond that template, **there is no automated CI scan that checks whether workspace content was
 committed to the public repo**. The guarantee rests on two things: the deny-all template (which
 must have been copied in by first-run setup), and human review of any PR that touches
-`examples/` or `templates/`.
+`examples/` or a skill's `templates/`.
 
 This honest limit is acknowledged in [`design-docs/core-beliefs.md`](design-docs/core-beliefs.md)
 under "Private & local" (Belief 3): "Beyond the template this is **cultural** — there is no CI

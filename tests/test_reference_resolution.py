@@ -254,11 +254,19 @@ DEFERRED_MOVES = {
     "shared/references/runbook.md",
     "shared/references/agent-data.md",
 }
+# The directories those four sit in. A computed pointer at a whole directory is the same defect as
+# one at a file, so pointing at `<plugin-root>/shared/scripts/mechanics/` is allowed only while the
+# scripts inside it are still a later task's to move. Derived, so it cannot drift from the set above.
+DEFERRED_DIRS = {str(pathlib.PurePosixPath(p).parent) for p in DEFERRED_MOVES}
 
 # A pointer the model has to compute: `<plugin-root>/…` expands a token, `../../…` counts two or
 # more directory steps up from the file it is written in. A single `../` (a SKILL.md naming its
 # sibling skill's SKILL.md) is one step inside `skills/` and is not part of this move.
-_COMPUTED_PTR = re.compile(r"(?:<plugin-root>/|(?:\.\./){2,})([A-Za-z0-9._/-]+\.[A-Za-z0-9]+)")
+#
+# The tail matches a directory as well as a file. An earlier version required a file extension,
+# which let `<plugin-root>/templates/` back in unnoticed — the gate for this whole restructure
+# missing the very pointer shape it exists to catch.
+_COMPUTED_PTR = re.compile(r"(?:<plugin-root>/|(?:\.\./){2,})((?:[A-Za-z0-9._-]+/)*[A-Za-z0-9._-]*)")
 
 # A co-located pointer written in a SKILL.md: the skill's own `templates/`, `scripts/` or
 # `references/` directory. The lookbehind rejects a match inside a longer path, where the directory
@@ -278,14 +286,27 @@ def _agent_facing_files():
     return sorted((ROOT / "skills").glob("*/SKILL.md")) + sorted(SHARED.glob("*.md"))
 
 
-def _computed_pointers(path):
-    """Distinct computed pointers in `path`, each as (written token, the path it addresses)."""
+def _computed_pointers_in(text):
+    """Distinct computed pointers in `text`, each as (written token, the path it addresses). The
+    address drops a trailing `/` so a directory pointer compares against the same names a file
+    pointer does."""
     out = []
-    for m in _COMPUTED_PTR.finditer(path.read_text(encoding="utf-8")):
-        pair = (m.group(0), m.group(1))
+    for m in _COMPUTED_PTR.finditer(text):
+        pair = (m.group(0), m.group(1).rstrip("/"))
         if pair not in out:
             out.append(pair)
     return out
+
+
+def _computed_pointers(path):
+    return _computed_pointers_in(path.read_text(encoding="utf-8"))
+
+
+def _computed_offenders_in(rel, text):
+    """The computed pointers in `text` that no later task has claimed — the defect this restructure
+    removes, as `path -> token` lines."""
+    return [f"{rel} -> `{tok}`" for tok, tail in _computed_pointers_in(text)
+            if tail not in DEFERRED_MOVES and tail not in DEFERRED_DIRS]
 
 
 def _plugin_file_pointers(path):
@@ -314,13 +335,41 @@ def test_no_computed_pointer_survives_outside_the_deferred_moves():
     restructure removes."""
     offenders = []
     for f in _agent_facing_files():
-        for tok, tail in _computed_pointers(f):
-            if tail not in DEFERRED_MOVES:
-                offenders.append(f"{f.relative_to(ROOT)} -> `{tok}`")
+        offenders += _computed_offenders_in(f.relative_to(ROOT).as_posix(),
+                                            f.read_text(encoding="utf-8"))
     assert not offenders, (
         "these pointers still make the model compute an address for a file that has one skill "
         "consumer; move the file into that skill and name it from there:\n  "
         + "\n  ".join(offenders))
+
+
+@pytest.mark.parametrize("planted", [
+    "copy `<plugin-root>/templates/config.example.yaml` to `config.yaml`",   # a file
+    "copy a template out of `<plugin-root>/templates/`",                     # a whole directory
+    "the copyable examples in `../../templates/`",                           # relative, directory
+    "read `../../templates/preferences.example.md` first",                   # relative, file
+    "run `<plugin-root>/scripts/schedule-line.sh daily`",                    # a moved script
+])
+def test_the_gate_catches_a_reintroduced_computed_pointer(planted):
+    """The gate above only earns trust if it fires. Planting each shape of pointer this restructure
+    removed — file or directory, token-prefixed or `../../`-prefixed — must produce an offender.
+    The directory shapes are the ones an earlier version of `_COMPUTED_PTR` let through, because it
+    required a file extension."""
+    offenders = _computed_offenders_in("skills/job-search/SKILL.md", planted)
+    assert offenders, f"the gate did not catch a reintroduced pointer: {planted!r}"
+
+
+@pytest.mark.parametrize("allowed", [
+    "run `<plugin-root>/shared/scripts/mechanics/validate-workspace.sh <workspace>`",
+    "the discovery step in `../../shared/references/runbook.md`",
+    "a script under `<plugin-root>/shared/scripts/mechanics/`",
+    "copy this skill's `templates/config.example.yaml` to `config.yaml`",
+    "the shape is `skills/job-search-run/templates/run-record.example.json`",
+])
+def test_the_gate_leaves_the_deferred_and_co_located_forms_alone(allowed):
+    """A gate that fired on everything would be no gate. The two files each later task owns, the
+    directory holding them, and both co-located forms must pass."""
+    assert _computed_offenders_in("skills/job-search/SKILL.md", allowed) == []
 
 
 def test_every_plugin_file_a_skill_names_exists():

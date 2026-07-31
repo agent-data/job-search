@@ -7,7 +7,9 @@ from that same directory.
 
 ## Find the workspace
 
-Every file path below is relative to the `workspace` this step prints. Run the discovery script:
+Every path below that names a file in the user's workspace is relative to the `workspace` this step
+prints. The few that name a file inside the plugin instead say so where they are written. Run the
+discovery script:
 
 ```sh
 <plugin-root>/shared/scripts/mechanics/workspace-discovery.sh
@@ -54,7 +56,7 @@ path cannot be read, rather than picking a workspace it might not name. The scri
 | `runs/<run_id>.json` — one record per run | a run at close | the home view, the agent skill |
 | `runs/.started-<run_id>` — empty marker: this run is open | a run at start, deleted at close | the next run |
 | `reports/<date>-digest.md` — the digest the user reads | a run at close | the user, the home view |
-| `.gitignore` — copied from `skills/job-search/templates/workspace.gitignore`; denies everything but itself | setup | git |
+| `.gitignore` — copied from the plugin's `skills/job-search/templates/workspace.gitignore`; denies everything but itself | setup | git |
 | `~/.config/job-search/config.json` — the registry, which sits outside the workspace: `active_workspace`, plus `scheduling` holding the booleans `installed` and `verified` — both true only after a canary proved the job — and the strings `mechanism` (cron, launchd, or the host's own) and `scheduler_id` | setup, schedule changes | discovery, the home view |
 
 ## One run, start to close
@@ -67,7 +69,7 @@ path cannot be read, rather than picking a workspace it might not name. The scri
    `runs/.started-<run_id>`, then read the brief's revision before anything can edit it:
    `shasum -a 256 <workspace>/preferences.md | cut -c1-12` (or `sha256sum` — same digest).
 3. **Do the run's work**, appending to `jobs.jsonl` as you go.
-4. **Close.** Write `runs/<run_id>.json` — every field, with realistic values, is in
+4. **Close.** Write `runs/<run_id>.json` — every field, with realistic values, is in the plugin's
    `skills/job-search-run/templates/run-record.example.json`. `brief_revision` is the digest from step 2.
    `trigger` is `manual` when the user asked for this run and `scheduled` when a scheduler started
    it, and `scheduler_id` names that scheduler or is `null` for a manual run. `agent_data_usage`

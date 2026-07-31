@@ -60,7 +60,7 @@ Other intents leave: what they want in a job → `job-preference-interview`, a p
 2. Run `agent-data whoami` — the whole preflight, local and free. On `api_key_set: false`, say the
    key is missing, give agent-data.md's `agent-data init` line, and go on once it reports true.
 3. Build the workspace where discovery pointed: copy this skill's `templates/config.example.yaml` to
-   `config.yaml` and its `templates/workspace.gitignore` to `.gitignore`, create an empty
+   `config.yaml` and this skill's `templates/workspace.gitignore` to `.gitignore`, create an empty
    `jobs.jsonl`, and make `runs/` and `reports/`. A file already there stays as it is. Say in one
    line that this folder is theirs and private.
 4. Write this machine's zone into `schedule.timezone` in that `config.yaml`: `readlink /etc/localtime`

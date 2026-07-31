@@ -53,9 +53,12 @@ test -d "$HERMES_HOME/plugins/job-search" && echo present || echo absent
 
   - Output empty, and the directory contains `plugin.yaml`, `__init__.py`, all
     five `skills/<name>/SKILL.md` files, `shared/references/`,
-    `shared/scripts/mechanics/`, and `skills/job-search/templates/` →
-    healthy install; go to
-    Step 3 and use the update command.
+    `shared/scripts/mechanics/`, `skills/job-search/templates/`,
+    `skills/job-search/scripts/`, `skills/job-search-run/templates/`,
+    `skills/job-search-run/scripts/`, and
+    `skills/job-preference-interview/templates/` → healthy install; go to
+    Step 3 and use the update command. That is the same list `__init__.py`
+    checks on load, so a tree that passes here is a tree the plugin loads.
   - Output empty but any of those files or directories is missing → the
     install is incomplete. Tell the user, then reinstall fresh:
 
