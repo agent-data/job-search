@@ -330,9 +330,9 @@ are the skills' own POSIX shell, no third-party dependency):
   "build": { "version":"0.4.0", "content_hash":"sha256:abcdef123456", "git_sha":"<short sha|unknown>" },
   "trigger":"manual|scheduled|canary",
   "scheduler_id":"<exact scheduler identifier; null for manual>",
-  "primary_model":"<exact primary model for this run>",
+  "primary_model":"<primary model as the host reports it — tier alias or exact id>",
   "primary_model_origin":"session_inheritance|user_override|repair_session",
-  "detail_model":"<exact model used for posting-detail judgment>",
+  "detail_model":"<model used for posting-detail judgment — tier alias or exact id>",
   "detail_model_origin":"configured_auto|configured_user|legacy_v1_selector|repair",
   "detail_model_binding_id":"<current binding id; null for legacy version 1>",
   "queries":[ {

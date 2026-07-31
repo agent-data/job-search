@@ -8,7 +8,7 @@ queries:
 search:
   sources: ["linkedin", "ashby"]   # job sources each query runs against: linkedin | ashby | greenhouse | lever
   freshness: "past-2-weeks"    # any | past-week | past-2-weeks | past-month — recency window (applied server-side; see conventions.md)
-  detail_model: "claude-sonnet-5"
+  detail_model: "sonnet"
 schedule:
   frequency: "daily"
   time: "08:00"

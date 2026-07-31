@@ -1,7 +1,7 @@
 {
   "version": 1,
   "binding_id": "binding-bfe5b07f-1500-453c-bd3c-ba9776c070db",
-  "detail_model": "claude-sonnet-5",
+  "detail_model": "sonnet",
   "detail_model_origin": "configured_auto",
   "bound_at": "2026-07-30T20:00:00Z"
 }

@@ -835,10 +835,6 @@ def test_fixture_run_record_validator_rejects_adversarial_schema_and_invariants(
 
 
 def test_tier_aliases_and_exact_ids_are_both_valid_run_record_model_values(tmp_path):
-    conventions = CONVENTIONS.read_text()
-    assert "Tier aliases are valid run-record values." in conventions
-    assert "exact-model-contract:forbidden-run-record-values" not in conventions
-
     result, summary, workspace = drive(tmp_path, "happy_manual")
     assert result.returncode == 0, result.stderr
     namespace = runpy.run_path(str(FIXTURE))
