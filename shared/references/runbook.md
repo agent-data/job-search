@@ -83,14 +83,14 @@ A workspace can hold other files left by older versions; nothing here reads or d
    --post-close <run_id>`. It prints nothing and exits 0 when the workspace is right; each line it
    does print names one file and one broken rule to fix.
 
-A run that has to stop early closes the same way, with `close_state` recording how it ended.
+A run that has to stop early closes the same way: `close_state` is `blocked` when you can name what
+stopped it, and `interrupted` when it ends unfinished and its work cannot be reconstructed.
 
 ## Scratch
 
-Everything a run writes for its own use — pages of results, notes, working lists — goes in
-`runs/.scratch/<run_id>/`, which step 4 deletes. Scratch files hold the fields you judged on:
-title, company, location, and the specific posting lines you cite. The full posting text stays in
-the response you are reading.
+Everything a run writes for its own use goes in `runs/.scratch/<run_id>/`, which step 4 deletes.
+Keep each search row as it arrived, `id` and `source_url` together, because a detail read needs
+that pair from the row it came from. Keep the posting lines you cite; full posting text stays out.
 
 ## What stays off disk
 
