@@ -70,8 +70,7 @@ Other intents leave: what they want in a job → `job-preference-interview`, a p
 8. Render what came back: the strong matches, then the moderate ones, each with its reasoning line
    and its link, plus any confirm note the digest carries. Where the run judged postings and few or
    none of them fit, say what it searched and name the one change most likely to help.
-9. Then offer the recurring job below — a thin first run makes it matter more, since tomorrow's
-   postings are the ones it exists to catch — and land them on the home view once that is settled.
+9. Then offer the recurring job below, and land them on the home view once that is settled.
 
 ## The recurring job
 
@@ -79,33 +78,33 @@ A search that runs on its own is the point of the whole thing, so offer it while
 are still on screen, and say plainly what it is: this same search, running by itself on a schedule,
 leaving a digest of whatever is new. Say what that cadence costs to keep: the calls one run opens
 with, that many again every day or week it fires, against the free monthly calls agent-data.md
-counts — the user hears the monthly total before a yes is recorded. Ask once, with daily as the usual
-cadence. Their yes starts the install, and so does a request that already asks for it.
+counts — the user hears the monthly total before a yes is recorded. Ask once, with daily as the
+usual cadence; their yes starts the install, as does a request that already asks for it.
 
 1. Write today's date into `schedule.consented` in `config.yaml`, with `schedule.frequency` and
-   `schedule.time` holding the cadence they picked.
+   `schedule.time` holding the cadence they picked. That date is the standing yes a scheduled,
+   headless, or subagent run proceeds on.
 2. `<plugin-root>/shared/scripts/mechanics/schedule-line.sh <frequency> [HH:MM]` prints the cron time
-   expression for that cadence. Wrap it in whatever your host schedules with — a cron entry, a
-   launchd job, or the host's own recurring-job command — running `job-search-run` against this
-   workspace the way the runbook's unattended section shows. As you install it, show the user that
-   line, where it lives, and how to remove it; this changes their machine. Then record the installed
-   job in the registry the runbook names, which is where the home view reads the schedule from.
+   expression for that cadence. Wrap it in whatever your host schedules with — cron, launchd, or the
+   host's own recurring-job command — running `job-search-run` against this workspace the way the
+   runbook's unattended section shows. As you install it, show the user that line and where it lives;
+   this changes their machine.
 3. **Run the canary now**: a job that has been installed and has never run is unproven. It spends,
    and in a session that has not searched yet it is the first metered call, so give the cost sentence
-   rule 2 asks for first. Then fire the job through the path the scheduler will use — that
-   invocation, that environment, rather than this session — and stay with it until it lands. It
-   follows the first run by minutes, so dedup leaves it little to judge; after real time has passed a
-   full run is right, and the user gets that digest.
+   rule 2 asks for first. Then fire the job through the path the scheduler will use — that invocation
+   and that environment, rather than this session — and stay with it until it lands.
 4. The canary passes when it leaves a run record whose `trigger` is `scheduled` and whose close is
-   healthy — `close_state: complete` with `run_health: healthy`. Setup is finished at that record and
-   not before. Say what the canary did either way: on a pass, that the schedule is live and when it
-   next runs; otherwise what stopped it, that the schedule is not working yet, the next step, and
-   that the job stays unloaded until a canary passes, so one that cannot work sits quiet instead of
-   failing every day unseen.
+   healthy — `close_state: complete` with `run_health: healthy`. On that record and not before,
+   record the installed job in the registry the runbook names, where the home view reads the
+   schedule from; setup is finished there. Say what the canary did either way: on a pass, that the
+   schedule is live and when it next runs; otherwise what stopped it, that it is not working yet,
+   and the next step, leaving the job unloaded and the registry unwritten.
 
-When they leave it off, say it starts whenever they ask and a search on demand is one sentence away.
-
-`schedule.consented` is the standing yes a scheduled, headless, or subagent run proceeds on.
+To turn it off, undo the install the way it was made — that cron line deleted, that launchd job
+unloaded and its file removed, or the host's own removal command — then clear the registry's
+`scheduling` marker (`installed: false`, or the object dropped) and say what was removed. A user who
+leaves it off in the first place hears that it starts whenever they ask, and that a search on demand
+is one sentence away.
 
 ## Home
 
@@ -133,12 +132,13 @@ What next? Just tell me:
 ```
 
 Sources are the ones `search.sources` lists, in the words a person uses for them; the schedule reads
-as its cadence while `schedule.consented` holds a date and the registry shows the job installed, and off
-otherwise; last run is the newest record's `run_health`. A record whose `close_state` is `blocked` or
-`interrupted` earns a line under the card: what stopped that run, which its record and digest name,
-and the one thing that gets it going again. Before the first run, offer that search in place of the
-digest and pipeline lines. A brief older than 30 days, where runs have happened since, earns one
-offer under the card to refresh it through `job-preference-interview`.
+as its cadence while `schedule.consented` holds a date and the registry shows the job installed, and
+off otherwise; an older registry carrying `verified: false` is an install no canary proved, and
+reads as off. Last run is the newest record's `run_health`. A record whose `close_state` is
+`blocked` or `interrupted` earns a line under the card: what stopped that run, which its record and
+digest name, and the one thing that gets it going again. Before the first run, offer that search in
+place of the digest and pipeline lines. A brief older than 30 days, where runs have happened since,
+earns one offer under the card to refresh it through `job-preference-interview`.
 
 ## When the user reacts
 

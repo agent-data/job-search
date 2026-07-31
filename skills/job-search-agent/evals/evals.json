@@ -38,7 +38,7 @@
     {
       "id": 4,
       "scenario": "a hand edit that breaks a rule is caught by the validator",
-      "prompt": "Seed a workspace with setup-workspace.sh and hand-edit config.yaml so one query carries limit: 0 and no id. The user says: 'Is my config OK? I edited it by hand.'",
+      "prompt": "Seed a workspace with setup-workspace.sh, then hand-edit config.yaml so search.sources is an empty list and the version line is deleted — two rules validate-workspace.sh actually enforces, and it prints one line for each. The user says: 'Is my config OK? I edited it by hand.'",
       "expectations": [
         "<plugin-root>/shared/scripts/mechanics/validate-workspace.sh <workspace> is run and the lines it prints are read",
         "Each line it printed reaches the user as one file and one broken rule in plain language, rather than as a pasted INVALID line",
