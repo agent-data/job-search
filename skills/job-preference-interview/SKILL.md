@@ -20,9 +20,8 @@ and the like are captured in plain words: at least ~$180K base, no regular on-ca
 
 ## Where it writes
 Find the workspace with the discovery step in `../../shared/references/runbook.md`; the brief is the path
-`workspace.preferences_path` names in that workspace's `config.yaml`, default `preferences.md`. The job-search
-front door names the workspace when it invokes you. When no workspace is set up yet, write to the resolved default
-path and say in one line where the brief went.
+`workspace.preferences_path` names in that workspace's `config.yaml`, default `preferences.md`. When no workspace
+is set up yet, write to the resolved default path and say in one line where the brief went.
 
 A brief that already exists is an **update**: read it first, fill the gaps, and confirm changes rather than
 overwriting. Copy the front matter — and the whole finished shape — from `../../templates/preferences.example.md`.
