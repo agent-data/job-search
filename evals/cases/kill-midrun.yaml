@@ -1,0 +1,17 @@
+# Kill-injection case (evals/seeds/kill-midrun/ = same shape as the headless-run seed;
+# created by the first task that runs this case). Session 1 starts a run; the runner
+# terminates the child right after the first search-jobs Bash call completes
+# (kill_after_event below — a regex matched against each tool call's name + JSON input),
+# leaving an orphaned started-marker. Session 2 (followup_prompt, same workspace) must
+# say the last run died, then rerun.
+behaviors: [B9]
+workspace: seeded
+timeout_s: 900
+models: [sonnet, haiku]
+kill_after_event: search-jobs
+prompt: >
+  Run one job search pass now: find and judge new postings against my
+  preferences and write a digest. Do not ask me questions; run headlessly.
+followup_prompt: >
+  Run one job search pass now: find and judge new postings against my
+  preferences and write a digest. Do not ask me questions; run headlessly.

@@ -834,3 +834,46 @@ Capture reality so the next review can compare against it (this is the boomerang
 - **Where did onboarding / the home view confuse you?** (the one thing you'd fix first) ______
 - **Any T4.7 phrasing Claude misread?** ______
 - **New product gaps found** (add to `docs/exec-plans/tech-debt-tracker.md`): ______
+
+---
+
+## Behavior evals
+
+The 2026-07-30 skill overhaul (`docs/superpowers/specs/2026-07-30-skill-overhaul-design.md`)
+tests kept behaviors with **live behavioral eval runs** graded on transcripts and captured
+workspaces — never substring assertions against documentation. The behavior → eval matrix is
+`evals/behaviors.md` (rows B1–B14); the six cases live in `evals/cases/`.
+
+Run one case (each case runs on **both** models):
+
+```bash
+python3 evals/run_eval.py --case fit --model sonnet     # cheapest case
+python3 evals/run_eval.py --case quickstart --model haiku
+```
+
+The runner spawns a real `claude -p` session against the **live** Job Postings API (no mocks)
+and writes `evals/results/<ts>-<case>-<model>/` containing:
+
+- `transcript.jsonl` — every stream-json line stamped with elapsed wall-clock seconds
+- `workspace/` — the `~/.job-search` the session produced
+- `result.json` — timings, exit codes, and the case's behavior rows
+
+Results stay local (`evals/results/.gitignore`); only aggregate numbers are committed, in
+`evals/baseline/2026-07-30-red-baseline.md` — the pre-overhaul RED numbers that B14 compares
+each post-rewrite run against.
+
+Notes for running:
+
+- The runner moves a real `~/.job-search` aside before the session and restores it after. If
+  a crashed runner leaves `~/.job-search.stash-<ts>` behind, move it back to `~/.job-search`
+  by hand.
+- Cases with `workspace: seeded` copy `evals/seeds/<case>/` into place and fail with a clear
+  message when that seed directory is missing; the task that first runs such a case creates
+  its seed.
+- `fit` fetches a live posting at run time (one `search-jobs` + one `get-posting` call) and
+  splices it into the prompt, so the judged posting is always current.
+- `kill-midrun` uses the case's `kill_after_event` regex (also available as
+  `--kill-after-event`) to terminate the child right after the first matching tool call
+  completes, then drives a follow-up session in the same workspace.
+- `schedule` installs a real scheduler entry (cron/launchd/host-native) as part of the
+  canary; remove it after grading.
