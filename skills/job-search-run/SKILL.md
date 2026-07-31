@@ -20,7 +20,7 @@ first, both named here relative to this file:
    has no workspace to write into.
 2. Open the run as the runbook's run contract does: a leftover marker means the last run stopped
    before it could close, so say that and delete it; then create this run's marker and take the
-   brief revision from `preferences.md`. From here on, a failure closes as a `blocked` run.
+   brief revision. From here on, a failure closes as a `blocked` run.
 3. Run `agent-data whoami`. When `api_key_set` comes back false, close blocked: the API key is
    missing, and `agent-data init` from agent-data.md's CLI table is the fix.
 4. Run `<plugin-root>/shared/scripts/mechanics/validate-workspace.sh <workspace>`. Silence means
@@ -31,15 +31,16 @@ first, both named here relative to this file:
 ## Search
 
 Read the route list once with `agent-data docs <listing id>`, which is free, and take every
-parameter name from it. One `search-jobs` call reaches one source, so each enabled query in
-`config.yaml` runs once per entry in `search.sources`: keywords, location and `limit` from the
-query, `source` from the list. Turn `search.freshness` into the cutoff parameter the route docs
-name; the `any` window sends no cutoff.
+parameter name from it. One `search-jobs` call reaches one source, so each enabled query runs once
+per entry in `search.sources`: keywords, location and `limit` from the query, `source` from the
+list, `search.freshness` as the cutoff parameter the route docs name (the `any` window sends
+none). This pass reads those first pages and stops there — a continuation page holds what the next
+run finds new.
 
-Check each response against what you asked for — the source echo, per the source-echo row in
-agent-data.md, and the cutoff echo the same way; a sent cutoff that comes back missing or altered
-means keeping the rows and applying that date yourself. Write every returned row into
-`runs/.scratch/<run_id>/` as it arrived, `id` and `source_url` together (the scratch rule).
+Send each response straight into `runs/.scratch/<run_id>/` as it arrives, every row with its `id`
+and `source_url` together (the scratch rule), then check the saved copy for the echoes: the source
+echo per agent-data.md's source-echo row, and the cutoff the same way, where one that comes back
+missing or altered means applying that date to the rows yourself.
 
 ## Reconcile
 
@@ -48,50 +49,48 @@ means keeping the rows and applying that date yourself. Write every returned row
    prints, every source's output together, is what this run has to judge.
 2. **The same row from two queries** — one `(source, source_id)` pair reaching you twice is one
    candidate: keep the first, and remember the other query found it too.
-3. **One opening posted twice** — feed the survivors as `source_id<TAB>company<TAB>title` lines
-   into `dedup.sh --near`, which prints the openings to judge and drops the repeats, so a company
-   posting one role in four cities bills one detail read rather than four.
+3. **One opening posted twice** — pipe the survivors as `source_id<TAB>company<TAB>title` into
+   `dedup.sh --near`, which prints the openings to judge: one role in four cities, one read.
 
 ## Scan the summaries
 
 Judge every candidate from its row first — title, company, `location_display`, `salary_display`,
 date. Settle a row that plainly breaks a must-have the brief names right there: record it as not
-relevant, with no detail read. That is what keeps detail reads few, and this scan is also where you
-write the guidance each read works from: everything that could match, and what a row leaves open,
-goes on the read list with a one-line **steer** — your provisional read plus the specific question
-the detail read has to answer, the must-have the row left unconfirmed, what is uncertain. A
-row whose title reads senior IC and whose location reads Austin gets a steer saying it looks
-strong and asking whether the role is remote within the US; a row with neither date field filled
-also asks for the posting date the description states.
+relevant, with no detail read. That keeps detail reads few, and this scan is where you write the
+guidance each read works from: everything that could match, and what a row leaves open, goes on
+the read list with a one-line **steer** — your provisional read plus the question that read has to
+answer, the must-have the row left unconfirmed. A senior-IC title with an Austin location earns a
+steer that reads strong and asks whether the role is remote within the US; a row with neither date
+field filled also asks for the date the description states.
 
 ## Read and judge
 
-Where your host has subagents, dispatch one per posting on the read list, in parallel: each
-posting is judged in its own fresh context, leaving this session's context for coordinating the
-run. Where your host has none, work the read list in order. Both paths run on the host's own
-model. Give each subagent enough to work cold: the row's `id` and `source_url` as the pair they
-arrived in, its `source`, the path to `preferences.md`, the `evaluate-job-fit` skill to follow for
-the judgment, and that posting's steer. The read itself is agent-data.md's `get-posting` recipe.
+Where your host has subagents, dispatch one per posting on the read list, in parallel: each is
+judged in its own fresh context, leaving this session's for coordinating the run. Where your host
+has none, work the list in order. Both paths run on the host's own model. Brief each subagent
+cold: the row's `id` and `source_url` as the pair they arrived in, its `source`, the path to
+`preferences.md`, the `evaluate-job-fit` skill to follow, and that posting's steer. The read is
+agent-data.md's `get-posting` recipe.
 
 Append one line per row to `<workspace>/jobs.jsonl` by piping the single-line event JSON into
 `<plugin-root>/shared/scripts/mechanics/event-log-append.sh <workspace>/jobs.jsonl`, which checks
 the line and skips a pair the log already holds. `<plugin-root>/templates/jobs-event.example.json`
 is one such line with every field filled — copy that field set, and fill it from this run:
 
-- `source`, `source_id`, `title`, `company_name`, `location_display`, `salary_display`,
-  `posted_at`, `source_url` copied from the row as they arrived, and `posting_id_at_seen` from the
-  row's `id`; `query_id` names the query whose search returned it.
+- `event` is `evaluated`, `run_id` is this run's id, and `status` starts at `new`.
+- `source`, `source_id`, `title`, `company_name`, `location_display`, `salary_display`, and
+  `source_url` copied from the row as they arrived; `posting_id_at_seen` from the row's `id`;
+  `posted_at` from its dates through agent-data.md's per-source date row; `query_id` the query.
 - `detail_read` is true for a posting read in full and false for one settled from its row;
-  `relevant`, `match`, `reasoning`, `dealbreakers_hit`, `unknowns`, and `needs_human_check` are
-  the judgment as `evaluate-job-fit` returned it; `ts` and `first_seen` are the UTC moment of it.
-- `posted_at_extracted` joins the line when the row carried no date and the description states
-  one. `same_role_as` joins a row the near-duplicate step dropped, holding
-  `<source>:<source_id>` of the row that was read: such a row carries that row's judgment with
-  `detail_read` false, so the next run treats it as already judged.
+  `relevant`, `match`, `reasoning`, `dealbreakers_hit`, `unknowns`, and `needs_human_check` are the
+  judgment as `evaluate-job-fit` returned it, and `ts` and `first_seen` the UTC moment of it.
+- `posted_at_extracted` joins the line when the row carried no date and the description states one;
+  `same_role_as` joins a dropped near-duplicate, holding `<source>:<source_id>` of the row that was
+  read, whose judgment it carries with `detail_read` false.
 
 Every candidate ends this run with a line in `jobs.jsonl` — the judgment from its detail read, or
-the one the scan settled from its row. A pass that ends with candidates still unjudged is an
-`interrupted` run, and its digest says how many are left for the next one.
+the one the scan settled from its row. A pass ending with candidates unjudged closes `interrupted`,
+its digest saying how many are left.
 
 ## Digest
 
@@ -119,13 +118,13 @@ Agent-data usage: 9 metered calls this run
 <footnotes>
 ```
 
-Strong band first. Count the lines this run appended to `jobs.jsonl` — in total, by source, by
-band — and write those counts on the counts line; the per-source breakdown in parentheses and the
+Strong band first. The counts line opens with the number of lines this run appended to
+`jobs.jsonl`, and its band and per-source numbers count those same lines; the breakdown and the
 ` · <Source>` tag appear when the run searched more than one source. A match whose row carried no
-date ends its reasoning line with the date the description stated, or with the fact that none is
-stated. Footnotes carry the rest: expired detail links, a source lost partway, and — for each
-company board (ashby, greenhouse, lever) that returned rows while this workspace held none of its
-postings yet — that a first pass over it reaches back further than the freshness window.
+date ends its reasoning line with the date the description stated, or with the fact that none is.
+Footnotes carry the rest: expired detail links, a source lost partway, and — for each company
+board (ashby, greenhouse, lever) that returned rows while this workspace held none of its postings
+yet — a first pass over it reaching back further than the freshness window.
 
 ## Close
 
@@ -136,11 +135,12 @@ fixing whatever it prints. Copy the field set of
 `<plugin-root>/templates/run-record.example.json`, with this run's value in each field.
 
 `trigger` is `manual` for a run the user asked for and `scheduled` for one a scheduler started,
-including the verification run after a schedule change. `run_health` is the single word `healthy`
-when every search answered and every candidate reached a judgment, and `degraded` when the run
-finished anyway with a source skipped or a search lost — then name that source and the reason in
-the digest. `close_state` is a separate field, defined in the runbook. Finish by saying what the
-run found and where the digest is, in plain language.
+including the verification run after a schedule change. `agent_data_usage` counts the calls this
+run made, retries and failed attempts included, rather than the calls it opened with.
+`run_health` is the single word `healthy` when every search answered and every candidate reached a
+judgment, and `degraded` on every other close, a `blocked` one included — the digest then names
+which source was lost or what stopped the run. `close_state` is a separate field, defined in the
+runbook. Finish by saying what the run found and where the digest is, in plain language.
 
 ## When a call or a run stops early
 
