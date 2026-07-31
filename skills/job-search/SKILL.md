@@ -106,9 +106,10 @@ usual cadence; their yes starts the install, as does a request that already asks
    healthy — `close_state: complete` with `run_health: healthy`. On that record and not before,
    write the job into the registry the runbook names, `installed` and `verified` both true, which is
    where the home view reads the schedule from; setup is finished there, and the user hears that the
-   schedule is live and when it next runs. Otherwise remove the job the way the turn-off recipe
-   below does, leave the registry unwritten and `schedule.consented` as it is, and say what stopped
-   the canary and what the next step is.
+   schedule is live and when it next runs. Every other ending is the same ending — the canary failed,
+   or you could not fire it at all — and it goes the same way: remove the job the way the turn-off
+   recipe below does, so nothing you installed is left to fire unproven, leave the registry unwritten
+   and `schedule.consented` as it is, and say what stopped the canary and what the next step is.
 
 To turn it off, undo the install the way it was made — that cron line deleted, that launchd job
 unloaded and its file removed, or the host's own removal command — then clear the registry's

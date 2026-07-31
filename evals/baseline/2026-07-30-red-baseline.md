@@ -45,7 +45,7 @@ transcripts, no user data.
 
 | measurement | RED | GREEN sonnet | GREEN haiku |
 |---|---|---|---|
-| time to first live result (headless quickstart) | 190 s | 121 s | 75 s |
+| time to first live result (headless quickstart) | 190 s | 88–121 s | 107 s |
 | full first-run onboarding wall-clock | 28–41 min | 8.6 min | 4.4 min |
 | metered API calls, onboarding run | 37 | 13 | 10 |
 | metered API calls, one daily pass (same seed) | 64 | 43–50 | 40 |
@@ -55,17 +55,20 @@ transcripts, no user data.
 
 ### Measurement condition for every timing row above
 
-**Both** columns of the timing rows — RED and GREEN, time to first live result and wall-clock —
-were measured **before the 2026-07-31 latency fix to the job-postings API**. Every run behind the
-GREEN column ran before it; none of these numbers includes any of that improvement.
+Time to first live result is the moment a **metered** `search-jobs` result came back — not the free
+`agent-data docs` call that precedes it in some runs.
 
-A run made after that fix will be faster for reasons that have nothing to do with the skill rewrite.
-Do not compare a later run's timing against these rows to credit or fault the skills, and do not
-update the GREEN timing figures with a post-fix run — the comparison only holds while both sides
-were measured under the same service. If a future pass wants timing numbers, it needs a fresh
-RED-equivalent measured under the same conditions.
+What is known about the service these runs ran against, and nothing beyond it: every session behind
+the GREEN column ran inside the window **18:18:28Z–20:11:25Z on 2026-07-31**, and no session was
+running at the moment a latency fix to the job-postings API was reported. **The deploy's own
+timestamp was not recorded anywhere**, so whether these runs preceded it is not established here.
 
-The rows that carry the release argument are unaffected by service latency and stay comparable:
+Treat the timing rows accordingly. A run made under a different service latency is not comparable
+with these, in either direction, and refreshing the GREEN timing figures alone would compare two
+different services; a future pass that wants timing numbers needs a RED equivalent measured beside
+them.
+
+The rows that carry the release argument do not depend on service latency and stay comparable:
 metered-call counts, lines read before the first API call, and every behavior pass or fail below.
 
 Every eval runs with permissions pre-accepted, so no dialog is ever shown; that row's GREEN number
@@ -84,13 +87,13 @@ so they are not a like-for-like saving. See the behavior rows below.
 | target | met? |
 |---|---|
 | read path before the first API call ≤ 700 lines | yes — worst case 271 |
-| quickstart time to first live result ≤ 190 s | yes — 121 s sonnet, 75 s haiku, both sides pre-fix |
+| quickstart time to first live result ≤ 190 s | yes — worst case 121 s (sonnet reps 121 s and 88 s; haiku 107 s) |
 | headless metered calls ≤ 64 on the same seed | yes — 43 and 50 across two sonnet reps, 40 haiku |
 | B1–B12 pass on both models | **no** — four rows, below |
 
 The time-to-first-result row is the one target that rests on a timing measurement, so it carries the
-caveat above: it is a valid comparison because both sides were measured under the same service, and
-it stops being one the moment either side is re-measured after the latency fix.
+caveat above: what the service was doing under these runs is only partly known, and the row should
+not be refreshed on its own.
 
 ## Behavior rows
 
@@ -102,7 +105,7 @@ it stops being one the moment either side is re-measured after the latency fix.
 | B4 cost context before the first metered call | pass | pass |
 | B5 summary scan reduces detail reads | pass | pass |
 | B6 id + source_url pairing, 0 fabricated ids | pass | not gradable |
-| B7 detail-read fault fallback | failed, **fixed**, re-run passes | failed, **fixed**, re-run passes |
+| B7 detail-read fault fallback | fallback half: failed, **fixed**, re-run passes. Stop-after-two half: **not exercised** | fallback half: failed, **fixed**, re-run passes. Stop-after-two half **and** the call-shape half: **not exercised** |
 | B8 jobs.jsonl conformance, digest re-derives | pass | **fail** |
 | B9 orphaned marker reported honestly | pass | pass |
 | B10 recurring job offered, consent recorded | offer passes | offer passes |
@@ -112,6 +115,15 @@ it stops being one the moment either side is re-measured after the latency fix.
 | B14 wall-clock and metered calls vs RED | pass | pass |
 
 B3 is exact: **zero** calls to the `status` route in any run of the matrix, on either model.
+
+B7 has two halves and only one of them was exercised. The half that was — judge a posting from its
+summary row when the detail read comes back rejected, rather than stopping — failed on both models,
+was fixed, and passes on both re-runs. The other half, "stop after 2 consecutive failed detail reads
+and attempt no more", was **not exercised on either model**: the case supplies three postings and the
+sonnet re-run read all three, so there was never a third attempt to withhold. On haiku a further half
+did not take either — the run never sent a valid call in the documented shape, reaching its (correct)
+"cannot fetch" conclusion by trying the open web and an invented sub-command instead. The fallback is
+fixed; the stop rule and the call shape remain unproven live.
 
 B6 is not gradable on haiku because that run issued its detail reads from a shell variable, so the
 transcript cannot pair each id with the row it came from. On sonnet all 46 reads carried both a
@@ -127,9 +139,9 @@ does leave the launchd job file on disk, which the turn-off recipe says to remov
 
 ## Detail-read spread on one seed
 
-Five runs of the identical `headless-run` seed — two enabled queries across two sources, an empty
-event log — spent 25, 36, 39, 46 and 49 detail reads. Every one closed healthy and every one stayed
-under RED's 64 metered calls, but the summary scan's threshold is set by model judgment, so the cost
+Five sonnet runs of the identical `headless-run` seed — two enabled queries across two sources, an
+empty event log — spent 25, 36, 39, 46 and 49 detail reads. Every one closed healthy and every one
+stayed under RED's 64 metered calls, but the summary scan's threshold is set by model judgment, so the cost
 of one pass varies close to twofold between runs of the same configuration.
 
 
