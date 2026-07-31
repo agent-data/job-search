@@ -61,7 +61,8 @@ schedule the agent also runs a one-time **config-time canary** — a real run th
 invocation — to confirm the job will genuinely work, so a misconfigured schedule fails at setup in front of
 you rather than silently the next day.
 
-This is an **instruction-level design rule**, carried by every skill's pinned references — there is no
+This is an **instruction-level design rule**, carried by the `job-search` skill — the only one that installs
+a schedule — and by the `job-search-runbook` skill it reads for the unattended invocation. There is no
 runtime hook enforcing it (the former PreToolUse guard was removed: it required Python on your machine and
 gated something you're entitled to do). If you explicitly ask for cron or launchd, it's your machine and your
 call: the agent shows you the exact line first, then writes it on your yes. You also remain free to run cron

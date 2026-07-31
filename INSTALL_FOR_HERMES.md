@@ -12,11 +12,11 @@ What this installs: the complete Job Search repository as the Hermes plugin
 `job-search`, with its seven skills available by their normal names — the five
 a user reaches, `job-search`, `job-search-run`, `job-search-agent`,
 `job-preference-interview` and `evaluate-job-fit`, and the two that hold the
-mechanics those five draw on, `job-search-runbook` and `agent-data-reference`. The skills
-read each other and their own `templates/` and `scripts/`
-directories from the installed repository, so
-the repository must stay intact: install it whole through the plugin manager,
-never as seven separate skills.
+mechanics those five draw on, `job-search-runbook` and
+`agent-data-reference`. The skills read each other and their own `templates/`
+and `scripts/` directories from the installed repository, so the repository
+must stay intact: install it whole through the plugin manager, never as seven
+separate skills.
 
 ## Step 1 — Confirm the environment
 

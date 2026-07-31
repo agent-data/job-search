@@ -31,8 +31,8 @@ The exact *shape* of each workspace file is not prose in either one: it is a cop
 - The two references live in **`skills/job-search-runbook/SKILL.md`** and
   **`skills/agent-data-reference/SKILL.md`** (dev tooling lives in `scripts/` and `evals/` — the Python
   linters, the release-integrity check, and the eval runners; none of it ships in the skills).
-- Edit one of those two files and you're done — every skill sees the change, because they all invoke the
-  same skill.
+- Edit one of those two files and you're done — every skill that invokes that reference sees the
+  change, because there is only one copy of it to edit.
 
 Nothing is generated into `skills/`: there is no build step, and no file there is a copy of another.
 

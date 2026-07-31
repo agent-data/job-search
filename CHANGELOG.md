@@ -12,8 +12,8 @@ All notable changes to this project are documented here. The format is based on
   running it unattended, scratch, what stays off disk) and `agent-data-reference` (the CLI, the four
   sources and their quirks, retries, what a call costs). Each of those five invokes whichever of
   the two it needs and nothing outside them, so a first run reaches live postings after a much
-  shorter read: the whole
-  agent-facing corpus — all seven `SKILL.md` files — is 9,096 words (`wc -w skills/*/SKILL.md`).
+  shorter read: the whole agent-facing corpus — all seven `SKILL.md` files — is 9,096 words
+  (`wc -w skills/*/SKILL.md`).
 - **Every runtime file lives inside the skill that owns it.** `shared/` is gone: the two references
   became the skills above, and the two mechanics scripts more than one skill runs —
   `workspace-discovery.sh` and `validate-workspace.sh` — moved into

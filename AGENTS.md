@@ -1,7 +1,7 @@
 # job-search — Agent Map
 
 An agent harness as a private, local-first **job-search** operating system: a plugin with seven skills —
-five a user reaches, and two the other five invoke for the mechanics — that the host agent reads and
+five a user reaches, and two more holding the mechanics those five draw on — that the host agent reads and
 executes natively (nothing ships to user machines but markdown), and three test layers — pytest over the dev tooling, per-skill scenario suites, and the live
 behavior evals in `evals/`.
 **This file is the entry point for coding agents working on this repo** — a map, not the territory.

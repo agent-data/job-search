@@ -125,7 +125,8 @@ the skill that writes each one, listed in
   itself) and the per-host resolution tests in
   [tests/test_reference_resolution.py](../../tests/test_reference_resolution.py).
 - **How to verify.** `git ls-files 'skills/*/references/*.md'` prints nothing — there are no
-  skill-local reference files left; every skill invokes the two reference skills by name.
+  skill-local reference files left; each skill invokes whichever of the two reference skills it
+  needs.
   `python3 -m pytest -q tests/test_reference_resolution.py` → every in-place pointer resolves under
   each host's install.
 
