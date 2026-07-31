@@ -11,6 +11,8 @@ description: Build, refine, deepen, or import the user's Job Preferences Brief �
 Build the user's **Job Preferences Brief** — the prose `preferences.md` that `evaluate-job-fit` later reads next
 to a posting to judge it. This skill asks questions and waits for the answers, so it runs with the user present;
 a scheduled run has nobody to answer. Your first words open the conversation itself, not the mechanics behind it.
+How you say everything here — a word defined where it first lands, one question at a time, state in the present
+tense — follows the ten rules under **How to communicate** in `../job-search/SKILL.md`.
 
 The brief is prose a model reads against a posting to judge it **qualitatively**: relevant or not, and if relevant
 weak / moderate / strong, with plain-language reasoning. Importance lives in which **bucket** a factor lands in —
@@ -43,7 +45,8 @@ later pass reads what exists and enriches it, and either path produces the same 
    on-call **red flag** from wanting good work-life balance). A stated role, location, or pay floor becomes a
    **Must-have**; softer wants go to **Strong preferences** or **Nice-to-haves**. A section they said nothing
    about stays empty rather than padded with preferences they never expressed. Ask **at most one** follow-up, and
-   only when a likely must-have is missing entirely.
+   only where the user answered here and a likely must-have is missing entirely; a sketch handed to you with its
+   answer already in it is drafted from those words, and the gaps wait for a deeper pass.
 3. Material they share — a resume, a cover letter, notes — is **background evidence** that informs the brief,
    never an existing brief and never silently turned into must-haves; where it conflicts with what they said,
    what they said wins.
@@ -59,9 +62,7 @@ or 15–20 on a thorough pass.
   them into something **observable** a reader could check against a posting: small teams, low meeting load, ships
   weekly; base at least ~$X.
 - **Make answering easy.** Offer a few example options or a simple scale where it helps, and **always** leave room
-  for no preference, skip, or that's a dealbreaker. A genuine pick-one with 2–4 natural answers (IC vs. manager;
-  remote / hybrid / onsite) goes through your host's native question interface, numbered prose only where it has
-  none; open questions stay prose.
+  for no preference, skip, or that's a dealbreaker.
 - Keep every message to one or two sentences, plus a closed choice's option lines — longer only when the user asks
   you to explain something at greater length.
 - **Start** with what is prompting the search, **reflect back** every 4–5 questions in 1–2 sentences so the user

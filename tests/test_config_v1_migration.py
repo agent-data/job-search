@@ -160,11 +160,6 @@ def _marked_table(path, marker):
     return rows
 
 
-def _evals(skill):
-    path = ROOT / "skills" / skill / "evals" / "evals.json"
-    return json.loads(path.read_text(encoding="utf-8"))["evals"]
-
-
 def test_fake_host_resolves_exact_v1_models_and_drives_all_failure_arms(tmp_path):
     roster = _json_stdout(_run_host(tmp_path, "happy", "model-roster"))
     assert roster == {
@@ -1005,38 +1000,7 @@ def test_canonical_contract_pins_passive_compatibility_transaction_and_cutoff():
     )
 
 
-def test_evals_carry_executable_migration_pressure():
-    """The runner's version-1 model-selector fixtures left with that apparatus in the 2026-07-30
-    job-search-run rewrite (nothing reads search.detail_model any more), so the migration pressure
-    this test tracks is the front door's."""
-    search_cases = _evals("job-search")
-    passive_home = next(case for case in search_cases if case["id"] == 15)
-    assert "fresh update_check cache" in passive_home["prompt"].lower()
-    migration = [case for case in search_cases if case.get("coverage_kind") == "executable_fixture"]
-    joined = json.dumps(migration).lower()
-    for token in (
-        "single schedule confirmation",
-        "exact detail model",
-        "validation failure",
-        "canary failure",
-        "config-backups",
-        "job_state absent",
-        "qualify-cutoff",
-        "prior sidecar",
-        "register failure",
-        "partial activation",
-        "rollback-migration",
-        "removal unavailable",
-        "first successful version-2 run",
-        "later failure",
-        "never restore",
-        "omitted optional",
-        "max_new_postings_per_run",
-        "unrelated version-2 run",
-        "persisted cutoff marker is an index",
-        "fail closed",
-    ):
-        assert token in joined
-
-    candidate_contract = next(case for case in migration if case["id"] == 24)
-    assert "positive integer or exact `all`" in json.dumps(candidate_contract).lower()
+# The front door's version-1 migration fixtures (ids 15-24) left with that apparatus in the
+# 2026-07-30 skill overhaul: nothing stages a version-1 -> version-2 migration any more, so the
+# executable migration-pressure scenarios this file used to require of skills/job-search/evals
+# have no subject. The migration contract blocks themselves are still checked above.

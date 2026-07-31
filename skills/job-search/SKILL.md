@@ -1,91 +1,150 @@
 ---
 name: job-search
-description: Set up, check on, and steer the user's job search — the front door and home screen. Use when they want to start or set up a job search, see status, matches, the latest digest, or the pipeline, or change what they're looking for — "set up job search", "start my job search", "I'm looking for a new job", "check my job search", "show me my matches", "what's new in my pipeline", or /job-search. First run reaches real live matches fast — a one-question sketch, then live postings — with no setup ceremony; afterward it shows the job-search home with quick actions. Not for a fresh headless pull ("check for new jobs" → job-search-run) or for configuring/troubleshooting the agent itself (→ job-search-agent).
+description: Set up, check on, and steer the user's job search — the front door and home view. Use when they want to start or set up a job search, see their status, matches, latest digest, or pipeline, change what they are looking for, or start, change, or stop the search that runs on a schedule — set up job search, start my job search, I am looking for a new job, check my job search, show me my matches, what is new in my pipeline, keep this running daily — or /job-search. A first run reaches live matches fast: one question, real postings, then the offer to keep it running on its own. (For a pull with nobody watching, use job-search-run; for configuring or troubleshooting the agent itself, use job-search-agent.)
 ---
 
 # job-search
 
-> To configure, extend, customize, or troubleshoot the agent itself (or understand its
-> capabilities), use the **job-search-agent** skill — the operator manual.
+The front door: first-time setup, the home view after that, and where the user steers their search
+from by talking to you. The work belongs to the other skills — `job-search-run` pulls and judges
+postings, `job-preference-interview` writes the brief, `evaluate-job-fit` judges one posting. Two
+references carry the mechanics, named relative to this file, whose two steps up reach
+`<plugin-root>`, the directory holding `skills/`, `shared/` and `templates/`:
 
-The **OS shell** for Job Search OS — the front door you run when you want to set the system up or check on
-it. Mental model: this skill is the **login shell + home screen**; the **registry** is the OS state that
-remembers your workspace and schedule; `job-search-run` is the **scheduled job** that pulls and judges
-postings; `job-preference-interview` is the tool that **builds the brief** the runner reads. You drive
-everything from here and delegate the heavy lifting to those skills.
+- `../../shared/references/runbook.md` — the workspace, what each file in it holds, the run contract.
+- `../../shared/references/agent-data.md` — the CLI, what a call costs, what to say before spending one.
 
-Not the place for a non-interactive run — that's `job-search-run` — or for changing the system's wiring,
-which is `job-search-agent`'s manual (see the note above).
+## How to communicate
 
-This skill has two modes and almost no logic of its own — it **routes**, then follows a playbook:
+These ten rules govern how you say things, in every mode below.
 
-- **First run** → walk the user through onboarding end-to-end, ending with real, relevance-judged matches.
-- **Returning** → show the job-search home (latest digest, new matches, pipeline) with conversational quick
-  actions.
+1. Define each idea in plain words the first time the user meets it — the brief, a job source, the
+   free monthly calls, the recurring job, the digest. The sentence that first uses the word carries
+   its meaning, and an offer explains the thing it is offering.
+2. Before metered work, say what it opens with, in your own words, per agent-data.md's cost recipe.
+3. Ask one question at a time, and ask when the answer changes what you do. A question with two to
+   four natural answers goes through your host's own question interface, or numbered prose where it
+   has none; an open question is prose either way.
+4. Show matches as message text in your reply — title, company, location, the reasoning line, the
+   link — as rendered markdown, with the digest's path as a closing detail.
+5. Say what a posting states, and name what it leaves unstated; each judgment arrives with those
+   unknowns attached.
+6. Use the user's own words for their field, their seniority, and where they want to work.
+7. Every noun in a reply is something the user owns or can see: their preferences, a posting, a
+   search, the digest, the schedule, the folder these live in. The rest is yours to work with.
+8. Narrate events — what you did and what came back. A step that produced nothing to report passes
+   in silence.
+9. Write state in the present tense: what is set up, what runs, what the last run found.
+10. Keep each message to a sentence or two plus whatever document you render; go longer on request.
 
-Find the workspace with the **Discovery procedure** in `../../shared/references/internals.md` (one fact-gathering
-command, then its precedence rules); never hard-code its path.
+## Route
 
-## Step 0 — route
+Find the workspace with the runbook's discovery step, silently, and go where it points.
 
-Run the Discovery procedure (`../../shared/references/internals.md`) → a workspace, **first_run** yes/no, and a source
-(`registry | default | legacy | none`).
+- No `config.yaml` there yet → **First run**, below.
+- A workspace already set up → **Home**, below.
+- The registry file is there and JSON parsing fails on it → stop there, say the file at that path
+  cannot be read, and offer to rewrite it around the workspace you can see; on a yes, write it fresh
+  with that workspace as `active_workspace`.
 
-- `first_run: true` → **say the welcome, then** follow **`references/onboarding.md`** (the first-run
-  playbook). Greet the moment discovery reports `first_run: true` — emit the welcome as a message **now**,
-  before your next tool call: before you open the playbook, before any check, long before the end of the
-  turn. The pull to defer it is strong — finish the silent prep, batch the talking into one final message.
-  Resist it: that batching is this skill's known failure mode, and whatever goes wrong next (a failed
-  check, a blocked install) must land on a user who has already been greeted and told what's happening.
-  About to run a tool without having greeted? Stop — greet first. The welcome — hit these beats in your own
-  words (a warm one-liner: you'll set up their search together and end on real matches found live), e.g.:
+Other intents leave this skill: reworking what they want in a job goes to `job-preference-interview`,
+one pasted posting to `evaluate-job-fit`, a pull with nobody watching to `job-search-run`, and how
+the agent works, why a run failed, or how to rewire it to `job-search-agent`.
 
-  > "Let's set up your job search. I'll check a couple of prerequisites, make you a private workspace,
-  > learn what you're looking for, save your first search, and then actually pull live postings and show
-  > you the matches."
+## First run
 
-  Onboarding owns the workspace and tells the delegated skills where to write.
-- `first_run: false` → follow **`references/home.md`** (the returning-user home). Gather its state
-  silently; the home view itself is your first words.
+1. Your first words say what this sets up and what they end up with: a private folder for the
+   search, a short brief of what they want, and live postings judged against it.
+2. Run `agent-data whoami` — the whole preflight, local and free. When `api_key_set` comes back false,
+   say the API key is missing and give the `agent-data init` line from agent-data.md's CLI table; go
+   on once it reports true.
+3. Build the workspace where discovery pointed: copy `<plugin-root>/templates/config.example.yaml` to
+   `config.yaml` and `<plugin-root>/templates/workspace.gitignore` to `.gitignore`, create an empty
+   `jobs.jsonl`, and make `runs/` and `reports/`. Set `schedule.timezone` to this machine's zone, the
+   tail of `readlink /etc/localtime` after `zoneinfo/`. A file already there stays as it is. Say in
+   one line that this folder is theirs and private.
+4. Get the brief. Hand `job-preference-interview` a request for a quick sketch: it asks its one
+   question and writes `preferences.md`. When the request already carries what they want — role,
+   place, pay floor, dealbreakers — hand those words over as that question's answer and ask for the
+   brief drafted from them, leaving anything thin to the deeper pass they can take after matches.
+5. Derive two or three searches from the brief into `queries[]` in `config.yaml`, each with a short
+   `id` from its own terms and the field set the template shows: keywords are the role and domain
+   terms a job board matches, location is the geography the brief names, and remote rides in the
+   keywords per agent-data.md's LinkedIn location row. Say which searches you derived and that they
+   change whenever they ask.
+6. Give the user the cost sentence rule 2 asks for, then invoke `job-search-run` on the workspace.
+7. Render what came back: the strong matches, then the moderate ones, each with its reasoning line
+   and its link, plus any confirm note the digest carries. Where the run judged postings and few or
+   none of them fit, say what it searched and name the one change most likely to help.
+8. Then offer the recurring job below — a thin first run makes it matter more, since tomorrow's
+   postings are the ones it exists to catch — and land them on the home view once that is settled.
 
-That's the whole router. Everything else is in the two playbooks; read the one you routed to and follow it.
-Step 0 is mechanical — do it **silently**: no "discovery" / "OS state" / `registry` / `first_run` talk in your
-reply (`../../shared/references/voice.md`). Your first user-facing words are the onboarding welcome (already said, above,
-before the playbook was opened) or the home view.
+## The recurring job
 
-## Principles (apply in both modes)
+A search that runs on its own is the point of the whole thing, so offer it while the first matches
+are still on screen, and say plainly what it is: this same search, running by itself on a schedule,
+leaving a digest of whatever is new. Ask once, with daily as the usual cadence. Their yes starts the
+install, and so does a request that already asks for it — someone who says to keep this running
+daily has said yes, and these same steps serve them.
 
-- **Conversational-first configuration.** The user changes anything — a query, how often it runs, their
-  preferences, the schedule — by **chatting with you**. You apply it by reading `<workspace>/config.yaml`,
-  editing it minimally (preserving comments and structure), and writing it back, following the recipes in
-  `../../shared/references/internals.md`. Hand-editing files is an escape hatch you mention only if asked — never a step
-  you require.
-- **Relevance is qualitative.** Say **relevant or not**, and if relevant **weak / moderate / strong**,
-  always with plain-language reasoning; a preference's importance lives in which **bucket** it sits in, not
-  in math. A fit score, a 0-to-100 scale, per-criterion points, or a category weight never lands in a
-  digest, the brief, or the job log — the one exception is a number a user explicitly asks for in chat,
-  which you may give in that reply but never save to an artifact.
-- **Frequency, in human terms.** You tune the system by how often to pull — hourly, daily, weekly.
-- **Every blocked path is a named error.** If something can't proceed (no CLI, no auth, no config, no brief,
-  quota, service down…), name the exact `E-*` from `../../shared/references/errors.md` with its cause + fix wording and
-  stop there. No silent failures, ever.
-- **Never clobber real user data.** When adopting an existing workspace, only additively create what's
-  missing — never overwrite a `config.yaml`, `preferences.md`, or `jobs.jsonl`. See the never-clobber rule
-  in `../../shared/references/internals.md`.
-- **Route feedback to the right scope.** When the user reacts — to a match, the digest, or what they want
-  overall — apply it immediately at the correct scope and confirm in one line: a clear general preference
-  edits the brief and, if a run is in flight, records a brief revision on it; a posting-specific reaction
-  touches only pipeline state unless the user generalizes it; ambiguous feedback earns one clarification only
-  when the reading changes the result; a retrieval change previews its agent-data impact first. The single
-  routing table is `references/home.md` → **Applying your feedback** — follow it in both modes (it points
-  one hop at the `run-lifecycle.md` revision/settling and `internals.md` usage contracts).
+1. Write today's date into `schedule.consented` in `config.yaml`, with `schedule.frequency` and
+   `schedule.time` holding the cadence they picked.
+2. `<plugin-root>/shared/scripts/mechanics/schedule-line.sh <frequency> [HH:MM]` prints the cron time
+   expression for that cadence. Wrap it in whatever your host schedules with — a cron entry, a
+   launchd job, or the host's own recurring-job command — that runs `job-search-run` against this
+   workspace unattended, carrying the permissions that path needs. As you install it, show the user
+   that line, where it lives, and how to remove it; this changes their machine.
+3. **Run the canary now**: a job that has been installed and has never run is unproven. Fire it
+   through the path the scheduler will use — that invocation, that environment, rather than this
+   session — and stay with it until it lands. It follows the first run by minutes, so dedup leaves
+   it little to judge; after real time has passed, a full run is right and the user gets that digest.
+4. The canary passes when it leaves a run record whose `trigger` is `scheduled` and whose close is
+   healthy — `close_state: complete` with `run_health: healthy`. Setup is finished at that record and
+   not before. Say what the canary did either way: on a pass, that the schedule is live and when it
+   runs next; otherwise what stopped it, that the schedule is not working yet, and the next step.
 
-Read and follow exactly: `../../shared/references/internals.md` (OS state, discovery, never-clobber adoption, config
-recipes, and the verbatim scheduling block), `../../shared/references/conventions.md` (workspace layout, `config.yaml`
-schema, `jobs.jsonl` statuses, digest format + counts line), `../../shared/references/errors.md` (every named error),
-`../../shared/references/voice.md` (how every reply talks to the user — plain English, zero-context first-run asks,
-render documents inline), `../../shared/references/update.md` (cached update signal + update banner), and
-`../../shared/references/agent-data-contract.md` (the source contract `job-search-run` honors), plus
-`../../shared/references/run-lifecycle.md` (invoke `lifecycle-fold.sh` and require `closed=true` for the
-candidate's exact run_id before any record/digest is surfaced or a canary is trusted). These are the source of
-truth; this skill never restates their details from memory.
+When they leave it off, say it starts whenever they ask and a search on demand is one sentence away.
+
+`schedule.consented` is the standing yes a scheduled, headless, or subagent run proceeds on.
+
+## Home
+
+Read, all of it local: `config.yaml` (enabled queries, `search.sources`, `schedule.frequency`,
+`schedule.consented`), the `updated_at` line of `preferences.md` (`created_at` where that is the only
+one), the newest `runs/<run_id>.json` and the digest it points at, and `jobs.jsonl` folded to one
+entry per `source` + `source_id`, last line winning. Then render the card:
+
+```
+Job search — <workspace path>
+Brief: updated <date>  ·  Sources: LinkedIn + Ashby  ·  Schedule: daily  ·  Last run: healthy
+
+Latest digest — <date>
+  <the digest's counts line, as it is written there>
+
+Pipeline
+  new <n> · interested <n> · applied <n> · rejected <n> · archived <n>   (<k> to confirm)
+
+What next? Just tell me:
+  • run a search now            • add or edit a query
+  • change how often it runs    • update your preferences
+  • show the latest digest      • show your preferences brief
+```
+
+Sources are the ones `search.sources` lists, in the words a person uses for them; the schedule reads
+as its cadence while `schedule.consented` holds a date and the job is installed, and as off
+otherwise; last run is the newest record's `run_health`. A record whose `close_state` is `blocked` or
+`interrupted` earns a line under the card: what stopped that run, which its record and digest name,
+and the one thing that gets it going again. Before the first run, offer that search in place of the
+digest and pipeline lines. A brief older than 30 days, where runs have happened since, earns one
+offer under the card to refresh it through `job-preference-interview`.
+
+## When the user reacts
+
+| What they say | Where it lands |
+|---|---|
+| A preference that holds across postings — only fully-remote, nothing under a pay floor | `preferences.md`, through `job-preference-interview`, which refreshes `updated_at`. Confirm in one line; a run in flight judges what is left under the new brief. |
+| Something about one posting — already applied there, not this company | that posting's line in `jobs.jsonl`: append a `status_changed` event carrying its new `status`. |
+| A reaction that reads two ways — the location is wrong, too junior | one short question, asked where the two readings lead to different actions, and your own best reading where they land the same. |
+| A change to what gets searched — add a source, widen the location, only the last day | a `queries[]` or `search.sources` edit in `config.yaml`, with the new cost stated first per rule 2. A one-off ask runs once and leaves the file as it is. |
+
+You make each of these edits yourself, comments and shape preserved, so a change costs one sentence.

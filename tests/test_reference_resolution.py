@@ -48,12 +48,11 @@ HOST_MANIFESTS = {
     "copilot": ".claude-plugin/plugin.json",
 }
 
-# The four hand-authored skill-local reference ORIGINALS that legitimately remain under skills/ (no
+# The hand-authored skill-local reference ORIGINALS that legitimately remain under skills/ (no
 # shared/references twin). Everything else under skills/*/references/ was a build-fanned copy and is
-# gone.
+# gone. The front door's two playbooks (home.md, onboarding.md) left with the 2026-07-30 rewrite that
+# folded the home view and the first-run flow into skills/job-search/SKILL.md.
 SKILL_LOCAL_ORIGINALS = {
-    "skills/job-search/references/home.md",
-    "skills/job-search/references/onboarding.md",
     "skills/job-search-agent/references/customization.md",
     "skills/job-search-agent/references/scheduling-and-consent.md",
 }

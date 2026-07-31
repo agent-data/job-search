@@ -3,7 +3,7 @@ title: New-User Onboarding
 status: current
 verified: partial
 last_reviewed: 2026-07-19
-code_refs: [skills/job-search/SKILL.md, skills/job-search/references/onboarding.md, shared/references/internals.md]
+code_refs: [skills/job-search/SKILL.md, shared/references/internals.md]
 ---
 
 # New-User Onboarding
@@ -31,7 +31,7 @@ the discovery procedure by [`shared/references/internals.md`](../../shared/refer
 ## The onboarding flow
 
 The full playbook lives in
-[`skills/job-search/references/onboarding.md`](../../skills/job-search/references/onboarding.md).
+[`skills/job-search/SKILL.md`](../../skills/job-search/SKILL.md).
 This section names each step and points to the owning reference; it does not restate mechanics.
 Every ask follows the zero-context voice rules owned by
 [`shared/references/voice.md`](../../shared/references/voice.md) — one short line of plain-English
@@ -112,7 +112,7 @@ Config schema and the derive/edit recipes are owned by
 
 The skill invokes `job-search-run` against the new workspace (the run loop itself — search,
 dedup, judge, detail-read, digest — is owned by
-[`skills/job-search/references/onboarding.md`](../../skills/job-search/references/onboarding.md)).
+[`skills/job-search-run/SKILL.md`](../../skills/job-search-run/SKILL.md)).
 What the user sees at this step is the payoff: the agent presents strong and moderate matches as
 a discovery, with each role's title, company, location, plain-language reasoning, and link.
 
@@ -164,7 +164,7 @@ never the raw code. Wording and fixes are owned by
   `/job-preference-interview`.
 - **Sparse market** — not a named error; zero search results prompt the agent to offer keyword
   broadening conversationally (see
-  [`skills/job-search/references/onboarding.md`](../../skills/job-search/references/onboarding.md)).
+  [`skills/job-search/SKILL.md`](../../skills/job-search/SKILL.md)).
 
 ## Related
 

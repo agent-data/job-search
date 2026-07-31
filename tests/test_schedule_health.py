@@ -353,11 +353,6 @@ def test_agent_schedule_health_evals_are_executable_fixture_and_cover_the_matrix
         assert phrase in matrix, f"agent schedule-health evals miss {phrase!r}"
 
 
-def test_home_schedule_health_eval_present_and_executable_fixture():
-    home = _evals("job-search")
-    health = [c for c in home if "schedule health" in c["scenario"].lower()]
-    assert health, "job-search must carry a home schedule-health rendering eval"
-    assert all(c.get("coverage_kind") == "executable_fixture" for c in health)
-    matrix = " ".join(" ".join([c["scenario"], c["prompt"], *c["expectations"]]).lower() for c in health)
-    assert "scheduled-attributable run" in matrix or "latest scheduled" in matrix
-    assert "unmetered" in matrix or "local" in matrix
+# The home view stopped deriving schedule health in the 2026-07-30 skill overhaul (it reads the
+# consent date in config.yaml and whether the job is installed), so the front door carries no
+# schedule-health eval. The agent skill still derives it, and the test above covers that.

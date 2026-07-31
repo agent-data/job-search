@@ -32,7 +32,7 @@ pending-build tests to live.
 **Resolved.** The clear-the-marker operation exists and the turn-off flow calls it: the scheduling marker's
 set/clear procedures are pinned in [`../../shared/references/internals.md`](../../shared/references/internals.md)
 (Registry → scheduling marker; the former `osctl.py set-unscheduled` was its script-era shape), the turn-off
-flow in [`home.md`](../../skills/job-search/references/home.md) clears the marker so it reads
+flow in [`the front door skill`](../../skills/job-search/SKILL.md) clears the marker so it reads
 `installed: false`, and [`TESTING.md` T4.4](../../TESTING.md) asserts it. No stale marker is left; closed.
 **Linked tests:** [`TESTING.md`](../../TESTING.md) T4.4 (marker assertion), §13 T13.3.
 

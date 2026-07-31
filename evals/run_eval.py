@@ -16,7 +16,7 @@ import yaml
 EVALS_DIR = os.path.dirname(os.path.abspath(__file__))
 WORKSPACE = os.path.join(os.path.expanduser("~"), ".job-search")
 LISTING = "f9a6ec16-0bfd-44d8-b3ee-073776745ee7"  # Job Postings API listing id
-ALLOWED = "Bash,Read,Write,Edit,Glob,Grep,Skill,AskUserQuestion,TodoWrite"
+ALLOWED = "Bash,Read,Write,Edit,Glob,Grep,Skill,Task,AskUserQuestion,TodoWrite"
 
 
 def fetch_live_posting():

@@ -22,8 +22,8 @@ truth. The install lays down the whole pack tree, so each skill resolves them **
 build stamp) and nothing else. It does **not** copy or sync references into the skills.
 
 A skill's own `SKILL.md`, its `evals/`, and the handful of authored playbooks under
-`skills/<skill>/references/` (e.g. `home.md`, `onboarding.md`, `customization.md`,
-`scheduling-and-consent.md`) are **authored originals**, not generated — edit them in place.
+`skills/<skill>/references/` (e.g. `customization.md`, `scheduling-and-consent.md`) are
+**authored originals**, not generated — edit them in place.
 
 ## Before you open a PR: everything must be green
 

@@ -3,7 +3,7 @@ title: Multi-Harness Portability — Research Dossier (Codex · Cursor · openco
 status: aspirational
 verified: partial
 last_reviewed: 2026-07-22
-code_refs: [shared/references/internals.md, shared/references/conventions.md, shared/references/voice.md, shared/references/parallelism.md, shared/references/errors.md, shared/references/agent-data-contract.md, skills/job-search/references/onboarding.md, skills/job-search/references/home.md, skills/job-search-agent/references/scheduling-and-consent.md, skills/job-search-agent/references/customization.md, skills/job-search-run/SKILL.md, scripts/build.sh, .claude-plugin/plugin.json, .opencode/plugins/job-search.js, docs/design-docs/codex-portability.md]
+code_refs: [shared/references/internals.md, shared/references/conventions.md, shared/references/voice.md, shared/references/parallelism.md, shared/references/errors.md, shared/references/agent-data-contract.md, skills/job-search/SKILL.md, skills/job-search-agent/references/scheduling-and-consent.md, skills/job-search-agent/references/customization.md, skills/job-search-run/SKILL.md, scripts/build.sh, .claude-plugin/plugin.json, .opencode/plugins/job-search.js, docs/design-docs/codex-portability.md]
 ---
 # Multi-Harness Portability — Research Dossier
 

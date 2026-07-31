@@ -52,7 +52,7 @@ and the render-inline rule for briefs and digests — is owned by
 `/job-search` is the entry point for all user interactions. On first run it routes to
 onboarding (see [`product-specs/new-user-onboarding.md`](product-specs/new-user-onboarding.md));
 for a returning user it routes to the home view described in
-[`../skills/job-search/references/home.md`](../skills/job-search/references/home.md).
+[`../skills/job-search/SKILL.md`](../skills/job-search/SKILL.md).
 
 The home view is a compact, glanceable dashboard — not a log dump. A returning user
 sees at a glance:
@@ -68,8 +68,7 @@ sees at a glance:
   [`conventions.md`](../shared/references/conventions.md)) and how many need a human check.
 - **One-time deeper-coverage offer** — only after the latest local run provides the qualifying
   evidence, and never again after it is shown; the marker and eligibility rules are owned by
-  [`internals.md`](../shared/references/internals.md) and
-  [`home.md`](../skills/job-search/references/home.md).
+  [`internals.md`](../shared/references/internals.md).
 - **Quick actions** — conversational prompts: run a search now, add or edit a query,
   change frequency or review depth, explain usage, update preferences, toggle the schedule,
   show the latest digest.

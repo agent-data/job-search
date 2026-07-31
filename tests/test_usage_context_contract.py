@@ -19,17 +19,8 @@ CONVENTIONS = SHARED / "conventions.md"
 ERRORS = SHARED / "errors.md"
 PARALLELISM = SHARED / "parallelism.md"
 CONFIG_TEMPLATE = ROOT / "templates" / "config.example.yaml"
-HOME = ROOT / "skills" / "job-search" / "references" / "home.md"
 CUSTOMIZATION = ROOT / "skills" / "job-search-agent" / "references" / "customization.md"
 RUNNER_SETUP = ROOT / "skills" / "job-search-run" / "evals" / "files" / "setup-workspace.sh"
-
-APPROVED_CONNECTED_BASELINE = (
-    "Agent-data offers a 100-call monthly free tier. This search starts with 4 calls; "
-    "reading promising postings may add detail calls."
-)
-APPROVED_PREINSTALL = (
-    "Agent-data offers a 100-call monthly free tier—enough to get started with this search."
-)
 
 # Agent-data's per-call prices, which change whenever its plans change.
 VOLATILE_PRICE_LITERALS = ("$0.008", "$0.0075", "$0.0067", "$0.005")
@@ -404,11 +395,11 @@ def test_config_v2_requires_one_detail_model_and_isolates_legacy_selectors():
 
 
 def test_static_config_template_is_v2_but_never_invents_a_model_identifier():
+    """The template setup copies carries no model field at all: the 2026-07-30 rewrite retired
+    that apparatus, so the line telling setup to insert one went with the onboarding prose."""
     template = CONFIG_TEMPLATE.read_text(encoding="utf-8")
     assert re.search(r"(?m)^version:\s*2\s*$", template)
     assert not re.search(r"(?m)^\s*detail_model\s*:", template)
-    assert "setup inserts" in template.lower()
-    assert "before writing a valid new workspace" in template.lower()
     for selector in ("fast", "balanced", "high", "inherit"):
         assert not re.search(rf"\b{selector}\b", template.lower())
 
@@ -479,22 +470,11 @@ def test_binding_sidecar_cannot_be_misread_as_a_run_record():
     assert _code_table(conventions, "exact-model-contract", "run-record-selection", 2) == {
         key: value for key, value in RUN_RECORD_SELECTION.items()
     }
-    for consumer in (INTERNALS, HOME, CUSTOMIZATION):
+    for consumer in (INTERNALS, CUSTOMIZATION):
         text = consumer.read_text(encoding="utf-8")
         assert "runs/*.json" not in text, (
             f"{consumer.relative_to(ROOT)} must not admit the detail-model sidecar as a run record"
         )
-
-
-def test_onboarding_eval_expects_a_bound_runnable_v2_workspace_before_running():
-    happy = next(case for case in _eval("job-search")["evals"] if case["id"] == 1)
-    effects = " ".join(happy["expectations"]).lower()
-    assert "version: 2" in effects
-    assert "exact search.detail_model" in effects
-    assert "runs/detail-model-binding.json" in effects
-    assert "before the first live run" in effects
-    assert "primary_model" in effects
-    assert "session_inheritance" in effects
 
 
 def test_runner_eval_fixture_pins_calls_first_context_and_a_validator_checked_close():
@@ -516,14 +496,6 @@ def test_runner_eval_fixture_pins_calls_first_context_and_a_validator_checked_cl
 
     quota = next(case for case in evals if "quota" in case["scenario"])
     assert "monthly allowance is spent" in " ".join(quota["expectations"]).lower()
-
-
-def test_parallel_choice_is_folded_into_initial_model_binding_not_a_later_refresh():
-    evals = _eval("job-search")["evals"]
-    parallel = next(case for case in evals if case["id"] == 8)
-    contract = " ".join(" ".join(parallel["expectations"]).lower().split())
-    assert "as part of initial setup finalization" in contract
-    assert "atomically writes the matching current runs/detail-model-binding.json" in contract
 
 
 def test_model_setup_is_one_time_and_unknown_primary_blocks_verified_scheduling():
@@ -611,14 +583,16 @@ def test_behavioral_evals_keep_computed_equivalents_unconditionally_non_charge()
 def test_t2_2_effect_evals_cover_the_fake_only_red_cases():
     """The runner's per-attempt accounting case left this set with the attempt ledger it graded
     (the 2026-07-30 rewrite counts calls in the run record instead); what the runner's fixtures now
-    pin about usage lives in test_runner_eval_fixture_pins_calls_first_context... above."""
+    pin about usage lives in test_runner_eval_fixture_pins_calls_first_context... above. The front
+    door's two approved-sentence fixtures went with the same rewrite: the cost facts are stated in
+    the agent's own words now, so its first-run fixture pins the ordering instead of the wording."""
     search = _eval("job-search")
     agent = _eval("job-search-agent")
 
     search_by_id = {case["id"]: case for case in search["evals"]}
-    assert "first metered row" in " ".join(search_by_id[1]["expectations"])
-    assert APPROVED_CONNECTED_BASELINE in " ".join(search_by_id[1]["expectations"])
-    assert APPROVED_PREINSTALL in " ".join(search_by_id[6]["expectations"])
+    first_run = " ".join(search_by_id[1]["expectations"]).lower()
+    assert "before the first search-jobs entry" in first_run
+    assert "free monthly calls" in first_run
 
     agent_by_scenario = {case["scenario"]: case for case in agent["evals"]}
     increases = agent_by_scenario[
