@@ -184,7 +184,7 @@ At the accounting point, classify the resolved attempt exactly once:
 
 | Resolved attempt | Additive accounting | Diagnostic accounting |
 |---|---|---|
-| `status` or `whoami`, any outcome | no metered operation | increment `free_route_calls` |
+| `whoami`, any outcome | no metered operation | increment `free_route_calls` |
 | quota/payment rejection | no metered operation | increment `quota_rejections` |
 | search/detail success | increment `metered_calls` and its one `by_operation` bucket | none |
 | search/detail non-quota failure | increment `metered_calls` and its one `by_operation` bucket | increment `charged_failures` |
@@ -255,7 +255,7 @@ fallback, and wording rules in `errors.md` rather than restating them here.
    - Brief missing/empty (`workspace.preferences_path`) → E-NO-PREFERENCES (HALT, exit 1, named fix).
    - Delete stale files whose complete name matches `runs/.pagination-<run_id>.jsonl`, where `<run_id>` has
      the format in `conventions.md`. Delete them without reading them: scratch is never resumable state.
-   - **Resolve review scope now, before `whoami`, `status`, or any metered call.** An already-confirmed
+   - **Resolve review scope now, before `whoami` or any metered call.** An already-confirmed
      one-off invocation value takes precedence over config and sets `origin:one_off`; the runner never
      interprets an unconfirmed depth request as consent.
 
@@ -272,10 +272,6 @@ fallback, and wording rules in `errors.md` rather than restating them here.
      confirmation and never write config. Saved values are durable consent; one-off context is ephemeral.
    - `agent-data whoami`; pass the result through **Attempt accounting**; `api_key_set:false` → E-NO-AUTH
      (HALT, exit 1).
-   - `agent-data call <listing> status`: `ok` proceed; `degraded` set a flag (set Run health: degraded (job sources flaky);
-     note "job sources flaky — results this run may be affected" in the digest; no detail-read cap — read
-     promising matches as normal); unreachable → E-SERVICE-DOWN (write a "service down" digest, HALT, exit 1).
-     Pass the status result through **Attempt accounting** before taking any branch.
 
    > Before exiting on ANY E-* HALT with a writable workspace (including E-NO-AGENT-DATA,
    > E-NO-AUTH, E-NO-PREFERENCES, E-CONFIG-VERSION, E-SERVICE-DOWN, E-QUOTA), write and

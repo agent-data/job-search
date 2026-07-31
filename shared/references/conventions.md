@@ -35,15 +35,15 @@ and Scheduling setup sections); this file does not restate them.
 
 ## config.yaml
 
-An actual newly created workspace uses version 2 and is valid only after interactive setup has written one
-nonempty exact live model identifier to `search.detail_model`. An exact identifier is a model the current
-host can execute by that identifier; it is not a capability tier, an inheritance token, or a placeholder.
+An actual newly created workspace uses version 2 and is valid only after interactive setup has written a
+nonempty `search.detail_model`. `detail_model` is one of `haiku`, `sonnet`, `opus`, or an exact model id
+when the host exposes one. Tier aliases are valid run-record values.
 
 <!-- exact-model-contract:config-v2-fields -->
 | Field | Owner | Presence | Value |
 |---|---|---|---|
 | `version` | `workspace_config` | `required` | `2` |
-| `search.detail_model` | `workspace_config` | `required` | `nonempty_exact_live_model_identifier` |
+| `search.detail_model` | `workspace_config` | `required` | `haiku_sonnet_opus_or_exact_model_id` |
 <!-- /exact-model-contract:config-v2-fields -->
 
 ```yaml
@@ -56,7 +56,7 @@ queries:
 search:
   sources: ["linkedin", "ashby"]  # ordered job sources every query runs against (the source enum is defined in agent-data-contract.md) — omit the key for this default; greenhouse/lever widen coverage across more company boards
   freshness: "past-2-weeks"  # any | past-week | past-2-weeks | past-month — recency window; resolves to a server-side published_on_or_after cutoff (client-side fallback if the echo is absent); default past-2-weeks
-  # Setup inserts the required exact search.detail_model before writing a valid new workspace.
+  # Setup inserts the required search.detail_model before writing a valid new workspace.
   # max_new_postings_per_run: 50  # optional: positive integer or "all"; omit for first-page coverage
   # parallel_detail_reads: true  # optional: approved use of parallel subagents for detail reads where the host supports them
 schedule:
@@ -81,40 +81,19 @@ recency the user names for a single run ("only postings published in the past da
 resolves to its own cutoff and overrides the saved default for that run, with no new enum value. The
 runner sends the cutoff and echo-verifies `data.query.published_on_or_after`; where a deployment omits
 the echo it filters client-side by the same effective date. Under an active window a row with no
-effective date is dropped (server parity); with `any` nothing is dropped. `detail_model` is the exact model
-identifier for the per-posting **fit verdict** — the judgment the detail read produces. In version 2,
-setup resolves that model once and writes its exact live
-identifier; every later posting-detail judgment obeys that stored value without tier interpretation or a
-new selection decision. Workspace config is the sole authority for the exact detail model: the private
+effective date is dropped (server parity); with `any` nothing is dropped. `detail_model` is the model
+for the per-posting **fit verdict** — the judgment the detail read produces. In version 2,
+setup resolves that model once and writes it; every later posting-detail judgment obeys that stored value
+without a new selection decision. Workspace config is the sole authority for the detail model: the private
 binding sidecar below is provenance evidence only and can never override `search.detail_model`. Config never
 stores the recurring primary model or either model's provenance field.
 
 <!-- exact-model-contract:legacy-v1-selectors -->
 Historical version-1 workspaces may contain the selectors `fast`, `balanced`, `high`, or `inherit`.
-Those tokens, plus the older `haiku` / `sonnet` / `opus` aliases, are legacy version-1 inputs only; none is a
+Those tokens are legacy version-1 inputs only; none is a
 valid version-2 `search.detail_model` value. This compatibility boundary does not authorize a headless run
 to rewrite or migrate the workspace.
 <!-- /exact-model-contract:legacy-v1-selectors -->
-
-Run-record model fields contain exact executable identifiers, never a selector or indirection token. The
-validator requires an already-trimmed value and compares that complete value, case-insensitively, with this
-closed vocabulary; it does not
-reject an exact identifier merely because one of these words is a substring (for example,
-`claude-sonnet-4-5-20250929` remains an exact identifier).
-
-<!-- exact-model-contract:forbidden-run-record-values -->
-- `auto`
-- `balanced`
-- `default`
-- `fast`
-- `haiku`
-- `high`
-- `inherit`
-- `latest`
-- `opus`
-- `quality`
-- `sonnet`
-<!-- /exact-model-contract:forbidden-run-record-values -->
 
 A version-1 headless run recognizes that saved selector and uses the canonical resolver below. Resolve the
 selector once for the run from the host's current roster; this is a bounded compatibility resolution, not a
@@ -284,7 +263,7 @@ Current state = fold by (**`source`**, **`source_id`**), last-write-wins per fie
 ```jsonc
 { "event":"evaluated", "ts":"<iso>", "run_id":"…", "source":"<the result row's source — copied, NEVER a hardcoded literal>", "source_id":"<source-native id — with source, the DEDUP KEY>",
   "query_id":"…", "title":"…", "company_name":"…", "location_display":"…", "salary_display":"<free text or empty string when absent>",
-  "posted_at":"<iso or null when the source omits it>", "posted_at_extracted":"<iso date — OPTIONAL; only when the API posted_at was null and the JD states a date>", "same_role_as":"<source>:<source_id> — OPTIONAL; this row is the same real-world role as that primary row — parse by splitting on the FIRST colon only (e.g. same_role_as:"greenhouse:acme:7310605" → source "greenhouse", source_id "acme:7310605")>", "source_url":"…", "posting_id_at_seen":"jp_…", "detail_read":true,
+  "posted_at":"<iso or null when the source omits it>", "posted_at_extracted":"<iso date — OPTIONAL; only when both published_at and posted_at were null and the JD states a date>", "same_role_as":"<source>:<source_id> — OPTIONAL; this row is the same real-world role as that primary row — parse by splitting on the FIRST colon only (e.g. same_role_as:"greenhouse:acme:7310605" → source "greenhouse", source_id "acme:7310605")>", "source_url":"…", "posting_id_at_seen":"jp_…", "detail_read":true,
   "relevant":true, "match":"strong|moderate|weak|null", "reasoning":"…",
   "dealbreakers_hit":[], "unknowns":[], "needs_human_check":false, "status":"new", "first_seen":"<iso>" }
 { "event":"status_changed", "ts":"<iso>", "source_id":"…", "status":"interested", "note":"…" }
@@ -353,7 +332,6 @@ are the skills' own POSIX shell, no third-party dependency):
   "scheduler_id":"<exact scheduler identifier; null for manual>",
   "primary_model":"<exact primary model for this run>",
   "primary_model_origin":"session_inheritance|user_override|repair_session",
-  "status_probe":"ok|degraded|unreachable",
   "detail_model":"<exact model used for posting-detail judgment>",
   "detail_model_origin":"configured_auto|configured_user|legacy_v1_selector|repair",
   "detail_model_binding_id":"<current binding id; null for legacy version 1>",
@@ -402,7 +380,7 @@ are the skills' own POSIX shell, no third-party dependency):
 |---|---|
 | `trigger` | Exact `manual`, `scheduled`, or `canary` copied from canonical `run_started` evidence. |
 | `scheduler_id` | JSON `null` for manual; exact nonsecret scheduler identifier copied from `run_started` for scheduled/canary. |
-| `primary_model` | Exact observed primary model for this run; never an alias, tier, prefix, guess, or reconstructed value. |
+| `primary_model` | The observed primary model for this run — a tier alias or an exact id, as the host reports it; never a guess or reconstructed value. |
 | `primary_model_origin` | Exact `session_inheritance`, `user_override`, or `repair_session` evidence from the current invocation/scheduler binding. |
 | `detail_model` | Exact bound or resolved detail model actually used for detail dispatch. |
 | `detail_model_origin` | Exact current binding/resolution provenance defined below. |

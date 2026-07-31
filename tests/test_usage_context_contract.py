@@ -138,7 +138,7 @@ CONFIG_V2_MODEL_FIELDS = {
     "search.detail_model": (
         "workspace_config",
         "required",
-        "nonempty_exact_live_model_identifier",
+        "haiku_sonnet_opus_or_exact_model_id",
     ),
 }
 
@@ -293,7 +293,7 @@ MODEL_SETUP_POLICIES = {
 }
 
 RUNTIME_DETAIL_MODEL_AUTHORITY = (
-    "For each posting-detail judgment, use the exact `search.detail_model`."
+    "For each posting-detail judgment, use the configured `search.detail_model`."
 )
 
 
@@ -392,7 +392,7 @@ def _runner_detail_section():
     return match.group(0)
 
 
-def test_config_v2_requires_one_exact_live_detail_model_and_isolates_legacy_selectors():
+def test_config_v2_requires_one_detail_model_and_isolates_legacy_selectors():
     text = CONVENTIONS.read_text(encoding="utf-8")
     assert _code_table(text, "exact-model-contract", "config-v2-fields", 4) == {
         key: value for key, value in CONFIG_V2_MODEL_FIELDS.items()
@@ -589,11 +589,11 @@ def test_shipped_v2_surfaces_use_exact_ids_and_preserve_the_current_major():
         r"(?ms)^\*\*Detail-read model.*?(?=^---$)", customization
     )
     assert detail
-    detail_text = detail.group(0).lower()
-    assert "exact live model identifier" in detail_text
+    detail_text = " ".join(detail.group(0).lower().split())
+    assert "`haiku`, `sonnet`, `opus`, or an exact model id" in detail_text
+    assert "tier aliases are valid run-record values" in detail_text
     assert "setup" in detail_text
     assert "explicit conversational user selection" in detail_text
-    assert "interactive repair" in detail_text
     assert "binds the tier" not in detail_text
     assert "detail_model: fast" not in detail_text
     assert "detail_model: high" not in detail_text

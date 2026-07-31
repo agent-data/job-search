@@ -173,31 +173,18 @@ After the primary pass scans summaries, the agent reads the full details for eve
 the run uses the parallel fan-out (the default where the host supports it), it fans out one detail-read
 subagent per posting (see
 `../../../shared/references/parallelism.md` for the general pattern, the host's own fan-out primitive, and the
-sequential fallback). Each subagent follows the `evaluate-job-fit` skill. This
-key is one exact live model identifier in version 2. Setup, an explicit conversational user selection
-(`configured_user`), or interactive repair selects and persists it after availability validation; runtime
-uses that exact value for every posting-detail judgment without reselecting or substituting. The
-automatic setup/repair choice is the least-powerful available model that performs fit judgment well, while
-an explicit exact available model requested by the user overrides it. The canonical schema, private binding
+sequential fallback). Each subagent follows the `evaluate-job-fit` skill. `detail_model` is one of `haiku`,
+`sonnet`, `opus`, or an exact model id when the host exposes one. Tier aliases are valid run-record values.
+Setup or an explicit conversational user selection (`configured_user`) selects and persists it; runtime
+uses that stored value for every posting-detail judgment without reselecting or substituting. The
+automatic setup choice is the least-powerful available model that performs fit judgment well, while
+an explicit available model requested by the user overrides it. The canonical schema, private binding
 sidecar, and version-1 compatibility boundary live in `../../../shared/references/conventions.md`; selection
 and write mechanics live in `../../../shared/references/internals.md`.
 
-For an unavailable/refused binding, do not improvise from that setup summary. Follow the canonical
-`exact-model-repair-candidate`, `exact-model-repair-confirmation`, and
-`exact-model-repair-transaction` marked contracts under **Exact-model repair** in
-`../../../shared/references/internals.md`. They preserve a valid unchanged slot, define the distinct
-`repair_session` primary and `repair` detail origins, require exact available overrides, and make the green
-real-path canary the only enable/verify commit point. User-facing failure wording comes from
-`../../../shared/references/errors.md` → `model-repair-rendering`.
-
-Without a schedule, repair only the unavailable detail binding. The explicit interactive repair request is
-neutral authority for the atomic config/fresh-sidecar pair write, with no extra confirmation or canary. A
-primary binding, scheduler update, calls-first preview, and canary apply only when a schedule exists.
-
-On a host that cannot assign a separate worker model, setup stores the exact primary model and configures
-sequential detail reads. Parallel approval, capacity, or refusal may change concurrency, never the saved exact
-model. If that exact dispatch is unavailable or refused, block and route to interactive repair—never choose a
-replacement during the run.
+On a host that cannot assign a separate worker model, setup stores the primary model and configures
+sequential detail reads. Parallel approval, capacity, or refusal may change concurrency, never the saved
+model.
 
 **Version-1 staged migration**
 

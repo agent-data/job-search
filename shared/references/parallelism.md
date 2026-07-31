@@ -33,12 +33,11 @@ worker model, setup persists the exact primary model as `search.detail_model` an
 judgments. Those are setup decisions, never headless runtime heuristics.
 
 <!-- exact-model-contract:runtime-detail-dispatch -->
-For each posting-detail judgment, use the exact `search.detail_model`.
+For each posting-detail judgment, use the configured `search.detail_model`.
 <!-- /exact-model-contract:runtime-detail-dispatch -->
 
-The exact value is required at dispatch. Never omit it, reinterpret it as a tier, or silently substitute
-another model. A sequential fallback is valid only when it still executes that exact configured model; setup
-uses the exact primary binding when the host has no separate-worker-model capability.
+`detail_model` is one of `haiku`, `sonnet`, `opus`, or an exact model id when the host exposes one. Tier
+aliases are valid run-record values.
 
 If the host has a concurrent primitive but refuses more subagents because its thread/slot limit is reached,
 that is **backpressure**, not a run-health error. Keep the already-dispatched work, wait for a completed subagent,

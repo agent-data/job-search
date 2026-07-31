@@ -282,7 +282,7 @@ plan.
   judged from its summary." Not an error.
 - **Zero results — all already known:** reassuring, not an error — "No new postings — you've already seen all N of these."
 - **Zero results — literally empty:** actionable — "Searches ran but returned 0 results. Broaden keywords in
-  `config.yaml`, or check `agent-data call <listing> status`."
+  `config.yaml`."
 
 ### Detecting E-QUOTA vs E-NO-AUTH from the CLI
 Both surface as a non-zero `agent-data call`. Distinguish by: run `agent-data whoami` first (covers auth). If

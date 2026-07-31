@@ -93,7 +93,6 @@ def test_lifecycle_fixture_happy_paths_close_only_after_valid_artifacts(
         "sources_failed",
         "sources_searched",
         "started_at",
-        "status_probe",
         "trigger",
     }
     assert record["trigger"] == trigger
@@ -811,11 +810,7 @@ def test_fixture_run_record_validator_rejects_adversarial_schema_and_invariants(
         ("preflight_complete", lambda row: row["lifecycle"].update(phase="preflight", close_state="complete")),
         ("health_mismatch", lambda row: row["lifecycle"].update(health="blocked")),
         ("missing_primary", lambda row: row.update(primary_model=None)),
-        ("portable_primary", lambda row: row.update(primary_model="inherit")),
-        ("tier_primary", lambda row: row.update(primary_model="high")),
-        ("alias_detail", lambda row: row.update(detail_model="haiku")),
         ("bad_detail_origin", lambda row: row.update(detail_model_origin="guessed")),
-        ("unreachable_complete", lambda row: row.update(status_probe="unreachable")),
         ("bad_timestamp", lambda row: row.update(completed_at="yesterday")),
         ("bool_count", lambda row: row["agent_data_usage"].update(metered_calls=True)),
         ("usage_sum", lambda row: row["agent_data_usage"]["by_operation"].update(detail_read=99)),
@@ -839,29 +834,10 @@ def test_fixture_run_record_validator_rejects_adversarial_schema_and_invariants(
         assert validator.validate_run_record(candidate) is False, name
 
 
-def test_canonical_forbidden_model_vocabulary_pressures_both_run_record_fields(tmp_path):
+def test_tier_aliases_and_exact_ids_are_both_valid_run_record_model_values(tmp_path):
     conventions = CONVENTIONS.read_text()
-    match = re.search(
-        r"<!-- exact-model-contract:forbidden-run-record-values -->\n(.*?)\n"
-        r"<!-- /exact-model-contract:forbidden-run-record-values -->",
-        conventions,
-        re.DOTALL,
-    )
-    assert match is not None
-    forbidden = set(re.findall(r"^- `([^`]+)`$", match.group(1), re.MULTILINE))
-    assert forbidden == {
-        "auto",
-        "balanced",
-        "default",
-        "fast",
-        "haiku",
-        "high",
-        "inherit",
-        "latest",
-        "opus",
-        "quality",
-        "sonnet",
-    }
+    assert "Tier aliases are valid run-record values." in conventions
+    assert "exact-model-contract:forbidden-run-record-values" not in conventions
 
     result, summary, workspace = drive(tmp_path, "happy_manual")
     assert result.returncode == 0, result.stderr
@@ -869,19 +845,20 @@ def test_canonical_forbidden_model_vocabulary_pressures_both_run_record_fields(t
     validator = namespace["Coordinator"]("validate", workspace, "manual", "-")
     original = json.loads((workspace / "runs" / (summary["run_id"] + ".json")).read_text())
     for field in ("primary_model", "detail_model"):
-        for selector in sorted(forbidden):
-            for value in (selector, selector.upper(), " %s " % selector):
-                candidate = json.loads(json.dumps(original))
-                candidate[field] = value
-                assert validator.validate_run_record(candidate) is False, (field, value)
-
-    for field, exact_id in (
-        ("primary_model", "gpt-5.4-2026-06-01"),
-        ("detail_model", "claude-sonnet-4-5-20250929"),
-    ):
-        candidate = json.loads(json.dumps(original))
-        candidate[field] = exact_id
-        assert validator.validate_run_record(candidate) is True, (field, exact_id)
+        for value in (
+            "haiku",
+            "sonnet",
+            "opus",
+            "gpt-5.4-2026-06-01",
+            "claude-sonnet-4-5-20250929",
+        ):
+            candidate = json.loads(json.dumps(original))
+            candidate[field] = value
+            assert validator.validate_run_record(candidate) is True, (field, value)
+        for value in ("", "   ", " sonnet "):
+            candidate = json.loads(json.dumps(original))
+            candidate[field] = value
+            assert validator.validate_run_record(candidate) is False, (field, value)
 
 
 def test_run_record_review_scope_rejects_every_mode_outcome_contradiction(tmp_path):

@@ -47,24 +47,6 @@ TERMINAL_MESSAGES = {
 }
 
 
-def marked_forbidden_model_values():
-    text = CONVENTIONS.read_text(encoding="utf-8")
-    match = re.search(
-        r"<!-- exact-model-contract:forbidden-run-record-values -->\n(.*?)\n"
-        r"<!-- /exact-model-contract:forbidden-run-record-values -->",
-        text,
-        re.DOTALL,
-    )
-    if match is None:
-        raise RuntimeError("canonical forbidden run-record model vocabulary is missing")
-    values = frozenset(re.findall(r"^- `([^`]+)`$", match.group(1), re.MULTILINE))
-    if not values:
-        raise RuntimeError("canonical forbidden run-record model vocabulary is empty")
-    return values
-
-
-FORBIDDEN_MODEL_VALUES = marked_forbidden_model_values()
-
 ATTRIBUTION = {
     "happy_manual": ("manual", "-"),
     "happy_scheduled": ("scheduled", "scheduler-fixture-1"),
@@ -927,7 +909,6 @@ class Coordinator:
             ),
             "primary_model": "fixture-primary-exact",
             "primary_model_origin": "session_inheritance",
-            "status_probe": "ok",
             "detail_model": "fixture-detail-exact",
             "detail_model_origin": "configured_user",
             "detail_model_binding_id": "fixture-binding-1",
@@ -1046,11 +1027,7 @@ class Coordinator:
             )
 
         def exact_model(value):
-            return (
-                nonempty(value)
-                and value == value.strip()
-                and value.lower() not in FORBIDDEN_MODEL_VALUES
-            )
+            return nonempty(value) and value == value.strip()
 
         def valid_attempt_error(error):
             required_error = {
@@ -1078,7 +1055,7 @@ class Coordinator:
             "lifecycle", "pagination_metrics", "primary_model", "primary_model_origin",
             "queries", "results_summary", "review_scope", "run_health", "run_id",
             "scheduler_id", "sources_failed", "sources_searched", "started_at",
-            "status_probe", "trigger",
+            "trigger",
         }
         if not exact_keys(record, required) or record["run_id"] != RUN_ID:
             return False
@@ -1108,10 +1085,6 @@ class Coordinator:
         if record["primary_model_origin"] not in (
             "session_inheritance", "user_override", "repair_session"
         ):
-            return False
-        if record["status_probe"] not in ("ok", "degraded", "unreachable"):
-            return False
-        if record["status_probe"] == "unreachable" and record["run_health"] != "blocked":
             return False
         detail_values = (
             record["detail_model"],

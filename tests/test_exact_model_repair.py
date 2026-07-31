@@ -2203,14 +2203,9 @@ def test_model_repair_user_rendering_is_complete_and_conversational():
 
 def test_agent_and_runner_skills_route_through_one_canonical_repair_flow():
     agent = AGENT.read_text(encoding="utf-8").lower()
-    customization = CUSTOMIZATION.read_text(encoding="utf-8").lower()
     scheduling = SCHEDULING.read_text(encoding="utf-8").lower()
     runner = RUNNER.read_text(encoding="utf-8").lower()
     assert "exact-model repair" in agent
-    assert "exact-model-repair-candidate" in customization
-    assert "exact-model-repair-transaction" in customization
-    assert "without a schedule" in customization
-    assert "no extra confirmation or canary" in customization
     assert "one scoped confirmation" in scheduling
     assert "exact-model-repair-confirmation" in scheduling
     assert "disabled and unverified" in scheduling

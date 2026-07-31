@@ -63,19 +63,11 @@ data. The action classification, usage preview, and confirmation rules that cons
 - Failed attempts and retry attempts currently count. The producer plans to make failures unmetered, so
   this is a dated current-state fact, not a permanent promise.
 - A call rejected for quota or payment does not count.
-- Free routes such as `status` and `whoami` do not count.
+- Every `call` route, including `status`, is metered against the included-call allowance; `whoami` is
+  local and free.
 
 If agent-data returns an explicit charged or metered status for an attempt, that status overrides inference
 from the outcome.
-
-## Route: status  (run this first)
-```
-agent-data call f9a6ec16-0bfd-44d8-b3ee-073776745ee7 status
-```
-Returns `{"status": "ok"}` healthy or `{"status": "degraded"}` when upstream fetches are failing at a high
-rate. A fresh service is `ok` by default. The probe is an AGGREGATE across all sources: `degraded`
-cannot be attributed to one source; per-source health is inferred from search outcomes. (Upstream
-ask on file: per-source status.)
 
 ## Route: search-jobs
 ```
