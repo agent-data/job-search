@@ -25,7 +25,7 @@ Start here, then follow the pointers.
 - [Plans methodology](docs/PLANS.md) · [Exec-plans index](docs/exec-plans/index.md)
 
 ## Working here
-- **Single source of truth:** the shared contracts live once, in the `job-search-runbook` and `agent-data-reference` skills — the other five invoke them by name, nothing is copied per-skill and no build step writes into `skills/`.
+- **Single source of truth:** the shared contracts live once, in the `job-search-runbook` and `agent-data-reference` skills — each of the other five invokes whichever of the two it needs and nothing outside them, nothing is copied per-skill and no build step writes into `skills/`.
 - **Keep the agent-facing corpus small.** The seven `SKILL.md` files are 9,096 words (`wc -w skills/*/SKILL.md`); the budget is 10,000. Adding words there is a real cost — every run reads them.
 - Dev tooling is stdlib-only Python (nothing Python ships in the skills); scoped conventional commits. CI runs four jobs (`.github/workflows/ci.yml`): `python3 -m pytest -q`, `python3 scripts/philosophy_guard.py --root .`, `python3 scripts/doc_lint.py --root .`, and `python3 scripts/check_release_integrity.py --root . --check-version-sync`. Run `python3 scripts/eval_harness.py --root .` too — it is not a CI job, so nothing else catches a malformed scenario file. See [CONTRIBUTING](CONTRIBUTING.md) for the full pre-PR list.
 - Daily contributor docs: [README](README.md) · [CONTRIBUTING](CONTRIBUTING.md) · [TESTING](TESTING.md)

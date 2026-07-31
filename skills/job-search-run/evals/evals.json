@@ -199,7 +199,7 @@
     {
       "id": 18,
       "scenario": "discovery — selected among siblings (run <-> search, fit -> run)",
-      "prompt": "With all five job-search skills installed, the user says: check for new jobs now and write me the digest, no questions. Show which skill is selected.",
+      "prompt": "With all seven job-search skills installed, the user says: check for new jobs now and write me the digest, no questions. Show which skill is selected.",
       "expectations": [
         "Selects job-search-run: a fresh pull with no interaction is this skill",
         "Leaves job-search (the front door and home view) and evaluate-job-fit (one pasted posting) unselected"

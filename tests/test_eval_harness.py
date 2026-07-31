@@ -1,7 +1,7 @@
 """Unit tests for scripts/eval_harness.py — the eval-scenario validator + the live-harness
 support math (rep aggregation, control-delta).
 
-Two jobs: (1) prove the REAL five evals.json are coherent, carry a discovery scenario per skill,
+Two jobs: (1) prove the REAL five evals.json are coherent, carry a discovery scenario each,
 mark the named judgment-heavy scenarios stochastic with a control arm, and hold no pack-authored `gpt-5*`
 literal from the pinned regression family; (2) unit-test the deterministic helpers the off-CI live harness
 feeds observed pass/fail into (aggregate_reps / control_delta).

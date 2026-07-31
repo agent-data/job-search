@@ -324,9 +324,9 @@ The canonical cadence windows remain:
 | weekly | 4 weeks | 4 |
 
 Label the period result as a comparison, not a billing forecast. Search-page, full-posting, failed-attempt,
-retry, and quota-rejection metering follow the dated producer contract in
-`shared/references/agent-data-contract.md`; no consuming surface copies those volatile facts
-(AAS-BOUND-03; AAS-FORM-06).
+retry, and quota-rejection metering follow the dated producer contract, which the
+`agent-data-reference` skill holds at `skills/agent-data-reference/SKILL.md`; no consuming surface
+copies those volatile facts (AAS-BOUND-03; AAS-FORM-06).
 
 Every schedule preview adds one immediate canary run to the setup impact. A canary is not "free testing":
 it follows the same agent-data metering contract as an ordinary run. If the first canary consumed metered

@@ -10,8 +10,9 @@ All notable changes to this project are documented here. The format is based on
 - **All five skills rewritten onto a two-skill shared core.** The mechanics live in two skills of
   their own: `job-search-runbook` (find the workspace, what each file holds, one run start to close,
   running it unattended, scratch, what stays off disk) and `agent-data-reference` (the CLI, the four
-  sources and their quirks, retries, what a call costs). Each of those five invokes those two and
-  nothing else, so a first run reaches live postings after a much shorter read: the whole
+  sources and their quirks, retries, what a call costs). Each of those five invokes whichever of
+  the two it needs and nothing outside them, so a first run reaches live postings after a much
+  shorter read: the whole
   agent-facing corpus — all seven `SKILL.md` files — is 9,096 words (`wc -w skills/*/SKILL.md`).
 - **Every runtime file lives inside the skill that owns it.** `shared/` is gone: the two references
   became the skills above, and the two mechanics scripts more than one skill runs —

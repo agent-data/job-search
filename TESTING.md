@@ -148,7 +148,8 @@ claude --plugin-dir "$JSOS" -p "reply with the single word LOADED and do nothing
 cd "$JSOS" && python3 -m pytest -q tests/test_reference_resolution.py
 ```
 **Expected:** `0 failed` — the shared contracts live **once**, in the `job-search-runbook` and
-`agent-data-reference` skills, which the other five invoke by name; there are **no per-skill bundled copies**.
+`agent-data-reference` skills, and each of the other five invokes whichever of the two it needs and
+nothing outside them; there are **no per-skill bundled copies**.
 Nothing is generated into `skills/`, so there is no build step to re-run.
 **Result:** ⬜
 
