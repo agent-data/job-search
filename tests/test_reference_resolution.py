@@ -1,22 +1,22 @@
 """Per-host reference-resolution marker tests (AAS-TEST-10).
 
-Proves the single-home cutover (belief 5): every reference a skill makes resolves IN PLACE to the one
-canonical shared/references/ home, under each supported host's install view. This structural proof
-REPLACES the removed byte-equality fan-out gate — the ~80 per-skill copies are gone (git rm'd) and each
-skill references the single source via `../../shared/references/<file>.md` (from a SKILL.md) or
-`../../../shared/references/<file>.md` (from a skill-local reference body). A dangling pointer -> RED; a
-resolved pointer that lands on the marked single home -> GREEN.
+Every file an agent reads at runtime sits inside a skill. The 2026-07-31 restructure promoted the
+last two shared references to skills of their own — `job-search-runbook` and `agent-data-reference`
+— and moved the last two mechanics scripts into the runbook skill, so `shared/` is gone. A skill
+that needs a reference invokes the skill holding it by name; a skill that needs a file names that
+file with a path nothing has to compute. These tests prove the shape holds under every supported
+host's install view: a dangling pointer -> RED, a pointer landing on a real file -> GREEN.
 
 Install model (STEP 0 finding, verified). Every documented distribution channel is a whole-repo
 git/editable clone loaded in place — marketplace add+install (Claude/Codex/Copilot/Droid),
 git-clone-and-open (Cursor), `gemini extensions install <url>`, opencode `git+https`, `pi install
-git:...`/`pi -e`. The Claude marketplace install on disk (~/.claude/plugins/marketplaces/agent-data) is
-a full clone that carries shared/. No manifest declares an npm-style `files` allowlist that would ship
-skills/ in isolation (a `"skills": "./skills/"` field only *locates* skills within the cloned tree — it
-is not a ship-restriction), and no host documents a filesystem read-scope jail confining a skill to its
-own directory. So shared/ sits as a sibling of skills/ under one install root on every host, and
-`../../shared/references/...` resolves. The per-host loop asserts that ships-shared property from each
-manifest and would go RED for any host that ever shipped skills-only.
+git:...`/`pi -e`. The Claude marketplace install on disk (~/.claude/plugins/marketplaces/agent-data)
+is a full clone. No manifest declares an npm-style `files` allowlist that would ship less than the
+whole tree (a `"skills": "./skills/"` field only *locates* skills within the cloned tree — it is not
+a ship-restriction), and no host documents a filesystem read-scope jail confining a skill to its own
+directory. So every skill sits under one install root on every host, and a pointer from one skill to
+a file in another resolves. The per-host loop asserts that ships-skills property from each manifest
+and would go RED for any host that ever shipped a subset.
 """
 import json
 import pathlib
@@ -25,10 +25,12 @@ import re
 import pytest
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
-SHARED = ROOT / "shared" / "references"
-MECH = ROOT / "shared" / "scripts" / "mechanics"
-# Unique marker planted in the ONE canonical home (shared/references/agent-data.md).
+SKILLS = ROOT / "skills"
+# Unique marker planted in the one file holding the job-postings reference.
 MARKER = "reference-resolution-marker:8f2a4c1e-single-home"
+
+# The two references promoted to skills on 2026-07-31. Every other skill reaches one by this name.
+REFERENCE_SKILLS = ("job-search-runbook", "agent-data-reference")
 
 # The eight adapter hosts -> the manifest that governs each host's install. Six manifest FILES cover
 # eight hosts: Copilot reuses the Claude manifest; Droid can use the Claude-compat manifest or the
@@ -44,39 +46,36 @@ HOST_MANIFESTS = {
     "copilot": ".claude-plugin/plugin.json",
 }
 
-# The hand-authored skill-local reference ORIGINALS that legitimately remain under skills/ (no
-# shared/references twin). Everything else under skills/*/references/ was a build-fanned copy and is
-# gone. The set is now empty: the 2026-07-30 rewrite folded the home view and the first-run flow into
+# The hand-authored skill-local reference ORIGINALS that legitimately remain under skills/. The set
+# is empty: the 2026-07-30 rewrite folded the home view and the first-run flow into
 # skills/job-search/SKILL.md and shrank the operator manual to a routing card, deleting the last two
-# playbooks. Every skill reads shared/references/ in place, so a skill-local pointer now dangles.
+# playbooks, and the 2026-07-31 restructure turned the two shared references into skills rather than
+# into per-skill reference files. So any `references/…` pointer now dangles.
 SKILL_LOCAL_ORIGINALS = set()
 
-# A reference-file PATH pointer: an in-place shared ref (`../../shared/references/x.md`,
-# `../../../shared/references/x.md`) or a kept skill-local ref (`references/x.md`,
-# `references/platform/x.md`). A bare prose name (a filename with no directory component) is not a
-# path and is intentionally NOT matched — resolution is a property of paths, not of doc-name shorthand.
+# A reference-file PATH pointer: a reintroduced shared ref (`../../shared/references/x.md`) or a
+# skill-local ref (`references/x.md`, `references/platform/x.md`). A bare prose name (a filename with
+# no directory component) is not a path and is intentionally NOT matched — resolution is a property
+# of paths, not of doc-name shorthand.
 _PTR = re.compile(r"(?:\.\./)*(?:shared/)?references/(?:platform/)?[A-Za-z0-9._-]+\.md")
 
-# A shared mechanics-script PATH pointer the P4/T4.2 invoke-or-prose-fallback wiring makes. The
-# 2026-07-30 rewrite settled on one written form — `<plugin-root>/shared/scripts/mechanics/x.sh`,
-# resolved from the install root — and the older relative forms (`../../shared/scripts/mechanics/x.sh`
-# from a SKILL.md, `../scripts/mechanics/x.sh` from a shared/references body) still resolve, so both
-# are matched here. The "run the shared script where a runtime exists" arm must reach the shared
-# scripts home — a dangling invocation would silently drop to the fallback on every host.
-#
-# Only the scripts more than one skill runs are left under shared/scripts/mechanics/. A script with a
-# single skill consumer moved into that skill on 2026-07-31 and is named `scripts/x.sh` from its
-# SKILL.md; `_COLOCATED_SCRIPT_PTR` matches those, and the same host loop proves they resolve too.
-_SCRIPT_PTR = re.compile(
-    r"(?:<plugin-root>/|(?:\.\./)+)(?:shared/)?scripts/mechanics/[A-Za-z0-9._-]+\.sh")
+# A script PATH pointer in its two written forms: co-located `scripts/x.sh`, which a skill writes for
+# its own script and which resolves against that skill's directory, and `skills/<skill>/scripts/x.sh`,
+# which a skill writes for another skill's script and which resolves from the install root. Both
+# arms of every invoke-or-prose-fallback must reach a real file — a dangling invocation would
+# silently drop to the prose fallback on every host.
 _COLOCATED_SCRIPT_PTR = re.compile(r"(?<![\w./-])scripts/[A-Za-z0-9._-]+\.sh")
+_ROOT_SCRIPT_PTR = re.compile(r"(?<![\w./-])skills/[A-Za-z0-9._-]+/scripts/[A-Za-z0-9._-]+\.sh")
+
+
+def _skill_files():
+    """Every SKILL.md, which is now every file an agent takes a runtime path from."""
+    return sorted(SKILLS.glob("*/SKILL.md"))
 
 
 def _pointer_files():
     """Files whose reference pointers must resolve: every SKILL.md (no skill-local originals remain)."""
-    files = sorted((ROOT / "skills").glob("*/SKILL.md"))
-    files += [ROOT / rel for rel in sorted(SKILL_LOCAL_ORIGINALS)]
-    return files
+    return _skill_files() + [ROOT / rel for rel in sorted(SKILL_LOCAL_ORIGINALS)]
 
 
 def _pointers(path):
@@ -89,13 +88,12 @@ def _pointers(path):
     return out
 
 
-def _ships_shared(manifest_rel):
-    """Model, from a manifest, whether the host's install ships shared/ reachably from skills/.
+def _ships_skills(manifest_rel):
+    """Model, from a manifest, whether the host's install ships the whole `skills/` tree.
 
-    Every documented install is a whole-repo clone loaded in place, so shared/ is a sibling of skills/.
-    The only thing that could break that is an npm-style `files` allowlist omitting shared/ — none use
-    one. A `skills` pointer selects where skills live in the cloned tree; it is NOT a ship-restriction.
-    Returns (ok, reason)."""
+    Every documented install is a whole-repo clone loaded in place. The only thing that could break
+    that is an npm-style `files` allowlist omitting skills/ — none use one. A `skills` pointer
+    selects where skills live in the cloned tree; it is NOT a ship-restriction. Returns (ok, reason)."""
     path = ROOT / manifest_rel
     if not path.is_file():
         return False, f"manifest {manifest_rel} is missing"
@@ -104,69 +102,71 @@ def _ships_shared(manifest_rel):
     except ValueError as e:
         return False, f"manifest {manifest_rel} is not valid JSON: {e}"
     files = data.get("files")
-    if isinstance(files, list) and not any("shared" in str(f) for f in files):
-        return False, f"manifest {manifest_rel} `files` allowlist would not ship shared/"
+    if isinstance(files, list) and not any("skills" in str(f) for f in files):
+        return False, f"manifest {manifest_rel} `files` allowlist would not ship skills/"
     return True, ""
 
 
 @pytest.mark.parametrize("host", sorted(HOST_MANIFESTS))
 def test_every_reference_resolves_in_place_on_host(host):
-    ok, reason = _ships_shared(HOST_MANIFESTS[host])
+    ok, reason = _ships_skills(HOST_MANIFESTS[host])
     assert ok, f"{host}: {reason}"
-    # Whole-tree in-place clone: the install root places skills/ and shared/ as siblings (== repo root).
+    # Whole-tree in-place clone: the install root is the repo root, and skills/ sits under it.
     install_root = ROOT
-    assert (install_root / "shared" / "references").is_dir(), f"{host}: shared/references not shipped"
+    assert (install_root / "skills").is_dir(), f"{host}: skills/ not shipped"
+    assert not (install_root / "shared").exists(), (
+        f"{host}: shared/ is back; every file an agent reads belongs inside a skill")
     for f in _pointer_files():
         for ptr in _pointers(f):
             target = (f.parent / ptr).resolve()
             assert target.exists(), (
                 f"{host}: {f.relative_to(ROOT)} -> `{ptr}` is DANGLING (no {target})")
-            if "shared/references" in ptr:
-                # an in-place shared pointer must land inside the single home
-                assert target.parent == SHARED or SHARED in target.parents, (
-                    f"{host}: {f.relative_to(ROOT)} -> `{ptr}` does not land in shared/references")
-            else:
-                # no skill-local originals remain, so any skill-local pointer is dangling
-                assert target.relative_to(ROOT).as_posix() in SKILL_LOCAL_ORIGINALS, (
-                    f"{host}: {f.relative_to(ROOT)} -> `{ptr}` is a skill-local pointer that is not "
-                    f"one of the kept originals (the set is empty)")
+            assert target.relative_to(ROOT).as_posix() in SKILL_LOCAL_ORIGINALS, (
+                f"{host}: {f.relative_to(ROOT)} -> `{ptr}` is a reference-file pointer that is not "
+                f"one of the kept skill-local originals (the set is empty)")
 
 
-def test_marker_present_in_single_home():
-    assert MARKER in (SHARED / "agent-data.md").read_text(encoding="utf-8"), (
-        "the resolution marker was removed from shared/references/agent-data.md")
+def test_marker_present_in_the_reference_skill():
+    assert MARKER in (SKILLS / "agent-data-reference" / "SKILL.md").read_text(encoding="utf-8"), (
+        "the resolution marker was removed from skills/agent-data-reference/SKILL.md")
+
+
+def test_marker_appears_in_exactly_one_shipped_file():
+    """One copy of the job-postings reference, not a per-skill fan-out. The marker used to prove
+    that every skill's `../../shared/references/…` pointer landed in the one shared home; consumers
+    now invoke `agent-data-reference` by name, so what is left to prove is that the name resolves to
+    exactly one file."""
+    holders = sorted(p.relative_to(ROOT).as_posix()
+                     for p in SKILLS.rglob("*.md") if MARKER in p.read_text(encoding="utf-8"))
+    assert holders == ["skills/agent-data-reference/SKILL.md"], (
+        f"the job-postings reference should live in exactly one file; found: {holders}")
 
 
 @pytest.mark.parametrize("host", sorted(HOST_MANIFESTS))
-def test_every_skill_reaches_the_marked_home_on_host(host):
-    """Positive proof that resolution lands on the ONE marked source tree, not a stray copy: each of
-    the five skills' SKILL.md points at a shared reference that resolves in place into
-    shared/references/, the directory carrying the marker. Which reference a skill cites is that
-    skill's own business — which reference each one cites changes as the skills are rewritten — so
-    the marker proves the DIRECTORY reached is the single home."""
-    ok, reason = _ships_shared(HOST_MANIFESTS[host])
+def test_every_consumer_skill_names_a_reference_skill_on_host(host):
+    """Positive proof that a consumer can still get to the mechanics: each of the five consumer
+    skills names at least one of the two reference skills by the exact name its host invokes. Which
+    reference a skill needs is that skill's own business and changes as the skills are rewritten, so
+    this asserts the naming, not which one."""
+    ok, reason = _ships_skills(HOST_MANIFESTS[host])
     assert ok, f"{host}: {reason}"
-    marked = [p.name for p in sorted(SHARED.glob("*.md")) if MARKER in p.read_text(encoding="utf-8")]
-    assert marked, "no file under shared/references/ carries the resolution marker"
-    for skill_md in sorted((ROOT / "skills").glob("*/SKILL.md")):
-        reached = []
-        for ptr in _pointers(skill_md):
-            if "shared/references" not in ptr:
-                continue
-            target = (skill_md.parent / ptr).resolve()
-            assert target.exists(), f"{host}: {skill_md.relative_to(ROOT)} -> `{ptr}` dangling"
-            if target.parent == SHARED:
-                reached.append(ptr)
-        assert reached, (
-            f"{host}: {skill_md.relative_to(ROOT)} makes no in-place pointer into the single home "
-            f"shared/references/ (marker carried by {marked})")
+    for name in REFERENCE_SKILLS:
+        assert (SKILLS / name / "SKILL.md").is_file(), f"{host}: skills/{name}/SKILL.md not shipped"
+    for skill_md in _skill_files():
+        if skill_md.parent.name in REFERENCE_SKILLS:
+            continue
+        text = skill_md.read_text(encoding="utf-8")
+        named = [name for name in REFERENCE_SKILLS if name in text]
+        assert named, (
+            f"{host}: {skill_md.relative_to(ROOT)} names neither reference skill "
+            f"({' nor '.join(REFERENCE_SKILLS)}), so nothing points it at the mechanics")
 
 
 def test_no_fanned_reference_copy_remains():
     """The fan-out is gone: no *.md remains under skills/*/references/ at all
     (no shared-twin copy, no references/platform/ adapter copy)."""
     present = set()
-    for refs in (ROOT / "skills").glob("*/references"):
+    for refs in SKILLS.glob("*/references"):
         for p in refs.rglob("*.md"):
             present.add(p.relative_to(ROOT).as_posix())
     fanned = sorted(present - SKILL_LOCAL_ORIGINALS)
@@ -175,88 +175,62 @@ def test_no_fanned_reference_copy_remains():
 
 # ------------------------------------------------------ mechanics-script resolution (P4/T4.2)
 
-def _script_pointer_files():
-    """Files that invoke a mechanics script: every SKILL.md + every shared/references body (the
-    invoke-or-prose-fallback wiring lives in the runner and in the contracts it defers to)."""
-    files = sorted((ROOT / "skills").glob("*/SKILL.md"))
-    files += sorted(SHARED.glob("*.md"))
-    return files
-
-
 def _script_pointers(path):
-    """Distinct script PATH pointers found in `path`, each with the directory it resolves against and
-    the directory it has to land in: a `<plugin-root>/…` pointer resolves from the install root and a
-    relative one from the file's own directory, both landing in shared/scripts/mechanics; a
-    co-located `scripts/x.sh` resolves from the file's own directory and lands there."""
+    """Distinct script PATH pointers in `path`, each paired with the file it must resolve to: a
+    co-located `scripts/x.sh` against the naming file's own directory, a `skills/<skill>/scripts/x.sh`
+    from the install root."""
     out = []
     seen = set()
     text = path.read_text(encoding="utf-8")
-    for m in _SCRIPT_PTR.finditer(text):
+    for m in _ROOT_SCRIPT_PTR.finditer(text):
         tok = m.group(0)
-        if tok in seen:
-            continue
-        seen.add(tok)
-        base = ROOT / tok[len("<plugin-root>/"):] if tok.startswith("<plugin-root>/") \
-            else path.parent / tok
-        out.append((tok, base, MECH))
+        if tok not in seen:
+            seen.add(tok)
+            out.append((tok, ROOT / tok))
     for m in _COLOCATED_SCRIPT_PTR.finditer(text):
         tok = m.group(0)
-        if tok in seen:
-            continue
-        seen.add(tok)
-        out.append((tok, path.parent / tok, path.parent / "scripts"))
+        if tok not in seen and not any(tok in root_tok for root_tok, _ in out):
+            seen.add(tok)
+            out.append((tok, path.parent / tok))
     return out
 
 
 @pytest.mark.parametrize("host", sorted(HOST_MANIFESTS))
 def test_every_mechanics_script_resolves_in_place_on_host(host):
-    """P4/T4.2: the 'run the script' arm of each invoke-or-prose-fallback must resolve IN PLACE on every
-    host — the same ships-shared property the references rely on. A shared script lands in
-    shared/scripts/mechanics, a single-consumer one in its own skill's scripts/. A dangling script
-    pointer -> RED (the runtime arm would never fire)."""
-    ok, reason = _ships_shared(HOST_MANIFESTS[host])
+    """P4/T4.2: the 'run the script' arm of each invoke-or-prose-fallback must resolve IN PLACE on
+    every host — the same ships-skills property the references rely on. A dangling script pointer
+    -> RED (the runtime arm would never fire)."""
+    ok, reason = _ships_skills(HOST_MANIFESTS[host])
     assert ok, f"{host}: {reason}"
-    assert MECH.is_dir(), f"{host}: shared/scripts/mechanics not shipped"
     any_ptr = False
-    for f in _script_pointer_files():
-        for ptr, unresolved, home in _script_pointers(f):
+    for f in _skill_files():
+        for ptr, target in _script_pointers(f):
             any_ptr = True
-            target = unresolved.resolve()
-            assert target.exists(), (
-                f"{host}: {f.relative_to(ROOT)} -> `{ptr}` is DANGLING (no {target})")
-            assert target.parent == home.resolve(), (
-                f"{host}: {f.relative_to(ROOT)} -> `{ptr}` does not land in "
-                f"{home.resolve().relative_to(ROOT)}")
+            assert target.resolve().is_file(), (
+                f"{host}: {f.relative_to(ROOT)} -> `{ptr}` is DANGLING (no {target.resolve()})")
     assert any_ptr, (
-        f"{host}: no script pointer found in any SKILL.md or shared/references body — the "
-        f"P4/T4.2 invoke-or-prose-fallback wiring is missing")
+        f"{host}: no script pointer found in any SKILL.md — the P4/T4.2 "
+        f"invoke-or-prose-fallback wiring is missing")
 
 
 # ------------------------------------------------- co-located pointers (skill-locality, 2026-07-31)
 #
 # The 0.8.0 behavior evals measured both models mis-resolving this pack's own file pointers: sonnet
-# read `../../shared/references/runbook.md` with one `..` too few, and haiku expanded `<plugin-root>`
-# to the skill's own directory. Each miss costs a wasted tool call and a visible recovery, so the
-# restructure gives every file with a single skill consumer an address that needs no computation.
+# read `../../shared/references/runbook.md` with one `..` too few, and haiku expanded the plugin-root
+# token to the skill's own directory. Each miss costs a wasted tool call and a visible recovery, so
+# the restructure gives every file an address that needs no computation.
 #
-# The written form: a path relative to the file that names it. From a SKILL.md that is
-# `templates/<file>` or `scripts/<file>` — the skill's own directory, which is where the file now
-# sits. From a file outside the skill (a shared/references body) it is the same file's path from the
-# repo root, `skills/<skill>/templates/<file>`. Neither form asks the model to count `../` steps or
-# to expand a token.
+# The written form: a path relative to the file that names it. From a SKILL.md naming its own file
+# that is `templates/<file>` or `scripts/<file>`. From a SKILL.md naming a file in another skill it
+# is that file's path from the repo root, `skills/<skill>/<dir>/<file>`. Neither form asks the model
+# to count `../` steps or to expand a token.
 #
-# These four files still carry a computed pointer, and each belongs to a later task: the two
-# remaining mechanics scripts move next, and the two shared references become skills after that.
-# The set shrinks to empty as those land. Any other computed pointer fails the test below.
-DEFERRED_MOVES = {
-    "shared/scripts/mechanics/validate-workspace.sh",
-    "shared/scripts/mechanics/workspace-discovery.sh",
-    "shared/references/runbook.md",
-    "shared/references/agent-data.md",
-}
-# The directories those four sit in. A computed pointer at a whole directory is the same defect as
-# one at a file, so pointing at `<plugin-root>/shared/scripts/mechanics/` is allowed only while the
-# scripts inside it are still a later task's to move. Derived, so it cannot drift from the set above.
+# Nothing is exempt. The set held the four files a later task owned — the two mechanics scripts and
+# the two shared references — and that task landed on 2026-07-31, so every computed pointer now
+# fails the test below.
+DEFERRED_MOVES = set()
+# The directories those files sat in. A computed pointer at a whole directory is the same defect as
+# one at a file, so the exemption had to cover both. Derived, so it cannot drift from the set above.
 DEFERRED_DIRS = {str(pathlib.PurePosixPath(p).parent) for p in DEFERRED_MOVES}
 
 # A pointer the model has to compute: `<plugin-root>/…` expands a token, `../../…` counts two or
@@ -274,16 +248,14 @@ _COMPUTED_PTR = re.compile(r"(?:<plugin-root>/|(?:\.\./){2,})((?:[A-Za-z0-9._-]+
 _COLOCATED_PTR = re.compile(
     r"(?<![\w./-])(?:templates|scripts|references)/[A-Za-z0-9._-]+\.[A-Za-z0-9]+")
 
-# The same co-located file addressed from the repo root, which is how a file outside the skill — a
-# shared/references body — names it.
+# The same file addressed from the repo root, which is how a SKILL.md names a file another skill owns.
 _ROOT_SKILL_PTR = re.compile(
     r"(?<![\w./-])skills/[A-Za-z0-9._-]+/(?:templates|scripts)/[A-Za-z0-9._-]+\.[A-Za-z0-9]+")
 
 
 def _agent_facing_files():
-    """Every file an agent reads at runtime and takes file paths from: the five SKILL.md bodies and
-    both shared references."""
-    return sorted((ROOT / "skills").glob("*/SKILL.md")) + sorted(SHARED.glob("*.md"))
+    """Every file an agent reads at runtime and takes file paths from: the seven SKILL.md bodies."""
+    return _skill_files()
 
 
 def _computed_pointers_in(text):
@@ -329,17 +301,16 @@ def _plugin_file_pointers(path):
     return out
 
 
-def test_no_computed_pointer_survives_outside_the_deferred_moves():
-    """Every file with one skill consumer is addressed without arithmetic. A `<plugin-root>/…` or
-    `../../…` pointer to anything but the four files a later task moves is the defect this
-    restructure removes."""
+def test_no_computed_pointer_survives_anywhere():
+    """Every file is addressed without arithmetic. A `<plugin-root>/…` or `../../…` pointer in any
+    SKILL.md is the defect this restructure removes, and nothing is exempt from it any more."""
     offenders = []
     for f in _agent_facing_files():
         offenders += _computed_offenders_in(f.relative_to(ROOT).as_posix(),
                                             f.read_text(encoding="utf-8"))
     assert not offenders, (
-        "these pointers still make the model compute an address for a file that has one skill "
-        "consumer; move the file into that skill and name it from there:\n  "
+        "these pointers still make the model compute an address; name the file from the skill that "
+        "owns it, or the skill that holds the reference:\n  "
         + "\n  ".join(offenders))
 
 
@@ -349,31 +320,34 @@ def test_no_computed_pointer_survives_outside_the_deferred_moves():
     "the copyable examples in `../../templates/`",                           # relative, directory
     "read `../../templates/preferences.example.md` first",                   # relative, file
     "run `<plugin-root>/scripts/schedule-line.sh daily`",                    # a moved script
+    "run `<plugin-root>/shared/scripts/mechanics/validate-workspace.sh <workspace>`",  # a promoted script
+    "the discovery step in `../../shared/references/runbook.md`",            # a promoted reference
+    "a script under `<plugin-root>/shared/scripts/mechanics/`",              # the promoted directory
 ])
 def test_the_gate_catches_a_reintroduced_computed_pointer(planted):
     """The gate above only earns trust if it fires. Planting each shape of pointer this restructure
     removed — file or directory, token-prefixed or `../../`-prefixed — must produce an offender.
-    The directory shapes are the ones an earlier version of `_COMPUTED_PTR` let through, because it
-    required a file extension."""
+    The last three were exempt while the two scripts and the two references were a later task's to
+    move; that task landed, so they are offenders now."""
     offenders = _computed_offenders_in("skills/job-search/SKILL.md", planted)
     assert offenders, f"the gate did not catch a reintroduced pointer: {planted!r}"
 
 
 @pytest.mark.parametrize("allowed", [
-    "run `<plugin-root>/shared/scripts/mechanics/validate-workspace.sh <workspace>`",
-    "the discovery step in `../../shared/references/runbook.md`",
-    "a script under `<plugin-root>/shared/scripts/mechanics/`",
     "copy this skill's `templates/config.example.yaml` to `config.yaml`",
     "the shape is `skills/job-search-run/templates/run-record.example.json`",
+    "run the plugin's `skills/job-search-runbook/scripts/validate-workspace.sh <workspace>`",
+    "the ten rules under **How to communicate** in `../job-search/SKILL.md`",
 ])
-def test_the_gate_leaves_the_deferred_and_co_located_forms_alone(allowed):
-    """A gate that fired on everything would be no gate. The two files each later task owns, the
-    directory holding them, and both co-located forms must pass."""
+def test_the_gate_leaves_the_written_forms_alone(allowed):
+    """A gate that fired on everything would be no gate. Both written forms — a skill's own file and
+    another skill's file from the repo root — must pass, as must the single `../` a SKILL.md uses to
+    name a sibling SKILL.md, which is one step inside `skills/` and needs no arithmetic."""
     assert _computed_offenders_in("skills/job-search/SKILL.md", allowed) == []
 
 
 def test_every_plugin_file_a_skill_names_exists():
-    """Every path to a plugin file named in a SKILL.md or a shared reference lands on a real file."""
+    """Every path to a plugin file named in a SKILL.md lands on a real file."""
     missing = []
     for f in _agent_facing_files():
         for tok, target in _plugin_file_pointers(f):

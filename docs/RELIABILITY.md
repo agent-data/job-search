@@ -4,13 +4,13 @@ How Job Search stays trustworthy: a deterministic core, named failures, bounded 
 and failures that surface where the user will actually see them. This doc describes the
 *mechanisms*. It does **not** restate any runtime contract. Each concrete value has one home
 elsewhere: how a run opens and closes and what each workspace file holds are in
-`shared/references/runbook.md`; retry rules and what a call
-costs are in `shared/references/agent-data.md`; the exact
+the `job-search-runbook` skill; retry rules and what a call
+costs are in the `agent-data-reference` skill; the exact
 fields of a config, a run record, a `jobs.jsonl` line, and the brief are the copyable examples in the
 `templates/` directory of the skill that writes each one, listed in
 [../ARCHITECTURE.md](../ARCHITECTURE.md#where-the-contracts-live); and whether a workspace on disk obeys
 those rules is decided by
-[../shared/scripts/mechanics/validate-workspace.sh](../shared/scripts/mechanics/validate-workspace.sh).
+[skills/job-search-runbook/scripts/validate-workspace.sh](../skills/job-search-runbook/scripts/validate-workspace.sh).
 When a number or a literal matters, follow the link to its source of truth.
 
 For the principles behind these mechanisms see
@@ -54,7 +54,7 @@ events, and current state is computed by folding them by dedup key (last-write-w
 Re-running is therefore safe — nothing is overwritten in place, and a crash mid-run can at
 worst leave a trailing partial line, never a corrupted record. What each workspace file holds, the
 registry write rules, the workspace-discovery precedence, and the scheduling marker are all owned by
-`shared/references/runbook.md`; one event line's exact
+the `job-search-runbook` skill; one event line's exact
 fields are [`jobs-event.example.json`](../skills/job-search-run/templates/jobs-event.example.json), and
 the known-ids and append operations are the scripts under
 [../skills/job-search-run/scripts/](../skills/job-search-run/scripts/).
@@ -69,7 +69,7 @@ cursor or page signature stops making trustworthy progress, so a bad continuatio
 restart at page one. Once continuation begins, the candidate pool moves through a private run-scoped
 scratch directory in bounded chunks, which the close deletes along with the started-marker; a later
 run deletes stale scratch rather than resuming it. Both the scratch rule and the run's start-to-close
-sequence are owned by `shared/references/runbook.md`.
+sequence are owned by the `job-search-runbook` skill.
 
 ## 2. No silent failures — every blocked path is named
 
@@ -105,7 +105,7 @@ failure (the 502s) is retried with bounded exponential backoff and jitter; a det
 client error (a bad field, an invalid request, a stale id/URL pair) is **never** retried,
 because retrying it would only waste a metered call and still fail. The exact attempt count,
 the backoff schedule, and which codes are retryable are owned by
-`shared/references/agent-data.md` —
+the `agent-data-reference` skill —
 paraphrased here, authoritative there.
 
 Retries are also **bounded across the run**, not just per call — the circuit-breaker. If the
@@ -121,15 +121,15 @@ attempt is classified once; retries and charged failures remain diagnostic subse
 and a quota-rejected attempt stay outside the metered total. That same local ledger supplies the
 calls-first digest line and the exact prior-work count when quota stops a run, avoiding both double
 counting and an invented account charge. The canonical counting rules live in
-`shared/references/agent-data.md`, and the
-stored record shape lives in `shared/references/runbook.md`.
+the `agent-data-reference` skill, and the
+stored record shape lives in the `job-search-runbook` skill.
 
 ## 4. Run health & blocked surfacing — visible without the exit code
 
 Every run records a **health state** in its `runs/<run_id>.json` record, and the digest leads with
 that state. The record also carries how the run ended, separately from how healthy it was:
 `close_state` is `complete`, `blocked`, or `interrupted`, while `run_health` is `healthy` or
-`degraded`. Both live in `shared/references/runbook.md`, and the
+`degraded`. Both live in the `job-search-runbook` skill, and the
 record's full shape is
 [`run-record.example.json`](../skills/job-search-run/templates/run-record.example.json).
 The two are independent on purpose: a run can finish all its work with a source lost along the way
@@ -177,7 +177,7 @@ Reliability claims are only as good as their tests. Four layers back this system
 - **A pytest suite over the dev tooling** ([../tests/](../tests/)) exercises the doc linter, the
   philosophy guard, the release-integrity checks, the mechanics scripts, and the shims' own
   behavior.
-- **The workspace validator** ([../shared/scripts/mechanics/validate-workspace.sh](../shared/scripts/mechanics/validate-workspace.sh)),
+- **The workspace validator** ([skills/job-search-runbook/scripts/validate-workspace.sh](../skills/job-search-runbook/scripts/validate-workspace.sh)),
   self-tested by `tests/test_validate_workspace.py`, is what turns the file rules into something
   mechanical: config keys, the brief's front matter, run-record fields and UTC timestamps, and —
   with `--post-close <run_id>` — that the run left no started-marker and no scratch behind. Those
@@ -211,7 +211,7 @@ tracked, not papered over. The green-gate commands and the contributor workflow 
 
 The knowledge base is held to the same standard as the code. Two stdlib guards run in CI:
 [../scripts/doc_lint.py](../scripts/doc_lint.py) checks that every live KB doc links the
-`../shared/references/` source of truth instead of restating
+the reference skills' source of truth instead of restating
 a contract literal, that every Markdown link resolves, and that the section indexes stay
 complete — and [../scripts/philosophy_guard.py](../scripts/philosophy_guard.py) fails the build
 if numeric score math, a budget/cost control, or an unverified actual-charge claim leaks into shipped

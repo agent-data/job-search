@@ -143,11 +143,9 @@ def _is_skill_eval(path):
 def _is_runtime_surface(path):
     if _is_skill_eval(path):
         return False
-    return (
-        path.startswith("skills/")
-        or path.startswith("shared/references/")
-        or path.startswith("shared/scripts/")
-    )
+    # Everything shipped lives under skills/ since the 2026-07-31 restructure: the two references
+    # became skills and the last mechanics scripts moved into one, so shared/ is gone.
+    return path.startswith("skills/")
 
 
 def _primary_version_at(root, base):

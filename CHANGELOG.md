@@ -7,13 +7,18 @@ All notable changes to this project are documented here. The format is based on
 ## [0.8.0] — 2026-07-31
 
 ### Changed
-- **All five skills rewritten onto a two-file shared core.** `shared/references/` is now
-  `runbook.md` (find the workspace, what each file holds, one run start to close, running it
-  unattended, scratch, what stays off disk) and `agent-data.md` (the CLI, the four sources and
-  their quirks, retries, what a call costs). Every skill reads those two files and nothing else,
-  so a first run reaches live postings after a much shorter read: the whole agent-facing corpus —
-  the five `SKILL.md` files plus both references — is 9,025 words
-  (`wc -w skills/*/SKILL.md shared/references/*.md`).
+- **All five skills rewritten onto a two-skill shared core.** The mechanics live in two skills of
+  their own: `job-search-runbook` (find the workspace, what each file holds, one run start to close,
+  running it unattended, scratch, what stays off disk) and `agent-data-reference` (the CLI, the four
+  sources and their quirks, retries, what a call costs). Every skill invokes those two and nothing
+  else, so a first run reaches live postings after a much shorter read: the whole agent-facing
+  corpus — all seven `SKILL.md` files — is 9,096 words (`wc -w skills/*/SKILL.md`).
+- **Every runtime file lives inside the skill that owns it.** `shared/` is gone: the two references
+  became the skills above, and the two mechanics scripts more than one skill runs —
+  `workspace-discovery.sh` and `validate-workspace.sh` — moved into
+  `skills/job-search-runbook/scripts/`. A skill needing the mechanics invokes the skill holding them
+  by name; a skill needing a file another skill owns names it as
+  `skills/<skill>/<dir>/<file>`.
 - **The run contract is a marker plus a record.** A run creates the empty marker
   `runs/.started-<run_id>` when it opens and deletes it at close, after writing
   `runs/<run_id>.json` and `reports/<date>-digest.md`. The record carries `close_state`
@@ -32,9 +37,9 @@ All notable changes to this project are documented here. The format is based on
   it — `skills/job-search/`, `skills/job-search-run/`, `skills/job-preference-interview/` — and the
   three scripts with one caller each moved the same way, into that skill's `scripts/`. A skill names
   its own file as `templates/<file>` or `scripts/<file>`, an address that needs no path arithmetic;
-  the live evals measured both models mis-resolving the `<plugin-root>/…` and `../../…` forms those
+  the live evals measured both models mis-resolving the plugin-root-token and `../../…` forms those
   replace.
-- **`shared/scripts/mechanics/validate-workspace.sh` enforces the file rules.** Config keys,
+- **`skills/job-search-runbook/scripts/validate-workspace.sh` enforces the file rules.** Config keys,
   the brief's front matter, run-record fields and UTC timestamps, and — with
   `--post-close <run_id>` — that the run left no marker and no scratch directory behind.
 - **Behavior is graded by live evals.** `evals/` holds `run_eval.py`, the fourteen kept behaviors
@@ -47,7 +52,7 @@ Two of these you will notice as a user:
 
 - **The update banner is gone.** In 0.7.0 the home view told you when a newer plugin version had been
   published and gave you the command to get it. Nothing checks now
-  (`git grep -niE "update available|newer version" -- skills/ shared/ README.md` returns nothing),
+  (`git grep -niE "update available|newer version" -- skills/ README.md` returns nothing),
   because the check read the build stamp, which went with the build step. Until it comes
   back, get updates the way your host offers them — `/plugin` in Claude Code, `codex plugin add`, and
   so on, per the install section in the README. Tracked as `TODO-UPDATE-AVAILABLE` in

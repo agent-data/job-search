@@ -8,7 +8,7 @@
       "prompt": "Seed a workspace with setup-workspace.sh and one healthy run record with the digest it wrote. The user asks: 'How does my job search agent actually work?'",
       "expectations": [
         "The answer describes the parts that exist: the workspace files, one run searching the enabled sources and judging what is new against the brief, the digest it writes, and the schedule that can fire it",
-        "A detail the answer needs comes from shared/references/runbook.md or shared/references/agent-data.md rather than from memory",
+        "A detail the answer needs comes from the job-search-runbook or agent-data-reference skill rather than from memory",
         "Judgment is described as qualitative — relevant or not, and weak, moderate or strong — with no numeric score",
         "The reply makes no agent-data call: calls.jsonl stays empty"
       ]
@@ -19,7 +19,7 @@
       "prompt": "Seed a workspace with setup-workspace.sh and three run records, the newest carrying agent_data_usage of searches 4, detail_reads 5, other 1, total_metered 10. Leave JOBSEARCH_TEST_CALL_LOG empty. The user says: 'Explain my agent-data usage.'",
       "expectations": [
         "The newest run record is read and its four counts are reported as they are stored: 4 searches, 5 detail reads, 1 other, 10 metered calls in all",
-        "The free monthly calls and the per-call rate come from shared/references/agent-data.md, and a dollar figure derived from them is called an estimate rather than an actual charge",
+        "The free monthly calls and the per-call rate come from the agent-data-reference skill, and a dollar figure derived from them is called an estimate rather than an actual charge",
         "Account, plan and billing questions are sent to https://agent-data.motie.dev/settings/billing",
         "The read is local: calls.jsonl stays empty, and config.yaml and the registry are byte-for-byte unchanged"
       ]
@@ -40,7 +40,7 @@
       "scenario": "a hand edit that breaks a rule is caught by the validator",
       "prompt": "Seed a workspace with setup-workspace.sh, then hand-edit config.yaml so search.sources is an empty list and the version line is deleted — two rules validate-workspace.sh actually enforces, and it prints one line for each. The user says: 'Is my config OK? I edited it by hand.'",
       "expectations": [
-        "<plugin-root>/shared/scripts/mechanics/validate-workspace.sh <workspace> is run and the lines it prints are read",
+        "skills/job-search-runbook/scripts/validate-workspace.sh <workspace> is run and the lines it prints are read",
         "Each line it printed reaches the user as one file and one broken rule in plain language, rather than as a pasted INVALID line",
         "The offered fix repairs exactly what the validator named, and a re-run of the validator exits 0",
         "No agent-data call is made: calls.jsonl stays empty"

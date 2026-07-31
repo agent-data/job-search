@@ -2,7 +2,7 @@
 
 Catalogued design documentation. The **living** principles are in `core-beliefs.md`; the dated
 specs below are **historical** snapshots of the original design (kept for rationale; the live
-contracts now live in `shared/references/`).
+contracts now live in the `job-search-runbook` and `agent-data-reference` skills).
 
 ## Living
 - [Core Beliefs — Agent-First Operating Principles](core-beliefs.md) — _status: current_
@@ -39,7 +39,7 @@ each doc's frontmatter `status`.
 |-------|---------|
 | `current` | Live and authoritative — the team stands behind it today; keep it true as the code changes. (In use: core-beliefs, the style guide, the onboarding spec.) |
 | `superseded` | Replaced by a newer doc; kept only for history. Excluded from the no-shared-reference-duplication check, like `historical`. (In use: `codex-portability.md`.) |
-| `historical` | A frozen snapshot of past design — read for rationale, not as the live contract (which now lives in `shared/references/`). Wears a snapshot banner. (In use: the three dated `2026-06-05-*` design specs.) |
+| `historical` | A frozen snapshot of past design — read for rationale, not as the live contract (which now lives in the two reference skills). Wears a snapshot banner. (In use: the three dated `2026-06-05-*` design specs.) |
 | `aspirational` | Describes intended, not-yet-built behavior. (Defined; none live yet.) |
 
 **`verified`** — how thoroughly the doc's checkable claims were confirmed against the code/corpus.

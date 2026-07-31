@@ -13,7 +13,7 @@ doc's checkable claims match the current source?**
 
 ## What counts as a checkable claim
 A statement that can be confirmed or refuted against code:
-- a command or pinned recipe (e.g. the discovery step in `shared/references/runbook.md`) and its exact flags
+- a command or pinned recipe (e.g. the discovery step in the `job-search-runbook` skill) and its exact flags
 - a field a function returns, or a key an event / record / config contains
 - an error code (`E-*`) and where / when it fires
 - a config key or its allowed values
@@ -42,7 +42,7 @@ You are told a MODE and the target docs.
    - **stale-date** — claims still accurate but `last_reviewed` is past the staleness window (just
      needs a date bump).
    - **obsolete** — describes behavior / components that no longer exist.
-4. "Point, don't duplicate": if a doc *paraphrases* a `shared/references/` contract instead of
+4. "Point, don't duplicate": if a doc *paraphrases* a reference skill's contract instead of
    linking to it, flag it as drift-risk — it will silently rot. (`doc_lint`'s
    no-shared-reference-duplication rule catches verbatim restatements; you surface paraphrased ones.)
 
@@ -63,7 +63,8 @@ You only report; the controller decides whether to fix now or log it.
    repair an index entry; correct a clearly-drifted factual claim to match the code; flip a truly
    obsolete doc's `status:` to `historical`/`superseded`. Anything needing judgment is left as a
    PROPOSAL in the PR body — do not guess at rewrites.
-3. Never edit `shared/references/` (the source of truth, owned elsewhere) and never edit code to match
+3. Never edit the `job-search-runbook` or `agent-data-reference` skills (the source of truth, owned
+   elsewhere) and never edit code to match
    a doc — docs follow code, not the reverse.
 4. Keep the gates green, then open a fix-up PR (never push to main, never force-merge):
 ```bash

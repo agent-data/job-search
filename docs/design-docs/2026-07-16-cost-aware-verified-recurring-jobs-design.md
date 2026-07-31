@@ -5,7 +5,7 @@ status: current
 verified: partial
 last_reviewed: 2026-07-31
 code_refs: [skills/job-search/SKILL.md, skills/job-search-agent/SKILL.md, skills/job-search-run/SKILL.md, skills/job-search/templates/config.example.yaml, tests/fake-agent-data]
-claimed_paths: [skills, shared/references, tests, docs/design-docs]
+claimed_paths: [skills, tests, docs/design-docs]
 owner_area: Skills & references
 repos: [job-search-os]
 ---
@@ -38,7 +38,7 @@ This design responds to three failures observed during a Job Search plugin dogfo
 3. cost context appeared for pagination but not for other choices that can increase agent-data calls.
 
 The design is approved. Implementation is pending. Until implementation lands, the runtime contracts in
-`shared/references/` remain the executable source of truth; this document owns the approved delta and
+the two reference skills remain the executable source of truth; this document owns the approved delta and
 supersedes the design intent in
 [`2026-07-11-verify-dont-encode-design.md`](2026-07-11-verify-dont-encode-design.md).
 
@@ -609,10 +609,10 @@ commit. The matrix is normative, not illustrative.
 
 | Surface | Change | Primary anchors |
 |---|---|---|
-| `shared/references/agent-data.md` | own the dated free-tier allowance, metering, pricing, retries, and the per-source quirks | AAS-BOUND-03; AAS-FORM-06; PSG-COMM-20 |
-| `shared/references/runbook.md` | workspace discovery, what each file holds, one run start to close, the registry and its scheduling marker, running it unattended, scratch | AAS-AUTO-01/02/04/05; AAS-FORM-07/09; AAS-PROC-03/04; AAS-PORT-03/04/05/10; PSG-F-09/10 |
+| the `agent-data-reference` skill | own the dated free-tier allowance, metering, pricing, retries, and the per-source quirks | AAS-BOUND-03; AAS-FORM-06; PSG-COMM-20 |
+| the `job-search-runbook` skill | workspace discovery, what each file holds, one run start to close, the registry and its scheduling marker, running it unattended, scratch | AAS-AUTO-01/02/04/05; AAS-FORM-07/09; AAS-PROC-03/04; AAS-PORT-03/04/05/10; PSG-F-09/10 |
 | `skills/job-search/templates/` (`config.example.yaml`, `workspace.gitignore`), `skills/job-search-run/templates/` (`run-record.example.json`, `jobs-event.example.json`), `skills/job-preference-interview/templates/preferences.example.md` | the exact fields of every workspace file, as copyable examples rather than prose | AAS-FORM-06/14; AAS-LANG-04 |
-| `shared/scripts/mechanics/validate-workspace.sh` | decide mechanically whether a workspace obeys the file rules, including that a closed run left no marker and no scratch | AAS-FORM-08/09/14; PSG-INJ-03/04/05/11/14 |
+| `skills/job-search-runbook/scripts/validate-workspace.sh` | decide mechanically whether a workspace obeys the file rules, including that a closed run left no marker and no scratch | AAS-FORM-08/09/14; PSG-INJ-03/04/05/11/14 |
 | *(deleted 2026-07-30 — `agent-data-contract.md`, `internals.md`, `conventions.md`, `parallelism.md`, `run-lifecycle.md`, `errors.md`, `voice.md`)* | their surviving content moved into the two references and the skills' `templates/` directories above; the exact-model binding, the lifecycle ledger, the local-metrics file, and the `E-*` catalogue were dropped outright | — |
 | `skills/job-search/SKILL.md` | front-door stance: all cost levers use the canonical preview; verified schedule semantics | AAS-BOUND-03; PSG-COMM-09/20 |
 | *(folded into `skills/job-search/SKILL.md` on 2026-07-30 — was `references/onboarding.md` and `references/home.md`)* | free-tier install framing, first-run preview, eligible scheduler setup, and the home view's schedule states; the setup-time model question went with them, and the schedule states collapsed to `installed` + `verified` | AAS-AUTO-02/04/11; AAS-LANG-08; AAS-TEST-15; PSG-F-09/10; PSG-COMM-09/10/18/20 |

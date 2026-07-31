@@ -26,7 +26,7 @@ are only invocable namespaced; bare `/job-search` for loose-skill installs). On 
 procedure to read the workspace state. When discovery reports `first_run: true` the skill routes to the
 first-run playbook; when `first_run: false` it routes to the returning-user home. The routing
 logic and both playbooks are owned by [`skills/job-search/SKILL.md`](../../skills/job-search/SKILL.md);
-the discovery procedure by `shared/references/runbook.md`.
+the discovery procedure by the `job-search-runbook` skill.
 
 ## The onboarding flow
 
@@ -61,7 +61,7 @@ the install, that's a one-line handoff, not an error: the agent gives the exact 
 (`! npm install -g agent-data`) and resumes once it lands. Then — and starting here when the CLI was
 present but unauthenticated — the agent walks the user through generating an API key (with explicit
 steps), authenticates with the contract's `agent-data init --api-key <KEY> -y` line (the same on
-every host — see `shared/references/agent-data.md`
+every host — see the `agent-data-reference` skill
 → Auth), and verifies with `agent-data whoami` before continuing. The API key is requested only at
 this connect step, never before the install. The **headless runner** (`job-search-run`) can't prompt,
 so when it meets either state it stops and closes `blocked` with a digest naming the missing CLI or
@@ -71,7 +71,7 @@ the missing key and the command that fixes it.
 
 The skill runs the workspace-discovery procedure to find the workspace path and first-run status. The
 discovery order, never-clobber adoption rule, and registry write rules are owned by
-`shared/references/runbook.md`.
+the `job-search-runbook` skill.
 
 - **Adopt** an existing workspace: record it in the registry; additively create only missing
   subdirectories; never overwrite existing `config.yaml`, `preferences.md`, or `jobs.jsonl`.
@@ -104,8 +104,8 @@ keywords — and writes them as `queries[]` entries into `config.yaml` (editing 
 comments and structure), then **acknowledges** what it saved and notes the searches are editable
 anytime. The user picks a run frequency in plain human terms — no credit math, no cost reasoning.
 Config schema and the derive/edit recipes are owned by
-`shared/references/runbook.md` and
-`shared/references/runbook.md`.
+the `job-search-runbook` skill and
+the `job-search-runbook` skill.
 
 ### 6. First live search — the magical moment
 
@@ -131,7 +131,7 @@ user's explicit yes — and the scheduling marker is recorded as running **only 
 canary** proves the real invocation works; a failed canary records nothing and stays honest that it
 is not scheduled. The agent composes the schedule and the run recipe for its own host (there is no
 per-host recipe to look up). The scheduling protocol, eligibility gates, and canary are owned by
-`shared/references/runbook.md` (Scheduling setup).
+the `job-search-runbook` skill (Scheduling setup).
 
 ## What the user sees / success criteria
 
@@ -142,7 +142,7 @@ At the end of onboarding all of the following are true:
   `preferences.md`, and `jobs.jsonl` — all created or adopted without hand-editing.
 - An **optional recurring schedule** is running and recorded in the OS registry if the user consented
   and its config-time canary passed (the agent resolves the mechanism for its own host; see
-  `shared/references/runbook.md` → Scheduling setup).
+  the `job-search-runbook` skill → Scheduling setup).
 
 On a **returning session**, discovery reports `first_run: false` because
 `config.yaml` exists in the workspace, and the skill routes to the home view (latest digest,
@@ -152,7 +152,7 @@ pipeline, quick actions) instead of restarting onboarding.
 
 Every failure path reaches the user as a plain cause and fix, written where the step hits it. There
 is no error-code catalogue and no code to leak; the wording lives in the skill, and what a stopped
-run writes is in `../../shared/references/runbook.md`.
+run writes is in the `job-search-runbook` skill.
 
 - **Missing prerequisites** — `agent-data` missing or unauthenticated. Interactive onboarding
   **remediates** (immediate install — no user input — then guided key + auth) rather than halting;

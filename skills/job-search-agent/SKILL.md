@@ -8,14 +8,14 @@ description: The operator manual for the job search agent — how it works, why 
 The operator manual: how this agent is put together, what to change to get different results, and
 what to do when a run comes back wrong. Daily use belongs to the other skills — this card says where
 each answer lives, then covers changing the search, explaining what a run spent, and the symptoms a
-user arrives with. The reference paths below are relative to this file.
+user arrives with.
 
 ## Where each answer lives
 
 | The question | Where it is answered |
 |---|---|
-| Where the user's files are, what each one holds, and how a run opens and closes | `../../shared/references/runbook.md` |
-| The job-postings CLI, the quirks of each source, retries, and what a call costs | `../../shared/references/agent-data.md` |
+| Where the user's files are, what each one holds, and how a run opens and closes | the `job-search-runbook` skill |
+| The job-postings CLI, the quirks of each source, retries, and what a call costs | the `agent-data-reference` skill |
 | Setting it up, the home view, steering the search, starting or stopping the schedule | the `job-search` skill |
 | One search pass, from preflight through the digest to the close | the `job-search-run` skill |
 | What the user wants in a job, written as prose in `preferences.md` | the `job-preference-interview` skill |
@@ -25,13 +25,13 @@ user arrives with. The reference paths below are relative to this file.
 
 Every search setting is a field in the workspace's `config.yaml`: the `queries[]` entries with their
 keywords, location, limit and `enabled` flag, plus `search.sources` and `search.freshness`. Edit the
-file in place, keeping its comments and shape, then check it with
-`<plugin-root>/shared/scripts/mechanics/validate-workspace.sh <workspace>` — silence means the file
-is usable, and each line it prints names one file and one broken rule. The change takes effect on
-the next run.
+file in place, keeping its comments and shape, then check it with the plugin's
+`skills/job-search-runbook/scripts/validate-workspace.sh <workspace>` — silence means the file is
+usable, and each line it prints names one file and one broken rule. The change takes effect on the
+next run.
 
 A change that raises what a run opens with — one more query, one more source — gets its new cost
-stated before it is saved, per agent-data.md's cost recipe.
+stated before it is saved, per `agent-data-reference`'s cost recipe.
 
 Changing how often the search runs goes through the `job-search` skill, which composes the cadence,
 installs the recurring job, and canaries it. A new or changed job counts as running once a canary
@@ -40,9 +40,9 @@ has left a run record whose `trigger` is `scheduled` and whose close is healthy.
 ## Explaining what a run spent
 
 Read the newest `runs/<run_id>.json` in the workspace and report its `agent_data_usage`: `searches`,
-`detail_reads`, `other`, and `total_metered`. That read is local and spends nothing. agent-data.md
-carries the rest — how many calls a month are free, the per-call rates past that, and
-`B = enabled queries × enabled sources` as what one run opens with. A call count times a rate is an
+`detail_reads`, `other`, and `total_metered`. That read is local and spends nothing.
+`agent-data-reference` carries the rest — how many calls a month are free, the per-call rates past
+that, and `B = enabled queries × enabled sources` as what one run opens with. A call count times a rate is an
 estimate; what the user was actually billed sits on their account at
 https://agent-data.motie.dev/settings/billing.
 

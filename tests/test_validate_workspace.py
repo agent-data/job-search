@@ -1,4 +1,4 @@
-"""Unit tests for `shared/scripts/mechanics/validate-workspace.sh`.
+"""Unit tests for `skills/job-search-runbook/scripts/validate-workspace.sh`.
 
 Every mechanical rule about workspace files lives in that one script: which keys `config.yaml` must
 carry and what shape their values take, the front matter `preferences.md` needs, the fields a run
@@ -21,7 +21,7 @@ import subprocess
 import pytest
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
-VALIDATOR = ROOT / "shared" / "scripts" / "mechanics" / "validate-workspace.sh"
+VALIDATOR = ROOT / "skills" / "job-search-runbook" / "scripts" / "validate-workspace.sh"
 SEED_WORKSPACE = ROOT / "evals" / "seeds" / "headless-run"
 CONFIG_TEMPLATE = ROOT / "skills" / "job-search" / "templates" / "config.example.yaml"
 PREFERENCES_TEMPLATE = (

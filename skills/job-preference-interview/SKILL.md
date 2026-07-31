@@ -21,7 +21,7 @@ points or weights, and no asking the user to rank categories against each other 
 and the like are captured in plain words: at least ~$180K base, no regular on-call.
 
 ## Where it writes
-Find the workspace with the discovery step in `../../shared/references/runbook.md`; the brief is the path
+Find the workspace with the discovery step in the `job-search-runbook` skill; the brief is the path
 `workspace.preferences_path` names in that workspace's `config.yaml`, default `preferences.md`. When no workspace
 is set up yet, write to the resolved default path and say in one line where the brief went.
 

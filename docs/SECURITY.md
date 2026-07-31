@@ -29,7 +29,7 @@ everything) and `!.gitignore` (keep the gitignore itself). Accidentally running 
 inside the workspace cannot commit personal data; the gitignore blocks it at the source.
 
 For the full workspace layout (which files live where and what each contains), see
-`shared/references/runbook.md`. Do not reproduce
+the `job-search-runbook` skill. Do not reproduce
 field lists from that file here — it is the single source of truth.
 
 ## How the public repo stays free of personal data
@@ -66,7 +66,7 @@ runtime hook enforcing it (the former PreToolUse guard was removed: it required 
 gated something you're entitled to do). If you explicitly ask for cron or launchd, it's your machine and your
 call: the agent shows you the exact line first, then writes it on your yes. You also remain free to run cron
 or launchd by hand in your own shell, as always. The scheduling flow is documented in
-`shared/references/runbook.md` (see the scheduling section).
+the `job-search-runbook` skill (see the scheduling section).
 
 ## Auth and secrets
 
@@ -76,7 +76,7 @@ is never stored in this repository. If the key is absent or invalid at run time,
 before it spends anything: it writes `runs/<run_id>.json` with `close_state: blocked` and
 `run_health: degraded`, and a digest naming the missing key and the exact command that sets one. The
 record is what the next front-door visit reads, so the failure cannot go unnoticed. How a run closes
-is owned by `../shared/references/runbook.md`.
+is owned by the `job-search-runbook` skill.
 
 ## Credit-free, side-effect-free testing
 
@@ -94,7 +94,7 @@ agent-data must go through the shim in evals, not the live CLI.
 ## No application-URL scraping
 
 The job-data source deliberately does not expose an `application_url` field.
-`shared/references/agent-data.md` states
+the `agent-data-reference` skill states
 this explicitly in the `get-posting` route definition. The system therefore never scrapes or
 follows application endpoints — the omission is intentional, not a gap.
 

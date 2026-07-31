@@ -36,7 +36,7 @@ page coverage take effect immediately.
 
 For the exact config recipes (how to add a query, change frequency, update the brief, or change
 review depth) and the preview arithmetic,
-see `shared/references/runbook.md`.
+see the `job-search-runbook` skill.
 
 For the product philosophy behind this (prose-over-knobs, conversational-first),
 see [`design-docs/core-beliefs.md`](design-docs/core-beliefs.md).
@@ -66,10 +66,10 @@ sees at a glance:
   the latest digest's Run health line as a fallback.
 - **Latest digest summary** — the date and the counts line from the newest digest.
 - **Pipeline counts** — totals grouped by job status (the status vocabulary is owned by
-  `shared/references/runbook.md`) and how many need a human check.
+  the `job-search-runbook` skill) and how many need a human check.
 - **One-time deeper-coverage offer** — only after the latest local run provides the qualifying
   evidence, and never again after it is shown; the marker and eligibility rules are owned by
-  `shared/references/runbook.md`.
+  the `job-search-runbook` skill.
 - **Quick actions** — conversational prompts: run a search now, add or edit a query,
   change frequency or review depth, explain usage, update preferences, toggle the schedule,
   show the latest digest.
@@ -105,7 +105,7 @@ links, incomplete deeper coverage, partial failures, and a brief-age nudge when 
 
 The **exact digest format** (section layout, counts line shape, run-health vocabulary,
 footnote conventions) is owned by
-`shared/references/runbook.md` — refer
+the `job-search-runbook` skill — refer
 there; it is not reproduced here.
 
 For how the digest is produced (the search loop, dedup, evaluation, detail reads,
@@ -131,7 +131,7 @@ What a stopped run writes is the record and the digest: `close_state` (`complete
 `interrupted`) and `run_health` (`healthy` / `degraded`) in `runs/<run_id>.json`, whose shape is
 [`run-record.example.json`](../skills/job-search-run/templates/run-record.example.json), plus a digest whose
 body is the cause and the fix. The close sequence is owned by
-`../shared/references/runbook.md`.
+the `job-search-runbook` skill.
 
 ---
 
@@ -147,9 +147,10 @@ consent-gated (the exact change is shown first and written only on an explicit y
 recorded as running only after a **config-time canary** proves the real invocation works.
 
 The OS state — the registry, the local jobs file, the schedule marker — is plain files the host
-agent reads and writes natively, following the pinned procedures in `shared/references/`. None of
+agent reads and writes natively, following the pinned procedures in the `job-search-runbook` and
+`agent-data-reference` skills. None of
 it is user-facing; users never interact with those files directly.
 
 For the full surface and how the scheduling mechanisms and canary work, see
 [`../ARCHITECTURE.md`](../ARCHITECTURE.md) and
-`shared/references/runbook.md` (Scheduling setup).
+the `job-search-runbook` skill (Scheduling setup).

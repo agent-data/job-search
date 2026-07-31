@@ -21,15 +21,15 @@ it reports; a few checks are pure shell or visual.
 
 The terminal state (per the AAS-T-10 ruling) is **a structural gate + automated lanes + a shrinking, honestly-labeled manual residual** — not a manual cross-host ritual. What is now **automated** (⚙️, runs in `pytest` / a CLI, host-independent — no manual driving):
 
-- **Scripted mechanics** — `tests/test_mechanics_scripts.py` (28 tests, `pytest -q tests/test_mechanics_scripts.py`): the deterministic state operations the skills call out to — dedup, the jobs.jsonl event-line append, schedule-line composition, and workspace discovery — each driven through `sh` against a temp fixture, plus one case that runs `sh -n` and strict `dash -n` over all five scripts in `shared/scripts/mechanics/` so none of them is quietly bash-only. The fifth script, `validate-workspace.sh`, is syntax-checked here and behavior-tested in the next bullet.
-- **Workspace validator** — `tests/test_validate_workspace.py`: `shared/scripts/mechanics/validate-workspace.sh` run against workspaces built per case. It checks config.yaml's required keys, `---` front matter with ISO `created_at`/`updated_at` in preferences.md, the run-record shape and UTC `Z` timestamps, and — with `--post-close` — that no started-marker or scratch directory survived the run. These file rules used to live only as prose in the skills; the script is now what enforces them.
+- **Scripted mechanics** — `tests/test_mechanics_scripts.py` (28 tests, `pytest -q tests/test_mechanics_scripts.py`): the deterministic state operations the skills call out to — dedup, the jobs.jsonl event-line append, schedule-line composition, and workspace discovery — each driven through `sh` against a temp fixture, plus one case that runs `sh -n` and strict `dash -n` over all five bundled scripts, wherever their owning skill keeps them, so none of them is quietly bash-only. The fifth script, `validate-workspace.sh`, is syntax-checked here and behavior-tested in the next bullet.
+- **Workspace validator** — `tests/test_validate_workspace.py`: `skills/job-search-runbook/scripts/validate-workspace.sh` run against workspaces built per case. It checks config.yaml's required keys, `---` front matter with ISO `created_at`/`updated_at` in preferences.md, the run-record shape and UTC `Z` timestamps, and — with `--post-close` — that no started-marker or scratch directory survived the run. These file rules used to live only as prose in the skills; the script is now what enforces them.
 - **Eval-case lint** — `tests/test_eval_cases.py`: every row in `evals/behaviors.md` names a case file that exists in `evals/cases/`, every case file carries the five header fields `evals/run_eval.py` reads (`behaviors`, `workspace`, `timeout_s`, `models`, `prompt`), and each case's `behaviors:` list matches the rows that name it. This checks that the eval config is coherent; it does not run an eval.
 - **Hardened skill evals** — `python3 scripts/eval_harness.py --root .` validates every `skills/*/evals/evals.json` for structural coherence (contiguous ids, well-formed scenarios, a **discovery** scenario per skill for the four overlap pairs, **stochastic** scenarios carrying `reps ≥ 5` + a **no-guidance control** arm, and — on milestone/liveness scenarios — a **fixed-time fixture** (`fixed_time`: a deterministic reference clock with a valid ISO `now` and a `checks` subset of `milestone`/`liveness`) so those derivations never read the wall clock) and rejects the pinned pack-authored `gpt-5*` literal regression family. Legacy version-1 selectors may resolve through host tier roles; version-2 test and runtime setup injects an exact host-resolved identifier. Pack-authored fixtures and prose never hard-code that identifier. `tests/test_eval_harness.py` unit-tests the rep-aggregation (pass-rate + variance), the control-delta, the fixed-time-fixture validation, and the **unique run marker** enforcement — the off-CI artifact check (`scripts/eval_harness.py --check-artifacts`) accepts a per-run `run_marker` and, for any `run_marked` assertion, requires the artifact to carry it, so a stale artifact left in a reused workspace can never create a false pass.
 - **Release integrity** — `scripts/check_release_integrity.py`: version-sync across the 7 manifests (six JSON plus the Hermes `plugin.yaml`).
 
 Verifying a host-specific action such as scheduling is now a **runtime config-time canary** check, replacing the deleted per-host **structural adapter validation**.
 
-How the skills *behave* is graded by the live behavior evals in `evals/` (§ Behavior evals), which are a **local release gate — CI never runs them**: each one spawns a real `claude -p` session against the live Job Postings API, which needs an API key and costs money. No test asserts sentences of documentation prose; the suites that did were retired on 2026-07-30 in favor of the evals plus `validate-workspace.sh`. Two pytest files still open a reference file, and neither reads it for wording: `tests/test_reference_resolution.py` follows every `../../shared/references/<file>.md` pointer from each host's install view and fails on a dangling one, and `tests/test_usage_context_contract.py` checks that pricing and metering facts have exactly one owning file (`shared/references/agent-data.md`).
+How the skills *behave* is graded by the live behavior evals in `evals/` (§ Behavior evals), which are a **local release gate — CI never runs them**: each one spawns a real `claude -p` session against the live Job Postings API, which needs an API key and costs money. No test asserts sentences of documentation prose; the suites that did were retired on 2026-07-30 in favor of the evals plus `validate-workspace.sh`. Two pytest files still open a reference file, and neither reads it for wording: `tests/test_reference_resolution.py` follows every path a SKILL.md names, from each host's install view, and fails on a dangling one, and `tests/test_usage_context_contract.py` checks that pricing and metering facts have exactly one owning file (the `agent-data-reference` skill).
 
 What stays a **labeled TRANSITIONAL residual** (👤/🤖, driven by hand): the **behavioral cross-host matrix** — actually running a skill end-to-end on each of the eight hosts that are **not installable on the CI runner** (Codex/Cursor/opencode/Gemini/Copilot/Droid/Pi/Hermes Agent), and the **N ≥ 5 stochastic eval reps** (the discovery/verdict/injection/merge scenarios run against the shim to record real pass-rate + variance + the control delta). These are the **off-CI live-harness step** — expected, not a gap: CI proves the scenarios are *well-formed*; the behavioral reps prove they *pass*, and shrink as hosts become installable. A green structural gate must never be read as a passed behavioral matrix.
 
@@ -60,7 +60,7 @@ live under the temp dir.
 
 **Isolation pre-flight — run before any destructive/live test (cheap insurance).** Prove the redirect is live so
 nothing can reach your real data (this evaluates the same registry expression the skills' Discovery procedure
-uses — `shared/references/runbook.md`):
+uses — the `job-search-runbook` skill):
 ```bash
 REG="${JOBSEARCH_OS_REGISTRY:-${XDG_CONFIG_HOME:-${JOBSEARCH_OS_HOME:-$HOME}/.config}/job-search/config.json}"
 case "$REG" in "$JSOS_TEST"/*) echo "isolation OK → registry $REG" ;; *) echo "LEAK: registry $REG outside $JSOS_TEST" ;; esac
@@ -90,7 +90,7 @@ in `-p` commands anyway so the skill is invoked deterministically.
 ```bash
 cd "$JSOS" && python3 -m pytest -q
 ```
-**Expected:** `372 passed` **and `0 failed`** — treat **`0 failed`** as the real gate. The count moves in both
+**Expected:** `408 passed` **and `0 failed`** — treat **`0 failed`** as the real gate. The count moves in both
 directions: it grows when tests are added, and it fell three times as the 2026-07-30 overhaul landed. First
 688 → 547, when the documentation-prose suites were retired. Then, on 2026-07-31, **554 → 377 → 374 → 372**:
 554 was the measured count once tasks 5–10 had added their own tests; deleting the shared reference corpus and
@@ -98,7 +98,10 @@ the structures it defined (the exact-model binding sidecar, the version-1 migrat
 the eight-state schedule health) took the tests that read them with it (**−177**); trimming the scheduler
 shim to the contracts that survive took three more (**−3**); retiring the `internal_record` assertion
 surface, which required a run record to carry a raw `E-*` code no shipped file writes any more, replaced its
-three tests with one that rejects the retired name (**−2**). Update the number here whenever it changes. Covers the doc linter, the philosophy guard,
+three tests with one that rejects the retired name (**−2**). It then grew on the same day as the skill
+locality restructure landed: **372 → 385 → 408**, the co-location gates first and then the frontmatter and
+locality suite that came with promoting the two shared references to skills. Update the number here
+whenever it changes. Covers the doc linter, the philosophy guard,
 the release-integrity checks, the scripted-mechanics unit tests, the workspace validator
 (`test_validate_workspace.py`), the eval-case lint (`test_eval_cases.py`), the **eval-scenario validator +
 harness math** (`test_eval_harness.py`), and the fake-shim self-tests (incl. the `bad-query` scenario behind
@@ -144,9 +147,9 @@ claude --plugin-dir "$JSOS" -p "reply with the single word LOADED and do nothing
 ```bash
 cd "$JSOS" && python3 -m pytest -q tests/test_reference_resolution.py
 ```
-**Expected:** `0 failed` — the shared contracts live **once** under `shared/references/` and resolve in place
-from each skill (skills point at `../../shared/references/<file>.md`); there are **no per-skill bundled copies**.
-Nothing is generated into `skills/` or `shared/`, so there is no build step to re-run.
+**Expected:** `0 failed` — the shared contracts live **once**, in the `job-search-runbook` and
+`agent-data-reference` skills, which the other five invoke by name; there are **no per-skill bundled copies**.
+Nothing is generated into `skills/`, so there is no build step to re-run.
 **Result:** ⬜
 
 ### T1.4 Trigger resolves — 🤖
@@ -443,7 +446,7 @@ Below, `$WS` stands for whichever throwaway workspace the row built (`$T3`, `$SH
 2. **A digest that says what stopped it.** `reports/<date>-digest.md` leads with `Run health: degraded`,
    and its body is the cause and the fix in plain words, not a match list and not a cheery summary. Grade
    the sentences: would a user who read only this know what happened and what to do?
-3. **No leftovers.** `"$JSOS/shared/scripts/mechanics/validate-workspace.sh" "$WS" --post-close <run_id>`
+3. **No leftovers.** `"$JSOS/skills/job-search-runbook/scripts/validate-workspace.sh" "$WS" --post-close <run_id>`
    exits 0 and prints nothing — the started-marker and the scratch directory are gone even though the run
    stopped early.
 
@@ -453,7 +456,7 @@ that file no matter how cleanly the run closed. Measured on T7.4's seed (a works
 `setup-workspace.sh` with `preferences.md` emptied):
 
 ```
-$ shared/scripts/mechanics/validate-workspace.sh "$WS" --post-close 2026-07-30T09-00-00Z
+$ skills/job-search-runbook/scripts/validate-workspace.sh "$WS" --post-close 2026-07-30T09-00-00Z
 INVALID preferences.md front-matter
 exit=1
 ```
@@ -782,7 +785,7 @@ and should not cause a ❌.
 
 **Expected (read the transcript):** Default/unsolicited relevance output stays band-only. The usage answer
 leads with actual calls and the outcome levers — frequency, sources, and review depth — and may load accurate
-current pricing from `shared/references/agent-data.md` when it clearly labels a pay-as-you-go equivalent. It
+current pricing from the `agent-data-reference` skill when it clearly labels a pay-as-you-go equivalent. It
 must not invent an actual charge, account balance, or `budget`/`credits`/`cost` config field. For the **explicit**
 "fit score out of 100" request, honoring it in the reply
 is acceptable (the agent is flexible) **as long as** it (a) notes scoring is non-default and
@@ -912,7 +915,7 @@ entries carry a date mark; the first-Ashby-pass footnote is present.
 - ⬜ Scheduling correct (the composed `/loop <interval>` matches the pinned table per frequency; `/loop` sets `mechanism:loop`; **zero-Python user path** proven with python3 masked) (§9)
 - ⬜ **No numeric scores/weights, budget config, or invented charge** in files or unsolicited chat; accurate calls-first usage context is labeled, and users control frequency, sources, and review depth (§10)
 - ⬜ Docs match reality (install commands, error table, sample digest) (§11)
-- ⬜ Full regression green: `pytest` (**372**; gate on `0 failed`) + the eval structural gate (`eval_harness.py`) + all five skills' evals (**51** scenarios) (§0.3, §12)
+- ⬜ Full regression green: `pytest` (**408**; gate on `0 failed`) + the eval structural gate (`eval_harness.py`) + the five eval suites (**51** scenarios) (§0.3, §12)
 - ⬜ Planned config slash-command tests are marked **N/A (pending build)**, not green (§13)
 - ⬜ Multi-source: live Ashby/Greenhouse/Lever rows; shim multi-source run shows per-source counts + first-pass footnote; one source down never blanks the run (§14)
 

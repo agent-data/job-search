@@ -5,46 +5,47 @@ self-contained — please read these before opening a PR.
 
 > Coding agent, or want the map of this repo? Start with [AGENTS.md](AGENTS.md) — the agent-facing entry point.
 
-## Single source of truth — shared references live once
+## Single source of truth — the two reference skills
 
-The shared runtime contracts live **once** under **`shared/references/*.md`** and are the single source of
-truth. The install lays down the whole pack tree, so each skill resolves them **in place** — skills point at
-`../../shared/references/<file>.md`, and there are **no per-skill copies** to keep in sync.
+The shared runtime contracts live **once**, as two skills of their own, and are the single source of
+truth. The install lays down the whole pack tree, so any skill can invoke either by name, and there are
+**no per-skill copies** to keep in sync.
 
 There are exactly two of them, and between them they own everything a run does:
 
-- **`runbook.md`** — find the workspace, what each file in it holds, how one run opens and closes, running
-  it unattended, scratch, and what stays off disk.
-- **`agent-data.md`** — the agent-data CLI, the four job sources and their quirks, retries, and what a
-  call costs.
+- **`job-search-runbook`** — find the workspace, what each file in it holds, how one run opens and closes,
+  running it unattended, scratch, and what stays off disk. It also holds the two scripts more than one
+  skill runs, `scripts/workspace-discovery.sh` and `scripts/validate-workspace.sh`.
+- **`agent-data-reference`** — the agent-data CLI, the four job sources and their quirks, retries, and
+  what a call costs.
 
 The exact *shape* of each workspace file is not prose in either one: it is a copyable example in the
 `templates/` directory of the skill that writes it — `config.example.yaml` and
 `workspace.gitignore` under `skills/job-search/`, `run-record.example.json` and
 `jobs-event.example.json` under `skills/job-search-run/`, `preferences.example.md` under
 `skills/job-preference-interview/`. Whether a workspace on disk obeys the file rules is decided by
-`shared/scripts/mechanics/validate-workspace.sh`, not by a paragraph a skill has to restate.
+`skills/job-search-runbook/scripts/validate-workspace.sh`, not by a paragraph a skill has to restate.
 
 **Edit the source:**
 
-- Shared references live in **`shared/references/*.md`** (dev tooling lives in `scripts/` and `evals/` —
-  the Python linters, the release-integrity check, and the eval runners; none of it ships in the skills).
-- Edit the file in `shared/references/` and you're done — every skill sees the change, because they all
-  resolve the same file.
+- The two references live in **`skills/job-search-runbook/SKILL.md`** and
+  **`skills/agent-data-reference/SKILL.md`** (dev tooling lives in `scripts/` and `evals/` — the Python
+  linters, the release-integrity check, and the eval runners; none of it ships in the skills).
+- Edit one of those two files and you're done — every skill sees the change, because they all invoke the
+  same skill.
 
-Nothing is generated into `skills/` or `shared/`: there is no build step, and no file there is a copy of
-another.
+Nothing is generated into `skills/`: there is no build step, and no file there is a copy of another.
 
 A skill's own `SKILL.md` and its `evals/` are **authored originals**, not generated — edit them in
 place.
 
 ## Keep the agent-facing corpus under 10,000 words
 
-The five `SKILL.md` files plus both references are what every run reads before it can do anything, so their
+The seven `SKILL.md` files are what every run reads before it can do anything, so their
 combined length is a product cost, not a style question. Measure before and after any change to them:
 
 ```bash
-wc -w skills/*/SKILL.md shared/references/*.md   # 8,822 total as of 0.8.0; the budget is 10,000
+wc -w skills/*/SKILL.md   # 9,096 total as of 0.8.0; the budget is 10,000
 ```
 
 If a change needs more words there, cut somewhere else in the same PR. Detail that only a contributor needs
@@ -71,8 +72,8 @@ python3 scripts/eval_harness.py --root .
 ```
 
 **Four of those five are the CI jobs**, in `.github/workflows/ci.yml`: `pytest`, the philosophy
-guard, the doc linter, and release integrity (which on a pull request also fails when `skills/`,
-`shared/references/`, or `shared/scripts/` changed without a forward version bump). `eval_harness.py`
+guard, the doc linter, and release integrity (which on a pull request also fails when anything under
+`skills/` changed without a forward version bump). `eval_harness.py`
 is **not** wired into CI — `grep -rn "eval_harness" .github/` returns nothing — so run it yourself;
 nothing else catches a malformed scenario file. All five must be green before you open a PR.
 
@@ -132,8 +133,8 @@ thing: `.claude-plugin/plugin.json` (the primary), `.codex-plugin/plugin.json`,
 python3 scripts/check_release_integrity.py --root . --check-version-sync
 ```
 
-CI runs that check on every change, and on a pull request it also fails when `skills/`,
-`shared/references/`, or `shared/scripts/` changed without a forward bump.
+CI runs that check on every change, and on a pull request it also fails when anything under `skills/`
+changed without a forward bump.
 
 - **patch** (`0.1.0 → 0.1.1`) — bug fixes, docs, internal refactors with no behavior change.
 - **minor** (`0.1.0 → 0.2.0`) — new skills or user-visible features, backward compatible.
@@ -157,7 +158,7 @@ brief, `config.yaml`, or `jobs.jsonl`. Keep them intact:
 - **Usage context, not budget controls.** Users choose outcomes — frequency, sources, and review depth — and
   see exact usage context before added metered work plus actual calls after each run. Accurate calls-first
   context is expected; a `budget`, `credits`, or `cost` config field, hard monetary cap, or invented actual
-  charge is not. Pricing and metering facts live only in `shared/references/agent-data.md`.
+  charge is not. Pricing and metering facts live only in the `agent-data-reference` skill.
 - **Private and local.** The user workspace is private PII with a deny-all `.gitignore` and is never
   committed. No personal data belongs in this repo.
 - **Every blocked path is named.** No silent failures: if something can't proceed, say what stopped it and

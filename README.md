@@ -26,7 +26,7 @@ Job Search gets live postings through the [agent-data](https://agent-data.dev) c
 1. If the CLI is missing, the agent offers to install it with `npm install -g agent-data`. If a global install needs different permissions, it gives you the exact command to run.
 2. If authentication is missing, the agent helps you create an API key, runs `agent-data init --api-key <KEY> -y`, and verifies it with `agent-data whoami`. The agent-data CLI stores the key in its own config, outside this repository.
 
-Agent-data offers a 100-call monthly free tier; the example below uses 9 metered calls. Before a choice increases expected usage, Job Search previews the change. After each run, it reports actual attempts. Any dollar amount is labeled as a pay-as-you-go equivalent, not an account charge. See [what a run spends](shared/references/agent-data.md) or your [billing page](https://agent-data.motie.dev/settings/billing) for current details.
+Agent-data offers a 100-call monthly free tier; the example below uses 9 metered calls. Before a choice increases expected usage, Job Search previews the change. After each run, it reports actual attempts. Any dollar amount is labeled as a pay-as-you-go equivalent, not an account charge. See [what a run spends](skills/agent-data-reference/SKILL.md) or your [billing page](https://agent-data.motie.dev/settings/billing) for current details.
 
 ## What a run looks like
 
@@ -181,7 +181,7 @@ After installation, start a new Hermes Agent session and use the Quickstart sent
 
 ## For contributors
 
-Start with [AGENTS.md](AGENTS.md). It points to the [architecture](ARCHITECTURE.md), [contributor workflow](CONTRIBUTING.md), [test guide](TESTING.md), and canonical runtime contracts in [`shared/references/`](shared/references/).
+Start with [AGENTS.md](AGENTS.md). It points to the [architecture](ARCHITECTURE.md), [contributor workflow](CONTRIBUTING.md), [test guide](TESTING.md), and the canonical runtime contracts in [job-search-runbook](skills/job-search-runbook/SKILL.md) and [agent-data-reference](skills/agent-data-reference/SKILL.md).
 
 ## License
 

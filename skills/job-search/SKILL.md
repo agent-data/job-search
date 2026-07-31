@@ -8,10 +8,10 @@ description: Set up, check on, and steer the user's job search — the front doo
 The front door: first-time setup, the home view after that, and where the user steers their search
 from by talking to you. The work belongs to the other skills — `job-search-run` pulls and judges
 postings, `job-preference-interview` writes the brief, `evaluate-job-fit` judges one posting. Two
-references carry the mechanics, each named below as a path relative to this file:
+more skills carry the mechanics — invoke each as you need it:
 
-- `../../shared/references/runbook.md` — the workspace, what each file in it holds, the run contract.
-- `../../shared/references/agent-data.md` — the CLI, what a call costs, what to say before spending one.
+- `job-search-runbook` — the workspace, what each file in it holds, the run contract.
+- `agent-data-reference` — the CLI, what a call costs, what to say before spending one.
 
 ## Your first message on a first run
 
@@ -27,7 +27,8 @@ These ten rules govern how you say things, in every mode below.
 
 1. Define each idea in plain words the first time the user meets it — the brief, a job source, the
    free monthly calls, the recurring job, the digest — in the sentence or offer that first uses it.
-2. Before metered work, say what it opens with, in your own words, per agent-data.md's cost recipe.
+2. Before metered work, say what it opens with, in your own words, per `agent-data-reference`'s
+   cost recipe.
 3. Ask one question at a time, and only when the answer changes what you do; a closed choice goes
    through your host's question interface (numbered prose without one), open questions stay prose.
 4. Show matches as message text in your reply — title, company, location, the reasoning line, the
@@ -58,7 +59,8 @@ Other intents leave: what they want in a job → `job-preference-interview`, a p
 
 1. Open with your first message above.
 2. Run `agent-data whoami` — the whole preflight, local and free. On `api_key_set: false`, say the
-   key is missing, give agent-data.md's `agent-data init` line, and go on once it reports true.
+   key is missing, give `agent-data-reference`'s `agent-data init` line, and go on once it reports
+   true.
 3. Build the workspace where discovery pointed: copy this skill's `templates/config.example.yaml` to
    `config.yaml` and this skill's `templates/workspace.gitignore` to `.gitignore`, create an empty
    `jobs.jsonl`, and make `runs/` and `reports/`. A file already there stays as it is. Say in one
@@ -74,7 +76,8 @@ Other intents leave: what they want in a job → `job-preference-interview`, a p
 6. Derive two or three searches from the brief into `queries[]` in `config.yaml`, each with a short
    `id` from its own terms and the template's field set: keywords are the role and domain terms a job
    board matches, location is the geography the brief names, and remote rides in the keywords per
-   agent-data.md's LinkedIn row. Say which searches you derived and that they change on request.
+   `agent-data-reference`'s LinkedIn row. Say which searches you derived and that they change on
+   request.
 7. Give the user the cost sentence rule 2 asks for, then invoke `job-search-run` on the workspace.
 8. Render what came back: the strong matches, then the moderate ones, each with its reasoning line
    and its link, plus any confirm note the digest carries. Where the run judged postings and few or
@@ -86,8 +89,8 @@ Other intents leave: what they want in a job → `job-preference-interview`, a p
 A search that runs on its own is the point of the whole thing, so offer it while the first matches
 are still on screen, and say plainly what it is: this same search, running by itself on a schedule,
 leaving a digest of whatever is new. Say what that cadence costs to keep: the calls one run opens
-with, that many again every day or week it fires, against the free monthly calls agent-data.md
-counts — the user hears the monthly total before a yes is recorded. Ask once, with daily as the
+with, that many again every day or week it fires, against the free monthly calls
+`agent-data-reference` counts — the user hears the monthly total before a yes is recorded. Ask once, with daily as the
 usual cadence; their yes starts the install, as does a request that already asks for it.
 
 1. Write today's date into `schedule.consented` in `config.yaml`, with `schedule.frequency` and

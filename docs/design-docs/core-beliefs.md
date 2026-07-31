@@ -30,8 +30,8 @@ Each belief is written in four parts:
 The runtime contracts these beliefs *protect* are owned elsewhere and are linked, never restated here —
 this doc is a live design-doc subject to the `no-shared-reference-duplication` rule in
 [scripts/doc_lint.py](../../scripts/doc_lint.py). How a run opens and closes and what each workspace file
-holds are in `shared/references/runbook.md`; retries and what a call costs
-are in `shared/references/agent-data.md`; the exact fields of a config,
+holds are in the `job-search-runbook` skill; retries and what a call costs
+are in the `agent-data-reference` skill; the exact fields of a config,
 a run record, a job event, and the brief are the copyable examples in the `templates/` directory of
 the skill that writes each one, listed in
 [../../ARCHITECTURE.md](../../ARCHITECTURE.md#where-the-contracts-live).
@@ -68,7 +68,7 @@ the skill that writes each one, listed in
   `skills/job-search-run/templates/run-record.example.json`; a spent allowance is
   named where the run hits it, in the [job-search-run](../../skills/job-search-run/SKILL.md) skill;
   and canonical pricing and metering facts live only in
-  `shared/references/agent-data.md`.
+  the `agent-data-reference` skill.
 - **How to verify.** `python3 scripts/philosophy_guard.py --root .` → `Philosophy guard: clean.`
 
 ## 3. Private & local
@@ -80,7 +80,7 @@ the skill that writes each one, listed in
   workspace.
 - **Enforced by.** The workspace gitignore *template* ships a deny-all (`*` then `!.gitignore`) that
   the first-run setup copies in; the workspace layout and what stays off disk entirely are owned by
-  `shared/references/runbook.md`. Beyond the template this
+  the `job-search-runbook` skill. Beyond the template this
   is **cultural** — there is no CI check that scans for committed PII, so review must catch it.
 - **How to verify.** Inspect `skills/job-search/templates/workspace.gitignore` (the deny-all template)
   and confirm no
@@ -99,18 +99,18 @@ the skill that writes each one, listed in
   `close_state: blocked` and `run_health: degraded` (the shape is `skills/job-search-run/templates/run-record.example.json`)
   plus a digest whose body is the cause and the fix, *before* it stops — because a headless `claude -p`
   exits 0 even when blocked, so the record is the only trustworthy signal. The start-to-close sequence is
-  owned by `shared/references/runbook.md`, and
+  owned by the `job-search-runbook` skill, and
   `validate-workspace.sh --post-close <run_id>` checks that even a run that stopped early left no
   started-marker and no scratch. The behavior is graded by the live evals in `evals/` — B9 covers a run
   killed mid-flight — and by the blocked scenarios in `skills/job-search-run/evals/evals.json`.
 - **How to verify.** Read the "One run, start to close" section of
-  `shared/references/runbook.md`; then run the job-search-run
+  the `job-search-runbook` skill; then run the job-search-run
   evals (ask Claude to "run the evals for job-search-run") and confirm each blocked scenario writes its
   record and a digest a user could act on without reading a log.
 
 ## 5. Single source of truth
 
-- **Statement.** Each fact has exactly one canonical home in `shared/references/`; skills reference it
+- **Statement.** Each fact has exactly one canonical home in a reference skill; other skills invoke it
   in place under the guaranteed bundle install. No fact is hand-copied, and no reference is fanned into
   per-skill copies tracked in source.
 - **Why.** Every supported host installs the whole pack via its manifest — there is no loose
@@ -121,7 +121,7 @@ the skill that writes each one, listed in
 - **Enforced by.** There is no build step at all now — nothing is generated into `skills/` or
   `shared/`, so there is nothing to fall out of sync. What holds the property is
   [scripts/doc_lint.py](../../scripts/doc_lint.py)'s duplication check
-  (`no-shared-reference-duplication`, which guards both the knowledge base and `shared/references/`
+  (`no-shared-reference-duplication`, which guards both the knowledge base and the reference skills
   itself) and the per-host resolution tests in
   [tests/test_reference_resolution.py](../../tests/test_reference_resolution.py).
 - **How to verify.** `git ls-files 'skills/*/references/*.md'` prints nothing — there are no
@@ -144,9 +144,9 @@ the skill that writes each one, listed in
   `claude -p` returns 0 even when it halted, success must be read from the written record, never from
   the exit code.
 - **Enforced by.** The mechanics are bundled as portable POSIX-`sh` scripts under
-  `shared/scripts/mechanics/` — dedup, the event-log append, schedule-line composition, workspace
+  `skills/job-search-runbook/scripts/` — dedup, the event-log append, schedule-line composition, workspace
   discovery, and `validate-workspace.sh`, which decides whether a workspace on disk obeys the file
-  rules. The prose those scripts pair with is `shared/references/runbook.md`
+  rules. The prose those scripts pair with is the `job-search-runbook` skill
   (find the workspace, what each file holds, one run start to close); the runner invokes the script
   where a shell runtime exists and follows the runbook's steps otherwise.
   `tests/test_mechanics_scripts.py` drives each script through `sh` against a temp fixture and
@@ -181,7 +181,7 @@ the skill that writes each one, listed in
   before the schedule is called active (`PSG-SUB-06`, prove it works, not that it exists). The
   unattended-first model (session loop as its named fallback) and the canary are owned by the front-door
   skill [skills/job-search/SKILL.md](../../skills/job-search/SKILL.md), which offers the schedule, runs the
-  canary, and records the marker only on a green one; `shared/references/runbook.md`
+  canary, and records the marker only on a green one; the `job-search-runbook` skill
   ("Running it unattended") gives the shape of the command a scheduler has to run.
 - **Enforced by.** **Instruction-level + evals** — there is no runtime hook. The stance asserts **no
   silent / un-consented privileged write**, and now that the advocated default is an unattended schedule (a
@@ -223,14 +223,14 @@ the skill that writes each one, listed in
   breaking changes is what lets a release add keys — `schedule.consented`, `search.max_new_postings_per_run` —
   without touching anyone's workspace, and lets a run ignore a key an older workspace still carries.
 - **Enforced by.** **Cultural**, backed by one mechanical check.
-  `shared/scripts/mechanics/validate-workspace.sh` requires `version` to be present and numeric and says
+  `skills/job-search-runbook/scripts/validate-workspace.sh` requires `version` to be present and numeric and says
   nothing about its value, so an older workspace keeps working — that permissiveness is the point, and it
   is what makes bumping the version a deliberate act rather than a side effect. Whether a change *deserves*
   a bump is a judgment; the release rule for the plugin version, and the requirement that a release note
   say what an existing workspace must do, are in
   [CONTRIBUTING.md](../../CONTRIBUTING.md#versioning--bump-it-every-release).
 - **How to verify.** Read the config-check block in
-  [../../shared/scripts/mechanics/validate-workspace.sh](../../shared/scripts/mechanics/validate-workspace.sh)
+  [skills/job-search-runbook/scripts/validate-workspace.sh](../../skills/job-search-runbook/scripts/validate-workspace.sh)
   (required keys: `version`, `queries`, `search.sources`, `schedule`), then check that the newest CHANGELOG
   entry has a **Compatibility** section whenever it changed what a run writes into a workspace.
 
@@ -262,7 +262,7 @@ the skill that writes each one, listed in
   the user. Treating docs as a product means they are linked, fresh, and checked like code.
 - **Enforced by.** [scripts/doc_lint.py](../../scripts/doc_lint.py) lints the knowledge base — links
   resolve, frontmatter and `code_refs` are valid, indexes are complete, and live docs don't duplicate
-  the `shared/references/` source of truth — and runs in CI
+  the reference skills' source of truth — and runs in CI
   ([.github/workflows/ci.yml](../../.github/workflows/ci.yml)). The structural map and the docs-as-
   product framing live in [ARCHITECTURE.md](../../ARCHITECTURE.md). That every failure names its fix is
   belief 4, carried by each skill next to the step that can hit it.

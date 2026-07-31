@@ -1,5 +1,5 @@
 manifest_version: 1
 name: job-search
 version: "0.8.0"
-description: A private, local-first job-search assistant — five skills that find postings, judge them against your prose preferences (no scores), and write digests on a schedule you control.
+description: A private, local-first job-search assistant that finds postings, judges them against your prose preferences (no scores), and writes digests on a schedule you control.
 kind: standalone

@@ -18,7 +18,7 @@ Scope: exactly one posting. Batches are job-search-run's job — it invokes this
   caller that hands you the path — job-search-run briefs every detail worker with one — names it
   directly. With no workspace yet, judge against a brief the user pastes.
 - The posting: a pasted job description, a saved `source_id` from `jobs.jsonl`, or a `source_url`+`posting_id`
-  pair to read fresh. That read is the `get-posting` recipe in `../../shared/references/agent-data.md`:
+  pair to read fresh. That read is the `get-posting` recipe in the `agent-data-reference` skill:
   read it there and send the call in the shape it gives, and say you are reading one posting before you
   do. A read that comes back rejected does not stop the judgment — judge that posting from what the
   request already carries, its title, company and location, record everything the full text would have

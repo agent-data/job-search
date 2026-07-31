@@ -18,6 +18,8 @@ SKILLS = (
     "job-search-agent",
     "job-preference-interview",
     "evaluate-job-fit",
+    "job-search-runbook",
+    "agent-data-reference",
 )
 
 
@@ -110,10 +112,12 @@ def test_missing_skill_dir_fails_naming_it(tmp_path):
         _load_adapter(root / "__init__.py").register(StubCtx())
 
 
-def test_missing_shared_references_fails_naming_it(tmp_path):
+def test_missing_runbook_scripts_fails_naming_it(tmp_path):
+    """The mechanics scripts moved into the runbook skill on 2026-07-31; an install missing that
+    directory must still fail by name, the way a missing shared/scripts/mechanics/ used to."""
     root = _synthetic_tree(tmp_path)
-    shutil.rmtree(root / "shared" / "references")
-    with pytest.raises(RuntimeError, match=r"shared/references"):
+    shutil.rmtree(root / "skills" / "job-search-runbook" / "scripts")
+    with pytest.raises(RuntimeError, match=r"skills/job-search-runbook/scripts"):
         _load_adapter(root / "__init__.py").register(StubCtx())
 
 

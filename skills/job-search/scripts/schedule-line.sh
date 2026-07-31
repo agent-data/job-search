@@ -2,7 +2,7 @@
 # schedule-line.sh — compose the five-field cron schedule expression for a cadence.
 #
 # config.yaml pins the cadence enum (schedule.frequency) and schedule.time (HH:MM, honored for
-# daily/weekly); shared/references/runbook.md §Running it unattended has the invocation the host
+# daily/weekly); the job-search-runbook skill's §Running it unattended has the invocation the host
 # wraps this line around. This is the deterministic, host-neutral core of that composition: the cron
 # time expression (minute hour day-of-month month day-of-week) for a cadence —
 #   hourly         -> 0 * * * *
@@ -16,7 +16,7 @@
 #
 # NOTE (flagged for the D10 fallback prose): the weekly day-of-week (Monday = 1) and the daily/weekly
 # default time (08:00, the config default) are inherited from the repo's prior schedule-line contract;
-# they are not otherwise pinned in shared/references/. Adjust here and in the fallback together.
+# they are not otherwise pinned in the job-search-runbook skill. Adjust here and in the fallback together.
 #
 # Usage: schedule-line.sh <frequency> [HH:MM]
 set -u

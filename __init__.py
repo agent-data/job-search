@@ -2,7 +2,7 @@
 
 Hermes imports this file when the enabled plugin loads (once per process) and
 calls register(ctx). It verifies the installed tree is complete, then registers
-the five skills under namespaced fallback names (job-search:<skill>). Bare-name
+the seven skills under namespaced fallback names (job-search:<skill>). Bare-name
 discovery does not come from here: the skills.external_dirs entry documented in
 INSTALL_FOR_HERMES.md provides it, because plugin-registered skills never enter
 Hermes's available-skills list.
@@ -22,16 +22,17 @@ SKILLS = (
     "job-search-agent",
     "job-preference-interview",
     "evaluate-job-fit",
+    "job-search-runbook",
+    "agent-data-reference",
 )
 
 REQUIRED_DIRS = (
-    "shared/references",
-    "shared/scripts/mechanics",
     "skills/job-search/templates",
     "skills/job-search/scripts",
     "skills/job-search-run/templates",
     "skills/job-search-run/scripts",
     "skills/job-preference-interview/templates",
+    "skills/job-search-runbook/scripts",
 )
 
 

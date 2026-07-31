@@ -1,5 +1,10 @@
-# agent-data — the job-postings API
-<!-- reference-resolution-marker:8f2a4c1e-single-home — this is the ONE canonical home; every skill reaches it in place. Asserted by tests/test_reference_resolution.py; do not remove. -->
+---
+name: agent-data-reference
+description: "The job-postings API the job-search skills call, not something a user asks for: the agent-data CLI and listing id, the per-source quirks, the get-posting recipe, retries, what a call costs."
+---
+
+# agent-data-reference — the job-postings API
+<!-- reference-resolution-marker:8f2a4c1e-single-home — the job-postings reference lives in this file and nowhere else; a sibling skill reaches it by invoking this skill. Asserted by tests/test_reference_resolution.py; do not remove. -->
 
 One marketplace listing serves four job sources. This file carries what the route docs leave out:
 the per-source behavior that changes a query or a judgment, what each call costs, and what to tell

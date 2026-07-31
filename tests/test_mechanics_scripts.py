@@ -1,9 +1,9 @@
 """Unit tests for the bundled portable-shell mechanics scripts (P4/T4.1, AAS-FORM-08).
 
 The fiddly deterministic mechanics that skills used to execute as model-run prose contracts are
-bundled as portable POSIX-`sh` scripts. A script with one skill consumer sits in that skill's own
-`scripts/` directory, so the skill names it without computing a path; the two that more than one
-skill runs are still in `shared/scripts/mechanics/`. Each test drives one script via subprocess
+bundled as portable POSIX-`sh` scripts. Every script sits in the `scripts/` directory of a
+skill, so the skill that owns it names it without computing a path; the two more than one skill runs
+sit in the `job-search-runbook` skill, and its two consumers name them from the repo root. Each test drives one script via subprocess
 against a temp fixture and asserts what the script does: dedup, the jobs.jsonl event-line append,
 schedule-line composition, and workspace discovery.
 
@@ -19,14 +19,14 @@ import subprocess
 import pytest
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
-MECH = ROOT / "shared" / "scripts" / "mechanics"
+RUNBOOK_SCRIPTS = ROOT / "skills" / "job-search-runbook" / "scripts"
 RUN_SCRIPTS = ROOT / "skills" / "job-search-run" / "scripts"
 SEARCH_SCRIPTS = ROOT / "skills" / "job-search" / "scripts"
 DEDUP = RUN_SCRIPTS / "dedup.sh"
 APPEND = RUN_SCRIPTS / "event-log-append.sh"
 SCHEDULE = SEARCH_SCRIPTS / "schedule-line.sh"
-DISCOVERY = MECH / "workspace-discovery.sh"
-VALIDATE = MECH / "validate-workspace.sh"
+DISCOVERY = RUNBOOK_SCRIPTS / "workspace-discovery.sh"
+VALIDATE = RUNBOOK_SCRIPTS / "validate-workspace.sh"
 
 ALL_SCRIPTS = [DEDUP, APPEND, SCHEDULE, DISCOVERY, VALIDATE]
 

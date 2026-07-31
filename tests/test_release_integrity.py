@@ -122,13 +122,13 @@ def test_untracked_runtime_surface_addition_requires_version_bump(tmp_path):
     assert "skills/new-skill/SKILL.md" in r.stdout
 
 
-def test_shared_scripts_change_is_runtime_surface_requiring_version_bump(tmp_path):
+def test_a_skill_script_change_is_runtime_surface_requiring_version_bump(tmp_path):
     """A mechanics-script change is SHIPPED RUNTIME (belief 6 / P4/T4.3): the version-bump gate must
-    treat shared/scripts/ like skills/ and shared/references/, so a script edit without a forward bump
-    goes RED, and a matching bump clears it."""
+    treat a skill's scripts/ like its SKILL.md, so a script edit without a forward bump goes RED, and
+    a matching bump clears it."""
     init_git_repo(tmp_path)
     seed_manifests(tmp_path, "1.2.3")
-    script = tmp_path / "shared" / "scripts" / "mechanics" / "validate-workspace.sh"
+    script = tmp_path / "skills" / "job-search-runbook" / "scripts" / "validate-workspace.sh"
     script.parent.mkdir(parents=True)
     script.write_text("#!/bin/sh\necho old\n")
     commit_all(tmp_path, "base")
@@ -138,7 +138,7 @@ def test_shared_scripts_change_is_runtime_surface_requiring_version_bump(tmp_pat
     r = run_check(tmp_path, "--check-version-bump", "--base", base)
     assert r.returncode == 1
     assert "runtime surface changed" in r.stdout
-    assert "shared/scripts/mechanics/validate-workspace.sh" in r.stdout
+    assert "skills/job-search-runbook/scripts/validate-workspace.sh" in r.stdout
 
     for manifest in (".claude-plugin/plugin.json", ".codex-plugin/plugin.json",
                      ".cursor-plugin/plugin.json", ".factory-plugin/plugin.json",

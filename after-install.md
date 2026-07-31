@@ -2,7 +2,7 @@
 
 Hermes installed the complete Job Search repository into this directory.
 
-**The five skills are not yet available by their normal names.** The Hermes
+**The seven skills are not yet available by their normal names.** The Hermes
 instance running this install must add this plugin's `skills/` directory to the
 active profile's `skills.external_dirs`, then verify discovery. The remaining
 steps are in `INSTALL_FOR_HERMES.md`, in this directory.

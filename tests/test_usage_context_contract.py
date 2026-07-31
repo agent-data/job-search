@@ -12,8 +12,8 @@ import re
 
 
 ROOT = Path(__file__).resolve().parents[1]
-SHARED = ROOT / "shared" / "references"
-AGENT_DATA = SHARED / "agent-data.md"
+SKILLS = ROOT / "skills"
+AGENT_DATA = SKILLS / "agent-data-reference" / "SKILL.md"
 CONFIG_TEMPLATE = ROOT / "skills" / "job-search" / "templates" / "config.example.yaml"
 RUNNER_SETUP = ROOT / "skills" / "job-search-run" / "evals" / "files" / "setup-workspace.sh"
 
@@ -42,7 +42,7 @@ FORBIDDEN_EQUIVALENT_CHARGE_EXCEPTIONS = (
 
 def _persisted_config_surfaces(root):
     """Yield real config templates/schemas and fenced persisted-config examples."""
-    roots = [root / name for name in ("shared", "skills", "templates", "examples")]
+    roots = [root / name for name in ("skills", "examples")]
     for base in roots:
         if not base.exists():
             continue
@@ -115,20 +115,20 @@ def test_runner_eval_fixture_pins_calls_first_context_and_a_validator_checked_cl
     assert "monthly allowance is spent" in " ".join(quota["expectations"]).lower()
 
 
-def test_per_call_dollar_prices_live_in_one_shared_reference():
+def test_per_call_dollar_prices_live_in_one_skill():
     """Agent-data's per-call prices change when its plans change. One copy can be corrected; a
     second copy goes stale silently and the agent then quotes a price that is no longer real. And
     with no copy at all, an agent asked what a run costs has nothing to quote, so the count of
-    owning files is pinned at exactly one: shared/references/agent-data.md."""
+    owning files is pinned at exactly one: skills/agent-data-reference/SKILL.md."""
     owners = {}
-    for path in sorted(SHARED.glob("*.md")):
+    for path in sorted(SKILLS.glob("*/SKILL.md")):
         text = path.read_text(encoding="utf-8")
         found = [literal for literal in VOLATILE_PRICE_LITERALS if literal in text]
         if found:
             owners[path.relative_to(ROOT).as_posix()] = found
     assert len(owners) == 1, (
         f"the per-call dollar prices {list(VOLATILE_PRICE_LITERALS)} must live in exactly one "
-        f"shared reference — a second copy goes stale silently, and none at all leaves the agent "
+        f"skill — a second copy goes stale silently, and none at all leaves the agent "
         f"with no price to quote. Found: {owners}"
     )
     owner, literals = next(iter(owners.items()))
@@ -198,7 +198,7 @@ def test_no_budget_credits_or_cost_key_in_persisted_config_surfaces():
 
 
 def test_non_config_cost_fields_and_prose_are_allowed(tmp_path):
-    api_doc = tmp_path / "shared" / "references" / "api.md"
+    api_doc = tmp_path / "skills" / "agent-data-reference" / "api.md"
     api_doc.parent.mkdir(parents=True)
     api_doc.write_text(
         "Ordinary prose may discuss cost: it is not persisted config.\n\n"
@@ -213,18 +213,18 @@ def test_non_config_cost_fields_and_prose_are_allowed(tmp_path):
 
 
 def test_forbidden_key_detection_is_scoped_to_real_config_surfaces(tmp_path):
-    template = tmp_path / "templates" / "config.example.yaml"
+    template = tmp_path / "skills" / "job-search" / "templates" / "config.example.yaml"
     template.parent.mkdir(parents=True)
     template.write_text("version: 1\nsearch:\n  cost: 10\n", encoding="utf-8")
-    schema_doc = tmp_path / "shared" / "references" / "schema.md"
+    schema_doc = tmp_path / "skills" / "agent-data-reference" / "schema.md"
     schema_doc.parent.mkdir(parents=True)
     schema_doc.write_text(
         "## config.yaml\n\n```yaml\nversion: 1\nbudget: 25\ncredits: 50\n```\n",
         encoding="utf-8",
     )
 
-    assert _forbidden_monetary_config_key_hits(tmp_path) == [
-        ("shared/references/schema.md#config-fence-1", "budget"),
-        ("shared/references/schema.md#config-fence-1", "credits"),
-        ("templates/config.example.yaml", "cost"),
+    assert sorted(_forbidden_monetary_config_key_hits(tmp_path)) == [
+        ("skills/agent-data-reference/schema.md#config-fence-1", "budget"),
+        ("skills/agent-data-reference/schema.md#config-fence-1", "credits"),
+        ("skills/job-search/templates/config.example.yaml", "cost"),
     ]

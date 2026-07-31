@@ -7,11 +7,11 @@ description: Run one headless, non-interactive job-search pass that finds and ju
 
 One pass over the user's job-search workspace: search the enabled sources, judge what is new
 against their brief, write the digest, close the run. Nobody is there to answer a question while
-it runs, so every choice comes from `config.yaml`, `preferences.md`, and two references to read
-first, both named here relative to this file:
+it runs, so every choice comes from `config.yaml`, `preferences.md`, and two skills to invoke
+first:
 
-- `../../shared/references/runbook.md` — the workspace, the run contract, the scratch rule.
-- `../../shared/references/agent-data.md` — the CLI, the per-source quirks, retries, what calls cost.
+- `job-search-runbook` — the workspace, the run contract, the scratch rule.
+- `agent-data-reference` — the CLI, the per-source quirks, retries, what calls cost.
 
 ## Preflight, then open the run
 
@@ -22,11 +22,12 @@ first, both named here relative to this file:
    before it could close, so say that and delete it; then create this run's marker and take the
    brief revision. From here on, a failure closes as a `blocked` run.
 3. Run `agent-data whoami`. When `api_key_set` comes back false, close blocked: the API key is
-   missing, and `agent-data init` from agent-data.md's CLI table is the fix.
-4. Run `<plugin-root>/shared/scripts/mechanics/validate-workspace.sh <workspace>`. Silence means
-   config and brief are usable; each line it prints names one file and one broken rule, so close
-   blocked and report those in plain language.
-5. Say what this run opens with, in the shape agent-data.md's cost recipe gives, before searching.
+   missing, and `agent-data init` from `agent-data-reference`'s CLI table is the fix.
+4. Run the plugin's `skills/job-search-runbook/scripts/validate-workspace.sh <workspace>`. Silence
+   means config and brief are usable; each line it prints names one file and one broken rule, so
+   close blocked and report those in plain language.
+5. Say what this run opens with, in the shape `agent-data-reference`'s cost recipe gives, before
+   searching.
 
 ## Search
 
@@ -39,8 +40,8 @@ run finds new.
 
 Send each response straight into `runs/.scratch/<run_id>/` as it arrives, every row with its `id`
 and `source_url` together (the scratch rule), then check the saved copy for the echoes: the source
-echo per agent-data.md's source-echo row, and the cutoff the same way, where one that comes back
-missing or altered means applying that date to the rows yourself.
+echo per `agent-data-reference`'s source-echo row, and the cutoff the same way, where one that comes
+back missing or altered means applying that date to the rows yourself.
 
 ## Reconcile
 
@@ -70,7 +71,7 @@ judged in its own fresh context, leaving this session's for coordinating the run
 has none, work the list in order. Both paths run on the host's own model. Brief each subagent
 cold: the row's `id` and `source_url` as the pair they arrived in, its `source`, the path to
 `preferences.md`, the `evaluate-job-fit` skill to follow, and that posting's steer. The read is
-agent-data.md's `get-posting` recipe.
+`agent-data-reference`'s `get-posting` recipe.
 
 Append one line per row to `<workspace>/jobs.jsonl` by piping the single-line event JSON into
 this skill's `scripts/event-log-append.sh <workspace>/jobs.jsonl`, which checks the line and skips a
@@ -80,7 +81,8 @@ every field filled — copy that field set, and fill it from this run:
 - `event` is `evaluated`, `run_id` is this run's id, and `status` starts at `new`.
 - `source`, `source_id`, `title`, `company_name`, `location_display`, `salary_display`, and
   `source_url` copied from the row as they arrived; `posting_id_at_seen` from the row's `id`;
-  `posted_at` from its dates through agent-data.md's per-source date row; `query_id` the query.
+  `posted_at` from its dates through `agent-data-reference`'s per-source date row; `query_id` the
+  query.
 - `detail_read` is true for a posting read in full and false for one settled from its row;
   `relevant`, `match`, `reasoning`, `dealbreakers_hit`, `unknowns`, and `needs_human_check` are the
   judgment as `evaluate-job-fit` returned it, and `ts` and `first_seen` the UTC moment of it.
@@ -129,8 +131,8 @@ yet — a first pass over it reaching back further than the freshness window.
 ## Close
 
 Close through the runbook's steps 4 and 5, in that order: the run record, the digest, deleting the
-marker and the scratch directory, then
-`<plugin-root>/shared/scripts/mechanics/validate-workspace.sh <workspace> --post-close <run_id>`,
+marker and the scratch directory, then the plugin's
+`skills/job-search-runbook/scripts/validate-workspace.sh <workspace> --post-close <run_id>`,
 fixing whatever it prints. Copy the field set of this skill's `templates/run-record.example.json`,
 with this run's value in each field.
 
@@ -145,6 +147,6 @@ runbook. Finish by saying what the run found and where the digest is, in plain l
 ## When a call or a run stops early
 
 Retries, the three-attempt budget, and the rule ending one source's work after two retryable
-failures in a row live in agent-data.md; after them, finish the pass with what you have, judging
-the postings a source failed on from their rows. A run that has to stop closes the same way — the
+failures in a row live in `agent-data-reference`; after them, finish the pass with what you have,
+judging the postings a source failed on from their rows. A run that has to stop closes the same way — the
 runbook's `blocked` and `interrupted` states — with what happened and one next step in its digest.
