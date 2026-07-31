@@ -3,7 +3,7 @@ title: Core Beliefs — Agent-First Operating Principles
 status: current
 verified: partial
 last_reviewed: 2026-07-31
-code_refs: [scripts/philosophy_guard.py, scripts/doc_lint.py, tests/test_philosophy_guard.py, tests/test_reference_resolution.py, tests/test_mechanics_scripts.py, shared/scripts/mechanics/dedup.sh, .github/workflows/ci.yml]
+code_refs: [scripts/philosophy_guard.py, scripts/doc_lint.py, tests/test_philosophy_guard.py, tests/test_reference_resolution.py, tests/test_mechanics_scripts.py, skills/job-search-run/scripts/dedup.sh, .github/workflows/ci.yml]
 ---
 # Core Beliefs — Agent-First Operating Principles
 
@@ -32,8 +32,9 @@ this doc is a live design-doc subject to the `no-shared-reference-duplication` r
 [scripts/doc_lint.py](../../scripts/doc_lint.py). How a run opens and closes and what each workspace file
 holds are in `shared/references/runbook.md`; retries and what a call costs
 are in `shared/references/agent-data.md`; the exact fields of a config,
-a run record, a job event, and the brief are the copyable examples in
-[../../templates/](../../templates/).
+a run record, a job event, and the brief are the copyable examples in the `templates/` directory of
+the skill that writes each one, listed in
+[../../ARCHITECTURE.md](../../ARCHITECTURE.md#where-the-contracts-live).
 
 ## 1. Qualitative, never numeric
 
@@ -47,7 +48,7 @@ a run record, a job event, and the brief are the copyable examples in
   it runs in CI ([.github/workflows/ci.yml](../../.github/workflows/ci.yml)) and as
   `tests/test_philosophy_guard.py`. The relevance vocabulary it protects is defined by the
   [evaluate-job-fit](../../skills/evaluate-job-fit/SKILL.md) skill that returns it, and one judged
-  posting's exact fields are `templates/jobs-event.example.json`. A score a user explicitly
+  posting's exact fields are `skills/job-search-run/templates/jobs-event.example.json`. A score a user explicitly
   asks for *in chat* is fine — it just must never be written into a digest, brief, or the job log.
 - **How to verify.** `python3 scripts/philosophy_guard.py --root .` → `Philosophy guard: clean.`
 
@@ -62,7 +63,8 @@ a run record, a job event, and the brief are the copyable examples in
 - **Enforced by.** [scripts/philosophy_guard.py](../../scripts/philosophy_guard.py) rejects any
   `budget` / `credits` / `cost` config field, cost knob, or unverified actual-charge claim in shipped
   output while allowing accurate calls-first usage context. What a run stores about its own metered
-  work is the `agent_data_usage` block in `templates/run-record.example.json`; a spent allowance is
+  work is the `agent_data_usage` block in
+  `skills/job-search-run/templates/run-record.example.json`; a spent allowance is
   named where the run hits it, in the [job-search-run](../../skills/job-search-run/SKILL.md) skill;
   and canonical pricing and metering facts live only in
   `shared/references/agent-data.md`.
@@ -79,7 +81,8 @@ a run record, a job event, and the brief are the copyable examples in
   the first-run setup copies in; the workspace layout and what stays off disk entirely are owned by
   `shared/references/runbook.md`. Beyond the template this
   is **cultural** — there is no CI check that scans for committed PII, so review must catch it.
-- **How to verify.** Inspect `templates/workspace.gitignore` (the deny-all template) and confirm no
+- **How to verify.** Inspect `skills/job-search/templates/workspace.gitignore` (the deny-all template)
+  and confirm no
   workspace contents are tracked.
 
 ## 4. No silent failures — named errors
@@ -92,7 +95,7 @@ a run record, a job event, and the brief are the copyable examples in
   did nothing. A code was never what the user read; the sentence next to the failing step was, so the
   codes went and the sentences stayed.
 - **Enforced by.** The run's close carries it: a run that stops still writes `runs/<run_id>.json` with
-  `close_state: blocked` and `run_health: degraded` (the shape is `templates/run-record.example.json`)
+  `close_state: blocked` and `run_health: degraded` (the shape is `skills/job-search-run/templates/run-record.example.json`)
   plus a digest whose body is the cause and the fix, *before* it stops — because a headless `claude -p`
   exits 0 even when blocked, so the record is the only trustworthy signal. The start-to-close sequence is
   owned by `shared/references/runbook.md`, and
@@ -207,8 +210,8 @@ a run record, a job event, and the brief are the copyable examples in
 - **Enforced by.** **Cultural / by design** — this is a product principle, not a linted rule. It is
   upheld by the skills (the front door and interview drive configuration through conversation) and by
   keeping the config human-only; the file's shape is the copyable
-  [templates/config.example.yaml](../../templates/config.example.yaml), which is the escape hatch.
-- **How to verify.** Read [templates/config.example.yaml](../../templates/config.example.yaml) — every key
+  [config.example.yaml](../../skills/job-search/templates/config.example.yaml), which is the escape hatch.
+- **How to verify.** Read [config.example.yaml](../../skills/job-search/templates/config.example.yaml) — every key
   is in human terms, with no tuning knob — and confirm the config-editing skills are conversational.
 
 ## 9. Config version stability
@@ -238,13 +241,14 @@ a run record, a job event, and the brief are the copyable examples in
   strong preferences / nice-to-haves captures importance structurally, which the model can reason over
   far better than a tuned scoring table — and it keeps belief 1 honest at the input side.
 - **Enforced by.** The prose-brief shape — the buckets, no weights, the qualitative vocabulary — is shown
-  by [templates/preferences.example.md](../../templates/preferences.example.md) and built by the
+  by [preferences.example.md](../../skills/job-preference-interview/templates/preferences.example.md) and built by the
   [job-preference-interview](../../skills/job-preference-interview/SKILL.md) skill;
   [scripts/philosophy_guard.py](../../scripts/philosophy_guard.py) backstops the *output* side by
   rejecting numeric scoring. The "importance = bucket" framing is restated in
   [CONTRIBUTING.md](../../CONTRIBUTING.md#project-philosophy-please-dont-regress-these). There is no
   linter over the brief's prose itself, so this is partly **cultural**.
-- **How to verify.** Read [templates/preferences.example.md](../../templates/preferences.example.md) — prose
+- **How to verify.** Read
+  [preferences.example.md](../../skills/job-preference-interview/templates/preferences.example.md) — prose
   sections, no machine-readable rubric; run `python3 scripts/philosophy_guard.py --root .` for the output
   backstop.
 
@@ -280,7 +284,7 @@ a run record, a job event, and the brief are the copyable examples in
   [skills/job-search-run/SKILL.md](../../skills/job-search-run/SKILL.md): scan, fan out one subagent per
   posting on the read list, work in order where the host cannot, then consolidate. The optional
   `search.parallel_detail_reads` key in
-  [templates/config.example.yaml](../../templates/config.example.yaml) records that a user approved
+  [config.example.yaml](../../skills/job-search/templates/config.example.yaml) records that a user approved
   subagents on a host that asks.
 - **How to verify.** Read the detail-read step of
   [skills/job-search-run/SKILL.md](../../skills/job-search-run/SKILL.md) and the brief it hands each

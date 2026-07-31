@@ -29,7 +29,8 @@ The product framing is an operating system whose userland is your job search:
 
 Where the OS state lives, how the workspace is discovered, and what each file in it holds are specified in
 [shared/references/runbook.md](shared/references/runbook.md); the exact shape of each file is carried by the
-examples in [templates/](templates/) and checked by
+examples in the `templates/` directory of the skill that writes it, listed under
+[Where the contracts live](#where-the-contracts-live), and checked by
 [shared/scripts/mechanics/validate-workspace.sh](shared/scripts/mechanics/validate-workspace.sh).
 
 ## Product domains
@@ -41,8 +42,8 @@ the `shared/references/` file that owns its contract.
 Find postings: run each saved query against the agent-data Job Postings API, dedup new results against the
 local record of already-seen postings, and respect retry / outage rules. Implemented by the [job-search-run](skills/job-search-run/SKILL.md)
 skill over the `jobs.jsonl` operations in
-[shared/scripts/mechanics/dedup.sh](shared/scripts/mechanics/dedup.sh) and
-[shared/scripts/mechanics/event-log-append.sh](shared/scripts/mechanics/event-log-append.sh) (dedup +
+[skills/job-search-run/scripts/dedup.sh](skills/job-search-run/scripts/dedup.sh) and
+[skills/job-search-run/scripts/event-log-append.sh](skills/job-search-run/scripts/event-log-append.sh) (dedup +
 persistence). The CLI routes, per-source quirks, retry rules, and what a call costs are owned by
 [shared/references/agent-data.md](shared/references/agent-data.md).
 
@@ -51,7 +52,7 @@ Capture what the user wants and judge postings against it — qualitatively, nev
 [job-preference-interview](skills/job-preference-interview/SKILL.md) skill builds the prose brief; the
 [evaluate-job-fit](skills/evaluate-job-fit/SKILL.md) skill reads that brief next to a posting and returns a
 relevance verdict. The brief shape is shown by
-[templates/preferences.example.md](templates/preferences.example.md), and the relevance vocabulary is
+[skills/job-preference-interview/templates/preferences.example.md](skills/job-preference-interview/templates/preferences.example.md), and the relevance vocabulary is
 defined by the [evaluate-job-fit](skills/evaluate-job-fit/SKILL.md) skill that returns it.
 
 ### workspace-state
@@ -59,7 +60,7 @@ Persist everything durably and discoverably: the workspace, config, the append-o
 audit logs, and digests. The engines are pinned procedures executed natively by the host agent: the registry +
 workspace-discovery rules in [shared/references/runbook.md](shared/references/runbook.md), which also
 maps what each file holds, and the event-log operations in
-[shared/scripts/mechanics/event-log-append.sh](shared/scripts/mechanics/event-log-append.sh).
+[skills/job-search-run/scripts/event-log-append.sh](skills/job-search-run/scripts/event-log-append.sh).
 
 ### scheduling-consent
 Run on a cadence the user controls: the agent advocates an **unattended** machine schedule (`cron`/`launchd`
@@ -69,9 +70,10 @@ SILENT or un-consented privileged write. The
 config-time canary proves the schedule actually runs, records the schedule marker in the registry; the agent
 resolves the concrete mechanism for its own host (there is no per-host adapter). The consent-gated stance is an instruction-level design rule carried by every skill
 ([docs/SECURITY.md](docs/SECURITY.md), [core-beliefs.md](docs/design-docs/core-beliefs.md) Belief 7), not a
-runtime control. The cadence options live in [templates/config.example.yaml](templates/config.example.yaml),
+runtime control. The cadence options live in
+[skills/job-search/templates/config.example.yaml](skills/job-search/templates/config.example.yaml),
 and the cron line for each is composed by
-[shared/scripts/mechanics/schedule-line.sh](shared/scripts/mechanics/schedule-line.sh).
+[skills/job-search/scripts/schedule-line.sh](skills/job-search/scripts/schedule-line.sh).
 
 ### error-surfacing
 Make every failure named and visible — no silent failures. A run that stops early still closes: it writes a
@@ -147,7 +149,7 @@ Install steps are in [README.md](README.md).
 
 **Headless run flow.** A scheduled pass runs [job-search-run](skills/job-search-run/SKILL.md): free preflight
 gates (CLI present, config, auth, brief, service status), then one metered search per enabled query, dedup via
-the known-ids operation ([shared/scripts/mechanics/dedup.sh](shared/scripts/mechanics/dedup.sh)), qualitative
+the known-ids operation ([skills/job-search-run/scripts/dedup.sh](skills/job-search-run/scripts/dedup.sh)), qualitative
 judgment per new posting, detail reads for the promising
 ones, and finally a persisted run record plus a digest. A run that a gate stops still closes: it writes a
 record with `close_state: blocked` and `run_health: degraded`, and a digest whose body says what stopped it
@@ -169,7 +171,7 @@ When you need an exact runtime detail, go to its owner — do not reproduce it h
 |---|---|
 | Workspace layout, registry, workspace discovery, the run contract, the scratch rule | [shared/references/runbook.md](shared/references/runbook.md) |
 | agent-data CLI: routes, per-source quirks, retry rules, listing id, what a call costs | [shared/references/agent-data.md](shared/references/agent-data.md) |
-| The exact shape of `config.yaml`, a run record, a `jobs.jsonl` line, the brief | [templates/](templates/) — `config.example.yaml`, `run-record.example.json`, `jobs-event.example.json`, `preferences.example.md` |
+| The exact shape of `config.yaml`, a run record, a `jobs.jsonl` line, the brief | the `templates/` directory of the skill that writes it: [config.example.yaml](skills/job-search/templates/config.example.yaml) and [workspace.gitignore](skills/job-search/templates/workspace.gitignore) (job-search), [run-record.example.json](skills/job-search-run/templates/run-record.example.json) and [jobs-event.example.json](skills/job-search-run/templates/jobs-event.example.json) (job-search-run), [preferences.example.md](skills/job-preference-interview/templates/preferences.example.md) (job-preference-interview) |
 | Whether a workspace on disk is well formed | [shared/scripts/mechanics/validate-workspace.sh](shared/scripts/mechanics/validate-workspace.sh) |
 | How each skill behaves | its `SKILL.md`, graded by the live behavior evals in [evals/](evals/) and its own `evals/evals.json` |
 

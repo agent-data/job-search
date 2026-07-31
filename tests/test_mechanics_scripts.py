@@ -1,9 +1,11 @@
 """Unit tests for the bundled portable-shell mechanics scripts (P4/T4.1, AAS-FORM-08).
 
 The fiddly deterministic mechanics that skills used to execute as model-run prose contracts are
-now bundled as portable POSIX-`sh` scripts under `shared/scripts/mechanics/` (their single home).
-Each test drives one script via subprocess against a temp fixture and asserts what the script does:
-dedup, the jobs.jsonl event-line append, schedule-line composition, and workspace discovery.
+bundled as portable POSIX-`sh` scripts. A script with one skill consumer sits in that skill's own
+`scripts/` directory, so the skill names it without computing a path; the two that more than one
+skill runs are still in `shared/scripts/mechanics/`. Each test drives one script via subprocess
+against a temp fixture and asserts what the script does: dedup, the jobs.jsonl event-line append,
+schedule-line composition, and workspace discovery.
 
 Scripts are invoked through `sh` (and, where present, strict `dash`) — never `bash` — so a bash-only
 construct fails the suite. Nothing here asserts how the reference documents word the same rules.
@@ -18,16 +20,19 @@ import pytest
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 MECH = ROOT / "shared" / "scripts" / "mechanics"
-DEDUP = MECH / "dedup.sh"
-APPEND = MECH / "event-log-append.sh"
-SCHEDULE = MECH / "schedule-line.sh"
+RUN_SCRIPTS = ROOT / "skills" / "job-search-run" / "scripts"
+SEARCH_SCRIPTS = ROOT / "skills" / "job-search" / "scripts"
+DEDUP = RUN_SCRIPTS / "dedup.sh"
+APPEND = RUN_SCRIPTS / "event-log-append.sh"
+SCHEDULE = SEARCH_SCRIPTS / "schedule-line.sh"
 DISCOVERY = MECH / "workspace-discovery.sh"
 VALIDATE = MECH / "validate-workspace.sh"
 
 ALL_SCRIPTS = [DEDUP, APPEND, SCHEDULE, DISCOVERY, VALIDATE]
 
 
-# A contract-valid single-line `evaluated` event, in the shape templates/jobs-event.example.json shows.
+# A contract-valid single-line `evaluated` event, in the shape
+# skills/job-search-run/templates/jobs-event.example.json shows.
 def evaluated(source, source_id, ts="2026-07-11T00:00:00Z", extra=""):
     return (
         '{"event":"evaluated","ts":"%s","source":"%s","source_id":"%s",'

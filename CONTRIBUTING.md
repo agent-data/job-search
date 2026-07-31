@@ -18,9 +18,11 @@ There are exactly two of them, and between them they own everything a run does:
 - **`agent-data.md`** — the agent-data CLI, the four job sources and their quirks, retries, and what a
   call costs.
 
-The exact *shape* of each workspace file is not prose in either one: it is a copyable example in
-`templates/` — `config.example.yaml`, `run-record.example.json`, `jobs-event.example.json`,
-`preferences.example.md`. Whether a workspace on disk obeys the file rules is decided by
+The exact *shape* of each workspace file is not prose in either one: it is a copyable example in the
+`templates/` directory of the skill that writes it — `config.example.yaml` and
+`workspace.gitignore` under `skills/job-search/`, `run-record.example.json` and
+`jobs-event.example.json` under `skills/job-search-run/`, `preferences.example.md` under
+`skills/job-preference-interview/`. Whether a workspace on disk obeys the file rules is decided by
 `shared/scripts/mechanics/validate-workspace.sh`, not by a paragraph a skill has to restate.
 
 **Edit the source:**
@@ -145,7 +147,7 @@ CI runs that check on every change, and on a pull request it also fails when `sk
 
 These are load-bearing design choices, enforced by `scripts/philosophy_guard.py` (run in CI via
 `.github/workflows/ci.yml` and as `tests/test_philosophy_guard.py`) and in review. The
-guard scans shipped default output (`examples/`, `templates/`). Note: a numeric score a
+guard scans shipped default output (`examples/` and every skill's `templates/`). Note: a numeric score a
 user *explicitly asks for* is fine in chat — it just must never be written into a digest,
 brief, `config.yaml`, or `jobs.jsonl`. Keep them intact:
 

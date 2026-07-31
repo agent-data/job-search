@@ -12,7 +12,8 @@ What this installs: the complete Job Search repository as the Hermes plugin
 `job-search`, with its five skills available by their normal names —
 `job-search`, `job-search-run`, `job-search-agent`, `job-preference-interview`,
 `evaluate-job-fit`. The skills read `shared/references/`,
-`shared/scripts/mechanics/`, and `templates/` from the installed repository, so
+`shared/scripts/mechanics/`, and their own `templates/` and `scripts/`
+directories from the installed repository, so
 the repository must stay intact: install it whole through the plugin manager,
 never as five separate skills.
 
@@ -52,7 +53,8 @@ test -d "$HERMES_HOME/plugins/job-search" && echo present || echo absent
 
   - Output empty, and the directory contains `plugin.yaml`, `__init__.py`, all
     five `skills/<name>/SKILL.md` files, `shared/references/`,
-    `shared/scripts/mechanics/`, and `templates/` → healthy install; go to
+    `shared/scripts/mechanics/`, and `skills/job-search/templates/` →
+    healthy install; go to
     Step 3 and use the update command.
   - Output empty but any of those files or directories is missing → the
     install is incomplete. Tell the user, then reinstall fresh:
@@ -164,7 +166,10 @@ Run every check. The final report states which checks ran and their results.
    ls skills/job-search/SKILL.md skills/job-search-run/SKILL.md \
       skills/job-search-agent/SKILL.md skills/job-preference-interview/SKILL.md \
       skills/evaluate-job-fit/SKILL.md
-   ls -d shared/references shared/scripts/mechanics templates
+   ls -d shared/references shared/scripts/mechanics \
+      skills/job-search/templates skills/job-search/scripts \
+      skills/job-search-run/templates skills/job-search-run/scripts \
+      skills/job-preference-interview/templates
    ```
 
    Every listed path must exist.

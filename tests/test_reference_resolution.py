@@ -57,14 +57,19 @@ SKILL_LOCAL_ORIGINALS = set()
 # path and is intentionally NOT matched — resolution is a property of paths, not of doc-name shorthand.
 _PTR = re.compile(r"(?:\.\./)*(?:shared/)?references/(?:platform/)?[A-Za-z0-9._-]+\.md")
 
-# A mechanics-script PATH pointer the P4/T4.2 invoke-or-prose-fallback wiring makes. The 2026-07-30
-# rewrite settled on one written form — `<plugin-root>/shared/scripts/mechanics/x.sh`, resolved from
-# the install root — and the older relative forms (`../../shared/scripts/mechanics/x.sh` from a
-# SKILL.md, `../scripts/mechanics/x.sh` from a shared/references body) still resolve, so both are
-# matched here. The "run the shared script where a runtime exists" arm must reach the single scripts
-# home — a dangling invocation would silently drop to the fallback on every host.
+# A shared mechanics-script PATH pointer the P4/T4.2 invoke-or-prose-fallback wiring makes. The
+# 2026-07-30 rewrite settled on one written form — `<plugin-root>/shared/scripts/mechanics/x.sh`,
+# resolved from the install root — and the older relative forms (`../../shared/scripts/mechanics/x.sh`
+# from a SKILL.md, `../scripts/mechanics/x.sh` from a shared/references body) still resolve, so both
+# are matched here. The "run the shared script where a runtime exists" arm must reach the shared
+# scripts home — a dangling invocation would silently drop to the fallback on every host.
+#
+# Only the scripts more than one skill runs are left under shared/scripts/mechanics/. A script with a
+# single skill consumer moved into that skill on 2026-07-31 and is named `scripts/x.sh` from its
+# SKILL.md; `_COLOCATED_SCRIPT_PTR` matches those, and the same host loop proves they resolve too.
 _SCRIPT_PTR = re.compile(
     r"(?:<plugin-root>/|(?:\.\./)+)(?:shared/)?scripts/mechanics/[A-Za-z0-9._-]+\.sh")
+_COLOCATED_SCRIPT_PTR = re.compile(r"(?<![\w./-])scripts/[A-Za-z0-9._-]+\.sh")
 
 
 def _pointer_files():
@@ -179,38 +184,150 @@ def _script_pointer_files():
 
 
 def _script_pointers(path):
-    """Distinct mechanics-script PATH pointers found in `path`, each with the directory it resolves
-    against: a `<plugin-root>/…` pointer resolves from the install root, a relative one from the
-    file's own directory."""
+    """Distinct script PATH pointers found in `path`, each with the directory it resolves against and
+    the directory it has to land in: a `<plugin-root>/…` pointer resolves from the install root and a
+    relative one from the file's own directory, both landing in shared/scripts/mechanics; a
+    co-located `scripts/x.sh` resolves from the file's own directory and lands there."""
     out = []
-    for m in _SCRIPT_PTR.finditer(path.read_text(encoding="utf-8")):
+    seen = set()
+    text = path.read_text(encoding="utf-8")
+    for m in _SCRIPT_PTR.finditer(text):
         tok = m.group(0)
-        if tok in [p for p, _ in out]:
+        if tok in seen:
             continue
-        if tok.startswith("<plugin-root>/"):
-            out.append((tok, ROOT / tok[len("<plugin-root>/"):]))
-        else:
-            out.append((tok, path.parent / tok))
+        seen.add(tok)
+        base = ROOT / tok[len("<plugin-root>/"):] if tok.startswith("<plugin-root>/") \
+            else path.parent / tok
+        out.append((tok, base, MECH))
+    for m in _COLOCATED_SCRIPT_PTR.finditer(text):
+        tok = m.group(0)
+        if tok in seen:
+            continue
+        seen.add(tok)
+        out.append((tok, path.parent / tok, path.parent / "scripts"))
     return out
 
 
 @pytest.mark.parametrize("host", sorted(HOST_MANIFESTS))
 def test_every_mechanics_script_resolves_in_place_on_host(host):
-    """P4/T4.2: the 'run the shared script' arm of each invoke-or-prose-fallback must resolve IN PLACE to
-    the single mechanics home on every host — the same ships-shared property the references rely on. A
-    dangling script pointer -> RED (the runtime arm would never fire)."""
+    """P4/T4.2: the 'run the script' arm of each invoke-or-prose-fallback must resolve IN PLACE on every
+    host — the same ships-shared property the references rely on. A shared script lands in
+    shared/scripts/mechanics, a single-consumer one in its own skill's scripts/. A dangling script
+    pointer -> RED (the runtime arm would never fire)."""
     ok, reason = _ships_shared(HOST_MANIFESTS[host])
     assert ok, f"{host}: {reason}"
     assert MECH.is_dir(), f"{host}: shared/scripts/mechanics not shipped"
     any_ptr = False
     for f in _script_pointer_files():
-        for ptr, unresolved in _script_pointers(f):
+        for ptr, unresolved, home in _script_pointers(f):
             any_ptr = True
             target = unresolved.resolve()
             assert target.exists(), (
                 f"{host}: {f.relative_to(ROOT)} -> `{ptr}` is DANGLING (no {target})")
-            assert target.parent == MECH, (
-                f"{host}: {f.relative_to(ROOT)} -> `{ptr}` does not land in shared/scripts/mechanics")
+            assert target.parent == home.resolve(), (
+                f"{host}: {f.relative_to(ROOT)} -> `{ptr}` does not land in "
+                f"{home.resolve().relative_to(ROOT)}")
     assert any_ptr, (
-        f"{host}: no mechanics-script pointer found in any SKILL.md or shared/references body — the "
+        f"{host}: no script pointer found in any SKILL.md or shared/references body — the "
         f"P4/T4.2 invoke-or-prose-fallback wiring is missing")
+
+
+# ------------------------------------------------- co-located pointers (skill-locality, 2026-07-31)
+#
+# The 0.8.0 behavior evals measured both models mis-resolving this pack's own file pointers: sonnet
+# read `../../shared/references/runbook.md` with one `..` too few, and haiku expanded `<plugin-root>`
+# to the skill's own directory. Each miss costs a wasted tool call and a visible recovery, so the
+# restructure gives every file with a single skill consumer an address that needs no computation.
+#
+# The written form: a path relative to the file that names it. From a SKILL.md that is
+# `templates/<file>` or `scripts/<file>` — the skill's own directory, which is where the file now
+# sits. From a file outside the skill (a shared/references body) it is the same file's path from the
+# repo root, `skills/<skill>/templates/<file>`. Neither form asks the model to count `../` steps or
+# to expand a token.
+#
+# These four files still carry a computed pointer, and each belongs to a later task: the two
+# remaining mechanics scripts move next, and the two shared references become skills after that.
+# The set shrinks to empty as those land. Any other computed pointer fails the test below.
+DEFERRED_MOVES = {
+    "shared/scripts/mechanics/validate-workspace.sh",
+    "shared/scripts/mechanics/workspace-discovery.sh",
+    "shared/references/runbook.md",
+    "shared/references/agent-data.md",
+}
+
+# A pointer the model has to compute: `<plugin-root>/…` expands a token, `../../…` counts two or
+# more directory steps up from the file it is written in. A single `../` (a SKILL.md naming its
+# sibling skill's SKILL.md) is one step inside `skills/` and is not part of this move.
+_COMPUTED_PTR = re.compile(r"(?:<plugin-root>/|(?:\.\./){2,})([A-Za-z0-9._/-]+\.[A-Za-z0-9]+)")
+
+# A co-located pointer written in a SKILL.md: the skill's own `templates/`, `scripts/` or
+# `references/` directory. The lookbehind rejects a match inside a longer path, where the directory
+# name is not the start of the pointer.
+_COLOCATED_PTR = re.compile(
+    r"(?<![\w./-])(?:templates|scripts|references)/[A-Za-z0-9._-]+\.[A-Za-z0-9]+")
+
+# The same co-located file addressed from the repo root, which is how a file outside the skill — a
+# shared/references body — names it.
+_ROOT_SKILL_PTR = re.compile(
+    r"(?<![\w./-])skills/[A-Za-z0-9._-]+/(?:templates|scripts)/[A-Za-z0-9._-]+\.[A-Za-z0-9]+")
+
+
+def _agent_facing_files():
+    """Every file an agent reads at runtime and takes file paths from: the five SKILL.md bodies and
+    both shared references."""
+    return sorted((ROOT / "skills").glob("*/SKILL.md")) + sorted(SHARED.glob("*.md"))
+
+
+def _computed_pointers(path):
+    """Distinct computed pointers in `path`, each as (written token, the path it addresses)."""
+    out = []
+    for m in _COMPUTED_PTR.finditer(path.read_text(encoding="utf-8")):
+        pair = (m.group(0), m.group(1))
+        if pair not in out:
+            out.append(pair)
+    return out
+
+
+def _plugin_file_pointers(path):
+    """Every pointer in `path` that names a file inside this plugin, paired with the file it must
+    resolve to: `<plugin-root>/…` and `skills/…` from the install root, `../../…` and a co-located
+    one from the naming file's own directory."""
+    text = path.read_text(encoding="utf-8")
+    out = []
+
+    def add(tok, target):
+        if (tok, target) not in out:
+            out.append((tok, target))
+
+    for tok, tail in _computed_pointers(path):
+        add(tok, ROOT / tail if tok.startswith("<plugin-root>/") else path.parent / tok)
+    for m in _COLOCATED_PTR.finditer(text):
+        add(m.group(0), path.parent / m.group(0))
+    for m in _ROOT_SKILL_PTR.finditer(text):
+        add(m.group(0), ROOT / m.group(0))
+    return out
+
+
+def test_no_computed_pointer_survives_outside_the_deferred_moves():
+    """Every file with one skill consumer is addressed without arithmetic. A `<plugin-root>/…` or
+    `../../…` pointer to anything but the four files a later task moves is the defect this
+    restructure removes."""
+    offenders = []
+    for f in _agent_facing_files():
+        for tok, tail in _computed_pointers(f):
+            if tail not in DEFERRED_MOVES:
+                offenders.append(f"{f.relative_to(ROOT)} -> `{tok}`")
+    assert not offenders, (
+        "these pointers still make the model compute an address for a file that has one skill "
+        "consumer; move the file into that skill and name it from there:\n  "
+        + "\n  ".join(offenders))
+
+
+def test_every_plugin_file_a_skill_names_exists():
+    """Every path to a plugin file named in a SKILL.md or a shared reference lands on a real file."""
+    missing = []
+    for f in _agent_facing_files():
+        for tok, target in _plugin_file_pointers(f):
+            if not target.resolve().exists():
+                missing.append(f"{f.relative_to(ROOT)} -> `{tok}` (no {target.resolve()})")
+    assert not missing, "dangling plugin-file pointers:\n  " + "\n  ".join(missing)

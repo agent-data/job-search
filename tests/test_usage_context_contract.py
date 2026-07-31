@@ -14,7 +14,7 @@ import re
 ROOT = Path(__file__).resolve().parents[1]
 SHARED = ROOT / "shared" / "references"
 AGENT_DATA = SHARED / "agent-data.md"
-CONFIG_TEMPLATE = ROOT / "templates" / "config.example.yaml"
+CONFIG_TEMPLATE = ROOT / "skills" / "job-search" / "templates" / "config.example.yaml"
 RUNNER_SETUP = ROOT / "skills" / "job-search-run" / "evals" / "files" / "setup-workspace.sh"
 
 # Agent-data's per-call prices, which change whenever its plans change.

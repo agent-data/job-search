@@ -4,8 +4,8 @@ title: "Cost-aware decisions, explicit models, and canary-verified recurring job
 status: current
 verified: partial
 last_reviewed: 2026-07-31
-code_refs: [skills/job-search/SKILL.md, skills/job-search-agent/SKILL.md, skills/job-search-run/SKILL.md, templates/config.example.yaml, tests/fake-agent-data]
-claimed_paths: [skills, shared/references, templates, tests, docs/design-docs]
+code_refs: [skills/job-search/SKILL.md, skills/job-search-agent/SKILL.md, skills/job-search-run/SKILL.md, skills/job-search/templates/config.example.yaml, tests/fake-agent-data]
+claimed_paths: [skills, shared/references, tests, docs/design-docs]
 owner_area: Skills & references
 repos: [job-search-os]
 ---
@@ -611,15 +611,15 @@ commit. The matrix is normative, not illustrative.
 |---|---|---|
 | `shared/references/agent-data.md` | own the dated free-tier allowance, metering, pricing, retries, and the per-source quirks | AAS-BOUND-03; AAS-FORM-06; PSG-COMM-20 |
 | `shared/references/runbook.md` | workspace discovery, what each file holds, one run start to close, the registry and its scheduling marker, running it unattended, scratch | AAS-AUTO-01/02/04/05; AAS-FORM-07/09; AAS-PROC-03/04; AAS-PORT-03/04/05/10; PSG-F-09/10 |
-| `templates/config.example.yaml`, `run-record.example.json`, `jobs-event.example.json`, `preferences.example.md` | the exact fields of every workspace file, as copyable examples rather than prose | AAS-FORM-06/14; AAS-LANG-04 |
+| `skills/job-search/templates/` (`config.example.yaml`, `workspace.gitignore`), `skills/job-search-run/templates/` (`run-record.example.json`, `jobs-event.example.json`), `skills/job-preference-interview/templates/preferences.example.md` | the exact fields of every workspace file, as copyable examples rather than prose | AAS-FORM-06/14; AAS-LANG-04 |
 | `shared/scripts/mechanics/validate-workspace.sh` | decide mechanically whether a workspace obeys the file rules, including that a closed run left no marker and no scratch | AAS-FORM-08/09/14; PSG-INJ-03/04/05/11/14 |
-| *(deleted 2026-07-30 — `agent-data-contract.md`, `internals.md`, `conventions.md`, `parallelism.md`, `run-lifecycle.md`, `errors.md`, `voice.md`)* | their surviving content moved into the two references and `templates/` above; the exact-model binding, the lifecycle ledger, the local-metrics file, and the `E-*` catalogue were dropped outright | — |
+| *(deleted 2026-07-30 — `agent-data-contract.md`, `internals.md`, `conventions.md`, `parallelism.md`, `run-lifecycle.md`, `errors.md`, `voice.md`)* | their surviving content moved into the two references and the skills' `templates/` directories above; the exact-model binding, the lifecycle ledger, the local-metrics file, and the `E-*` catalogue were dropped outright | — |
 | `skills/job-search/SKILL.md` | front-door stance: all cost levers use the canonical preview; verified schedule semantics | AAS-BOUND-03; PSG-COMM-09/20 |
 | *(folded into `skills/job-search/SKILL.md` on 2026-07-30 — was `references/onboarding.md` and `references/home.md`)* | free-tier install framing, first-run preview, eligible scheduler setup, and the home view's schedule states; the setup-time model question went with them, and the schedule states collapsed to `installed` + `verified` | AAS-AUTO-02/04/11; AAS-LANG-08; AAS-TEST-15; PSG-F-09/10; PSG-COMM-09/10/18/20 |
 | `skills/job-search-agent/SKILL.md` | operator explanation for cost levers, exact model ownership, and eligible recurring jobs | AAS-BOUND-03; AAS-LANG-01/03; PSG-COMM-05/20 |
 | *(folded into `skills/job-search-agent/SKILL.md` on 2026-07-30 — was `references/customization.md` and `references/scheduling-and-consent.md`)* | cost-aware query/source/cadence/depth edits, and the schedule's consent gate, canary, and cleanup; the schedule setup itself moved to the front door | AAS-AUTO-01/02/04/05; AAS-FORM-07/09/10; AAS-PORT-03/04/05/10; PSG-F-09/10; PSG-SUB-06 |
 | `skills/job-search-run/SKILL.md` | preflight gates, the search and judgment loop, and the run's close | AAS-TEST-04/12; PSG-COMM-09 |
-| `templates/config.example.yaml` | version 2, human terms only, no model key at all | AAS-FORM-03/06; AAS-LANG-02/04; PSG-ANTI-03 |
+| `skills/job-search/templates/config.example.yaml` | version 2, human terms only, no model key at all | AAS-FORM-03/06; AAS-LANG-02/04; PSG-ANTI-03 |
 | *(deleted 2026-07-30 — `lifecycle-append.sh`, `lifecycle-fold.sh`, `support-summary.sh`)* | the ledger they wrote and folded no longer exists; a run's own state is its marker plus its record | AAS-FORM-08/09/14; AAS-PORT-01; PSG-SAFE-13/14/17 |
 | affected skill evals, `tests/fake-scheduler`, and developer eval helpers | observable lifecycle, activation, cost, model, scheduler, canary, liveness, migration, and privacy effects | AAS-TEST-03/04/07/08/09/10/13/15 |
 | `README.md`, onboarding/product/doctrine docs, `TESTING.md`, and `docs/QUALITY_SCORE.md` | natural-language Quickstart and cookbook, dated support matrix, lifecycle/model/scheduler/cost/error truth, and labeled evidence | PSG-F-10; PSG-COMM-04/05/06/07/09/20; AAS-BOUND-03 |

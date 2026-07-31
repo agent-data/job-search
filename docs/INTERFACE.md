@@ -129,7 +129,7 @@ the words the user would use, at the step that hit it.
 
 What a stopped run writes is the record and the digest: `close_state` (`complete` / `blocked` /
 `interrupted`) and `run_health` (`healthy` / `degraded`) in `runs/<run_id>.json`, whose shape is
-[`../templates/run-record.example.json`](../templates/run-record.example.json), plus a digest whose
+[`run-record.example.json`](../skills/job-search-run/templates/run-record.example.json), plus a digest whose
 body is the cause and the fix. The close sequence is owned by
 `../shared/references/runbook.md`.
 

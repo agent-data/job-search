@@ -8,8 +8,7 @@ description: The operator manual for the job search agent — how it works, why 
 The operator manual: how this agent is put together, what to change to get different results, and
 what to do when a run comes back wrong. Daily use belongs to the other skills — this card says where
 each answer lives, then covers changing the search, explaining what a run spent, and the symptoms a
-user arrives with. The reference paths below are relative to this file, which sits two steps below
-`<plugin-root>`.
+user arrives with. The reference paths below are relative to this file.
 
 ## Where each answer lives
 

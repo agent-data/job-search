@@ -5,4 +5,4 @@
 - [ ] `python3 scripts/doc_lint.py --root .` is clean
 - [ ] `python3 scripts/philosophy_guard.py --root .` is clean
 - [ ] Scoped Conventional-Commit messages
-- [ ] No numeric scores / budget / credit knobs; no PII in `examples/` or `templates/`
+- [ ] No numeric scores / budget / credit knobs; no PII in `examples/` or any skill's `templates/`

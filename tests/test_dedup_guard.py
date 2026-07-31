@@ -7,7 +7,7 @@ evals). `dedup.sh --near` collapses those rows within one run: candidate rows ar
 `source_id<TAB>company<TAB>title`, and the source_ids of the openings to judge come back on
 stdout — the first row of each same-company, same-normalized-title group.
 
-Driven through POSIX `sh` (and strict `dash` where present), like every other mechanics script.
+Driven through POSIX `sh` (and strict `dash` where present), like every other bundled script.
 """
 import pathlib
 import shutil
@@ -16,7 +16,7 @@ import subprocess
 import pytest
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
-DEDUP = ROOT / "shared" / "scripts" / "mechanics" / "dedup.sh"
+DEDUP = ROOT / "skills" / "job-search-run" / "scripts" / "dedup.sh"
 
 SHELLS = ["sh"] + (["dash"] if shutil.which("dash") else [])
 

@@ -8,7 +8,7 @@ description: Set up, check on, and steer the user's job search — the front doo
 The front door: first-time setup, the home view after that, and where the user steers their search
 from by talking to you. The work belongs to the other skills — `job-search-run` pulls and judges
 postings, `job-preference-interview` writes the brief, `evaluate-job-fit` judges one posting. Two
-references carry the mechanics, named relative to this file, two steps below `<plugin-root>`:
+references carry the mechanics, each named below as a path relative to this file:
 
 - `../../shared/references/runbook.md` — the workspace, what each file in it holds, the run contract.
 - `../../shared/references/agent-data.md` — the CLI, what a call costs, what to say before spending one.
@@ -59,8 +59,8 @@ Other intents leave: what they want in a job → `job-preference-interview`, a p
 1. Open with your first message above.
 2. Run `agent-data whoami` — the whole preflight, local and free. On `api_key_set: false`, say the
    key is missing, give agent-data.md's `agent-data init` line, and go on once it reports true.
-3. Build the workspace where discovery pointed: copy `<plugin-root>/templates/config.example.yaml` to
-   `config.yaml` and `<plugin-root>/templates/workspace.gitignore` to `.gitignore`, create an empty
+3. Build the workspace where discovery pointed: copy this skill's `templates/config.example.yaml` to
+   `config.yaml` and its `templates/workspace.gitignore` to `.gitignore`, create an empty
    `jobs.jsonl`, and make `runs/` and `reports/`. A file already there stays as it is. Say in one
    line that this folder is theirs and private.
 4. Write this machine's zone into `schedule.timezone` in that `config.yaml`: `readlink /etc/localtime`
@@ -93,11 +93,11 @@ usual cadence; their yes starts the install, as does a request that already asks
 1. Write today's date into `schedule.consented` in `config.yaml`, with `schedule.frequency` and
    `schedule.time` holding the cadence they picked. That date is the standing yes a scheduled,
    headless, or subagent run proceeds on.
-2. `<plugin-root>/shared/scripts/mechanics/schedule-line.sh <frequency> [HH:MM]` prints the cron time
-   expression for that cadence. Wrap it in whatever your host schedules with — cron, launchd, or the
-   host's own recurring-job command — running `job-search-run` against this workspace the way the
-   runbook's unattended section shows. As you install it, show the user that line and where it lives;
-   this changes their machine.
+2. This skill's `scripts/schedule-line.sh <frequency> [HH:MM]` prints the cron time expression for
+   that cadence. Wrap it in whatever your host schedules with — cron, launchd, or the host's own
+   recurring-job command — running `job-search-run` against this workspace the way the runbook's
+   unattended section shows. As you install it, show the user that line and where it lives; this
+   changes their machine.
 3. **Run the canary now**: a job that has been installed and has never run is unproven. It spends,
    and in a session that has not searched yet it is the first metered call, so give the cost sentence
    rule 2 asks for first. Then fire the job through the path the scheduler will use — that invocation

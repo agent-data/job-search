@@ -6,8 +6,10 @@ and failures that surface where the user will actually see them. This doc descri
 elsewhere: how a run opens and closes and what each workspace file holds are in
 `shared/references/runbook.md`; retry rules and what a call
 costs are in `shared/references/agent-data.md`; the exact
-fields of a config, a run record, a `jobs.jsonl` line, and the brief are the copyable examples in
-[../templates/](../templates/); and whether a workspace on disk obeys those rules is decided by
+fields of a config, a run record, a `jobs.jsonl` line, and the brief are the copyable examples in the
+`templates/` directory of the skill that writes each one, listed in
+[../ARCHITECTURE.md](../ARCHITECTURE.md#where-the-contracts-live); and whether a workspace on disk obeys
+those rules is decided by
 [../shared/scripts/mechanics/validate-workspace.sh](../shared/scripts/mechanics/validate-workspace.sh).
 When a number or a literal matters, follow the link to its source of truth.
 
@@ -19,7 +21,7 @@ For the principles behind these mechanisms see
 trustworthy exit code* both live in [§4](#4-run-health--blocked-surfacing--visible-without-the-exit-code).
 There is no error-code catalogue to look a message up in: a run that stops writes what stopped it, in plain
 words, into its record and its digest. The record's shape is
-[`templates/run-record.example.json`](../templates/run-record.example.json). Jump by symptom:
+[`run-record.example.json`](../skills/job-search-run/templates/run-record.example.json). Jump by symptom:
 
 | If you're chasing… | Go to |
 |---|---|
@@ -53,9 +55,9 @@ Re-running is therefore safe — nothing is overwritten in place, and a crash mi
 worst leave a trailing partial line, never a corrupted record. What each workspace file holds, the
 registry write rules, the workspace-discovery precedence, and the scheduling marker are all owned by
 `shared/references/runbook.md`; one event line's exact
-fields are [`templates/jobs-event.example.json`](../templates/jobs-event.example.json), and the
-known-ids / append / fold operations are the scripts under
-[../shared/scripts/mechanics/](../shared/scripts/mechanics/).
+fields are [`jobs-event.example.json`](../skills/job-search-run/templates/jobs-event.example.json), and
+the known-ids and append operations are the scripts under
+[../skills/job-search-run/scripts/](../skills/job-search-run/scripts/).
 
 Because the deterministic pieces are isolated from the LLM judgment, the parts that *can* be
 proven correct *are* — the model is left to do only what genuinely needs judgment (relevance),
@@ -128,7 +130,8 @@ Every run records a **health state** in its `runs/<run_id>.json` record, and the
 that state. The record also carries how the run ended, separately from how healthy it was:
 `close_state` is `complete`, `blocked`, or `interrupted`, while `run_health` is `healthy` or
 `degraded`. Both live in `shared/references/runbook.md`, and the
-record's full shape is [`templates/run-record.example.json`](../templates/run-record.example.json).
+record's full shape is
+[`run-record.example.json`](../skills/job-search-run/templates/run-record.example.json).
 The two are independent on purpose: a run can finish all its work with a source lost along the way
 (`complete` + `degraded`).
 

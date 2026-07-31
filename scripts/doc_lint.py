@@ -255,11 +255,13 @@ def scan_code_refs(root):
 # `git ls-files` (the same `re` module this file uses; `git grep -E` mishandles `\s`/`\d` around the
 # multibyte `·`):
 #
-#   frequency enum      templates/config.example.yaml, shared/scripts/mechanics/schedule-line.sh
-#   freshness enum      templates/config.example.yaml (+ the three eval seeds copied from it)
-#   job source enum     templates/config.example.yaml (+ the three eval seeds)
+#   frequency enum      skills/job-search/templates/config.example.yaml,
+#                       skills/job-search/scripts/schedule-line.sh
+#   freshness enum      skills/job-search/templates/config.example.yaml (+ the three eval seeds
+#                       copied from it)
+#   job source enum     skills/job-search/templates/config.example.yaml (+ the three eval seeds)
 #   digest counts line  skills/job-search-run/SKILL.md (the digest template), examples/sample-digest.md
-#   config field        templates/config.example.yaml (+ the three eval seeds)
+#   config field        skills/job-search/templates/config.example.yaml (+ the three eval seeds)
 #
 # Only the job source enum has an OWNER, because only it is a fact a shared reference owns:
 # shared/references/agent-data.md, which names the four sources in prose rather than in this pipe

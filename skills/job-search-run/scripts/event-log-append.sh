@@ -1,7 +1,8 @@
 #!/bin/sh
 # event-log-append.sh — validate a jobs.jsonl event line, then append it idempotently.
 #
-# Appends one jobs.jsonl event line, in the shape templates/jobs-event.example.json shows:
+# Appends one jobs.jsonl event line, in the shape this skill's templates/jobs-event.example.json
+# shows:
 #   - one event per line (single-line JSON, never pretty-printed);
 #   - every event carries a non-empty "source_id"; the literal key "source_id" appears exactly once;
 #   - every `evaluated` event carries a non-empty "source"; the literal key "source" appears at most

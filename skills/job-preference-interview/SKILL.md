@@ -26,11 +26,12 @@ Find the workspace with the discovery step in `../../shared/references/runbook.m
 is set up yet, write to the resolved default path and say in one line where the brief went.
 
 A brief that already exists is an **update**: read it first, fill the gaps, and confirm changes rather than
-overwriting. Copy the front matter — and the whole finished shape — from `../../templates/preferences.example.md`.
-A new brief carries today's date in both `created_at` and `updated_at`; an update keeps `created_at` and moves
-`updated_at` to today, because the home view measures staleness from `updated_at`. When the user changes the brief
-while a search is running, writing the updated brief is still your whole job; what the running search does with it
-is the job-search front door's feedback routing.
+overwriting. Copy the front matter — and the whole finished shape — from this skill's
+`templates/preferences.example.md`. A new brief carries today's date in both `created_at` and
+`updated_at`; an update keeps `created_at` and moves `updated_at` to today, because the home view
+measures staleness from `updated_at`. When the user changes the brief while a search is running,
+writing the updated brief is still your whole job; what the running search does with it is the
+job-search front door's feedback routing.
 
 ## How deep to go
 What the user asked for decides. Someone who wants to move fast, or a hand-off from the front door asking for a
@@ -93,8 +94,8 @@ lives, and a relative ordering the user volunteers is captured in words inside i
 - **Red flags** — things whose presence makes a posting worse / a likely pass.
 
 ## Output: the brief
-Write the prose document to the resolved path in the shape of `../../templates/preferences.example.md` — the front
-matter, then these five sections in this order:
+Write the prose document to the resolved path in the shape of this skill's `templates/preferences.example.md` —
+the front matter, then these five sections in this order:
 - **Summary** — 2–3 sentences capturing the ideal role in plain language.
 - **Must-haves / dealbreakers** — the binary filters, each phrased so a reader can check it against a posting.
 - **Strong preferences** — the heavily-wanted, non-binary criteria.

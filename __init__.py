@@ -27,7 +27,11 @@ SKILLS = (
 REQUIRED_DIRS = (
     "shared/references",
     "shared/scripts/mechanics",
-    "templates",
+    "skills/job-search/templates",
+    "skills/job-search/scripts",
+    "skills/job-search-run/templates",
+    "skills/job-search-run/scripts",
+    "skills/job-preference-interview/templates",
 )
 
 

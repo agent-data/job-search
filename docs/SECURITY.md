@@ -22,7 +22,8 @@ sections below walk the enforcement, layer by layer.
 ## How the workspace stays out of git
 
 The workspace lives outside this repo — by default at `~/.job-search/` on your machine. At
-first-run, the setup copies [`../templates/workspace.gitignore`](../templates/workspace.gitignore)
+first-run, the setup copies
+[`workspace.gitignore`](../skills/job-search/templates/workspace.gitignore)
 into the workspace root. That file is a genuine deny-all: its only rules are `*` (block
 everything) and `!.gitignore` (keep the gitignore itself). Accidentally running `git add` from
 inside the workspace cannot commit personal data; the gitignore blocks it at the source.

@@ -298,7 +298,7 @@ ARTIFACT_KINDS = {
 #
 # The companion `internal_record` surface was retired on 2026-07-31. It required a run record to
 # retain a raw E-* code, and the 2026-07-30 overhaul left no shipped file that writes one
-# (`git grep -nE "E-[A-Z]+" -- skills/ shared/ templates/ examples/ .claude-plugin/ .codex-plugin/
+# (`git grep -nE "E-[A-Z]+" -- skills/ shared/ examples/ .claude-plugin/ .codex-plugin/
 # evals/` returns nothing), so the rule demanded a shape the product cannot produce.
 SURFACES = ("user_facing",)
 # A canonical E-* code: E- then an uppercase-alnum segment, optionally more hyphen-joined

@@ -2,7 +2,8 @@
 
 The mechanics every flow needs: where the user's workspace is, what each file in it holds, how one
 run opens and closes, and what stays off disk. `<plugin-root>` below is the top directory of the
-installed plugin — the one holding `skills/`, `shared/`, and `templates/`.
+installed plugin — the one holding `skills/` and `shared/`. A path that starts `skills/` is written
+from that same directory.
 
 ## Find the workspace
 
@@ -53,7 +54,7 @@ path cannot be read, rather than picking a workspace it might not name. The scri
 | `runs/<run_id>.json` — one record per run | a run at close | the home view, the agent skill |
 | `runs/.started-<run_id>` — empty marker: this run is open | a run at start, deleted at close | the next run |
 | `reports/<date>-digest.md` — the digest the user reads | a run at close | the user, the home view |
-| `.gitignore` — copied from `<plugin-root>/templates/workspace.gitignore`; denies everything but itself | setup | git |
+| `.gitignore` — copied from `skills/job-search/templates/workspace.gitignore`; denies everything but itself | setup | git |
 | `~/.config/job-search/config.json` — the registry, which sits outside the workspace: `active_workspace`, plus `scheduling` holding the booleans `installed` and `verified` — both true only after a canary proved the job — and the strings `mechanism` (cron, launchd, or the host's own) and `scheduler_id` | setup, schedule changes | discovery, the home view |
 
 ## One run, start to close
@@ -67,7 +68,7 @@ path cannot be read, rather than picking a workspace it might not name. The scri
    `shasum -a 256 <workspace>/preferences.md | cut -c1-12` (or `sha256sum` — same digest).
 3. **Do the run's work**, appending to `jobs.jsonl` as you go.
 4. **Close.** Write `runs/<run_id>.json` — every field, with realistic values, is in
-   `<plugin-root>/templates/run-record.example.json`. `brief_revision` is the digest from step 2.
+   `skills/job-search-run/templates/run-record.example.json`. `brief_revision` is the digest from step 2.
    `trigger` is `manual` when the user asked for this run and `scheduled` when a scheduler started
    it, and `scheduler_id` names that scheduler or is `null` for a manual run. `agent_data_usage`
    counts metered calls: `searches`, `detail_reads`, everything else in `other`, and their sum in

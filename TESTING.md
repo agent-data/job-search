@@ -660,7 +660,7 @@ and duplicate/merge volume. Record the observation; do not auto-tune `max_new_po
 ```bash
 T6=$(mktemp -d)
 mkdir -p "$T6/job-search"                                  # LEGACY (visible) location
-cp "$JSOS/templates/config.example.yaml" "$T6/job-search/config.yaml"
+cp "$JSOS/skills/job-search/templates/config.example.yaml" "$T6/job-search/config.yaml"
 sed -i.bak -e 's/^version: 2/version: 1/' \
   "$T6/job-search/config.yaml"; rm -f "$T6/job-search/config.yaml.bak"   # an older workspace's config
 printf 'SENTINEL-PREFS\n' > "$T6/job-search/preferences.md"
@@ -698,7 +698,7 @@ guarantee; the config-time **canary is not yet exercised here** (it is the runti
 ### T9.1 The composed `/loop` line matches the pinned interval table — 🤖
 In a sandboxed session, for each frequency ask: **"if my schedule were <frequency>, what's the exact /loop
 line?"** (or read it off the scheduling offers in T2.1/T4.3).
-**Expected:** the interval each cadence in `templates/config.example.yaml` maps to —
+**Expected:** the interval each cadence in `skills/job-search/templates/config.example.yaml` maps to —
 `hourly → /loop 1h …`, `every-2-hours → /loop 2h …`, `every-6-hours → /loop 6h …`, `daily → /loop 24h …`,
 `weekly → /loop 168h …`; the target is `/job-search:job-search-run` in this plugin suite (bare
 `/job-search-run` only for loose-skill installs). Any other interval or target is a ❌.

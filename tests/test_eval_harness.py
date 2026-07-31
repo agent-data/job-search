@@ -248,8 +248,10 @@ def test_control_delta_no_lift_is_flagged():
 def _artifacts_workspace(tmp_path):
     """A workspace holding only files a run actually writes: the slim run record, the digest,
     the jobs.jsonl event log, and config.yaml. Field names and shapes come from
-    templates/run-record.example.json, templates/jobs-event.example.json and
-    templates/config.example.yaml, so each assertion kind below points at a live structure."""
+    skills/job-search-run/templates/run-record.example.json,
+    skills/job-search-run/templates/jobs-event.example.json and
+    skills/job-search/templates/config.example.yaml, so each assertion kind below points at a live
+    structure."""
     ws = tmp_path / "ws"
     (ws / "runs").mkdir(parents=True)
     (ws / "reports").mkdir(parents=True)
@@ -424,7 +426,8 @@ STRUCTURED_DIGEST = (
     "unaffected.\n"
 )
 # The E-QUOTA token is fixture data for the raw-code matcher, not a claim that any run writes
-# one. The record's own fields are written in the shape templates/run-record.example.json has.
+# one. The record's own fields are written in the shape
+# skills/job-search-run/templates/run-record.example.json has.
 LEAKED_CODE_DIGEST = STRUCTURED_DIGEST + "\n(internal classification: E-QUOTA)\n"
 BLOCKED_RECORD = {"run_id": "2026-07-17T12-00-00Z", "close_state": "blocked",
                   "run_health": "degraded"}

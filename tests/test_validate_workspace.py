@@ -23,8 +23,9 @@ import pytest
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 VALIDATOR = ROOT / "shared" / "scripts" / "mechanics" / "validate-workspace.sh"
 SEED_WORKSPACE = ROOT / "evals" / "seeds" / "headless-run"
-CONFIG_TEMPLATE = ROOT / "templates" / "config.example.yaml"
-PREFERENCES_TEMPLATE = ROOT / "templates" / "preferences.example.md"
+CONFIG_TEMPLATE = ROOT / "skills" / "job-search" / "templates" / "config.example.yaml"
+PREFERENCES_TEMPLATE = (
+    ROOT / "skills" / "job-preference-interview" / "templates" / "preferences.example.md")
 
 RUN_ID = "2026-07-16T14-30-00Z"
 
@@ -153,7 +154,7 @@ def test_seed_workspace_passes():
 
 
 def test_workspace_built_from_the_templates_passes(tmp_path):
-    """A new workspace copied straight from `templates/` validates."""
+    """A new workspace copied straight from the two skills' templates/ directories validates."""
     workspace = tmp_path / "from-templates"
     workspace.mkdir()
     shutil.copyfile(CONFIG_TEMPLATE, workspace / "config.yaml")

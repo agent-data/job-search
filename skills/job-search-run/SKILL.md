@@ -44,9 +44,9 @@ missing or altered means applying that date to the rows yourself.
 
 ## Reconcile
 
-1. **Already judged** — per source, feed the candidate `source_id`s into
-   `<plugin-root>/shared/scripts/mechanics/dedup.sh <workspace>/jobs.jsonl <source>`; what it
-   prints, every source's output together, is what this run has to judge.
+1. **Already judged** — per source, feed the candidate `source_id`s into this skill's
+   `scripts/dedup.sh <workspace>/jobs.jsonl <source>`; what it prints, every source's output
+   together, is what this run has to judge.
 2. **The same row from two queries** — one `(source, source_id)` pair reaching you twice is one
    candidate: keep the first, and remember the other query found it too.
 3. **One opening posted twice** — pipe the survivors as `source_id<TAB>company<TAB>title` into
@@ -73,9 +73,9 @@ cold: the row's `id` and `source_url` as the pair they arrived in, its `source`,
 agent-data.md's `get-posting` recipe.
 
 Append one line per row to `<workspace>/jobs.jsonl` by piping the single-line event JSON into
-`<plugin-root>/shared/scripts/mechanics/event-log-append.sh <workspace>/jobs.jsonl`, which checks
-the line and skips a pair the log already holds. `<plugin-root>/templates/jobs-event.example.json`
-is one such line with every field filled — copy that field set, and fill it from this run:
+this skill's `scripts/event-log-append.sh <workspace>/jobs.jsonl`, which checks the line and skips a
+pair the log already holds. Its `templates/jobs-event.example.json` is one such line with every
+field filled — copy that field set, and fill it from this run:
 
 - `event` is `evaluated`, `run_id` is this run's id, and `status` starts at `new`.
 - `source`, `source_id`, `title`, `company_name`, `location_display`, `salary_display`, and
@@ -131,8 +131,8 @@ yet — a first pass over it reaching back further than the freshness window.
 Close through the runbook's steps 4 and 5, in that order: the run record, the digest, deleting the
 marker and the scratch directory, then
 `<plugin-root>/shared/scripts/mechanics/validate-workspace.sh <workspace> --post-close <run_id>`,
-fixing whatever it prints. Copy the field set of
-`<plugin-root>/templates/run-record.example.json`, with this run's value in each field.
+fixing whatever it prints. Copy the field set of this skill's `templates/run-record.example.json`,
+with this run's value in each field.
 
 `trigger` is `manual` for a run the user asked for and `scheduled` for one a scheduler started,
 including the verification run after a schedule change. `agent_data_usage` counts the calls this

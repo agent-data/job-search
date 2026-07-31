@@ -128,7 +128,7 @@ def test_shared_scripts_change_is_runtime_surface_requiring_version_bump(tmp_pat
     goes RED, and a matching bump clears it."""
     init_git_repo(tmp_path)
     seed_manifests(tmp_path, "1.2.3")
-    script = tmp_path / "shared" / "scripts" / "mechanics" / "dedup.sh"
+    script = tmp_path / "shared" / "scripts" / "mechanics" / "validate-workspace.sh"
     script.parent.mkdir(parents=True)
     script.write_text("#!/bin/sh\necho old\n")
     commit_all(tmp_path, "base")
@@ -138,7 +138,7 @@ def test_shared_scripts_change_is_runtime_surface_requiring_version_bump(tmp_pat
     r = run_check(tmp_path, "--check-version-bump", "--base", base)
     assert r.returncode == 1
     assert "runtime surface changed" in r.stdout
-    assert "shared/scripts/mechanics/dedup.sh" in r.stdout
+    assert "shared/scripts/mechanics/validate-workspace.sh" in r.stdout
 
     for manifest in (".claude-plugin/plugin.json", ".codex-plugin/plugin.json",
                      ".cursor-plugin/plugin.json", ".factory-plugin/plugin.json",
