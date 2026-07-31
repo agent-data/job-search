@@ -2,7 +2,7 @@
 title: Core Beliefs — Agent-First Operating Principles
 status: current
 verified: partial
-last_reviewed: 2026-07-15
+last_reviewed: 2026-07-31
 code_refs: [scripts/philosophy_guard.py, scripts/doc_lint.py, tests/test_philosophy_guard.py, tests/test_reference_resolution.py, tests/test_mechanics_scripts.py, shared/scripts/mechanics/dedup.sh, .github/workflows/ci.yml]
 ---
 # Core Beliefs — Agent-First Operating Principles
@@ -10,8 +10,10 @@ code_refs: [scripts/philosophy_guard.py, scripts/doc_lint.py, tests/test_philoso
 These are the beliefs that define how the agent — and the people who change it — operate. Read
 this before you change product behavior: a change that regresses one of these is almost always the
 wrong direction. They split by how they hold. Most are non-negotiable because they are
-mechanically blocked in CI — a guard, a build check, or a hook fails the PR, so the regression
-can't land. The rest are cultural: held by review and habit rather than tooling, and each belief's
+mechanically blocked in CI — the philosophy guard, the doc linter, the workspace validator, or a
+pytest suite fails the PR, so the regression can't land. There is no build step and no hook: nothing
+is generated into `skills/` or `shared/`, so there is nothing to check for drift. The rest are
+cultural: held by review and habit rather than tooling, and each belief's
 **Enforced by** says so honestly (some are wholly cultural; a couple have a mechanical backstop
 plus a residual judgment review must catch). The beliefs themselves are the canonical framing in
 [CONTRIBUTING.md](../../CONTRIBUTING.md#project-philosophy-please-dont-regress-these); this doc adds
@@ -25,10 +27,13 @@ Each belief is written in four parts:
   is cultural rather than mechanical, this says so honestly.
 - **How to verify** — the exact command to run or file to inspect.
 
-The runtime contracts these beliefs *protect* (the named errors, the config schema, the digest, the
-status vocabulary, the frequency lever) are owned by `shared/references/`
-and are linked, never restated here — this doc is a live design-doc subject to the
-`no-shared-reference-duplication` rule in [scripts/doc_lint.py](../../scripts/doc_lint.py).
+The runtime contracts these beliefs *protect* are owned elsewhere and are linked, never restated here —
+this doc is a live design-doc subject to the `no-shared-reference-duplication` rule in
+[scripts/doc_lint.py](../../scripts/doc_lint.py). How a run opens and closes and what each workspace file
+holds are in `shared/references/runbook.md`; retries and what a call costs
+are in `shared/references/agent-data.md`; the exact fields of a config,
+a run record, a job event, and the brief are the copyable examples in
+[../../templates/](../../templates/).
 
 ## 1. Qualitative, never numeric
 
@@ -40,8 +45,9 @@ and are linked, never restated here — this doc is a live design-doc subject to
 - **Enforced by.** [scripts/philosophy_guard.py](../../scripts/philosophy_guard.py) scans shipped
   default output (`examples/`, `templates/`) for fit scores / weights / points and fails the build;
   it runs in CI ([.github/workflows/ci.yml](../../.github/workflows/ci.yml)) and as
-  `tests/test_philosophy_guard.py`. The relevance vocabulary it protects is defined in
-  `shared/references/conventions.md`. A score a user explicitly
+  `tests/test_philosophy_guard.py`. The relevance vocabulary it protects is defined by the
+  [evaluate-job-fit](../../skills/evaluate-job-fit/SKILL.md) skill that returns it, and one judged
+  posting's exact fields are `templates/jobs-event.example.json`. A score a user explicitly
   asks for *in chat* is fine — it just must never be written into a digest, brief, or the job log.
 - **How to verify.** `python3 scripts/philosophy_guard.py --root .` → `Philosophy guard: clean.`
 
@@ -55,11 +61,11 @@ and are linked, never restated here — this doc is a live design-doc subject to
   clearly labels any account-neutral equivalent rather than claiming an actual charge.
 - **Enforced by.** [scripts/philosophy_guard.py](../../scripts/philosophy_guard.py) rejects any
   `budget` / `credits` / `cost` config field, cost knob, or unverified actual-charge claim in shipped
-  output while allowing accurate calls-first usage context. The outcome levers and usage-record
-  contract live in `shared/references/conventions.md`, the
-  reactive quota error and its fix are owned by
-  `shared/references/errors.md`, and canonical pricing/metering facts
-  live only in `shared/references/agent-data-contract.md`.
+  output while allowing accurate calls-first usage context. What a run stores about its own metered
+  work is the `agent_data_usage` block in `templates/run-record.example.json`; a spent allowance is
+  named where the run hits it, in the [job-search-run](../../skills/job-search-run/SKILL.md) skill;
+  and canonical pricing and metering facts live only in
+  `shared/references/agent-data.md`.
 - **How to verify.** `python3 scripts/philosophy_guard.py --root .` → `Philosophy guard: clean.`
 
 ## 3. Private & local
@@ -70,30 +76,33 @@ and are linked, never restated here — this doc is a live design-doc subject to
   with a deny-all default means the safe thing happens even if someone runs `git add` from inside the
   workspace.
 - **Enforced by.** The workspace gitignore *template* ships a deny-all (`*` then `!.gitignore`) that
-  the first-run setup copies in; the file layout and "never committed" contract are owned by
-  `shared/references/conventions.md`. Beyond the template this
+  the first-run setup copies in; the workspace layout and what stays off disk entirely are owned by
+  `shared/references/runbook.md`. Beyond the template this
   is **cultural** — there is no CI check that scans for committed PII, so review must catch it.
 - **How to verify.** Inspect `templates/workspace.gitignore` (the deny-all template) and confirm no
   workspace contents are tracked.
 
 ## 4. No silent failures — named errors
 
-- **Statement.** Every blocked path is internally named with a durable cause and fix, surfaced to the user
-  through the home view and digest, with a desktop notification where supported. Established failures use
-  canonical `E-*` values; an explicitly bounded non-user-facing class may bridge a staged contract, but its
-  raw token never reaches normal chat or the digest.
+- **Statement.** Every blocked path is named where it is hit, in the words a user would use, with a cause
+  and a fix — and it reaches the user through the digest and the home view, plus a desktop notification
+  where supported. There is no error-code catalogue and no internal token that could leak into either.
 - **Why.** A headless run that fails quietly is worse than no run. Naming each failure — with the fix
   attached — means a user always learns what to do next, and never has to read a log to find out a run
-  did nothing.
-- **Enforced by.** The named-error catalogue, the three surfacing channels, and the rule that a HALT
-  writes a blocked record (because a headless `claude -p` exits 0 even when blocked) are all owned by
-  `shared/references/errors.md`. The behavior is exercised by the
-  job-search-run skill's evals (the quota / service-down / no-auth / no-preferences / config-version
-  halt scenarios in `skills/job-search-run/evals/evals.json`).
-- **How to verify.** Read `shared/references/errors.md`; then run
-  the job-search-run evals (ask Claude to "run the evals for job-search-run") and confirm each blocked
-  scenario writes its internal classification and blocked record while user-visible artifacts carry cause +
-  fix without leaking a bounded internal-class token.
+  did nothing. A code was never what the user read; the sentence next to the failing step was, so the
+  codes went and the sentences stayed.
+- **Enforced by.** The run's close carries it: a run that stops still writes `runs/<run_id>.json` with
+  `close_state: blocked` and `run_health: degraded` (the shape is `templates/run-record.example.json`)
+  plus a digest whose body is the cause and the fix, *before* it stops — because a headless `claude -p`
+  exits 0 even when blocked, so the record is the only trustworthy signal. The start-to-close sequence is
+  owned by `shared/references/runbook.md`, and
+  `validate-workspace.sh --post-close <run_id>` checks that even a run that stopped early left no
+  started-marker and no scratch. The behavior is graded by the live evals in `evals/` — B9 covers a run
+  killed mid-flight — and by the blocked scenarios in `skills/job-search-run/evals/evals.json`.
+- **How to verify.** Read the "One run, start to close" section of
+  `shared/references/runbook.md`; then run the job-search-run
+  evals (ask Claude to "run the evals for job-search-run") and confirm each blocked scenario writes its
+  record and a digest a user could act on without reading a log.
 
 ## 5. Single source of truth
 
@@ -105,17 +114,16 @@ and are linked, never restated here — this doc is a live design-doc subject to
   compose-by-reference model, AAS-PACK-02/BOUND-03). Where a host cannot resolve a path outside a
   skill's own directory, the build assembles that host's self-contained copies from the single source
   (AAS-DIST-03) — a generated copy, never hand-maintained.
-- **Enforced by.** `scripts/build.sh` (assembly only where a host needs it;
-  today every host resolves in place, so it regenerates only the content-hash build stamp),
-  [scripts/doc_lint.py](../../scripts/doc_lint.py)'s intra-reference duplication check
-  (`no-shared-reference-duplication`, which guards `shared/references/` and the skill-local originals
-  directly), and the per-host resolution marker tests in
+- **Enforced by.** There is no build step at all now — nothing is generated into `skills/` or
+  `shared/`, so there is nothing to fall out of sync. What holds the property is
+  [scripts/doc_lint.py](../../scripts/doc_lint.py)'s duplication check
+  (`no-shared-reference-duplication`, which guards both the knowledge base and `shared/references/`
+  itself) and the per-host resolution tests in
   [tests/test_reference_resolution.py](../../tests/test_reference_resolution.py).
-- **How to verify.** `git ls-files 'skills/*/references/*.md'` lists only the four skill-local
-  originals (`home.md`, `onboarding.md`, `customization.md`, `scheduling-and-consent.md`) — no fanned
-  copies; `python3 -m pytest -q tests/test_reference_resolution.py` → every in-place pointer resolves
-  under each host's install; `./scripts/build.sh` then `git status --porcelain` → empty (the stamp is
-  already current).
+- **How to verify.** `git ls-files 'skills/*/references/*.md'` prints nothing — there are no
+  skill-local reference files left; every skill reads the two shared references in place.
+  `python3 -m pytest -q tests/test_reference_resolution.py` → every in-place pointer resolves under
+  each host's install.
 
 ## 6. Deterministic, testable, headless
 
@@ -132,19 +140,18 @@ and are linked, never restated here — this doc is a live design-doc subject to
   `claude -p` returns 0 even when it halted, success must be read from the written record, never from
   the exit code.
 - **Enforced by.** The mechanics are bundled as portable POSIX-`sh` scripts under
-  `shared/scripts/mechanics/` (dedup, the event log, schedule-line composition, workspace discovery),
-  each reproducing — and paired with — the pinned prose contract owned by
-  `shared/references/internals.md` (registry, discovery,
-  scheduling marker) and `shared/references/conventions.md`
-  (the `jobs.jsonl` event-line contract + operations); the runner invokes the script where a shell
-  runtime exists and follows the named prose fallback otherwise. `tests/test_mechanics_scripts.py`
-  pins the scripted form to the contract; the skill evals assert on the artifacts those procedures
-  produce (registry bytes, event lines). The "read the record, not the exit code" contract is owned by
-  `shared/references/errors.md`.
-- **How to verify.** Run `python3 -m pytest tests/test_mechanics_scripts.py` (the scripted mechanics
-  reproduce their pinned contracts) plus the skill evals (e.g. "run the evals for job-search-run") and
-  the TESTING.md state/discovery checks; confirm registry writes and `jobs.jsonl` lines match the
-  pinned contracts.
+  `shared/scripts/mechanics/` — dedup, the event-log append, schedule-line composition, workspace
+  discovery, and `validate-workspace.sh`, which decides whether a workspace on disk obeys the file
+  rules. The prose those scripts pair with is `shared/references/runbook.md`
+  (find the workspace, what each file holds, one run start to close); the runner invokes the script
+  where a shell runtime exists and follows the runbook's steps otherwise.
+  `tests/test_mechanics_scripts.py` drives each script through `sh` against a temp fixture and
+  `tests/test_validate_workspace.py` drives the validator against workspaces built per case, so the
+  rules are mechanically checked rather than asserted in prose. "Read the record, not the exit code"
+  is belief 4's close contract, in the same runbook.
+- **How to verify.** Run `python3 -m pytest tests/test_mechanics_scripts.py tests/test_validate_workspace.py`,
+  then the live evals in `evals/` (e.g. `python3 evals/run_eval.py --case headless-run --model sonnet`)
+  and confirm the captured workspace passes `validate-workspace.sh --post-close <run_id>`.
 
 ## 7. Consent-gated autonomy
 
@@ -168,31 +175,27 @@ and are linked, never restated here — this doc is a live design-doc subject to
   targets — a run that silently lacked permission to write the workspace or reach agent-data, discovered
   only the next day (belief 4: no silent failures) — by proving the *real* unattended invocation works
   before the schedule is called active (`PSG-SUB-06`, prove it works, not that it exists). The
-  unattended-first model (session loop as its named fallback), the "cloud schedulers don't qualify" test,
-  and the canary spec are owned by `skills/job-search-agent/references/scheduling-and-consent.md` and
-  `shared/references/internals.md` (Scheduling setup).
+  unattended-first model (session loop as its named fallback) and the canary are owned by the front-door
+  skill [skills/job-search/SKILL.md](../../skills/job-search/SKILL.md), which offers the schedule, runs the
+  canary, and records the marker only on a green one; `shared/references/runbook.md`
+  ("Running it unattended") gives the shape of the command a scheduler has to run.
 - **Enforced by.** **Instruction-level + evals** — there is no runtime hook. The stance asserts **no
   silent / un-consented privileged write**, and now that the advocated default is an unattended schedule (a
   real machine change) the same gate covers it: shown first, approved on a yes, user-removable. The
-  unattended-first model, the in-session-loop fallback, the "cloud schedulers don't qualify" test, and the
-  mandatory **config-time canary** are pinned in
-  `shared/references/internals.md` (Scheduling setup) and
-  `skills/job-search-agent/references/scheduling-and-consent.md`, and stated user-facing in
-  [docs/SECURITY.md](../SECURITY.md). The canary's proof routes through the **written record** — success
-  read from the run artifact, not the process exit code (belief 6) — the same no-silent-failure channel
-  owned by `shared/references/errors.md`. Exercised by the job-search
-  evals (scheduling is verified via the offered yes/no, the composed schedule line for the cadence, and the
-  registry marker — not by an enforced prohibition).
+  unattended-first model, the in-session-loop fallback, and the mandatory **config-time canary** are pinned
+  in [skills/job-search/SKILL.md](../../skills/job-search/SKILL.md) and stated user-facing in
+  [docs/SECURITY.md](../SECURITY.md). The canary's proof routes through the **written record** — a run
+  record with `trigger: scheduled` and a healthy close, read from the artifact rather than the process exit
+  code (belief 6). Graded by the `schedule` eval case (behavior row B11) and by the job-search scenario
+  suite: the yes/no offer, the composed schedule line for the cadence, and the registry marker — not an
+  enforced prohibition.
 - **How to verify.** Run the job-search evals and confirm the agent *offers* scheduling as a yes/no,
   composes the correct schedule line for the chosen cadence, and — on a yes — records the registry marker,
   never writing a privileged schedule *without* consent. Because the evals stub scheduling (no real
   crontab/launchd runs in tests), the canary's "prove the real invocation before recording" gate is
-  verified by inspecting the pinned flow in
-  `skills/job-search-agent/references/scheduling-and-consent.md` +
-  `shared/references/internals.md` (marker set only after Verify passed —
-  a green canary for the unattended schedule, or the loop fallback's observed first-fire run record); a green
-  eval reflects the consent + compose + record behavior, not an enforced prohibition or a
-  live canary.
+  verified by the `schedule` case, which installs a real scheduler entry and reads the run record the canary
+  wrote: `python3 evals/run_eval.py --case schedule --model sonnet` (remove the entry after grading). The
+  marker is written only after that record shows a healthy close.
 
 ## 8. Conversational-first configuration
 
@@ -203,26 +206,29 @@ and are linked, never restated here — this doc is a live design-doc subject to
   the agent makes the edit.
 - **Enforced by.** **Cultural / by design** — this is a product principle, not a linted rule. It is
   upheld by the skills (the front door and interview drive configuration through conversation) and by
-  keeping the config human-only; the file's shape is documented in
-  `shared/references/conventions.md` as the escape hatch.
-- **How to verify.** Inspect `shared/references/conventions.md`
-  (human-terms-only config) and confirm the config-editing skills are conversational.
+  keeping the config human-only; the file's shape is the copyable
+  [templates/config.example.yaml](../../templates/config.example.yaml), which is the escape hatch.
+- **How to verify.** Read [templates/config.example.yaml](../../templates/config.example.yaml) — every key
+  is in human terms, with no tuning knob — and confirm the config-editing skills are conversational.
 
 ## 9. Config version stability
 
-- **Statement.** The config schema version is never bumped to ship a feature; a version bump means a
-  genuine breaking change, and an out-of-range version surfaces as a named config-version error.
-- **Why.** Bumping the schema on a whim breaks every existing workspace. Reserving the version for
-  real breaking changes — and detecting "config written by a newer version" as a named, fixable error
-  — keeps upgrades safe.
-- **Enforced by.** The config-version named error (its cause + fix) is owned by
-  `shared/references/errors.md`, exercised by the config-version
-  halt eval in `skills/job-search-run/evals/evals.json`. That the *major* version implies a breaking
-  change is the release rule in [CONTRIBUTING.md](../../CONTRIBUTING.md#versioning--bump-it-every-release).
-  Whether a feature *deserves* a bump is a **cultural** judgment, not a linted gate.
-- **How to verify.** Read the config-version row in
-  `shared/references/errors.md`; run the config-version eval and
-  confirm it halts and writes a blocked record.
+- **Statement.** The `config.yaml` schema version is never bumped to ship a feature; a bump means a
+  genuine breaking change that an existing workspace cannot survive unchanged.
+- **Why.** Bumping the schema on a whim breaks every existing workspace. Reserving the version for real
+  breaking changes is what lets a release add keys — `schedule.consented`, `search.max_new_postings_per_run` —
+  without touching anyone's workspace, and lets a run ignore a key an older workspace still carries.
+- **Enforced by.** **Cultural**, backed by one mechanical check.
+  `shared/scripts/mechanics/validate-workspace.sh` requires `version` to be present and numeric and says
+  nothing about its value, so an older workspace keeps working — that permissiveness is the point, and it
+  is what makes bumping the version a deliberate act rather than a side effect. Whether a change *deserves*
+  a bump is a judgment; the release rule for the plugin version, and the requirement that a release note
+  say what an existing workspace must do, are in
+  [CONTRIBUTING.md](../../CONTRIBUTING.md#versioning--bump-it-every-release).
+- **How to verify.** Read the config-check block in
+  [../../shared/scripts/mechanics/validate-workspace.sh](../../shared/scripts/mechanics/validate-workspace.sh)
+  (required keys: `version`, `queries`, `search.sources`, `schedule`), then check that the newest CHANGELOG
+  entry has a **Compatibility** section whenever it changed what a run writes into a workspace.
 
 ## 10. Prose over knobs
 
@@ -231,15 +237,16 @@ and are linked, never restated here — this doc is a live design-doc subject to
 - **Why.** People describe what they want in sentences, not weights. A prose brief with must-haves /
   strong preferences / nice-to-haves captures importance structurally, which the model can reason over
   far better than a tuned scoring table — and it keeps belief 1 honest at the input side.
-- **Enforced by.** The prose-brief shape (the buckets, "no weights", the qualitative vocabulary) is
-  owned by `shared/references/conventions.md`;
+- **Enforced by.** The prose-brief shape — the buckets, no weights, the qualitative vocabulary — is shown
+  by [templates/preferences.example.md](../../templates/preferences.example.md) and built by the
+  [job-preference-interview](../../skills/job-preference-interview/SKILL.md) skill;
   [scripts/philosophy_guard.py](../../scripts/philosophy_guard.py) backstops the *output* side by
   rejecting numeric scoring. The "importance = bucket" framing is restated in
   [CONTRIBUTING.md](../../CONTRIBUTING.md#project-philosophy-please-dont-regress-these). There is no
   linter over the brief's prose itself, so this is partly **cultural**.
-- **How to verify.** Inspect `shared/references/conventions.md`
-  (the prose brief sections, no machine-readable contract); run `python3 scripts/philosophy_guard.py
-  --root .` for the output backstop.
+- **How to verify.** Read [templates/preferences.example.md](../../templates/preferences.example.md) — prose
+  sections, no machine-readable rubric; run `python3 scripts/philosophy_guard.py --root .` for the output
+  backstop.
 
 ## 11. Docs-as-product
 
@@ -252,35 +259,30 @@ and are linked, never restated here — this doc is a live design-doc subject to
   resolve, frontmatter and `code_refs` are valid, indexes are complete, and live docs don't duplicate
   the `shared/references/` source of truth — and runs in CI
   ([.github/workflows/ci.yml](../../.github/workflows/ci.yml)). The structural map and the docs-as-
-  product framing live in [ARCHITECTURE.md](../../ARCHITECTURE.md). That every error names its fix is
-  the contract in `shared/references/errors.md`.
+  product framing live in [ARCHITECTURE.md](../../ARCHITECTURE.md). That every failure names its fix is
+  belief 4, carried by each skill next to the step that can hit it.
 - **How to verify.** `python3 scripts/doc_lint.py --root .` → `Doc lint: clean.`
 
 ## 12. Parallel by default
 
-<!-- exact-model-contract:parallel-belief -->
-
-- **Statement.** Independent work runs concurrently, not in sequence — a run dispatches mutually-independent
-  subtasks (e.g. one detail-read subagent per posting) wherever the host supports it, and briefs each like a
-  colleague with zero context. The one carve-out: hosts that gate subagents behind explicit user approval
-  (e.g. Codex) wait for that approval before fanning out; every other host parallelizes by default. Setup
-  persists one exact `search.detail_model`; runtime dispatch uses that exact identifier for every posting
-  judgment and never reselects, interprets, scales, or substitutes it.
+- **Statement.** Independent work runs concurrently, not in sequence — a run dispatches one detail-read
+  subagent per posting wherever the host has subagents, and briefs each like a colleague with zero context.
+  Where the host has none, or gates subagents behind explicit user approval (Codex), the run works the list
+  in order instead. Both paths run on the host's own model; nothing pins a separate model for the search.
 - **Why.** Time-to-value is a product feature. Parallelizing independent work turns a serial crawl into one
-  concurrent step; isolating each subtask in its own subagent keeps the primary context clean and dispatches each
-  isolated subtask with an explicit model binding. Setup chooses the least-powerful available model that can
-  perform the fit judgment well unless the user requests another exact available model; when the host cannot
-  assign a separate worker model, setup saves the exact primary model and runtime evaluates sequentially. A
-  well-briefed subagent makes judgment calls — a terse one returns shallow, generic work.
-- **Enforced by.** **Cultural / by design** — no linter for parallelism. The principle and the subagent-briefing
-  guidance are owned by `shared/references/parallelism.md` (bundled into
-  every skill); `job-search-run` embodies it (scan → parallel per-posting fan-out by default, sequential only
-  where the host lacks the primitive or awaits subagent approval → consolidate; the `search.detail_model` and
-  parallel-approval knobs live in `shared/references/conventions.md`).
-  Setup-time model selection is owned by `shared/references/internals.md`;
-  exact runtime authority is owned by `parallelism.md` and `skills/job-search-run/SKILL.md`.
-- **How to verify.** Inspect `shared/references/parallelism.md` and
-  `skills/job-search-run/SKILL.md`; confirm mutually-independent work is dispatched concurrently by default
-  (sequential only where the host lacks the primitive or awaits subagent approval), and that the fallback
-  still evaluates every queued item with the exact saved model.
-<!-- /exact-model-contract:parallel-belief -->
+  concurrent step, and isolating each detail read in its own subagent keeps the primary context clean — the
+  run consolidates the verdicts rather than carrying every job description. A well-briefed subagent makes
+  judgment calls; a terse one returns shallow, generic work, which is why the brief matters more than the
+  fan-out. The setup-time model binding this belief used to carry was removed on 2026-07-31: it made setup
+  ask a question users could not answer, and pinning a model bought nothing the host's own model did not
+  already give.
+- **Enforced by.** **Cultural / by design** — no linter for parallelism. The behavior lives in
+  [skills/job-search-run/SKILL.md](../../skills/job-search-run/SKILL.md): scan, fan out one subagent per
+  posting on the read list, work in order where the host cannot, then consolidate. The optional
+  `search.parallel_detail_reads` key in
+  [templates/config.example.yaml](../../templates/config.example.yaml) records that a user approved
+  subagents on a host that asks.
+- **How to verify.** Read the detail-read step of
+  [skills/job-search-run/SKILL.md](../../skills/job-search-run/SKILL.md) and the brief it hands each
+  subagent; confirm independent work is dispatched concurrently by default, and that the in-order path
+  still reaches a judgment for every posting on the list.

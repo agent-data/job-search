@@ -79,7 +79,7 @@ These expectations apply to every listed agent:
 
 Job Search is compatible with Claude Code, Codex, Cursor, opencode, Gemini CLI, GitHub Copilot CLI, Factory Droid, Pi, and Hermes Agent.
 
-The primary model is inherited from the session that creates the job. Setup records an exact detail-review model, and scheduled runs reuse it. A recurring schedule is recorded only after the agent tests the actual invocation and confirms that it can reach agent-data and write the workspace.
+Every run — the one you ask for and the one a schedule starts — reads and judges postings on the model of the session it runs in. Nothing pins a separate model for the search. A recurring schedule is recorded only after the agent runs the real scheduled command once and confirms that it reached agent-data and wrote the workspace.
 
 </details>
 

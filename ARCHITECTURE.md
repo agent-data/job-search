@@ -115,11 +115,16 @@ leaking into shipped artifacts, and [scripts/doc_lint.py](scripts/doc_lint.py) k
 structurally sound. The scheduling stance is instruction-level (see scheduling-consent above).
 
 ### tests-evals
-The deterministic test bed under [tests/](tests/): pytest suites for the dev tooling (the doc linter, the
-philosophy guard, the agent-data shim's self-checks); a fake `agent-data` PATH shim
-(`tests/fake-agent-data`) so runs are exercised with no network and no credits; and per-skill `evals/`
-measured by the skill-creator harness — the evals are what verify the pinned runtime procedures end-to-end.
-See [TESTING.md](TESTING.md) for the matrix.
+Three layers. The deterministic test bed under [tests/](tests/): pytest suites for the dev tooling (the doc
+linter, the philosophy guard, the release-integrity checks, the mechanics scripts, the workspace validator,
+the shims' self-checks), plus a fake `agent-data` PATH shim (`tests/fake-agent-data`) so a whole run is
+exercised with no network and no credits. Per-skill scenario suites in `skills/<skill>/evals/evals.json`,
+checked for structural coherence by [scripts/eval_harness.py](scripts/eval_harness.py) and driven through
+the skill-creator skill. And the live behavior evals in [evals/](evals/) — `run_eval.py` spawns a real
+session against the live Job Postings API and captures the transcript and the workspace it produced, which
+a grader reads; `behaviors.md` maps the fourteen kept behaviors B1–B14 onto the six cases in `cases/`.
+Because those runs cost real metered calls they are a local release gate, not a CI step. See
+[TESTING.md](TESTING.md) for the matrix.
 
 ## Package layering & data flow
 
@@ -144,8 +149,9 @@ Install steps are in [README.md](README.md).
 gates (CLI present, config, auth, brief, service status), then one metered search per enabled query, dedup via
 the known-ids operation ([shared/scripts/mechanics/dedup.sh](shared/scripts/mechanics/dedup.sh)), qualitative
 judgment per new posting, detail reads for the promising
-ones, and finally a persisted run record plus a digest. Any blocked gate writes a named-error record so the
-next home view surfaces it. Detail and failure modes are in
+ones, and finally a persisted run record plus a digest. A run that a gate stops still closes: it writes a
+record with `close_state: blocked` and `run_health: degraded`, and a digest whose body says what stopped it
+and what fixes it, so the next home view surfaces both. Detail and failure modes are in
 [docs/product-specs/index.md](docs/product-specs/index.md) and
 [shared/references/agent-data.md](shared/references/agent-data.md).
 
@@ -163,9 +169,9 @@ When you need an exact runtime detail, go to its owner — do not reproduce it h
 |---|---|
 | Workspace layout, registry, workspace discovery, the run contract, the scratch rule | [shared/references/runbook.md](shared/references/runbook.md) |
 | agent-data CLI: routes, per-source quirks, retry rules, listing id, what a call costs | [shared/references/agent-data.md](shared/references/agent-data.md) |
-| The exact shape of `config.yaml`, a run record, a `jobs.jsonl` line, the brief | [templates/](templates/) |
+| The exact shape of `config.yaml`, a run record, a `jobs.jsonl` line, the brief | [templates/](templates/) — `config.example.yaml`, `run-record.example.json`, `jobs-event.example.json`, `preferences.example.md` |
 | Whether a workspace on disk is well formed | [shared/scripts/mechanics/validate-workspace.sh](shared/scripts/mechanics/validate-workspace.sh) |
-| How each skill behaves | its `SKILL.md`, graded by the evals in [evals/](evals/) |
+| How each skill behaves | its `SKILL.md`, graded by the live behavior evals in [evals/](evals/) and its own `evals/evals.json` |
 
 Contributor workflow and the green-gate commands are in [CONTRIBUTING.md](CONTRIBUTING.md) and
 [TESTING.md](TESTING.md); planned work is tracked in [docs/exec-plans/index.md](docs/exec-plans/index.md).

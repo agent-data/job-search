@@ -7,6 +7,20 @@ code_refs: [skills/job-search/SKILL.md, skills/job-search-agent/SKILL.md, skills
 ---
 # Multi-Harness Portability — Research Dossier
 
+> **Read this first (added 2026-07-31).** The per-file portability verdicts in §2 grade a reference
+> corpus that no longer exists. The 2026-07-30 skill overhaul deleted `internals.md`,
+> `conventions.md`, `voice.md`, `parallelism.md`, `errors.md`, `agent-data-contract.md`,
+> `run-lifecycle.md`, `update.md`, `build-stamp.md`, and all four hand-authored per-skill reference
+> files, and deleted `scripts/build.sh` with them — there is no build step and nothing is fanned
+> anywhere. What remains is two references read in place from every skill:
+> `../../shared/references/runbook.md` and
+> `../../shared/references/agent-data.md`. Both were written
+> host-neutrally, so the Claude-coupling this dossier found is not a live finding; the portability
+> question it raised is now settled by each host resolving its own tools and scheduler at run time.
+> The dossier is kept for its per-harness research — the install paths, headless invocations, and
+> scheduler capabilities in §3–§6, which the shipped adapters are built on and which is still
+> accurate.
+>
 > **Raw research material, not a commitment.** This dossier consolidates seven adversarially-verified
 > single-harness portability studies into one reference so the lead can synthesize a house-style
 > exec-plan. It maps the work; it builds nothing. The product today targets Claude Code only —

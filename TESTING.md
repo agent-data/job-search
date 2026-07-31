@@ -29,7 +29,7 @@ The terminal state (per the AAS-T-10 ruling) is **a structural gate + automated 
 
 Verifying a host-specific action such as scheduling is now a **runtime config-time canary** check, replacing the deleted per-host **structural adapter validation**.
 
-How the skills *behave* is graded by the live behavior evals in `evals/` (§ Behavior evals), which are a **local release gate — CI never runs them**: each one spawns a real `claude -p` session against the live Job Postings API, which needs an API key and costs money. No test asserts sentences of documentation prose; the suites that did were retired on 2026-07-30 in favor of the evals plus `validate-workspace.sh`. What still reads a reference file is a token comparison inside a marked contract block (`<!-- namespace:name -->` … `<!-- /namespace:name -->`), which pins a machine-readable table rather than any wording; those tests go when the files they read are deleted.
+How the skills *behave* is graded by the live behavior evals in `evals/` (§ Behavior evals), which are a **local release gate — CI never runs them**: each one spawns a real `claude -p` session against the live Job Postings API, which needs an API key and costs money. No test asserts sentences of documentation prose; the suites that did were retired on 2026-07-30 in favor of the evals plus `validate-workspace.sh`. Two pytest files still open a reference file, and neither reads it for wording: `tests/test_reference_resolution.py` follows every `../../shared/references/<file>.md` pointer from each host's install view and fails on a dangling one, and `tests/test_usage_context_contract.py` checks that pricing and metering facts have exactly one owning file (`shared/references/agent-data.md`).
 
 What stays a **labeled TRANSITIONAL residual** (👤/🤖, driven by hand): the **behavioral cross-host matrix** — actually running a skill end-to-end on each of the eight hosts that are **not installable on the CI runner** (Codex/Cursor/opencode/Gemini/Copilot/Droid/Pi/Hermes Agent), and the **N ≥ 5 stochastic eval reps** (the discovery/verdict/injection/merge scenarios run against the shim to record real pass-rate + variance + the control delta). These are the **off-CI live-harness step** — expected, not a gap: CI proves the scenarios are *well-formed*; the behavioral reps prove they *pass*, and shrink as hosts become installable. A green structural gate must never be read as a passed behavioral matrix.
 
@@ -115,8 +115,8 @@ export JSOS_CANON_LOC="United States"           # large location → rarely empt
 **Sparse-data fallback (apply to any LIVE test).** If a live search returns **0 results**: broaden the canonical
 query once (drop the location); if still 0, re-run the *same assertion* against the fake-shim **`happy`** scenario
 (§7 setup) and mark the live result **N/A — market-quiet**, not ❌. A bug looks different from an empty market: a
-bug throws a named `E-*`, mis-shapes the digest, or crashes; a quiet market returns a clean "0 results — broaden
-keywords" (T7.10). Only the former is a ❌.
+bug closes the run `blocked`, mis-shapes the digest, or crashes; a quiet market completes healthy and says "0
+results — broaden keywords" (T7.11). Only the former is a ❌.
 
 > Prefer realism? You may swap in your own role/location as an **optional** variant — but grade the canonical run.
 
@@ -231,18 +231,18 @@ last run health), the latest digest summary (date + counts), a pipeline snapshot
 ### T4.2 Add a query conversationally — 🤖
 Say: **"add a query for 'staff machine learning engineer' in 'Remote'."**
 **Verify (👤):** `cat "$JSOS_TEST/.job-search/config.yaml"` → a new `queries[]` entry with those keywords/location,
-`enabled: true`, `version: 1` intact, **no budget/score fields added**.
+`enabled: true`, `version: 2` intact, **no budget/score fields added**.
 **Result:** ⬜
 
 ### T4.2b Edit a query conversationally — 🤖
 Say: **"change the location on the staff ML query to 'United States'."**
 **Verify (👤):** `config.yaml` → that **same** `queries[]` item's `location` is updated; its `id`/`keywords`
-unchanged, other queries untouched, `version: 1` intact.
+unchanged, other queries untouched, `version: 2` intact.
 **Result:** ⬜
 
 ### T4.2c Remove a query conversationally — 🤖
 Say: **"drop the staff ML query."**
-**Verify (👤):** `config.yaml` → that item is gone; remaining queries intact; `version: 1` intact.
+**Verify (👤):** `config.yaml` → that item is gone; remaining queries intact; `version: 2` intact.
 **Result:** ⬜
 
 ### T4.3 Change frequency conversationally — 🤖
@@ -278,7 +278,7 @@ posting's `source_id` with `"status":"interested"`; the home pipeline count refl
 ### T4.7 Conversational robustness — the interface IS the product — 🤖
 The config interface is natural language, so test more than one phrasing per action. For each cell, send the
 phrasing and record whether Claude makes the **right** edit — or asks **one** clarifying question when genuinely
-ambiguous. It must never silently do the wrong thing; **`version: 1` stays; no score/budget fields ever appear.**
+ambiguous. It must never silently do the wrong thing; **`version: 2` stays; no score/budget fields ever appear.**
 
 | Action | Multi-intent | Oblique | Negative / exclude | Typo / loose |
 |---|---|---|---|---|
@@ -288,14 +288,15 @@ ambiguous. It must never silently do the wrong thing; **`version: 1` stays; no s
 
 **Expected, per cell:** correct `config.yaml`/`jobs.jsonl` edit **or** one targeted clarifying question
 (e.g. "by 'so often' do you mean hourly→daily?"); multi-intent applies **both** changes; negative phrasings
-**exclude** (add an exclusion / mark not-interested), never add the thing. `version: 1` preserved throughout.
+**exclude** (add an exclusion / mark not-interested), never add the thing. `version: 2` preserved throughout.
 **Verify (👤):** `cat "$JSOS_TEST/.job-search/config.yaml"` after the multi-intent + typo rows; fold the state
 after the status row.
 **Result:** ⬜
 
 ### T4.8 Home failure-states — don't bury problems — 🤖 + 👤
-The healthy home is T4.1; these are the states `home.md:26-92` says must render specifically. Build each, then
-say **"/job-search:job-search"**:
+The healthy home is T4.1; these are the states the front door
+([`skills/job-search/SKILL.md`](skills/job-search/SKILL.md), the home-view step) must render specifically.
+Build each, then say **"/job-search:job-search"**:
 - **No runs yet** (workspace exists, no digest): complete onboarding but **decline** the sample run (or
   `rm "$JSOS_TEST/.job-search/reports/"*.md`). → Home says *"No runs yet — want me to run your first search
   now?"*, not an empty digest block.
@@ -333,14 +334,17 @@ Immediately run it again.
 `evaluated` events; no `get-posting` calls; Run health healthy; exits 0.
 **Result:** ⬜
 
-### T5.3 Headless first-run with no workspace → E-NO-CONFIG — 👤
+### T5.3 Headless first-run with no workspace — 👤
 ```bash
 T2=$(mktemp -d)
 JOBSEARCH_OS_REGISTRY="$T2/absent.json" JOBSEARCH_OS_HOME="$T2" \
   claude --plugin-dir "$JSOS" -p "/job-search:job-search-run"     # no --workspace, empty sandbox
 echo "exit: $?"; rm -rf "$T2"
 ```
-**Expected:** names **E-NO-CONFIG** (run the job-search skill); makes no calls; no `runs/` record is written (no workspace) — the failure is visible because the next job-search visit routes to onboarding; the process exits **0** (do not assert non-zero).
+**Expected:** the reply says there is no job search set up yet and names the job-search skill as the way to
+set one up; it makes no `agent-data` calls. Nothing is written under `$T2` — with no workspace there is
+nowhere to put a run record, and the failure stays visible because the next job-search visit routes to
+onboarding. The process exits **0** (do not assert non-zero).
 **Result:** ⬜
 
 ### T5.4 Headless **+ live** run — the actual scheduled path — 👤  ★ production path
@@ -391,10 +395,12 @@ PATH="$SH5/_bin:$PATH" JOBSEARCH_FIXTURES="$JSOS/tests/fixtures" JOBSEARCH_TEST_
   claude --plugin-dir "$JSOS" -p "/job-search:job-search-run --workspace $SH5"; echo "exit: $?"
 cat "$SH5/reports/"*.md 2>/dev/null; rm -rf "$SH5"
 ```
-**Expected:** writes a `runs/<id>.json` with `close_state: blocked` and `run_health: degraded`, naming the dead service as what stopped the run, so the next job-search home view surfaces it; the headless `claude -p` process returns **0**, so do not assert on `$?`; the digest's Run-health line reads **`Run health: degraded`**
-(`run_health` is one word — `healthy` when every search answered and every candidate reached a judgment, `degraded` on every other close, a blocked one included; what stopped the run is `close_state` plus the digest's own wording); the body says the service is
-unreachable and the next scheduled run will retry, **not** a match list.
-(the degraded digest shape is strengthened in T7.7/T7.9.)
+**Expected:** the three blocked-close conditions from §7, with the dead service as the cause. The digest's
+health line reads **`Run health: degraded`** and its body says the service is unreachable and the next
+scheduled run will retry — **not** a match list. `run_health` is one word: `healthy` when every search
+answered and every candidate reached a judgment, `degraded` on every other close, a blocked one included.
+What stopped the run is carried by `close_state` plus the digest's own wording, not by a code.
+(The degraded digest shape is pushed harder in T7.7/T7.9.)
 **Result:** ⬜
 
 ---
@@ -420,11 +426,36 @@ in the reasoning. Unknowns are never counted against it.
 
 ---
 
-## 7. Named-error paths (no silent failures)
+## 7. Blocked and degraded paths (no silent failures)
+
+Every test in this section grades the same three observable things, so read this once instead of re-reading
+it per row. There is no error-code catalogue any more — nothing to look a code up in, and no code to assert
+on. What a blocked run owes the user is:
+
+Below, `$WS` stands for whichever throwaway workspace the row built (`$T3`, `$SH`, and so on).
+
+1. **A closed run record.** `runs/<run_id>.json` exists, with `close_state: blocked` and
+   `run_health: degraded`. Read it: `cat "$WS/runs/"*.json`. The record is what the *next* front-door visit
+   reads, so a scheduled run that failed overnight is named the next morning — that is the whole point of
+   writing it before stopping.
+2. **A digest that says what stopped it.** `reports/<date>-digest.md` leads with `Run health: degraded`,
+   and its body is the cause and the fix in plain words, not a match list and not a cheery summary. Grade
+   the sentences: would a user who read only this know what happened and what to do?
+3. **No leftovers.** `"$JSOS/shared/scripts/mechanics/validate-workspace.sh" "$WS" --post-close <run_id>`
+   exits 0 and prints nothing — the started-marker and the scratch directory are gone even though the run
+   stopped early.
+
+Two things that are **not** pass conditions. The headless `claude -p` process returns **0** even on a
+blocked run (a skill cannot set the host process's exit status), so never assert on `$?`. And no exact
+wording is required: two runs may explain the same block in different sentences and both pass, as long as
+the cause and the fix are there.
+
+A run that *finishes* its work while something went wrong is a different close: `close_state: complete`
+with `run_health: degraded`. Those rows say so.
 
 ### Live-triggerable
 
-### T7.1 E-NO-AUTH — 👤
+### T7.1 The CLI is not authenticated — 👤
 ```bash
 T3=$(mktemp -d); cp -R "$JSOS_TEST/.job-search" "$T3/.job-search" 2>/dev/null || true
 AGENT_DATA_API_KEY="" JOBSEARCH_OS_HOME="$T3" JOBSEARCH_OS_REGISTRY="$T3/reg.json" \
@@ -432,28 +463,33 @@ AGENT_DATA_API_KEY="" JOBSEARCH_OS_HOME="$T3" JOBSEARCH_OS_REGISTRY="$T3/reg.jso
 echo "exit: $?"; rm -rf "$T3"
 ```
 *(If your key is in `~/.agent-data/config.json`, temporarily test in a shell where it isn't, or skip — the eval covers it.)*
-**Expected:** halts with **E-NO-AUTH** (names the `export AGENT_DATA_API_KEY=…` fix); nothing pulled; writes a `runs/<id>.json` with `close_state: blocked` and `run_health: degraded` naming the missing key, so the next job-search home view surfaces it; the headless `claude -p` process returns **0**, so do not assert on `$?`.
+**Expected:** the three blocked-close conditions above, with the cause being the missing API key and the fix
+being the exact command that sets one (`agent-data init --api-key …`, or exporting `AGENT_DATA_API_KEY`).
+Nothing is pulled — no `search-jobs`, no `get-posting`.
 **Result:** ⬜
 
-### T7.2 E-NO-AGENT-DATA — 👤
+### T7.2 The CLI is not installed — 👤
 ```bash
 T4=$(mktemp -d)
 PATH="/usr/bin:/bin" JOBSEARCH_OS_HOME="$T4" JOBSEARCH_OS_REGISTRY="$T4/reg.json" \
   claude --plugin-dir "$JSOS" -p "/job-search:job-search-run --workspace $T4/.job-search"  # agent-data not on this PATH
 echo "exit: $?"; rm -rf "$T4"
 ```
-**Expected:** **E-NO-AGENT-DATA** naming the `npm install -g agent-data` fix; writes a `runs/<id>.json` with `close_state: blocked` and `run_health: degraded` naming the missing CLI, so the next job-search home view surfaces it; the headless `claude -p` process returns **0**, so do not assert on `$?`. *(The trimmed
-PATH needs no python3 — the skills are zero-dependency; see T9.4.)*
+**Expected:** the three blocked-close conditions above, with the cause being the missing `agent-data` command
+and the fix being `npm install -g agent-data`. *(The trimmed PATH needs no python3 — the skills are
+zero-dependency; see T9.4.)*
 **Result:** ⬜
 
-### T7.3 E-NO-CONFIG — covered by T5.3. **Result:** ⬜
-### T7.4 E-NO-PREFERENCES — 👤
+### T7.3 No workspace at all — covered by T5.3 (nothing to write a record into). **Result:** ⬜
+### T7.4 The preferences brief is empty — 👤
 ```bash
 T5=$(mktemp -d); bash "$JSOS/skills/job-search-run/evals/files/setup-workspace.sh" "$T5/.job-search" >/dev/null
 : > "$T5/.job-search/preferences.md"
 claude --plugin-dir "$JSOS" -p "/job-search:job-search-run --workspace $T5/.job-search"; echo "exit: $?"; rm -rf "$T5"
 ```
-**Expected:** **E-NO-PREFERENCES** naming the job-preference-interview skill; nothing pulled; writes a `runs/<id>.json` with `close_state: blocked` and `run_health: degraded` naming the missing brief, so the next job-search home view surfaces it; the headless `claude -p` process returns **0**, so do not assert on `$?`.
+**Expected:** the three blocked-close conditions above, with the cause being the empty brief — there is
+nothing to judge postings against — and the fix naming the job-preference-interview skill. Nothing is
+pulled.
 **Result:** ⬜
 
 ### Fake-shim only (deterministic error injection — cannot be forced on the live API)
@@ -469,46 +505,40 @@ JOBSEARCH_FIXTURES=$JSOS/tests/fixtures, JOBSEARCH_TEST_SCENARIO=<scenario>) and
 
 | Test | scenario | Expected | Result |
 |---|---|---|---|
-| T7.5 **E-QUOTA** | `quota` | plain-language quota note leads with the billing recovery and exact zero prior metered calls; rejected attempt is unmetered; no retry or invented balance/charge; existing matches intact; writes a `runs/<id>.json` with `close_state: blocked` and `run_health: degraded` naming the spent allowance, so the next job-search home view surfaces it; the headless `claude -p` process returns **0**, so do not assert on `$?` | ⬜ |
-| T7.6 **E-SERVICE-DOWN** | `down` | "service down" digest, Run health `degraded`; **no** search/get-posting calls; writes a `runs/<id>.json` with `close_state: blocked` and `run_health: degraded` naming the dead service, so the next job-search home view surfaces it; the headless `claude -p` process returns **0**, so do not assert on `$?` | ⬜ |
-| T7.7 **E-UPSTREAM-STRETCH** | `stretch` | retries the 502 with backoff, opens each source's circuit after two consecutive failed queries against it (the shim fails every source → all stretched); writes a digest with Run health `degraded` that names every source as unavailable; doesn't crash | ⬜ |
-| T7.8 invalid-pair (non-error) | `invalid-pair` | no retry; summary-only judgment + "detail link expired" footnote; `detail_read:false`; run completes, exit 0 | ⬜ |
-| T7.9 degraded (non-error) | `degraded` | Run-health line reads `degraded` and the digest names the flaky sources as what degraded the run; digest notes results this run may be affected; **no detail-read cap** (reads promising matches as normal); still produces matches; `close_state` stays `complete` because the run finished its work; exit 0 | ⬜ |
-| T7.10 many promising postings | `many-promising` | every promising posting is evaluated; if the host hits a subagent/thread limit, it continues in rolling batches or falls back sequentially; capacity backpressure alone does **not** make Run health degraded | ⬜ |
-| T7.11 zero / all-known | `zero-empty` | "Searches ran but returned 0 results — broaden keywords"; exit 0. (All-known: pre-seed jobs.jsonl with the happy ids → "No new postings — you've already seen all N of these.") | ⬜ |
+| T7.5 monthly allowance spent | `quota` | **blocked close.** The digest leads with the spent allowance and the billing page as the fix, and states the run's actual prior metered calls — zero here, because the very first attempt was rejected. The rejected attempt is not counted as metered. No retry, no invented balance or charge. Postings already in `jobs.jsonl` are untouched | ⬜ |
+| T7.6 service unreachable | `down` | **blocked close.** No `search-jobs` and no `get-posting` calls at all. The digest says the service is unreachable and that the next scheduled run will retry, instead of a match list | ⬜ |
+| T7.7 every source keeps failing | `stretch` | retries the 502 with backoff, then stops searching a source after two consecutive failed queries against it (the shim fails every source, so all stop). The digest reads `Run health: degraded` and names every source as unavailable. It does not crash | ⬜ |
+| T7.8 stale detail links | `invalid-pair` | no retry — a dead id/URL pair is not going to become live. Those postings are judged from their summaries with a "detail link expired" footnote and `detail_read:false`. The run **completes** (`close_state: complete`), exit 0 | ⬜ |
+| T7.9 flaky sources, run still finishes | `degraded` | the digest's health line reads `degraded` and names the flaky sources as what degraded the run, and notes that this run's results may be incomplete. Promising matches are still read in full — nothing caps detail reads here — and matches are still produced. `close_state` stays **`complete`**: the run finished its work | ⬜ |
+| T7.10 many promising postings | `many-promising` | every promising posting is evaluated; if the host hits a subagent or thread limit, it continues in rolling batches or falls back to working the list in order. Hitting that limit is not by itself a reason for `run_health: degraded` | ⬜ |
+| T7.11 zero results / all already seen | `zero-empty` | completes healthy: "Searches ran but returned 0 results — broaden keywords", exit 0. (All-known variant: pre-seed `jobs.jsonl` with the happy ids → "No new postings — you've already seen all N of these.") | ⬜ |
 
 ```bash
 rm -rf "$SH"
 ```
 
-The next three reuse the same fake shim and are fully **offline** (no credits). Each builds its own throwaway
+The next two reuse the same fake shim and are fully **offline** (no credits). Each builds its own throwaway
 workspace, so they don't depend on the shared `$SH` above.
 
-### T7.11 E-CONFIG-VERSION — a config from a newer version halts — 👤
-```bash
-SHV=$(mktemp -d); bash "$JSOS/skills/job-search-run/evals/files/setup-workspace.sh" "$SHV" >/dev/null
-sed -i.bak 's/^version: 1/version: 3/' "$SHV/config.yaml"      # pretend a newer skill wrote it
-PATH="$SHV/_bin:$PATH" JOBSEARCH_FIXTURES="$JSOS/tests/fixtures" \
-  claude --plugin-dir "$JSOS" -p "/job-search:job-search-run --workspace $SHV"; echo "exit: $?"; rm -rf "$SHV"
-```
-**Expected:** **E-CONFIG-VERSION** ("written by a newer version … update the job-search skills"); HALT at
-preflight (no `search-jobs`/`get-posting`); writes a `runs/<id>.json` with `close_state: blocked` and `run_health: degraded` naming the unreadable config version, so the next job-search home view surfaces it; the headless `claude -p` process returns **0**, so do not assert on `$?`.
-**Result:** ⬜
+*(There is no config-version test any more. Nothing in the pack halts on a `config.yaml` version it does not
+recognise — `validate-workspace.sh` requires `version` to be present and numeric, and that is all. If a
+future release reintroduces a schema break, add the test back with it.)*
 
-### T7.12 E-BAD-QUERY — skip the bad query, keep the good ones — 👤
-E-BAD-QUERY is **non-blocking** (skip the query, continue). Build a workspace with one good and one malformed
+### T7.12 One malformed query is skipped, the good ones still run — 👤
+A rejected query is **non-blocking**: skip it, keep going. Build a workspace with one good and one malformed
 query (the `bad-query` scenario rejects only the `INVALID` sentinel location with a `422`):
 ```bash
 SHB=$(mktemp -d); bash "$JSOS/skills/job-search-run/evals/files/setup-workspace.sh" "$SHB" >/dev/null
 cat > "$SHB/config.yaml" <<'YAML'
-version: 1
+version: 2
 workspace:
   preferences_path: "preferences.md"
 queries:
   - { id: "good", keywords: "software engineer", location: "United States",   limit: 10, enabled: true }
   - { id: "bad",  keywords: "data engineer",     location: "INVALID-LOCATION", limit: 10, enabled: true }
 search:
-  detail_model: "balanced"  # valid legacy-v1 selector
+  sources: ["linkedin"]
+  freshness: "any"
 schedule:
   frequency: "daily"
   time: "08:00"
@@ -517,12 +547,13 @@ PATH="$SHB/_bin:$PATH" JOBSEARCH_FIXTURES="$JSOS/tests/fixtures" JOBSEARCH_TEST_
   claude --plugin-dir "$JSOS" -p "/job-search:job-search-run --workspace $SHB"; echo "exit: $?"
 cat "$SHB/reports/"*.md 2>/dev/null; rm -rf "$SHB"
 ```
-**Expected:** the **bad** query → **E-BAD-QUERY** naming the param (`location`, from `details[].loc`) + the
-"fix it in `config.yaml`" guidance, and is **skipped**; the **good** query still runs and produces matches; Run
-health **partial**; **no retry** on the 422 (`retryable:false`); run **completes, exit 0** (skip, not halt).
+**Expected:** the **bad** query is skipped, and the digest says which query was skipped, which parameter the
+service rejected (`location`, from `details[].loc`), and that fixing it means editing `config.yaml`. The
+**good** query still runs and produces matches. The 422 is **not retried** (`retryable:false`). The run
+**completes** — `close_state: complete`, `run_health: degraded` because a query was lost — exit 0.
 **Result:** ⬜
 
-### T7.13 detail-fetch-failed (non-error) — retry, then fall back to summary — 👤
+### T7.13 A detail read fails — retry, then judge from the summary — 👤
 ```bash
 SHD=$(mktemp -d); bash "$JSOS/skills/job-search-run/evals/files/setup-workspace.sh" "$SHD" >/dev/null
 PATH="$SHD/_bin:$PATH" JOBSEARCH_FIXTURES="$JSOS/tests/fixtures" JOBSEARCH_TEST_SCENARIO=detail-fetch-failed \
@@ -534,7 +565,23 @@ and judges from the **summary** (footnote that the detail couldn't be read); `de
 the run **completes, exit 0** (a footnote, not a failure).
 **Result:** ⬜
 
-### T7.14 Pagination and usage-context matrix — 🤖 + 👤 (fake shim, fully offline)
+### T7.14 A run that died mid-flight is reported, not hidden — 👤
+The one blocked-shaped state that isn't an API failure: the previous run was killed before it could close, so
+its started-marker is still there and it has no record.
+```bash
+SHK=$(mktemp -d); bash "$JSOS/skills/job-search-run/evals/files/setup-workspace.sh" "$SHK" >/dev/null
+: > "$SHK/runs/.started-2026-07-30T09-00-00Z"; mkdir -p "$SHK/runs/.scratch/2026-07-30T09-00-00Z"
+PATH="$SHK/_bin:$PATH" JOBSEARCH_FIXTURES="$JSOS/tests/fixtures" JOBSEARCH_TEST_SCENARIO=happy \
+  claude --plugin-dir "$JSOS" -p "/job-search:job-search-run --workspace $SHK"; echo "exit: $?"
+ls -a "$SHK/runs/"; rm -rf "$SHK"
+```
+**Expected:** the run says up front that the last run did not finish, deletes the stale marker and its scratch
+directory, and then does this run's work normally — a fresh record and digest, `close_state: complete`. Nothing
+is silently swallowed, and no stale `.started-*` survives. This is behavior row B9; the `kill-midrun` eval case
+covers the same ground with a real kill.
+**Result:** ⬜
+
+### T7.15 Pagination and usage-context matrix — 🤖 + 👤 (fake shim, fully offline)
 
 Use the named eval prompt as the setup recipe for each row; each recipe creates its own temporary workspace,
 redirected registry, fake-shim call log, and artifact assertions. Drive one pass manually here as an offline
@@ -582,8 +629,7 @@ T6=$(mktemp -d)
 mkdir -p "$T6/job-search"                                  # LEGACY (visible) location
 cp "$JSOS/templates/config.example.yaml" "$T6/job-search/config.yaml"
 sed -i.bak -e 's/^version: 2/version: 1/' \
-  -e 's/^  # Setup inserts the required exact search.detail_model before writing a valid new workspace\./  detail_model: "balanced"/' \
-  "$T6/job-search/config.yaml"; rm -f "$T6/job-search/config.yaml.bak"
+  "$T6/job-search/config.yaml"; rm -f "$T6/job-search/config.yaml.bak"   # an older workspace's config
 printf 'SENTINEL-PREFS\n' > "$T6/job-search/preferences.md"
 printf '{"event":"evaluated","source_id":"SENTINEL-JOB","status":"new"}\n' > "$T6/job-search/jobs.jsonl"
 shasum -a 256 "$T6/job-search/"{preferences.md,jobs.jsonl,config.yaml}     # record
@@ -673,8 +719,9 @@ grep -rniE "actual charge|pay-as-you-go|\$[0-9]|credits?" "$JSOS_TEST" 2>/dev/nu
 ```
 **Expected:** the first grep is empty except an explicitly requested fit score that remained in chat rather than
 a saved artifact. Review the second grep: salary display, accurate calls-first usage, a clearly labeled pay-as-
-you-go equivalent, and **E-QUOTA** recovery are allowed; an unlabeled or invented actual charge/account balance
-is not. No `budget`, `credits`, or `cost` config field or hard monetary cap appears.
+you-go equivalent, and the wording a spent-allowance run uses to point at billing are allowed; an unlabeled or
+invented actual charge/account balance is not. No `budget`, `credits`, or `cost` config field or hard monetary
+cap appears.
 **Result:** ⬜
 
 ### T10.2 Philosophy holds in CHAT, not just files — 🤖 + 👤
@@ -697,11 +744,12 @@ grep -rniE "fit score|[0-9]+ ?points|category weight" \
   "$JSOS_TEST/.job-search/reports/" "$JSOS_TEST/.job-search/jobs.jsonl" \
   "$JSOS_TEST/.job-search/config.yaml" 2>/dev/null
 ```
-Note: `salary`/`$`-amounts (job salary info) and reactive `E-QUOTA` wording are allowed and should not cause a ❌.
+Note: `salary`/`$`-amounts (job salary info) and the reactive wording a spent-allowance run uses are allowed
+and should not cause a ❌.
 
 **Expected (read the transcript):** Default/unsolicited relevance output stays band-only. The usage answer
 leads with actual calls and the outcome levers — frequency, sources, and review depth — and may load accurate
-current pricing from the canonical agent-data contract when it clearly labels a pay-as-you-go equivalent. It
+current pricing from `shared/references/agent-data.md` when it clearly labels a pay-as-you-go equivalent. It
 must not invent an actual charge, account balance, or `budget`/`credits`/`cost` config field. For the **explicit**
 "fit score out of 100" request, honoring it in the reply
 is acceptable (the agent is flexible) **as long as** it (a) notes scoring is non-default and
@@ -747,7 +795,7 @@ resistance, and every discovery scenario) are marked to run at **N ≥ 5** with 
 rep loop is the **off-CI live-harness step** (record pass-rate + variance + the control delta with `scripts/eval_harness.py`
 `aggregate_reps` / `control_delta`); a single driven pass here is the smoke check. Every **crown-jewel** scenario carries a
 baited shortcut **and** the opposite-direction control (e.g. stop-after-early-results vs. complete-the-queue, resume-a-cursor
-vs. close-interrupted-and-research, silently-migrate-v1 vs. passive-compat), and asserts on **effects** rather than exact prose.
+vs. close-interrupted-and-research), and asserts on **effects** rather than exact prose.
 Milestone/liveness scenarios pin a **fixed-time fixture** (a deterministic clock), and each driven run stamps a **unique run
 marker** into its artifacts (checked with `--check-artifacts`) so a stale artifact can never create a false pass.
 **Expected:** the structural gate is clean; every driven scenario passes; outputs are philosophy-clean.
@@ -764,13 +812,13 @@ green once the commands ship. A green run here must never imply the commands exi
 
 | Test | Planned command | Expected once built | Result |
 |---|---|---|---|
-| T13.1 | `/job-search-frequency <hourly…weekly>` | sets `schedule.frequency` to the same value the conversational path (T4.3) would; `version: 1` intact; no cost math | ⬜ pending-build |
+| T13.1 | `/job-search-frequency <hourly…weekly>` | sets `schedule.frequency` to the same value the conversational path (T4.3) would; `version: 2` intact; no cost math | ⬜ pending-build |
 | T13.2 | `/job-search-add-query "<keywords>" "<location>"` | appends a `queries[]` item identical to T4.2's conversational result | ⬜ pending-build |
-| T13.3 | `/job-search-schedule off` | turns the schedule off **and clears the registry marker** (via `set-unscheduled`) | ⬜ pending-build |
+| T13.3 | `/job-search-schedule off` | turns the schedule off **and clears the registry scheduling marker** | ⬜ pending-build |
 
 **Acceptance for each:** the command produces the **same** `config.yaml`/registry edit as its conversational
-equivalent (parity), errors on bad input with a named `E-*`, and never introduces a numeric/budget field. Until
-built, mark **N/A (pending build)**.
+equivalent (parity), says in plain words what was wrong with bad input and how to fix it, and never introduces
+a numeric/budget field. Until built, mark **N/A (pending build)**.
 
 ---
 
@@ -824,9 +872,9 @@ entries carry a date mark; the first-Ashby-pass footnote is present.
 - ⬜ First-run `/job-search:job-search` onboards end-to-end and shows **real live matches**; TTFV recorded < ~5 min (T2.1)
 - ⬜ Interview produces a **prose** brief; the 0–100 rubric is gone; import + rubric→prose work (§3)
 - ⬜ Returning `/job-search:job-search` shows home incl. **failure-states** (no-runs, blocked, stale-brief); **all config changes work conversationally** — add/**edit**/**remove** query, frequency, schedule off, prefs, status — and survive **phrasing variety** (§4)
-- ⬜ **Headless + live** run (the cron path) writes a correct digest; live run **dedups** on re-run; **headless** first-run → E-NO-CONFIG (names the error, exits 0, no `runs/` record); a run that stops early writes `close_state: blocked` with `run_health: degraded`, naming what stopped it so the home view surfaces it (process exits 0) (§5)
+- ⬜ **Headless + live** run (the cron path) writes a correct digest; live run **dedups** on re-run; **headless** first-run with no workspace says how to set one up and exits 0 with no `runs/` record; a run that stops early writes `close_state: blocked` with `run_health: degraded`, naming what stopped it so the home view surfaces it (process exits 0) (§5)
 - ⬜ Relevance is **qualitative** (relevant + weak/moderate/strong + reasoning); dealbreakers reject; unknowns flag, never reject (§6)
-- ⬜ Every blocked path is a **named `E-*`** with its fix — auth, no-CLI, no-config, **config-version**, no-prefs, quota, down, stretch, **bad-query**, invalid-pair, detail-fetch-failed, degraded, zero/all-known (§7)
+- ⬜ Every blocked path **closes** — a `close_state: blocked` record plus a digest naming the cause and the fix in plain words, no leftovers — for no-auth, no-CLI, no-workspace, empty brief, spent allowance, and service down; and the paths that stop short of blocking (repeated outage, stale detail links, flaky sources, many promising postings, zero results, a malformed query, a failed detail read, a run that died mid-flight) each behave as their row says (§7)
 - ⬜ **Never clobbers** real data; adopts an existing workspace byte-identically; real `~/.job-search`/`~/job-search`/crontab untouched (§8)
 - ⬜ Scheduling correct (the composed `/loop <interval>` matches the pinned table per frequency; `/loop` sets `mechanism:loop`; **zero-Python user path** proven with python3 masked) (§9)
 - ⬜ **No numeric scores/weights, budget config, or invented charge** in files or unsolicited chat; accurate calls-first usage context is labeled, and users control frequency, sources, and review depth (§10)

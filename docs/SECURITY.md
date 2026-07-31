@@ -70,10 +70,11 @@ or launchd by hand in your own shell, as always. The scheduling flow is document
 
 The agent-data API key is the only credential the system uses. It is provided via the environment
 (`AGENT_DATA_API_KEY`) or the agent-data CLI's own config file (`~/.agent-data/config.json`); it
-is never stored in this repository. If the key is absent or invalid at run time, the agent halts
-immediately with a named error and writes a blocked run record. The full named-error catalogue —
-including the auth failure error, its cause, and its fix — is in
-`../shared/references/errors.md`.
+is never stored in this repository. If the key is absent or invalid at run time, the run stops
+before it spends anything: it writes `runs/<run_id>.json` with `close_state: blocked` and
+`run_health: degraded`, and a digest naming the missing key and the exact command that sets one. The
+record is what the next front-door visit reads, so the failure cannot go unnoticed. How a run closes
+is owned by `../shared/references/runbook.md`.
 
 ## Credit-free, side-effect-free testing
 

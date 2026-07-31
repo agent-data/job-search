@@ -4,6 +4,56 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.0] — 2026-07-31
+
+### Changed
+- **All five skills rewritten onto a two-file shared core.** `shared/references/` is now
+  `runbook.md` (find the workspace, what each file holds, one run start to close, running it
+  unattended, scratch, what stays off disk) and `agent-data.md` (the CLI, the four sources and
+  their quirks, retries, what a call costs). Every skill reads those two files and nothing else,
+  so a first run reaches live postings after a much shorter read: the whole agent-facing corpus —
+  the five `SKILL.md` files plus both references — is 8,822 words
+  (`wc -w skills/*/SKILL.md shared/references/*.md`).
+- **The run contract is a marker plus a record.** A run creates the empty marker
+  `runs/.started-<run_id>` when it opens and deletes it at close, after writing
+  `runs/<run_id>.json` and `reports/<date>-digest.md`. The record carries `close_state`
+  (`complete` | `blocked` | `interrupted`) and `run_health` (`healthy` | `degraded`); its full
+  shape is `templates/run-record.example.json`. A marker left behind means the previous run died
+  mid-flight: the next run says so, deletes the marker, and goes on.
+- **Failures are graded on what the user reads, not on a code.** A run that cannot proceed still
+  closes — a record with `close_state: blocked` and `run_health: degraded`, and a digest whose
+  body says in plain words what stopped it and what fixes it. The `E-*` code catalogue that used
+  to carry that wording is gone from every shipped file.
+- **`templates/` is the copyable contract.** `run-record.example.json` and
+  `jobs-event.example.json` join `config.example.yaml` and `preferences.example.md`, so the exact
+  shape of every workspace file is a file you can read rather than prose in a skill.
+- **`shared/scripts/mechanics/validate-workspace.sh` enforces the file rules.** Config keys,
+  the brief's front matter, run-record fields and UTC timestamps, and — with
+  `--post-close <run_id>` — that the run left no marker and no scratch directory behind.
+- **Behavior is graded by live evals.** `evals/` holds `run_eval.py`, the fourteen kept behaviors
+  B1–B14 in `behaviors.md`, six cases in `cases/`, and the pre-rewrite baseline numbers B14
+  compares against. Runs spawn a real session against the live Job Postings API, so they are a
+  local release gate; CI checks only that the case config is coherent.
+
+### Removed
+- The legacy shared corpus and the machinery it defined: `conventions.md`, `errors.md`,
+  `internals.md`, `voice.md`, `parallelism.md`, `update.md`, `build-stamp.md`,
+  `agent-data-contract.md`, `run-lifecycle.md`, the four skill-local reference files, the
+  lifecycle-ledger scripts, and the build stamp with its generator (`scripts/build.sh`,
+  `scripts/build_stamp.py`). 27 files were deleted since 0.7.0
+  (`git diff --diff-filter=D --name-only 257fa2f..HEAD | wc -l`).
+
+### Compatibility
+- **Existing workspaces keep working, unchanged.** `config.yaml` stays at `version: 2`; the
+  required keys are still `version`, `queries`, `search.sources`, and `schedule`.
+- A run no longer writes the lifecycle ledger `runs/.lifecycle-<run_id>.jsonl` or the binding file
+  `runs/detail-model-binding.json`, and it no longer reads either one. A workspace that still holds
+  them from an earlier version is left alone — nothing reads them, nothing deletes them; remove
+  them by hand if you want them gone. (`metrics.json` was specified but never written by any
+  shipped file, so no workspace has one to leave behind.)
+- `search.detail_model` is no longer written or read. A workspace that still carries it is valid;
+  the key is simply ignored, and every detail read runs on the host's own model.
+
 ## [0.7.0] — 2026-07-23
 
 ### Added

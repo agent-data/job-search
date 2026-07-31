@@ -2,7 +2,7 @@
 title: New-User Onboarding
 status: current
 verified: partial
-last_reviewed: 2026-07-19
+last_reviewed: 2026-07-31
 code_refs: [skills/job-search/SKILL.md]
 ---
 
@@ -33,10 +33,10 @@ the discovery procedure by `shared/references/runbook.md`.
 The full playbook lives in
 [`skills/job-search/SKILL.md`](../../skills/job-search/SKILL.md).
 This section names each step and points to the owning reference; it does not restate mechanics.
-Every ask follows the zero-context voice rules owned by
-`shared/references/voice.md` — one short line of plain-English
-context (what the thing is, why it's asked), then the question; internal vocabulary never reaches
-the user.
+Every ask assumes the user has zero context: one short line of plain English saying what the thing
+is and why it is being asked, then the question. Internal vocabulary never reaches the user. That is
+carried by the skill itself and graded by behavior rows B1 and B2 in
+[`../../evals/behaviors.md`](../../evals/behaviors.md), not pinned in a separate style reference.
 
 ### 1. Welcome
 
@@ -63,10 +63,9 @@ present but unauthenticated — the agent walks the user through generating an A
 steps), authenticates with the contract's `agent-data init --api-key <KEY> -y` line (the same on
 every host — see `shared/references/agent-data.md`
 → Auth), and verifies with `agent-data whoami` before continuing. The API key is requested only at
-this connect step, never before the install. The internal codes for
-this state (`E-NO-AGENT-DATA`, `E-NO-AUTH`, owned by
-`shared/references/errors.md`) are never shown to the user. The
-**headless runner** (`job-search-run`) can't prompt, so it still halts on these with a blocked digest.
+this connect step, never before the install. The **headless runner** (`job-search-run`) can't prompt,
+so when it meets either state it stops and closes `blocked` with a digest naming the missing CLI or
+the missing key and the command that fixes it.
 
 ### 3. Workspace creation or adoption
 
@@ -94,9 +93,9 @@ chooses one path:
   rubric to prose (this system is qualitative only), enriches thin sections, and writes
   `preferences.md`.
 
-Either path ends with `preferences.md` present at the workspace path. If a run is attempted
-without a usable brief, the error is `E-NO-PREFERENCES` (see
-`shared/references/errors.md`).
+Either path ends with `preferences.md` present at the workspace path. A run attempted without a
+usable brief has nothing to judge postings against, so it stops and closes `blocked`, naming the
+missing brief and pointing at `job-preference-interview`.
 
 ### 5. Searches and frequency (derived from the brief)
 
@@ -116,12 +115,11 @@ dedup, judge, detail-read, digest — is owned by
 What the user sees at this step is the payoff: the agent presents strong and moderate matches as
 a discovery, with each role's title, company, location, plain-language reasoning, and link.
 
-If the run is blocked instead, the user meets a named error in the digest and the home view; how
-that surfacing works is owned by
+If the run is blocked instead, the digest and the home view both say what stopped it and what fixes
+it; how that surfacing works is owned by
 [`../RELIABILITY.md`](../RELIABILITY.md#4-run-health--blocked-surfacing--visible-without-the-exit-code).
-Onboarding-specific note: the likeliest blocks here are `E-QUOTA` (the only point where API
-limits surface, reactively) and `E-SERVICE-DOWN`, both catalogued in
-`shared/references/errors.md`.
+Onboarding-specific note: the two likeliest blocks here are a spent monthly allowance — the only
+point where API limits surface, and only reactively — and an unreachable service.
 
 ### 7. Schedule offer
 
@@ -152,15 +150,14 @@ pipeline, quick actions) instead of restarting onboarding.
 
 ## Edge cases
 
-All failure paths are named internally with an `E-*` code and reach the user as a plain cause + fix,
-never the raw code. Wording and fixes are owned by
-`shared/references/errors.md`; they are not restated here.
+Every failure path reaches the user as a plain cause and fix, written where the step hits it. There
+is no error-code catalogue and no code to leak; the wording lives in the skill, and what a stopped
+run writes is in `../../shared/references/runbook.md`.
 
 - **Missing prerequisites** — `agent-data` missing or unauthenticated. Interactive onboarding
   **remediates** (immediate install — no user input — then guided key + auth) rather than halting;
-  the headless runner halts with `E-NO-AGENT-DATA` / `E-NO-AUTH` before any workspace is touched.
-  Codes stay internal — never shown to the user.
-- **No preferences yet** — `E-NO-PREFERENCES`; the first run halts and directs the user to
+  the headless runner stops before any workspace is touched, naming the missing CLI or key.
+- **No preferences yet** — the first run stops and directs the user to
   `/job-preference-interview`.
 - **Sparse market** — not a named error; zero search results prompt the agent to offer keyword
   broadening conversationally (see

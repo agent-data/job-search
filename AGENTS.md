@@ -1,15 +1,16 @@
 # job-search — Agent Map
 
-An agent harness as a private, local-first **job-search** operating system: a plugin with five skills, a
-single-source-of-truth `shared/references/` tree whose pinned contracts the host agent executes natively
-(nothing ships to user machines but markdown), and a pytest + fake-shim + skill-creator eval harness.
+An agent harness as a private, local-first **job-search** operating system: a plugin with five skills, two
+shared reference files the host agent reads and executes natively (nothing ships to user machines but
+markdown), and three test layers — pytest over the dev tooling, per-skill scenario suites, and the live
+behavior evals in `evals/`.
 **This file is the entry point for coding agents working on this repo** — a map, not the territory.
 Start here, then follow the pointers.
 
 ## Start here
 - **[ARCHITECTURE.md](ARCHITECTURE.md)** — the five product domains × five layers and how they fit; read before any change.
 - **[Core beliefs](docs/design-docs/core-beliefs.md)** — the agent-first operating principles; read before changing behavior.
-- **[Runtime contracts](shared/references/)** — the SINGLE SOURCE OF TRUTH for errors, config, conventions, and the agent-data API. Docs here POINT to these; never duplicate them.
+- **[Runtime contracts](shared/references/)** — two files, and between them the single source of truth for everything a run does: `runbook.md` (the workspace, what each file holds, how one run opens and closes, what stays off disk) and `agent-data.md` (the CLI, the four job sources, retries, what a call costs). Docs here POINT to these; never duplicate them. The exact shape of each workspace file is a copyable example in [templates/](templates/).
 
 ## Design & product
 - [Design docs index](docs/design-docs/index.md) — catalogued specs with verification status.
@@ -25,5 +26,6 @@ Start here, then follow the pointers.
 
 ## Working here
 - **Single source of truth:** shared contracts live once in `shared/references/` and resolve in place from the installed pack bundle — skills point at them, nothing is copied per-skill and no build step writes into `skills/` or `shared/`.
-- Dev tooling is stdlib-only Python (nothing Python ships in the skills); scoped conventional commits; `python3 scripts/doc_lint.py --root .` and `python3 -m pytest -q` must be green before a PR.
+- **Keep the agent-facing corpus small.** The five `SKILL.md` files plus both references are 8,822 words (`wc -w skills/*/SKILL.md shared/references/*.md`); the budget is 10,000. Adding words there is a real cost — every run reads them.
+- Dev tooling is stdlib-only Python (nothing Python ships in the skills); scoped conventional commits; `python3 scripts/doc_lint.py --root .`, `python3 scripts/philosophy_guard.py --root .`, and `python3 -m pytest -q` must be green before a PR.
 - Daily contributor docs: [README](README.md) · [CONTRIBUTING](CONTRIBUTING.md) · [TESTING](TESTING.md)

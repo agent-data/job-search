@@ -23,17 +23,20 @@ Code's native `/effort`). Requested during planning.
 permanently `pending-build` / N/A (never green), so the conversational path is the only config surface CI exercises;
 low user-facing risk (the feature simply doesn't exist yet), but the coverage gap is invisible in a green test run.
 **How to apply:** Each command calls the *same* config-edit recipes as the conversational flow (parity), keeps
-`version: 1`, rejects bad input with a named `E-*`, and never adds a numeric/budget field. Then flip §13's
-pending-build tests to live.
+the workspace's `config.yaml` version as it found it, says in plain words what was wrong with bad input and how
+to fix it, and never adds a numeric/budget field. Then flip §13's pending-build tests to live.
 **Linked tests:** [`TESTING.md`](../../TESTING.md) §13 (T13.1–T13.3, currently pending-build).
 **Depends on:** deciding command names + argument grammar.
 
 ## P2 — turn-off doesn't clear the schedule marker (`TODO-SCHED-OFF`) — ✅ resolved (closed 2026-06-11)
-**Resolved.** The clear-the-marker operation exists and the turn-off flow calls it: the scheduling marker's
-set/clear procedures are pinned in `shared/references/runbook.md`
-(Registry → scheduling marker; the former `osctl.py set-unscheduled` was its script-era shape), the turn-off
-flow in [`the front door skill`](../../skills/job-search/SKILL.md) clears the marker so it reads
-`installed: false`, and [`TESTING.md` T4.4](../../TESTING.md) asserts it. No stale marker is left; closed.
+**Resolved, and since strengthened.** The registry's `scheduling` marker — the booleans `installed` and
+`verified`, plus `mechanism` and `scheduler_id` — is described in
+`shared/references/runbook.md` (the file table; the former
+`osctl.py set-unscheduled` was its script-era shape). The turn-off recipe in
+[the front door skill](../../skills/job-search/SKILL.md) now undoes the install the way it was made — the cron
+line deleted, the launchd job unloaded and its file removed, or the host's own removal command — *and then*
+clears the marker, so the machine job and the marker go together rather than leaving one behind.
+[`TESTING.md` T4.4](../../TESTING.md) asserts it. Closed.
 **Linked tests:** [`TESTING.md`](../../TESTING.md) T4.4 (marker assertion), §13 T13.3.
 
 ## P3 — jobs.jsonl grows unboundedly; the in-context fold cost grows with it (`TODO-JOBS-COMPACTION`)
@@ -104,7 +107,9 @@ no defined winner — the collapsed role could show either status.
 **Linked tests:** none (watch item).
 
 ### P3 — run-health `<why>` can't name a two-of-three source loss (`TODO-WHY-ENUM-MULTILOSS`)
-**Resolved 2026-07-06 by [2026-07-06-multi-source-reconciliation-greenhouse-lever](completed/2026-07-06-multi-source-reconciliation-greenhouse-lever.md).** With Greenhouse + Lever now in routine use, the `<why>` vocabulary gained a "several — but not all — sources lost, each named in `search.sources` order" band (`shared/references/runbook.md` digest format, `job-search-run` step 5, `errors.md` E-UPSTREAM-STRETCH), so a partial-but-multiple loss is named exactly. Kept as a resolved record.
+**Resolved 2026-07-06 by [2026-07-06-multi-source-reconciliation-greenhouse-lever](completed/2026-07-06-multi-source-reconciliation-greenhouse-lever.md).** With Greenhouse + Lever now in routine use, the `<why>` vocabulary gained a "several — but not all — sources lost, each named in `search.sources` order" band (`shared/references/runbook.md` digest format, `job-search-run` step 5, `errors.md` E-UPSTREAM-STRETCH), so a partial-but-multiple loss is named exactly. (The `errors.md` row cited at the time is gone: the run now
+names each lost source in the digest, in the words the user reads, with no code behind it.) Kept as a resolved
+record.
 **What:** The run-health `<why>` vocabulary names one lost source or "all sources unavailable"; it can't
 say two of three sources were lost (e.g. LinkedIn and Ashby down while Workday survives).
 **Why:** With the two default sources the only cases are "one lost" or "all lost", both already covered.
@@ -125,8 +130,14 @@ runtime signal. The multi-source feature never ran; every result defaulted to Li
 the system) noticed. The items below turn "a person eyeballed it" into "the system states it," and remove the
 version-identity collision that caused the miss.
 
-### P1 — content changes ship under an unchanged version; runs don't self-identify their build (`TODO-SKILL-BUILD-STAMP`)
-**What:** (a) A CI gate that fails when anything under `skills/` or `shared/references/` changes without a
+### P1 — content changes ship under an unchanged version; runs don't self-identify their build (`TODO-SKILL-BUILD-STAMP`) — ✅ part (a) resolved, part (b) obsolete (closed 2026-07-31)
+**Resolved / obsolete.** Part (a) shipped: `scripts/check_release_integrity.py --check-version-bump` fails a
+pull request when `skills/`, `shared/references/`, or `shared/scripts/` changed without a forward bump in
+`.claude-plugin/plugin.json`, and CI runs it. Part (b) shipped in 0.4.0 as
+`shared/references/build-stamp.md` and was deleted in the 0.8.0 overhaul, along with `scripts/build.sh` and
+`scripts/build_stamp.py`: there is no build step any more, so there is no build to identify — the version in
+the seven manifests is the whole artifact identity. Kept as a resolved record.
+**Original proposal:** (a) A CI gate that fails when anything under `skills/` or `shared/references/` changes without a
 version bump in `.claude-plugin/plugin.json`. (b) A **build-stamp** (version + short content-hash + git sha)
 emitted in the run summary and written to `runs/<run_id>.json`, so any run is traceable to a concrete artifact.
 **Why:** The repo and the installed cache both read `0.3.0` with divergent skill content; the stale cache is
@@ -139,8 +150,11 @@ and surface it (plus git sha) in the 5-line summary and `runs/<run_id>.json`. Pa
 `TODO-DOGFOOD-BUILD-VERIFY`.
 **Linked tests:** none yet (add a CI assertion for the version-bump gate).
 
-### P3 — dogfooding can validate the wrong build (`TODO-DOGFOOD-BUILD-VERIFY`)
-**What:** The dogfooding / verification recipe asserts the artifact under test is the one actually loaded —
+### P3 — dogfooding can validate the wrong build (`TODO-DOGFOOD-BUILD-VERIFY`) — ✅ obsolete (closed 2026-07-31)
+**Obsolete.** It depended on the build-stamp, which no longer exists (`TODO-SKILL-BUILD-STAMP`). The live
+behavior evals in `evals/` sidestep the problem instead: `run_eval.py` spawns each session against the repo
+tree under test, so there is no installed cache that could diverge from it. Kept as a resolved record.
+**Original proposal:** The dogfooding / verification recipe asserts the artifact under test is the one actually loaded —
 print the build-stamp (`TODO-SKILL-BUILD-STAMP`) and confirm the installed cache matches the intended build
 before starting.
 **Why:** This session exercised the stale cached skill, not the repo's updated skill; only an observant user
@@ -207,12 +221,19 @@ mechanism (never a plugin-authored how-to). This preserves the load-bearing "one
 per-platform bundle" principle: the record is a small selected/generated data file, not a forked skill.
 **Rejected (B2)** — install-time skill specialization (templating literals into a per-harness skill fork):
 cleanest read-time, but violates the single-tree principle and adds a build step plus generated cache
-artifacts. Also, define the precedence between the `search.detail_model` tier and a user's standing model
-preference (this run honored config; the rule is currently unwritten).
+artifacts. (The precedence question this entry also raised — `search.detail_model` versus a user's standing model
+preference — is moot: `search.detail_model` was removed in 0.8.0 and every detail read now runs on the host's
+own model.)
 **Linked tests:** none yet.
 
-### P2 — no in-product signal that a newer plugin version exists (`TODO-UPDATE-AVAILABLE`)
-**What:** Detect when a newer published version/build exists and surface it non-blockingly in the welcome/home
+### P2 — no in-product signal that a newer plugin version exists (`TODO-UPDATE-AVAILABLE`) — ⏸️ reopened, was shipped then removed (2026-07-31)
+**Reopened.** The update banner shipped in 0.4.0 for Claude Code and Codex and was removed in the 0.8.0
+overhaul with `shared/references/update.md` — no shipped file checks for a newer version today
+(`git grep -niE "update available|newer version" -- skills/ shared/` returns nothing). Whether it comes back
+is a product call: every host now has its own plugin manager that reports staleness, so the in-product banner
+may be duplicated work. The proposal below stands as written except that it no longer depends on
+`TODO-SKILL-BUILD-STAMP` — compare the manifest version, which is the only build identity left.
+**Original proposal:** Detect when a newer published version/build exists and surface it non-blockingly in the welcome/home
 dashboard — e.g. "Update available: 0.3.0 → 0.4.0 — run `<update command>`". Compare the installed
 version/build-stamp (`TODO-SKILL-BUILD-STAMP`) against the latest published (the `marketplace.json` the plugin
 already ships, or a lightweight remote version endpoint).
@@ -280,8 +301,10 @@ and continue to verify readiness only through `agent-data whoami`.
 current local init plus post-init `whoami` path, but do not prove credential non-observability; extend those
 arms and the onboarding harness with sentinel-key leak assertions when the safe transport lands.
 
-### P3 — update reminders have no display backoff (`TODO-UPDATE-REMINDER-BACKOFF`)
-**What:** Record the checked version/build and check time plus the version/build and time last reminded.
+### P3 — update reminders have no display backoff (`TODO-UPDATE-REMINDER-BACKOFF`) — ⏸️ blocked on `TODO-UPDATE-AVAILABLE`
+**Blocked.** There is no update reminder to back off: the banner and `shared/references/update.md` were both
+removed in the 0.8.0 overhaul. This only becomes actionable if `TODO-UPDATE-AVAILABLE` ships again.
+**Original proposal:** Record the checked version/build and check time plus the version/build and time last reminded.
 Suppress the same update reminder during a documented backoff interval; let a newer version/build or a
 compatibility blocker bypass backoff; honor explicit update checks; and never auto-update.
 **Why:** `update.md` already caches remote checks for 24 hours but renders
@@ -339,8 +362,14 @@ pin current metering, quota, retry, and comparable-history effects.
 
 ## Local metrics wiring (2026-07-19 whole-branch review)
 
-### P2 — metrics.json is contract-specified but no shipped surface writes it (`TODO-METRICS-WIRING`)
-**What:** Wire the `{workspace}/metrics.json` writes the local-metrics contract in
+### P2 — metrics.json is contract-specified but no shipped surface writes it (`TODO-METRICS-WIRING`) — ✅ obsolete (closed 2026-07-31)
+**Obsolete.** The 0.8.0 overhaul deleted the local-metrics contract rather than wiring it: nothing specifies
+`metrics.json` any more, and nothing writes it, so the contract and the gap closed together. The measurements
+it was going to supply are now taken from the live evals instead — `run_eval.py` stamps every transcript line
+with elapsed wall-clock seconds and writes timings to `result.json`, and `evals/baseline/` holds the committed
+aggregates that behavior row B14 compares each run against. No user workspace ever contained a `metrics.json`,
+so there is nothing to migrate. Kept as a resolved record.
+**Original proposal:** Wire the `{workspace}/metrics.json` writes the local-metrics contract in
 `shared/references/runbook.md` (§ Local metrics)
 already specifies: the **front door** must create the per-attempt `setups[]` record and write
 `onboarding_started_at` + `agent_data_ready_at`, and **schedule setup** must write `schedule_verified_at`

@@ -46,8 +46,9 @@ add metered work, the agent gives the exact known call baseline and names what r
 after every run, it reports actual calls first. Accurate, clearly labeled usage context is expected,
 but a `budget`, `credits`, or `cost` config field and a hard monetary cap are not. Canonical pricing
 and metering facts live in
-`shared/references/agent-data.md`; quota recovery
-wording lives in `shared/references/errors.md`. See the **Usage context,
+`shared/references/agent-data.md`; what a run says when the
+monthly allowance is spent is written where the run hits it, in
+[`skills/job-search-run/SKILL.md`](../skills/job-search-run/SKILL.md). See the **Usage context,
 not budget controls** belief in [docs/design-docs/core-beliefs.md](design-docs/core-beliefs.md).
 
 ### Privacy as a promise
@@ -102,8 +103,9 @@ decision.
   product previews decision-relevant usage, reports actual calls after a run, and keeps frugal-by-
   behavior design (dedup, summary-first judgment, selective detail reads); it does not add a
   `budget`, `credits`, or `cost` config field. Current pricing and metering facts stay single-homed in
-  `shared/references/agent-data.md`, while a quota
-  limit remains a named, actionable error in `shared/references/errors.md`.
+  `shared/references/agent-data.md`, while a spent
+  allowance remains something the run names plainly — with the billing page as the fix — and closes
+  `blocked` on, rather than a number it silently works around.
 
 - **Multi-source aggregation — shipped 2026-07; the non-goal's own trigger fired.** This entry
   previously refused multi-source aggregation "before a second source exists," naming the seam

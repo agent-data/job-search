@@ -41,9 +41,10 @@ see `shared/references/runbook.md`.
 For the product philosophy behind this (prose-over-knobs, conversational-first),
 see [`design-docs/core-beliefs.md`](design-docs/core-beliefs.md).
 
-How skills speak — the plain-English outcome-first voice, the banned internal vocabulary,
-and the render-inline rule for briefs and digests — is owned by
-`../shared/references/voice.md`.
+How skills speak — plain English, outcome first, no internal vocabulary, briefs and digests
+rendered inline rather than described — is carried by each skill's own `SKILL.md`, and graded by
+behavior rows B1 and B2 in [`../evals/behaviors.md`](../evals/behaviors.md) rather than pinned in a
+style reference.
 
 ---
 
@@ -122,12 +123,15 @@ from the interface's side, what the user meets is the blocked digest in place of
 match listing and the same blocked state named in the home view on their next `/job-search`.
 
 Every failure is named internally and reaches the user as a plain, four-part cause · preserved
-work · next step · exact fix message they can act on — never the raw internal code. There are no
-silent failures, and the user never sees a code token. The internal name lives only in the run
-record and the operator manual.
+work · next step · exact fix — sentences a user can act on. There are no silent failures, and there
+is no code token to leak, because there is no error-code catalogue: the run says what stopped it in
+the words the user would use, at the step that hit it.
 
-Full error catalog with exact cause+fix wording, and the internal-vs-user rendering rule:
-`../shared/references/errors.md`.
+What a stopped run writes is the record and the digest: `close_state` (`complete` / `blocked` /
+`interrupted`) and `run_health` (`healthy` / `degraded`) in `runs/<run_id>.json`, whose shape is
+[`../templates/run-record.example.json`](../templates/run-record.example.json), plus a digest whose
+body is the cause and the fix. The close sequence is owned by
+`../shared/references/runbook.md`.
 
 ---
 
