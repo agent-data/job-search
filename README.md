@@ -83,7 +83,7 @@ Every run — the one you ask for and the one a schedule starts — reads and ju
 
 </details>
 
-If something fails, ask the agent to “create a support summary.” It shows you a local diagnostic containing system and run-health metadata, without preferences, posting content, match details, credentials, cursors, or environment dumps. Nothing is uploaded automatically. You can review the file and attach it to a [GitHub issue](https://github.com/agent-data/job-search/issues).
+If something fails, ask **“why did my last run fail?”** or **“how does my job search agent work?”** The agent reads the run's own record and the digest it wrote, both already on your machine, and tells you what stopped the run and what fixes it — spent monthly allowance, a source that was down, a query that found nothing, a schedule that stopped firing. Nothing is uploaded, and nothing is sent anywhere. To report a bug, copy what it tells you into a [GitHub issue](https://github.com/agent-data/job-search/issues); read the run record at `~/.job-search/runs/` first if you want to check what it contains.
 
 ## Installation
 

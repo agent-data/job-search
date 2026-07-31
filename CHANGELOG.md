@@ -36,12 +36,28 @@ All notable changes to this project are documented here. The format is based on
   local release gate; CI checks only that the case config is coherent.
 
 ### Removed
-- The legacy shared corpus and the machinery it defined: `conventions.md`, `errors.md`,
-  `internals.md`, `voice.md`, `parallelism.md`, `update.md`, `build-stamp.md`,
-  `agent-data-contract.md`, `run-lifecycle.md`, the four skill-local reference files, the
-  lifecycle-ledger scripts, and the build stamp with its generator (`scripts/build.sh`,
-  `scripts/build_stamp.py`). 27 files were deleted since 0.7.0
-  (`git diff --diff-filter=D --name-only 257fa2f..HEAD | wc -l`).
+Two of these you will notice as a user:
+
+- **The update banner is gone.** In 0.7.0 the home view told you when a newer plugin version had been
+  published and gave you the command to get it. Nothing checks now
+  (`grep -rniE "update available|newer version" skills/ shared/ templates/ README.md` returns
+  nothing), because the check read the build stamp, which went with the build step. Until it comes
+  back, get updates the way your host offers them — `/plugin` in Claude Code, `codex plugin add`, and
+  so on, per the install section in the README. Tracked as `TODO-UPDATE-AVAILABLE` in
+  `docs/exec-plans/tech-debt-tracker.md`.
+- **"Create a support summary" is gone.** In 0.7.0 you could ask for a local, whitelist-only
+  diagnostic file to attach to a bug report. To report a problem now, ask "why did my last run fail?"
+  — the agent reads the run record and digest already on your machine and explains what happened —
+  and paste that into the issue. The underlying files are `~/.job-search/runs/<run_id>.json` and
+  `~/.job-search/reports/<date>-digest.md`; read them before pasting, since nothing filters them for
+  you the way the old summary did.
+
+The rest is internal. The legacy shared corpus and the machinery it defined: `conventions.md`,
+`errors.md`, `internals.md`, `voice.md`, `parallelism.md`, `update.md`, `build-stamp.md`,
+`agent-data-contract.md`, `run-lifecycle.md`, the four skill-local reference files, the
+lifecycle-ledger and support-summary scripts, and the build stamp with its generator
+(`scripts/build.sh`, `scripts/build_stamp.py`). 27 files were deleted since 0.7.0
+(`git diff --diff-filter=D --name-only 257fa2f..HEAD | wc -l`).
 
 ### Compatibility
 - **Existing workspaces keep working, unchanged.** `config.yaml` stays at `version: 2`; the

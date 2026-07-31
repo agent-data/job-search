@@ -21,7 +21,7 @@ it reports; a few checks are pure shell or visual.
 
 The terminal state (per the AAS-T-10 ruling) is **a structural gate + automated lanes + a shrinking, honestly-labeled manual residual** — not a manual cross-host ritual. What is now **automated** (⚙️, runs in `pytest` / a CLI, host-independent — no manual driving):
 
-- **Scripted mechanics** — `tests/test_mechanics_scripts.py`: the deterministic state operations the skills call out to — dedup, the jobs.jsonl event-line append, schedule-line composition, workspace discovery, and the local support summary — each driven through `sh` (and `dash` where present) against a temp fixture.
+- **Scripted mechanics** — `tests/test_mechanics_scripts.py` (28 tests, `pytest -q tests/test_mechanics_scripts.py`): the deterministic state operations the skills call out to — dedup, the jobs.jsonl event-line append, schedule-line composition, and workspace discovery — each driven through `sh` against a temp fixture, plus one case that runs `sh -n` and strict `dash -n` over all five scripts in `shared/scripts/mechanics/` so none of them is quietly bash-only. The fifth script, `validate-workspace.sh`, is syntax-checked here and behavior-tested in the next bullet.
 - **Workspace validator** — `tests/test_validate_workspace.py`: `shared/scripts/mechanics/validate-workspace.sh` run against workspaces built per case. It checks config.yaml's required keys, `---` front matter with ISO `created_at`/`updated_at` in preferences.md, the run-record shape and UTC `Z` timestamps, and — with `--post-close` — that no started-marker or scratch directory survived the run. These file rules used to live only as prose in the skills; the script is now what enforces them.
 - **Eval-case lint** — `tests/test_eval_cases.py`: every row in `evals/behaviors.md` names a case file that exists in `evals/cases/`, every case file carries the five header fields `evals/run_eval.py` reads (`behaviors`, `workspace`, `timeout_s`, `models`, `prompt`), and each case's `behaviors:` list matches the rows that name it. This checks that the eval config is coherent; it does not run an eval.
 - **Hardened skill evals** — `python3 scripts/eval_harness.py --root .` validates every `skills/*/evals/evals.json` for structural coherence (contiguous ids, well-formed scenarios, a **discovery** scenario per skill for the four overlap pairs, **stochastic** scenarios carrying `reps ≥ 5` + a **no-guidance control** arm, and — on milestone/liveness scenarios — a **fixed-time fixture** (`fixed_time`: a deterministic reference clock with a valid ISO `now` and a `checks` subset of `milestone`/`liveness`) so those derivations never read the wall clock) and rejects the pinned pack-authored `gpt-5*` literal regression family. Legacy version-1 selectors may resolve through host tier roles; version-2 test and runtime setup injects an exact host-resolved identifier. Pack-authored fixtures and prose never hard-code that identifier. `tests/test_eval_harness.py` unit-tests the rep-aggregation (pass-rate + variance), the control-delta, the fixed-time-fixture validation, and the **unique run marker** enforcement — the off-CI artifact check (`scripts/eval_harness.py --check-artifacts`) accepts a per-run `run_marker` and, for any `run_marked` assertion, requires the artifact to carry it, so a stale artifact left in a reused workspace can never create a false pass.
@@ -445,6 +445,21 @@ Below, `$WS` stands for whichever throwaway workspace the row built (`$T3`, `$SH
    exits 0 and prints nothing — the started-marker and the scratch directory are gone even though the run
    stopped early.
 
+**Condition 3 only applies where the rest of the workspace is valid.** The validator grades the whole
+workspace, not just the run's leftovers, so a row that deliberately seeds a broken file will fail it on
+that file no matter how cleanly the run closed. Measured on T7.4's seed (a workspace from
+`setup-workspace.sh` with `preferences.md` emptied):
+
+```
+$ shared/scripts/mechanics/validate-workspace.sh "$WS" --post-close 2026-07-30T09-00-00Z
+INVALID preferences.md front-matter
+exit=1
+```
+
+That is the validator working correctly, not the run failing. Each row below says which conditions it
+grades; where a row grades 1 and 2 only, check the leftovers by hand instead —
+`ls -a "$WS/runs/"` shows no `.started-*` and no `.scratch/`.
+
 Two things that are **not** pass conditions. The headless `claude -p` process returns **0** even on a
 blocked run (a skill cannot set the host process's exit status), so never assert on `$?`. And no exact
 wording is required: two runs may explain the same block in different sentences and both pass, as long as
@@ -463,33 +478,45 @@ AGENT_DATA_API_KEY="" JOBSEARCH_OS_HOME="$T3" JOBSEARCH_OS_REGISTRY="$T3/reg.jso
 echo "exit: $?"; rm -rf "$T3"
 ```
 *(If your key is in `~/.agent-data/config.json`, temporarily test in a shell where it isn't, or skip — the eval covers it.)*
-**Expected:** the three blocked-close conditions above, with the cause being the missing API key and the fix
-being the exact command that sets one (`agent-data init --api-key …`, or exporting `AGENT_DATA_API_KEY`).
-Nothing is pulled — no `search-jobs`, no `get-posting`.
+**Grades conditions 1, 2, and 3.**
+**Expected:** the cause is the missing API key and the fix is the exact command that sets one
+(`agent-data init --api-key …`, or exporting `AGENT_DATA_API_KEY`). Nothing is pulled — no `search-jobs`,
+no `get-posting`.
 **Result:** ⬜
 
 ### T7.2 The CLI is not installed — 👤
+The workspace has to be real, or there is nowhere to write the record this row grades. Build one, then hide
+`agent-data` by putting **only** `claude` on the PATH:
 ```bash
-T4=$(mktemp -d)
-PATH="/usr/bin:/bin" JOBSEARCH_OS_HOME="$T4" JOBSEARCH_OS_REGISTRY="$T4/reg.json" \
-  claude --plugin-dir "$JSOS" -p "/job-search:job-search-run --workspace $T4/.job-search"  # agent-data not on this PATH
-echo "exit: $?"; rm -rf "$T4"
+T4=$(mktemp -d); bash "$JSOS/skills/job-search-run/evals/files/setup-workspace.sh" "$T4/.job-search" >/dev/null
+mkdir -p "$T4/bin"; ln -s "$(command -v claude)" "$T4/bin/claude"
+command -v agent-data          # note where it really is — the mask below must not include that directory
+PATH="$T4/bin:/usr/bin:/bin" JOBSEARCH_OS_HOME="$T4" JOBSEARCH_OS_REGISTRY="$T4/reg.json" \
+  claude --plugin-dir "$JSOS" -p "/job-search:job-search-run --workspace $T4/.job-search"
+echo "exit: $?"; cat "$T4/.job-search/runs/"*.json; rm -rf "$T4"
 ```
-**Expected:** the three blocked-close conditions above, with the cause being the missing `agent-data` command
-and the fix being `npm install -g agent-data`. *(The trimmed PATH needs no python3 — the skills are
-zero-dependency; see T9.4.)*
+`agent-data` commonly sits in the same directory as `claude` (both under `~/.local/bin` on this machine),
+which is why the symlink exists rather than a trimmed `$PATH` — dropping the directory would take `claude`
+with it. If your `claude` needs a runtime that isn't in `/usr/bin` or `/bin`, add that directory too; the
+only thing this row requires is that `agent-data` is absent.
+**Grades conditions 1, 2, and 3.**
+**Expected:** the cause is the missing `agent-data` command and the fix is `npm install -g agent-data`.
+*(The masked PATH needs no python3 — the skills are zero-dependency; see T9.4.)*
 **Result:** ⬜
 
-### T7.3 No workspace at all — covered by T5.3 (nothing to write a record into). **Result:** ⬜
+### T7.3 No workspace at all — covered by T5.3. Grades neither 1 nor 3: there is no workspace, so there is nowhere to write a record and nothing to validate. **Result:** ⬜
 ### T7.4 The preferences brief is empty — 👤
 ```bash
 T5=$(mktemp -d); bash "$JSOS/skills/job-search-run/evals/files/setup-workspace.sh" "$T5/.job-search" >/dev/null
 : > "$T5/.job-search/preferences.md"
-claude --plugin-dir "$JSOS" -p "/job-search:job-search-run --workspace $T5/.job-search"; echo "exit: $?"; rm -rf "$T5"
+claude --plugin-dir "$JSOS" -p "/job-search:job-search-run --workspace $T5/.job-search"; echo "exit: $?"
+ls -a "$T5/.job-search/runs/"; rm -rf "$T5"
 ```
-**Expected:** the three blocked-close conditions above, with the cause being the empty brief — there is
-nothing to judge postings against — and the fix naming the job-preference-interview skill. Nothing is
-pulled.
+**Grades conditions 1 and 2 only.** The seed empties `preferences.md` on purpose, so the validator will
+report `INVALID preferences.md front-matter` and exit 1 whatever the run did — that is the broken seed, not
+a leftover. Check the leftovers from the `ls -a` instead: no `.started-*` and no `.scratch/`.
+**Expected:** the cause is the empty brief — there is nothing to judge postings against — and the fix names
+the job-preference-interview skill. Nothing is pulled.
 **Result:** ⬜
 
 ### Fake-shim only (deterministic error injection — cannot be forced on the live API)
@@ -502,6 +529,10 @@ export FAKE="PATH=$SH/_bin:$PATH JOBSEARCH_FIXTURES=$JSOS/tests/fixtures"
 ```
 Run each by giving Claude: *"run the job-search-run skill with --workspace $SH and the fake shim (PATH=$SH/_bin:$PATH,
 JOBSEARCH_FIXTURES=$JSOS/tests/fixtures, JOBSEARCH_TEST_SCENARIO=<scenario>) and show the digest + exit code."*
+
+`setup-workspace.sh` builds `$SH` from the repo templates, so every file in it is valid and **every row
+below grades all three conditions**, plus whatever its own Expected column adds. A row marked "blocked
+close" ends `close_state: blocked` / `run_health: degraded`; the rest complete.
 
 | Test | scenario | Expected | Result |
 |---|---|---|---|

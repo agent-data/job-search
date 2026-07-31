@@ -53,19 +53,26 @@ belongs in this repo's docs, which no run reads.
 Run all of these and make sure they pass:
 
 ```bash
-# 1) Unit tests — the doc linter, the philosophy guard, the release-integrity checks, the
-#    mechanics scripts, validate-workspace.sh, the eval-case lint, and the shims. No API calls.
+# Unit tests — the doc linter, the philosophy guard, the release-integrity checks, the
+# mechanics scripts, validate-workspace.sh, the eval-case lint, and the shims. No API calls.
 python3 -m pytest -q
 
-# 2) Doc-lint (knowledge base) + philosophy guard (shipped output) — both run in CI too
-python3 scripts/doc_lint.py --root .
+# Philosophy guard (shipped output) + doc-lint (knowledge base)
 python3 scripts/philosophy_guard.py --root .
+python3 scripts/doc_lint.py --root .
 
-# 3) The per-skill scenario suites are well formed
+# The seven manifests agree on a version
+python3 scripts/check_release_integrity.py --root . --check-version-sync
+
+# The per-skill scenario suites are well formed (not a CI job — see below)
 python3 scripts/eval_harness.py --root .
 ```
 
-Those four are what CI runs, and they must be green before you open a PR.
+**Four of those five are the CI jobs**, in `.github/workflows/ci.yml`: `pytest`, the philosophy
+guard, the doc linter, and release integrity (which on a pull request also fails when `skills/`,
+`shared/references/`, or `shared/scripts/` changed without a forward version bump). `eval_harness.py`
+is **not** wired into CI — `grep -rn "eval_harness" .github/` returns nothing — so run it yourself;
+nothing else catches a malformed scenario file. All five must be green before you open a PR.
 
 **Two eval layers sit on top, and neither runs in CI.** Per-skill scenarios live in
 `skills/<skill>/evals/evals.json`, with a `harness` block describing setup; drive them by asking Claude in a
