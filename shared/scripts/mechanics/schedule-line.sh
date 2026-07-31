@@ -1,9 +1,9 @@
 #!/bin/sh
 # schedule-line.sh — compose the five-field cron schedule expression for a cadence.
 #
-# The scheduling contract in shared/references/internals.md §Scheduling pins the cadence enum
-# (schedule.frequency) and schedule.time (HH:MM, honored for daily/weekly) and defers the composed
-# line to the host. This is the deterministic, host-neutral core of that composition: the cron
+# config.yaml pins the cadence enum (schedule.frequency) and schedule.time (HH:MM, honored for
+# daily/weekly); shared/references/runbook.md §Running it unattended has the invocation the host
+# wraps this line around. This is the deterministic, host-neutral core of that composition: the cron
 # time expression (minute hour day-of-month month day-of-week) for a cadence —
 #   hourly         -> 0 * * * *
 #   every-2-hours  -> 0 */2 * * *

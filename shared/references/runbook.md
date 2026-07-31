@@ -20,11 +20,10 @@ source=legacy
 first_run=false
 ```
 
-`first_run=true` means that path has no `config.yaml` yet and setup creates it. `source=legacy`
-means the user's workspace sits at the older visible path, as above: keep using it, and record it
-in the registry as `active_workspace` so later runs find it directly. An existing `config.yaml`,
-`preferences.md`, or `jobs.jsonl` stays exactly as it is — adopting a workspace adds only the
-missing `runs/` and `reports/` directories.
+`first_run=true` means that path has no `config.yaml` yet and setup creates it. `source=legacy` means
+the workspace sits at the older visible path: keep using it, and record it in the registry as
+`active_workspace` so later runs find it. An existing `config.yaml`, `preferences.md`, or `jobs.jsonl`
+stays as it is — adopting a workspace adds only the missing `runs/` and `reports/` directories.
 
 The registry file — the one to read here and to write for adoption or scheduling — is
 `$JOBSEARCH_OS_REGISTRY` when set, otherwise
@@ -34,17 +33,15 @@ Where no shell runs, read that file and apply the same order yourself. In the ru
 `$JOBSEARCH_OS_HOME` when set and `$HOME` otherwise (tests and evals set it to move the home base).
 First match decides:
 
-1. The registry parses as JSON and holds a non-empty `active_workspace` — use it and stop, even
-   when that directory has no `config.yaml` (then this is a first run). Falling through to the
-   rules below could move the user to a different workspace.
+1. The registry parses as JSON and holds a non-empty `active_workspace` — use it and stop, even with
+   no `config.yaml` there (that is a first run); falling through could move the user elsewhere.
 2. `$H/.job-search/config.yaml` exists — workspace `$H/.job-search`.
 3. `$H/job-search/config.yaml` exists — workspace `$H/job-search`.
 4. Neither exists — first run, workspace `$H/.job-search`, which setup creates.
 
 A registry file that exists but does not parse as JSON stops the run: report that the file at that
-path cannot be read, rather than picking a workspace it might not name. The script reads the
-registry with `grep` and cannot tell a corrupt file from an absent one, so parse-check it yourself
-before trusting the result.
+path cannot be read, rather than picking a workspace it might not name. The script reads it with
+`grep` and cannot tell a corrupt file from an absent one, so parse-check it yourself.
 
 ## What each file holds
 
@@ -55,12 +52,9 @@ before trusting the result.
 | `jobs.jsonl` — append-only event log, one JSON object per line; a posting's current state is the fold of its events by `source` + `source_id` | every run | the home view, the pipeline, duplicate checks |
 | `runs/<run_id>.json` — one record per run | a run at close | the home view, the agent skill |
 | `runs/.started-<run_id>` — empty marker: this run is open | a run at start, deleted at close | the next run |
-| `runs/.scratch/<run_id>/` — one run's working files | that run, deleted at close | that run |
 | `reports/<date>-digest.md` — the digest the user reads | a run at close | the user, the home view |
 | `.gitignore` — copied from `<plugin-root>/templates/workspace.gitignore`; denies everything but itself | setup | git |
 | `~/.config/job-search/config.json` — the registry: which workspace is active, and the state of the schedule. Sits outside the workspace. | setup, schedule changes | discovery |
-
-A workspace can hold other files left by older versions; nothing here reads or deletes them.
 
 ## One run, start to close
 
@@ -86,14 +80,21 @@ A workspace can hold other files left by older versions; nothing here reads or d
 A run that has to stop early closes the same way: `close_state` is `blocked` when you can name what
 stopped it, and `interrupted` when it ends unfinished and its work cannot be reconstructed.
 
+## Running it unattended
+
+A scheduler starts a run the way a person does — on Claude Code, `claude -p /job-search:job-search-run`
+(the plugin namespace is part of that target), with `--permission-mode acceptEdits` and
+`--allowedTools Bash,Read,Write,Edit,Glob,Grep,Skill,Task` so the run can search and write its own
+workspace. A cron or launchd process has no login session, so the job's environment carries a token
+from `claude setup-token` as `CLAUDE_CODE_OAUTH_TOKEN`. Another host takes its own headless flags,
+in the same shape: this pack's run skill, permission to write the workspace, credentials in the job.
+
 ## Scratch
 
-Everything a run writes for its own use goes in `runs/.scratch/<run_id>/`, which step 4 deletes.
-Keep each search row as it arrived, `id` and `source_url` together, because a detail read needs
-that pair from the row it came from. Keep the posting lines you cite; full posting text stays out.
+A run's own working files go in `runs/.scratch/<run_id>/`, which step 4 deletes: each search row as
+it arrived, `id` and `source_url` paired for the detail read, plus the posting lines you cite.
 
 ## What stays off disk
 
-The workspace holds the user's private job search. Use these where they arrive and write none of
-them to a file: API keys and auth headers, pagination cursors, full job descriptions, and
-preference text anywhere other than `preferences.md`.
+The workspace holds a private job search. Write none of these to a file: API keys and auth headers,
+pagination cursors, full job descriptions, preference text anywhere but `preferences.md`.
