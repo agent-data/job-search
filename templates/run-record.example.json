@@ -1,0 +1,18 @@
+{
+  "run_id": "2026-07-30T15-04-02Z",
+  "trigger": "scheduled",
+  "scheduler_id": "com.job-search.daily",
+  "brief_revision": "9f2c41a7be05",
+  "close_state": "complete",
+  "run_health": "healthy",
+  "sources": ["linkedin", "ashby"],
+  "queries": ["ai-eng-remote", "ml-platform-sf"],
+  "agent_data_usage": {
+    "searches": 4,
+    "detail_reads": 5,
+    "other": 1,
+    "total_metered": 10
+  },
+  "started_at": "2026-07-30T15:04:02Z",
+  "completed_at": "2026-07-30T15:12:47Z"
+}
