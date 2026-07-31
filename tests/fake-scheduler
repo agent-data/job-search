@@ -7,8 +7,10 @@ capability probe, staged disabled registration, inspection, a real-path canary f
 enable/disable/remove reversibility actions. Behavior is driven entirely by one scenario
 capability fixture under tests/fixtures/scheduler/. The shim never touches a real scheduler,
 cron, launchd, network, model, or agent-data account: it only reads its fixture and the staged
-job definition and writes state, a log, and (on a successful or blocked fire) the scheduled-path
-run artifacts into the temp workspace named by env vars.
+job definition and writes state, a log, and (on a fire that reaches a close) the scheduled-path run
+record and digest into the temp workspace named by env vars. It models only what the front door's
+schedule flow actually consumes today; the phase ledger, the milestone events, and the exact-model
+fields it used to emit went with the contracts that defined them on 2026-07-31.
 
     export JOBSEARCH_TEST_SCHEDULER_STATE=STATE_JSON
     export JOBSEARCH_TEST_SCHEDULER_LOG=LOG_JSONL
@@ -37,18 +39,6 @@ FIXTURES_DIR = pathlib.Path(__file__).resolve().parent / "fixtures" / "scheduler
 # A deterministic clock: each fire advances one tick so repeated fires get distinct run ids,
 # while a fresh state reproduces the same first run id byte-for-byte.
 CLOCK_BASE = datetime(2026, 7, 17, 12, 0, 0, tzinfo=timezone.utc)
-
-# The quiet scheduled/canary phase path: monotonic and adjacent, traversing the presentation
-# phase without claiming its milestone.
-HEALTHY_PHASES = (
-    "searching",
-    "selection_settled",
-    "reviewing_initial_batch",
-    "early_results_shown",
-    "reviewing_remaining",
-    "finalizing",
-)
-
 
 def emit(value, *, stream=sys.stdout, status=0):
     print(json.dumps(value, sort_keys=True), file=stream)
@@ -141,7 +131,7 @@ def write_text_artifact(path, text):
 
 
 def canonical_digest(run_id, health, trigger, job_id):
-    health_label = "healthy" if health == "healthy" else "blocked (action needed)"
+    health_label = health
     counts = (
         "2 new postings · 1 strong · 1 moderate · 0 weak"
         if health == "healthy"
@@ -158,8 +148,8 @@ def canonical_digest(run_id, health, trigger, job_id):
 
 
 def write_fire_artifacts(job_id, definition, fixture, state):
-    """Simulate one real scheduled-path fire; write the run record, digest, and lifecycle
-    ledger into the staged workspace and return the outcome summary."""
+    """Simulate one real scheduled-path fire; write the run record and digest into the staged
+    workspace and return the outcome summary."""
     fire = fixture.get("fire", {})
     outcome = fire.get("outcome", "success")
     workspace = pathlib.Path(definition["workspace"])
@@ -172,78 +162,40 @@ def write_fire_artifacts(job_id, definition, fixture, state):
     stamp = instant.isoformat(timespec="seconds")
     trigger = definition.get("trigger", "scheduled")
 
-    configured_primary = definition.get("primary_model", "fixture-primary-exact")
-    primary_origin = definition.get("primary_model_origin", "session_inheritance")
-    primary_model = configured_primary
-    if outcome == "model_binding_lost":
-        primary_model = fire.get("substituted_primary_model", "harness-mutable-default")
-        primary_origin = "harness_default"
-    preserved = primary_model == configured_primary
-
-    if outcome in ("success", "model_binding_lost"):
-        health, close_state, phase = "healthy", "complete", "complete"
+    # run_health is one word: healthy when the run finished its work, degraded on every other
+    # close. What stopped it is carried by close_state and named in the digest.
+    if outcome == "success":
+        health, close_state = "healthy", "complete"
         metered = int(fire.get("metered_calls", 3))
-        internal_code = None
+        stopped_by = None
     elif outcome == "pre_meter_failure":
-        health, close_state, phase = "blocked", "blocked", "preflight"
+        health, close_state = "degraded", "blocked"
         metered = 0
-        internal_code = fire.get("internal_code", "E-SCHEDULE-CANARY")
+        stopped_by = fire.get("stopped_by", "the scheduled run could not reach the API")
     elif outcome == "metered_failure":
-        health, close_state, phase = "blocked", "blocked", "searching"
+        health, close_state = "degraded", "blocked"
         metered = int(fire.get("metered_calls", 1))
-        internal_code = fire.get("internal_code", "E-SCHEDULE-CANARY")
+        stopped_by = fire.get("stopped_by", "every search the scheduled run made failed")
     else:
         fail("invalid_scenario_fixture", scenario=SCENARIO, reason="unknown fire outcome")
 
-    # Lifecycle ledger — the same event schema the real coordinator emits, written directly
-    # (this shim reproduces no live run machinery). Failures stop at their last working phase.
-    rows = [{"event": "run_started", "run_id": run_id, "ts": stamp, "phase": "preflight",
-             "trigger": trigger, "scheduler_id": job_id, "source_order": "linkedin"}]
-    if close_state == "complete":
-        for reached in HEALTHY_PHASES:
-            rows.append({"event": "phase_changed", "run_id": run_id, "ts": stamp,
-                         "phase": reached})
-        rows.append({"event": "milestone", "run_id": run_id, "ts": stamp,
-                     "milestone": "final_run_record_written"})
-        rows.append({"event": "milestone", "run_id": run_id, "ts": stamp,
-                     "milestone": "final_digest_written"})
-    elif phase == "searching":
-        rows.append({"event": "phase_changed", "run_id": run_id, "ts": stamp,
-                     "phase": "searching"})
-        rows.append({"event": "attempt_started", "run_id": run_id, "ts": stamp,
-                     "attempt_id": "search-1", "operation": "initial_search",
-                     "logical_operation_id": "search-1", "attempt_number": 1})
-        rows.append({"event": "attempt_accounted", "run_id": run_id, "ts": stamp,
-                     "attempt_id": "search-1", "metered": True,
-                     "outcome": "terminal_failure", "request_id": "request-search-1"})
-    rows.append({"event": "run_closed", "run_id": run_id, "ts": stamp,
-                 "close_state": close_state, "internal_code": internal_code})
-
-    ledger = runs / f".lifecycle-{run_id}.jsonl"
-    write_text_artifact(
-        ledger,
-        "".join(json.dumps(row, sort_keys=True) + "\n" for row in rows),
-    )
-
+    searches = metered if health != "healthy" else 1
+    detail_reads = metered - searches if metered > searches else 0
     record = {
         "run_id": run_id,
         "trigger": trigger,
         "scheduler_id": job_id,
+        "close_state": close_state,
+        "run_health": health,
         "started_at": stamp,
         "completed_at": stamp,
-        "primary_model": primary_model,
-        "primary_model_origin": primary_origin,
-        "detail_model": definition.get("detail_model", "fixture-detail-exact"),
-        "detail_model_origin": definition.get("detail_model_origin", "configured_user"),
-        "agent_data_usage": {"metered_calls": metered},
-        "results_summary": {
-            "new_postings": 2 if health == "healthy" else 0,
-            "evaluated": 2 if health == "healthy" else 0,
-            "relevant": 1 if health == "healthy" else 0,
+        "agent_data_usage": {
+            "searches": searches,
+            "detail_reads": detail_reads,
+            "other": 0,
+            "total_metered": metered,
         },
-        "lifecycle": {"phase": phase, "close_state": close_state, "health": health},
-        "run_health": health,
-        "error": None if internal_code is None else {"code": internal_code},
+        "stopped_by": stopped_by,
     }
     write_text_artifact(runs / f"{run_id}.json", json.dumps(record, indent=2, sort_keys=True) + "\n")
     write_text_artifact(
@@ -262,13 +214,10 @@ def write_fire_artifacts(job_id, definition, fixture, state):
         "close_state": close_state,
         "metered_calls": metered,
         "metered_consumed": metered > 0,
-        "primary_model": primary_model,
-        "primary_model_preserved": preserved,
-        "internal_code": internal_code,
+        "stopped_by": stopped_by,
         "artifacts": {
             "run_record": f"runs/{run_id}.json",
             "digest": f"runs/{run_id}-digest.md",
-            "ledger": f"runs/.lifecycle-{run_id}.jsonl",
         },
     }
 

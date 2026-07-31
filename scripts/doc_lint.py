@@ -248,25 +248,38 @@ def scan_code_refs(root):
 # Each entry is (regex, label, owner). `owner` is the repo-relative single canonical home for a fact
 # that a shared reference owns, and such an entry is also enforced ACROSS the reference layer
 # (owner-aware): any non-owner reference file that restates an owned literal without a resolving
-# pointer is flagged. `owner=None` = guarded in KB docs only, which is where every token below sits
-# except the job sources. The frequency, freshness and config-field tokens are written by
-# templates/config.example.yaml; the digest counts line by the run skill's digest template; the
-# run_id format by validate-workspace.sh. None of those is a shared reference, so a KB doc restating
-# one has no reference file to point at, and the reference-layer arm has nothing to compare. The job
-# source enum's home is shared/references/agent-data.md, which names the four sources in prose
-# rather than in this pipe form — so a shared reference that writes the pipe form is restating a
-# fact it does not own.
+# pointer is flagged. `owner=None` = guarded in KB docs only.
+#
+# Every signature below has at least one live holder — a file that really writes the token today —
+# so each one guards a fact that can drift. The holders, measured with the regexes themselves over
+# `git ls-files` (the same `re` module this file uses; `git grep -E` mishandles `\s`/`\d` around the
+# multibyte `·`):
+#
+#   frequency enum      templates/config.example.yaml, shared/scripts/mechanics/schedule-line.sh
+#   freshness enum      templates/config.example.yaml (+ the three eval seeds copied from it)
+#   job source enum     templates/config.example.yaml (+ the three eval seeds)
+#   digest counts line  skills/job-search-run/SKILL.md (the digest template), examples/sample-digest.md
+#   config field        templates/config.example.yaml (+ the three eval seeds)
+#
+# Only the job source enum has an OWNER, because only it is a fact a shared reference owns:
+# shared/references/agent-data.md, which names the four sources in prose rather than in this pipe
+# form — so a shared reference that writes the pipe form is restating a fact it does not own. The
+# other four are written by the config template, the schedule-line script and the digest template,
+# none of which is a shared reference, so there is nothing for the reference-layer arm to compare.
+#
+# Four signatures were dropped on 2026-07-31 with the corpus that defined their tokens, each
+# measured to have zero live holders first: `run_id format` (YYYY-MM-DDTHH-MM-SSZ — validate-
+# workspace.sh writes the anchored regex, never this placeholder), `job status enum`,
+# `run-health states` (run_health is one word now: healthy or degraded, with no parenthetical),
+# and `E-QUOTA verbatim` (the E-* catalog is gone from every shipped file). A signature with no
+# holder guards nothing and would only mislead the next reader into thinking the fact still exists.
 DUP_SIGNATURES = [
     (re.compile(r"every-2-hours"), "frequency enum", None),
     (re.compile(r"any \| past-week \| past-2-weeks \| past-month"), "freshness enum", None),
-    (re.compile(r"YYYY-MM-DDTHH-MM-SSZ"), "run_id format", None),
-    (re.compile(r"interested\W+applied\W+rejected"), "job status enum", None),
-    (re.compile(r"degraded \(job sources flaky\)"), "run-health states", None),
     (re.compile(r"linkedin \| ashby \| greenhouse \| lever"), "job source enum",
      "shared/references/agent-data.md"),
     (re.compile(r"strong\s*·\s*\d+\s*moderate"), "digest counts line", None),
     (re.compile(r"desktop_notify_on_block"), "config field", None),
-    (re.compile(r"API limit for this period has been reached"), "E-QUOTA verbatim", None),
 ]
 DUP_ALLOW = re.compile(r"shared/references")  # a line that points to the source is fine
 

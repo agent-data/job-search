@@ -179,7 +179,7 @@ def test_dup_exempts_exec_plans(tmp_path):
 
 def test_dup_exempts_historical_design_doc(tmp_path):
     d = tmp_path / "docs" / "design-docs"; d.mkdir(parents=True)
-    body = _design_fm(status="historical") + "The run_id format is YYYY-MM-DDTHH-MM-SSZ here.\n"
+    body = _design_fm(status="historical") + "Cadences here include every-2-hours.\n"
     (d / "old.md").write_text(body)
     r = run_lint(tmp_path, "--only", "no-shared-reference-duplication")
     assert r.returncode == 0, r.stdout
@@ -189,13 +189,6 @@ def test_dup_exempts_generated(tmp_path):
     (g / "x.md").write_text("frequencies include every-2-hours per the CLI.\n")
     r = run_lint(tmp_path, "--only", "no-shared-reference-duplication")
     assert r.returncode == 0, r.stdout
-
-def test_dup_status_enum_comma_form_fails(tmp_path):
-    d = tmp_path / "docs"; d.mkdir()
-    (d / "a.md").write_text("Pipeline statuses: new, interested, applied, rejected, archived.\n")
-    r = run_lint(tmp_path, "--only", "no-shared-reference-duplication")
-    assert r.returncode == 1 and "job status enum" in r.stdout
-
 
 def test_index_lists_all_siblings_passes(tmp_path):
     d = tmp_path / "docs" / "design-docs"; d.mkdir(parents=True)

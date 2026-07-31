@@ -304,7 +304,7 @@ def test_check_artifacts_flags_json_field_mismatch(tmp_path):
     ws, run_id = _artifacts_workspace(tmp_path)
     evidence = {"workspace": str(ws), "assertions": [
         {"kind": "json_field_equals", "path": f"runs/{run_id}.json",
-         "field": "run_health", "equals": "blocked"}]}
+         "field": "run_health", "equals": "degraded"}]}
     hits = eh.check_artifacts(evidence)
     assert len(hits) == 1 and "run_health" in hits[0]
 
@@ -408,8 +408,14 @@ STRUCTURED_DIGEST = (
     "unaffected.\n"
 )
 LEAKED_CODE_DIGEST = STRUCTURED_DIGEST + "\n(internal classification: E-QUOTA)\n"
-RECORD_WITH_CODE = {"run_health": "blocked", "error": {"code": "E-QUOTA"}}
-RECORD_WITHOUT_CODE = {"run_health": "blocked", "error": {"reason": "quota rejected"}}
+# These two exist to drive eval_harness's `surface` rule, which matches on a raw E-* code: a
+# user_facing artifact must not carry one, an internal_record must. The code is fixture data for
+# that matcher, not a claim that a run writes one — no shipped file names an E-* code any more (see
+# the note in the fix report). The record's own fields are written in the shape a run record has.
+RECORD_WITH_CODE = {"close_state": "blocked", "run_health": "degraded",
+                    "error": {"code": "E-QUOTA"}}
+RECORD_WITHOUT_CODE = {"close_state": "blocked", "run_health": "degraded",
+                       "error": {"reason": "quota rejected"}}
 
 
 def _belief4_workspace(base, digest_body, record):
