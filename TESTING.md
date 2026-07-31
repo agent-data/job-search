@@ -90,13 +90,15 @@ in `-p` commands anyway so the skill is invoked deterministically.
 ```bash
 cd "$JSOS" && python3 -m pytest -q
 ```
-**Expected:** `374 passed` **and `0 failed`** — treat **`0 failed`** as the real gate. The count moves in both
-directions: it grows when tests are added, and it fell twice as the 2026-07-30 overhaul landed. First
-688 → 547, when the documentation-prose suites were retired. Then, on 2026-07-31, **554 → 377 → 374**: 554
-was the measured count once tasks 5–10 had added their own tests; deleting the shared reference corpus and
+**Expected:** `372 passed` **and `0 failed`** — treat **`0 failed`** as the real gate. The count moves in both
+directions: it grows when tests are added, and it fell three times as the 2026-07-30 overhaul landed. First
+688 → 547, when the documentation-prose suites were retired. Then, on 2026-07-31, **554 → 377 → 374 → 372**:
+554 was the measured count once tasks 5–10 had added their own tests; deleting the shared reference corpus and
 the structures it defined (the exact-model binding sidecar, the version-1 migration, the lifecycle ledger,
 the eight-state schedule health) took the tests that read them with it (**−177**); trimming the scheduler
-shim to the contracts that survive took three more (**−3**). Update the number here whenever it changes. Covers the doc linter, the philosophy guard,
+shim to the contracts that survive took three more (**−3**); retiring the `internal_record` assertion
+surface, which required a run record to carry a raw `E-*` code no shipped file writes any more, replaced its
+three tests with one that rejects the retired name (**−2**). Update the number here whenever it changes. Covers the doc linter, the philosophy guard,
 the release-integrity checks, the scripted-mechanics unit tests, the workspace validator
 (`test_validate_workspace.py`), the eval-case lint (`test_eval_cases.py`), the **eval-scenario validator +
 harness math** (`test_eval_harness.py`), and the fake-shim self-tests (incl. the `bad-query` scenario behind
@@ -910,7 +912,7 @@ entries carry a date mark; the first-Ashby-pass footnote is present.
 - ⬜ Scheduling correct (the composed `/loop <interval>` matches the pinned table per frequency; `/loop` sets `mechanism:loop`; **zero-Python user path** proven with python3 masked) (§9)
 - ⬜ **No numeric scores/weights, budget config, or invented charge** in files or unsolicited chat; accurate calls-first usage context is labeled, and users control frequency, sources, and review depth (§10)
 - ⬜ Docs match reality (install commands, error table, sample digest) (§11)
-- ⬜ Full regression green: `pytest` (**374**; gate on `0 failed`) + the eval structural gate (`eval_harness.py`) + all five skills' evals (**51** scenarios) (§0.3, §12)
+- ⬜ Full regression green: `pytest` (**372**; gate on `0 failed`) + the eval structural gate (`eval_harness.py`) + all five skills' evals (**51** scenarios) (§0.3, §12)
 - ⬜ Planned config slash-command tests are marked **N/A (pending build)**, not green (§13)
 - ⬜ Multi-source: live Ashby/Greenhouse/Lever rows; shim multi-source run shows per-source counts + first-pass footnote; one source down never blanks the run (§14)
 

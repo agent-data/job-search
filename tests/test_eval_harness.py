@@ -246,32 +246,45 @@ def test_control_delta_no_lift_is_flagged():
 # the mode is invoked only with an explicit path, so CI's --root run never needs them.
 # ---------------------------------------------------------------------------
 def _artifacts_workspace(tmp_path):
+    """A workspace holding only files a run actually writes: the slim run record, the digest,
+    the jobs.jsonl event log, and config.yaml. Field names and shapes come from
+    templates/run-record.example.json, templates/jobs-event.example.json and
+    templates/config.example.yaml, so each assertion kind below points at a live structure."""
     ws = tmp_path / "ws"
     (ws / "runs").mkdir(parents=True)
+    (ws / "reports").mkdir(parents=True)
     run_id = "2026-07-17T12-00-00Z"
     record = {
+        "run_id": run_id,
         "trigger": "scheduled",
-        "scheduler_id": "job-1",
+        "scheduler_id": "com.job-search.daily",
+        "brief_revision": "9f2c41a7be05",
+        "close_state": "complete",
         "run_health": "healthy",
-        "lifecycle": {"close_state": "complete"},
-        "primary_model": "fixture-primary-exact",
+        "sources": ["linkedin", "ashby"],
+        "queries": ["ai-eng-remote", "ml-platform-sf"],
+        "agent_data_usage": {"searches": 4, "detail_reads": 5, "other": 1, "total_metered": 10},
+        "started_at": "2026-07-17T12:00:00Z",
+        "completed_at": "2026-07-17T12:08:47Z",
     }
     (ws / "runs" / f"{run_id}.json").write_text(json.dumps(record), encoding="utf-8")
-    ledger = [
-        {"event": "run_started", "phase": "preflight"},
-        {"event": "phase_changed", "phase": "searching"},
-        {"event": "posting_state", "state": "queued"},
-        {"event": "phase_changed", "phase": "finalizing"},
-        {"event": "run_closed", "close_state": "complete"},
+    events = [
+        {"event": "evaluated", "source": "linkedin", "source_id": "4012345678",
+         "run_id": run_id, "status": "new"},
+        {"event": "evaluated", "source": "ashby", "source_id": "a1b2c3d4",
+         "run_id": run_id, "status": "new"},
+        {"event": "status_changed", "source": "linkedin", "source_id": "4012345678",
+         "status": "interested"},
     ]
-    (ws / "runs" / f".lifecycle-{run_id}.jsonl").write_text(
-        "\n".join(json.dumps(r) for r in ledger), encoding="utf-8"
+    (ws / "jobs.jsonl").write_text(
+        "\n".join(json.dumps(r) for r in events), encoding="utf-8"
     )
-    (ws / "runs" / f"{run_id}-digest.md").write_text(
-        "# Job search digest\nRun health: healthy\n", encoding="utf-8"
+    (ws / "reports" / "2026-07-17-digest.md").write_text(
+        "# Job search digest — 2026-07-17\nRun health: healthy\n", encoding="utf-8"
     )
     (ws / "config.yaml").write_text(
-        'version: 2\nsearch:\n  detail_model: "fixture-detail-exact"\n', encoding="utf-8"
+        'version: 2\nsearch:\n  sources: ["linkedin", "ashby"]\n  freshness: "past-2-weeks"\n',
+        encoding="utf-8",
     )
     return ws, run_id
 
@@ -283,14 +296,16 @@ def _all_kinds_evidence(ws, run_id):
             {"kind": "file_exists", "path": f"runs/{run_id}.json"},
             {"kind": "json_field_equals", "path": f"runs/{run_id}.json",
              "field": "trigger", "equals": "scheduled"},
+            # dotted traversal, against the record's one nested object
             {"kind": "json_field_equals", "path": f"runs/{run_id}.json",
-             "field": "lifecycle.close_state", "equals": "complete"},
-            {"kind": "jsonl_event_sequence", "path": f"runs/.lifecycle-{run_id}.jsonl",
-             "field": "phase", "sequence": ["preflight", "searching", "finalizing"]},
-            {"kind": "text_absent", "path": f"runs/{run_id}-digest.md",
+             "field": "agent_data_usage.total_metered", "equals": 10},
+            # default field ("event"), against the append-only log a run writes
+            {"kind": "jsonl_event_sequence", "path": "jobs.jsonl",
+             "sequence": ["evaluated", "status_changed"]},
+            {"kind": "text_absent", "path": "reports/2026-07-17-digest.md",
              "pattern": "Here's what I found so far"},
             {"kind": "text_matches", "path": "config.yaml",
-             "pattern": r'detail_model:\s*"fixture-detail-exact"'},
+             "pattern": r'freshness:\s*"past-2-weeks"'},
         ],
     }
 
@@ -317,20 +332,20 @@ def test_check_artifacts_flags_missing_file(tmp_path):
 
 
 def test_check_artifacts_text_absent_catches_forbidden_surface(tmp_path):
-    ws, run_id = _artifacts_workspace(tmp_path)
-    (ws / "runs" / f"{run_id}-digest.md").write_text(
+    ws, _ = _artifacts_workspace(tmp_path)
+    (ws / "reports" / "2026-07-17-digest.md").write_text(
         "Here's what I found so far", encoding="utf-8")
     evidence = {"workspace": str(ws), "assertions": [
-        {"kind": "text_absent", "path": f"runs/{run_id}-digest.md",
+        {"kind": "text_absent", "path": "reports/2026-07-17-digest.md",
          "pattern": "Here's what I found so far"}]}
     assert len(eh.check_artifacts(evidence)) == 1
 
 
 def test_check_artifacts_jsonl_sequence_out_of_order_fails(tmp_path):
-    ws, run_id = _artifacts_workspace(tmp_path)
+    ws, _ = _artifacts_workspace(tmp_path)
     evidence = {"workspace": str(ws), "assertions": [
-        {"kind": "jsonl_event_sequence", "path": f"runs/.lifecycle-{run_id}.jsonl",
-         "field": "phase", "sequence": ["finalizing", "preflight"]}]}
+        {"kind": "jsonl_event_sequence", "path": "jobs.jsonl",
+         "sequence": ["status_changed", "evaluated"]}]}
     assert len(eh.check_artifacts(evidence)) == 1
 
 
@@ -362,7 +377,7 @@ def test_check_artifacts_text_matches_absent_pattern_fails_closed(tmp_path):
     ws, _ = _artifacts_workspace(tmp_path)
     evidence = {"workspace": str(ws), "assertions": [
         {"kind": "text_matches", "path": "config.yaml",
-         "pattern": r'detail_model:\s*"never-configured-this-exact-model"'}]}
+         "pattern": r'freshness:\s*"never-configured-this-window"'}]}
     hits = eh.check_artifacts(evidence)
     assert len(hits) == 1 and "text_matches" in hits[0] and "config.yaml" in hits[0]
 
@@ -370,14 +385,14 @@ def test_check_artifacts_text_matches_absent_pattern_fails_closed(tmp_path):
 def test_check_artifacts_jsonl_malformed_line_fails_closed(tmp_path):
     # A malformed JSONL line in a jsonl_event_sequence target fails closed — the sequence would
     # otherwise match, so the malformed line (not an ordering miss) is what must trip the hit.
-    ws, run_id = _artifacts_workspace(tmp_path)
-    (ws / "runs" / f".lifecycle-{run_id}.jsonl").write_text(
-        '{"event": "run_started", "phase": "preflight"}\n'
+    ws, _ = _artifacts_workspace(tmp_path)
+    (ws / "jobs.jsonl").write_text(
+        '{"event": "evaluated", "source": "linkedin"}\n'
         "{not valid json here\n"
-        '{"event": "run_closed", "phase": "finalizing"}\n', encoding="utf-8")
+        '{"event": "status_changed", "source": "linkedin"}\n', encoding="utf-8")
     evidence = {"workspace": str(ws), "assertions": [
-        {"kind": "jsonl_event_sequence", "path": f"runs/.lifecycle-{run_id}.jsonl",
-         "field": "phase", "sequence": ["preflight", "finalizing"]}]}
+        {"kind": "jsonl_event_sequence", "path": "jobs.jsonl",
+         "sequence": ["evaluated", "status_changed"]}]}
     hits = eh.check_artifacts(evidence)
     assert len(hits) == 1 and "malformed" in hits[0]
 
@@ -394,28 +409,25 @@ def test_check_artifacts_invalid_json_target_fails_closed(tmp_path):
 
 
 # ---------------------------------------------------------------------------
-# T7.2: surface enforcement — belief 4's internal/user separation is checkable.
-# A user-facing artifact (chat/digest/home/notification) must never carry a raw
-# E-* code; the internal record must retain it. The `surface` flag makes the
-# harness enforce the correct direction, extending --check-artifacts additively.
+# T7.2: surface enforcement — belief 4's internal/user separation is checkable on the side that
+# still has a product behind it. A user-facing artifact (chat, digest, home view, notification)
+# must never carry a raw E-* code. The companion `internal_record` surface, which required a run
+# record to RETAIN such a code, was retired on 2026-07-31: no shipped file writes an E-* code any
+# more, so the rule demanded a shape the product cannot produce.
 # ---------------------------------------------------------------------------
 STRUCTURED_DIGEST = (
-    "# Job search digest\n"
-    "Run health: blocked (action needed)\n\n"
+    "# Job search digest — 2026-07-17\n"
+    "Run health: degraded\n\n"
     "agent-data's API allowance has been reached, so this run cannot continue until "
     "calls are available. Check your account at "
     "https://agent-data.motie.dev/settings/billing. Your existing matches are "
     "unaffected.\n"
 )
+# The E-QUOTA token is fixture data for the raw-code matcher, not a claim that any run writes
+# one. The record's own fields are written in the shape templates/run-record.example.json has.
 LEAKED_CODE_DIGEST = STRUCTURED_DIGEST + "\n(internal classification: E-QUOTA)\n"
-# These two exist to drive eval_harness's `surface` rule, which matches on a raw E-* code: a
-# user_facing artifact must not carry one, an internal_record must. The code is fixture data for
-# that matcher, not a claim that a run writes one — no shipped file names an E-* code any more (see
-# the note in the fix report). The record's own fields are written in the shape a run record has.
-RECORD_WITH_CODE = {"close_state": "blocked", "run_health": "degraded",
-                    "error": {"code": "E-QUOTA"}}
-RECORD_WITHOUT_CODE = {"close_state": "blocked", "run_health": "degraded",
-                       "error": {"reason": "quota rejected"}}
+BLOCKED_RECORD = {"run_id": "2026-07-17T12-00-00Z", "close_state": "blocked",
+                  "run_health": "degraded"}
 
 
 def _belief4_workspace(base, digest_body, record):
@@ -429,7 +441,7 @@ def _belief4_workspace(base, digest_body, record):
 
 
 def test_check_artifacts_user_facing_surface_rejects_a_raw_error_code(tmp_path):
-    ws, _ = _belief4_workspace(tmp_path, LEAKED_CODE_DIGEST, RECORD_WITH_CODE)
+    ws, _ = _belief4_workspace(tmp_path, LEAKED_CODE_DIGEST, BLOCKED_RECORD)
     evidence = {"workspace": str(ws), "assertions": [
         {"kind": "file_exists", "path": "reports/2026-07-17-digest.md",
          "surface": "user_facing"}]}
@@ -438,53 +450,32 @@ def test_check_artifacts_user_facing_surface_rejects_a_raw_error_code(tmp_path):
 
 
 def test_check_artifacts_user_facing_surface_passes_when_structured(tmp_path):
-    ws, _ = _belief4_workspace(tmp_path, STRUCTURED_DIGEST, RECORD_WITH_CODE)
+    ws, _ = _belief4_workspace(tmp_path, STRUCTURED_DIGEST, BLOCKED_RECORD)
     evidence = {"workspace": str(ws), "assertions": [
         {"kind": "file_exists", "path": "reports/2026-07-17-digest.md",
          "surface": "user_facing"}]}
     assert eh.check_artifacts(evidence) == []
 
 
-def test_check_artifacts_internal_record_surface_requires_the_code(tmp_path):
-    ws, run_id = _belief4_workspace(tmp_path, STRUCTURED_DIGEST, RECORD_WITHOUT_CODE)
-    evidence = {"workspace": str(ws), "assertions": [
-        {"kind": "file_exists", "path": f"runs/{run_id}.json",
-         "surface": "internal_record"}]}
-    hits = eh.check_artifacts(evidence)
-    assert len(hits) == 1 and "internal_record" in hits[0]
-
-
-def test_check_artifacts_internal_record_surface_passes_with_the_code(tmp_path):
-    ws, run_id = _belief4_workspace(tmp_path, STRUCTURED_DIGEST, RECORD_WITH_CODE)
-    evidence = {"workspace": str(ws), "assertions": [
-        {"kind": "json_field_equals", "path": f"runs/{run_id}.json",
-         "field": "error.code", "equals": "E-QUOTA", "surface": "internal_record"}]}
-    assert eh.check_artifacts(evidence) == []
-
-
-def test_check_artifacts_surface_enforces_both_directions_at_once(tmp_path):
-    good_ws, gid = _belief4_workspace(tmp_path / "good", STRUCTURED_DIGEST, RECORD_WITH_CODE)
-    good = {"workspace": str(good_ws), "assertions": [
-        {"kind": "file_exists", "path": "reports/2026-07-17-digest.md", "surface": "user_facing"},
-        {"kind": "file_exists", "path": f"runs/{gid}.json", "surface": "internal_record"}]}
-    assert eh.check_artifacts(good) == []
-    # Inverted separation: the code leaked to the digest AND vanished from the record -> both fail.
-    bad_ws, bid = _belief4_workspace(tmp_path / "bad", LEAKED_CODE_DIGEST, RECORD_WITHOUT_CODE)
-    bad = {"workspace": str(bad_ws), "assertions": [
-        {"kind": "file_exists", "path": "reports/2026-07-17-digest.md", "surface": "user_facing"},
-        {"kind": "file_exists", "path": f"runs/{bid}.json", "surface": "internal_record"}]}
-    assert len(eh.check_artifacts(bad)) == 2
+def test_check_artifacts_retired_internal_record_surface_is_rejected(tmp_path):
+    # The retirement is the assertion: naming the removed surface is now a schema error, so an
+    # evidence file still carrying it fails loudly instead of silently checking nothing.
+    ws, run_id = _belief4_workspace(tmp_path, STRUCTURED_DIGEST, BLOCKED_RECORD)
+    with pytest.raises(ValueError):
+        eh.check_artifacts({"workspace": str(ws), "assertions": [
+            {"kind": "file_exists", "path": f"runs/{run_id}.json",
+             "surface": "internal_record"}]})
 
 
 def test_check_artifacts_rejects_an_unknown_surface(tmp_path):
-    ws, run_id = _belief4_workspace(tmp_path, STRUCTURED_DIGEST, RECORD_WITH_CODE)
+    ws, run_id = _belief4_workspace(tmp_path, STRUCTURED_DIGEST, BLOCKED_RECORD)
     with pytest.raises(ValueError):
         eh.check_artifacts({"workspace": str(ws), "assertions": [
             {"kind": "file_exists", "path": f"runs/{run_id}.json", "surface": "operator"}]})
 
 
 def test_cli_check_artifacts_flags_a_user_facing_code_leak(tmp_path):
-    ws, _ = _belief4_workspace(tmp_path, LEAKED_CODE_DIGEST, RECORD_WITH_CODE)
+    ws, _ = _belief4_workspace(tmp_path, LEAKED_CODE_DIGEST, BLOCKED_RECORD)
     ep = tmp_path / "current-artifacts.json"
     ep.write_text(json.dumps({"workspace": str(ws), "assertions": [
         {"kind": "file_exists", "path": "reports/2026-07-17-digest.md",
@@ -673,14 +664,18 @@ def test_validator_flags_fixed_time_empty_checks(tmp_path):
 # (which carries a different marker, or none) fails even a file_exists assertion.
 # Additive: no run_marker / no run_marked -> identical to before.
 # ---------------------------------------------------------------------------
+DIGEST_REL = "reports/2026-07-17-digest.md"  # the digest _artifacts_workspace writes
+
+
 def _stamped_workspace(tmp_path, marker):
     ws, run_id = _artifacts_workspace(tmp_path)
     # Stamp THIS run's marker into the run-specific artifacts.
     (ws / "runs" / f"{run_id}.json").write_text(
-        json.dumps({"trigger": "scheduled", "run_marker": marker,
-                    "lifecycle": {"close_state": "complete"}}), encoding="utf-8")
-    (ws / "runs" / f"{run_id}-digest.md").write_text(
-        f"# Job search digest\nRun health: healthy\n<!-- run: {marker} -->\n", encoding="utf-8")
+        json.dumps({"run_id": run_id, "trigger": "scheduled", "run_marker": marker,
+                    "close_state": "complete", "run_health": "healthy"}), encoding="utf-8")
+    (ws / DIGEST_REL).write_text(
+        f"# Job search digest — 2026-07-17\nRun health: healthy\n<!-- run: {marker} -->\n",
+        encoding="utf-8")
     return ws, run_id
 
 
@@ -689,17 +684,17 @@ def test_check_artifacts_run_marker_passes_when_the_artifact_carries_it(tmp_path
     ws, run_id = _stamped_workspace(tmp_path, marker)
     evidence = {"workspace": str(ws), "run_marker": marker, "assertions": [
         {"kind": "file_exists", "path": f"runs/{run_id}.json", "run_marked": True},
-        {"kind": "file_exists", "path": f"runs/{run_id}-digest.md", "run_marked": True}]}
+        {"kind": "file_exists", "path": DIGEST_REL, "run_marked": True}]}
     assert eh.check_artifacts(evidence) == []
 
 
 def test_check_artifacts_run_marker_fails_on_a_stale_artifact(tmp_path):
     # The digest exists (file_exists alone would PASS) but predates this run: it carries no
     # fresh marker, so run_marked catches the stale artifact and fails.
-    ws, run_id = _artifacts_workspace(tmp_path)  # unstamped digest from a prior run
+    ws, _ = _artifacts_workspace(tmp_path)  # unstamped digest from a prior run
     fresh = "runmark-fresh-XYZ-999"
     evidence = {"workspace": str(ws), "run_marker": fresh, "assertions": [
-        {"kind": "file_exists", "path": f"runs/{run_id}-digest.md", "run_marked": True}]}
+        {"kind": "file_exists", "path": DIGEST_REL, "run_marked": True}]}
     hits = eh.check_artifacts(evidence)
     assert len(hits) == 1 and "run_marker" in hits[0] and fresh in hits[0]
 
@@ -708,10 +703,10 @@ def test_check_artifacts_run_marker_defeats_a_stale_false_pass_end_to_end(tmp_pa
     # Run A stamped its marker; Run B (a distinct nonce) reuses the workspace. B's assertions
     # would falsely pass on A's leftover digest without the marker check.
     marker_a = "runmark-A-111"
-    ws, run_id = _stamped_workspace(tmp_path, marker_a)
+    ws, _ = _stamped_workspace(tmp_path, marker_a)
     marker_b = "runmark-B-222"
     evidence_b = {"workspace": str(ws), "run_marker": marker_b, "assertions": [
-        {"kind": "file_exists", "path": f"runs/{run_id}-digest.md", "run_marked": True}]}
+        {"kind": "file_exists", "path": DIGEST_REL, "run_marked": True}]}
     hits = eh.check_artifacts(evidence_b)
     assert len(hits) == 1 and marker_b in hits[0]
 
@@ -746,10 +741,10 @@ def test_check_artifacts_rejects_an_empty_run_marker(tmp_path):
 
 
 def test_cli_check_artifacts_flags_a_stale_run_marker(tmp_path):
-    ws, run_id = _artifacts_workspace(tmp_path)
+    ws, _ = _artifacts_workspace(tmp_path)
     ep = tmp_path / "current-artifacts.json"
     ep.write_text(json.dumps({"workspace": str(ws), "run_marker": "runmark-fresh", "assertions": [
-        {"kind": "file_exists", "path": f"runs/{run_id}-digest.md", "run_marked": True}]}),
+        {"kind": "file_exists", "path": DIGEST_REL, "run_marked": True}]}),
         encoding="utf-8")
     r = subprocess.run([sys.executable, str(MODULE), "--check-artifacts", str(ep)],
                        capture_output=True, text=True)

@@ -290,15 +290,20 @@ ARTIFACT_KINDS = {
     "text_matches": ("pattern",),
 }
 
-# T7.2 belief-4 separation, made checkable. An optional `surface` on any assertion declares
-# whether the artifact is shown to the user or is an internal record, and the harness enforces
-# the matching direction: a user-facing surface (chat/digest/home/notification) must carry NO
-# raw canonical error code; an internal record MUST retain one. This is additive — an assertion
-# without `surface` behaves exactly as before, so --root and the T6.1 kinds are untouched.
-SURFACES = ("user_facing", "internal_record")
+# T7.2 belief-4 separation, made checkable. An optional `surface: user_facing` on any assertion
+# declares that the artifact is shown to the user — chat, digest, home view, notification — and
+# the harness fails it when the file carries a raw internal error code. This is additive: an
+# assertion without `surface` behaves exactly as before, so --root and the T6.1 kinds are
+# untouched.
+#
+# The companion `internal_record` surface was retired on 2026-07-31. It required a run record to
+# retain a raw E-* code, and the 2026-07-30 overhaul left no shipped file that writes one
+# (`git grep -nE "E-[A-Z]+" -- skills/ shared/ templates/ examples/ .claude-plugin/ .codex-plugin/
+# evals/` returns nothing), so the rule demanded a shape the product cannot produce.
+SURFACES = ("user_facing",)
 # A canonical E-* code: E- then an uppercase-alnum segment, optionally more hyphen-joined
-# segments (E-QUOTA, E-NO-AUTH, E-UPSTREAM-STRETCH, E-SCHEDULE-CANARY). Bounded lowercase
-# internal classes are asserted by field, not by this token.
+# segments (E-QUOTA, E-NO-AUTH, E-UPSTREAM-STRETCH). Bounded lowercase internal classes are
+# asserted by field, not by this token.
 RAW_ERROR_CODE = re.compile(r"\bE-[A-Z][A-Z0-9]*(?:-[A-Z0-9]+)*\b")
 
 
@@ -382,9 +387,9 @@ def check_artifacts(evidence):
     object). Assertion kinds: file_exists, json_field_equals (dotted field), jsonl_event_sequence
     (an ordered subsequence of a per-line field, default 'event'), text_absent, text_matches.
 
-    An assertion may also carry a `surface` (T7.2): `user_facing` fails if the file contains a raw
-    canonical E-* code (chat/digest/home/notification must render cause+fix, never the code);
-    `internal_record` fails if the file contains none (the record must retain its classification).
+    An assertion may also carry `surface: user_facing` (T7.2), which fails if the file contains a
+    raw canonical E-* code — chat, digest, home view and notification render cause and fix, never
+    the code.
 
     An assertion may also carry `run_marked: true` (T9.1): when the evidence declares a unique
     top-level `run_marker`, the asserted file must CONTAIN that marker, so a stale artifact left
@@ -473,23 +478,17 @@ def _surface_hits(workspace, assertions):
     file is left to the assertion's own kind to flag, so this never double-reports existence."""
     hits = []
     for a in assertions:
-        surface = a.get("surface")
-        if not surface:
+        if a.get("surface") != "user_facing":
             continue
         rel = a["path"]
         full = os.path.join(workspace, rel)
         if not os.path.isfile(full):
             continue
         match = RAW_ERROR_CODE.search(_read_text(full))
-        if surface == "user_facing" and match:
+        if match:
             hits.append(
                 f"user_facing: {rel} exposes raw error code {match.group(0)!r} "
                 "(user-facing surfaces render cause+fix, never the code)"
-            )
-        elif surface == "internal_record" and not match:
-            hits.append(
-                f"internal_record: {rel} retains no canonical E-* classification code "
-                "(the internal record must keep the code)"
             )
     return hits
 
