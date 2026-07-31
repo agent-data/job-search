@@ -192,11 +192,11 @@ Reliability claims are only as good as their tests. Four layers back this system
   produced, and a grader reads them. `behaviors.md` maps the fourteen kept behaviors B1–B14 onto
   the six cases. This is the layer that proves the reliability claims above — that a blocked gate
   really does close the run and say what stopped it, that a killed run is reported on the next
-  pass, that judgment stays qualitative. Per-skill scenario suites in
-  `skills/<skill>/evals/evals.json` cover routing and narrower flows against the shim.
+  pass, that judgment stays qualitative. Scenario suites in the five user-facing skills, at
+  `skills/<skill>/evals/evals.json`, cover routing and narrower flows against the shim.
 - **CI** ([../.github/workflows/ci.yml](../.github/workflows/ci.yml)) runs four gates on every
   change: the pytest suite, the philosophy guard, the doc linter, and the release-integrity check.
-  `scripts/eval_harness.py`, which checks that the per-skill scenario files are well formed, is a
+  `scripts/eval_harness.py`, which checks that those five scenario files are well formed, is a
   local pre-PR step rather than a CI job.
 
 Honest scope (per [QUALITY_SCORE.md](QUALITY_SCORE.md)): both eval layers and the live acceptance

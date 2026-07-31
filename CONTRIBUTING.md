@@ -15,7 +15,8 @@ There are exactly two of them, and between them they own everything a run does:
 
 - **`job-search-runbook`** — find the workspace, what each file in it holds, how one run opens and closes,
   running it unattended, scratch, and what stays off disk. It also holds the two scripts more than one
-  skill runs, `scripts/workspace-discovery.sh` and `scripts/validate-workspace.sh`.
+  skill runs, at `skills/job-search-runbook/scripts/workspace-discovery.sh` and
+  `skills/job-search-runbook/scripts/validate-workspace.sh`.
 - **`agent-data-reference`** — the agent-data CLI, the four job sources and their quirks, retries, and
   what a call costs.
 
@@ -67,7 +68,7 @@ python3 scripts/doc_lint.py --root .
 # The seven manifests agree on a version
 python3 scripts/check_release_integrity.py --root . --check-version-sync
 
-# The per-skill scenario suites are well formed (not a CI job — see below)
+# The scenario suites the five user-facing skills ship are well formed (not a CI job — see below)
 python3 scripts/eval_harness.py --root .
 ```
 
@@ -77,8 +78,8 @@ guard, the doc linter, and release integrity (which on a pull request also fails
 is **not** wired into CI — `grep -rn "eval_harness" .github/` returns nothing — so run it yourself;
 nothing else catches a malformed scenario file. All five must be green before you open a PR.
 
-**Two eval layers sit on top, and neither runs in CI.** Per-skill scenarios live in
-`skills/<skill>/evals/evals.json`, with a `harness` block describing setup; drive them by asking Claude in a
+**Two eval layers sit on top, and neither runs in CI.** Scenario suites live in the five user-facing
+skills, at `skills/<skill>/evals/evals.json`, with a `harness` block describing setup; drive them by asking Claude in a
 Claude Code session ("run the evals for job-search-run"), which invokes the skill-creator skill against that
 file. They are **credit-free** — every `agent-data` call goes through the fake shim in `tests/`, so nothing
 is billed. Keep them that way: if you add a skill or a code path that talks to `agent-data`, route the
@@ -148,7 +149,7 @@ changed without a forward bump.
 
 These are load-bearing design choices, enforced by `scripts/philosophy_guard.py` (run in CI via
 `.github/workflows/ci.yml` and as `tests/test_philosophy_guard.py`) and in review. The
-guard scans shipped default output (`examples/` and every skill's `templates/`). Note: a numeric score a
+guard scans shipped default output (`examples/` plus every `skills/*/templates/` directory there is). Note: a numeric score a
 user *explicitly asks for* is fine in chat — it just must never be written into a digest,
 brief, `config.yaml`, or `jobs.jsonl`. Keep them intact:
 

@@ -15,7 +15,8 @@ created: 2026-07-16
 >   and `tests/test_run_lifecycle_pressure.py` are all gone, and no workspace holds a
 >   `runs/.lifecycle-<run_id>.jsonl` or a `metrics.json`. A run now opens with the empty marker
 >   `runs/.started-<run_id>` and closes by writing `runs/<run_id>.json`; a leftover marker is how the
->   next run learns the last one died. That contract is in `../../../shared/references/runbook.md`.
+>   next run learns the last one died. That contract is now the `job-search-runbook` skill, at
+>   [skills/job-search-runbook/SKILL.md](../../../skills/job-search-runbook/SKILL.md).
 > - **The exact-model binding.** `search.detail_model`, `runs/detail-model-binding.json`, and
 >   `tests/test_exact_model_repair.py` are gone; every detail read runs on the host's own model.
 > - **The `E-*` error catalogue** referenced by T7.2, along with `shared/references/errors.md`. A run

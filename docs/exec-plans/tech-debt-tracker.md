@@ -56,9 +56,10 @@ postings") that writes a new file and never edits in place. Do not build preempt
 gained a runtime contract and CI-executable coverage: the schedule-health derivation, then in
 `shared/references/runbook.md` (§ Schedule health) and dropped with that corpus in the 0.8.0 overhaul, computed
 the expected fire instants **in the configured timezone** (DST-aware via stdlib `zoneinfo`), and
-`tests/test_schedule_health.py` pins the 30-minute grace boundary, the
+`tests/test_schedule_health.py` pinned the 30-minute grace boundary, the
 one-vs-two missed-fire thresholds, and a daily fire across a daylight-saving transition against fixed clocks —
-so it is no longer informational-only. Interrupted-run recovery (a hard-kill mid-run) was contracted by the
+so it was no longer informational-only. That suite was retired on 2026-07-30 with the eight-state schedule
+health it encoded; the registry now carries `installed` and `verified`, and a canary is what sets them. Interrupted-run recovery (a hard-kill mid-run) was contracted by the
 recovery map then in `shared/references/runbook.md`
 (`open_before_selection_settled` → close `interrupted` and restart cleanly) and exercised by
 `tests/test_run_lifecycle_pressure.py` until 2026-07-30, when that suite was retired; the same recovery
@@ -72,8 +73,8 @@ because the append-only `jobs.jsonl` contract
 (the `job-search-runbook` skill) bounds the corruption risk.
 **How to apply:** Add a targeted test for the desktop-notify path and an overlapping-run guard when those
 surfaces are exercised in the field.
-**Linked tests:** resolved portions — `tests/test_schedule_health.py`
-(timezone/DST + grace) and the `kill-midrun` behavior eval, row B9 in `evals/behaviors.md` (interrupted
+**Linked tests:** resolved portions — `tests/test_schedule_health.py` (timezone/DST + grace, retired
+2026-07-30) and the `kill-midrun` behavior eval, row B9 in `evals/behaviors.md` (interrupted
 recovery); none yet for the two open surfaces.
 
 ## P3 — schedule-line accepts an out-of-range --time (`TODO-TIME-RANGE`) — ✅ resolved (obsolete)

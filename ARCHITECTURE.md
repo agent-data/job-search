@@ -123,7 +123,7 @@ structurally sound. The scheduling stance is instruction-level (see scheduling-c
 Three layers. The deterministic test bed under [tests/](tests/): pytest suites for the dev tooling (the doc
 linter, the philosophy guard, the release-integrity checks, the mechanics scripts, the workspace validator,
 the shims' self-checks), plus a fake `agent-data` PATH shim (`tests/fake-agent-data`) so a whole run is
-exercised with no network and no credits. Per-skill scenario suites in `skills/<skill>/evals/evals.json`,
+exercised with no network and no credits. Scenario suites in the five user-facing skills, at `skills/<skill>/evals/evals.json`,
 checked for structural coherence by [scripts/eval_harness.py](scripts/eval_harness.py) and driven through
 the skill-creator skill. And the live behavior evals in [evals/](evals/) — `run_eval.py` spawns a real
 session against the live Job Postings API and captures the transcript and the workspace it produced, which

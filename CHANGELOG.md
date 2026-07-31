@@ -31,7 +31,7 @@ All notable changes to this project are documented here. The format is based on
   closes — a record with `close_state: blocked` and `run_health: degraded`, and a digest whose
   body says in plain words what stopped it and what fixes it. The `E-*` code catalogue that used
   to carry that wording is gone from every shipped file.
-- **A `templates/` directory in each skill is the copyable contract.** `run-record.example.json` and
+- **A `templates/` directory inside the skill that copies from it is the contract.** `run-record.example.json` and
   `jobs-event.example.json` join `config.example.yaml`, `workspace.gitignore` and
   `preferences.example.md`, so the exact shape of every workspace file is a file you can read rather
   than prose in a skill. Each one sits in the `templates/` directory of the single skill that copies

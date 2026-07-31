@@ -821,7 +821,7 @@ First, the **structural gate** (⚙️, host-independent) — every scenario is 
 cd "$JSOS" && python3 scripts/eval_harness.py --root .   # "Eval harness: eval scenarios coherent."
 ```
 
-Then ask Claude, for each skill, to **run its evals** (the `harness` in `skills/<skill>/evals/evals.json`; they use the
+Then ask Claude, for each of the five suites, to **run its evals** (the `harness` in `skills/<skill>/evals/evals.json`; they use the
 fake-agent-data shim, so zero real credits) — **51 scenarios**:
 - `evaluate-job-fit` (5) · `job-search-run` (18) · `job-preference-interview` (5) · `job-search` (14) · `job-search-agent` (9).
 

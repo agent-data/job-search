@@ -206,7 +206,7 @@ def discovery_scenarios(root="."):
 
 
 def validate_coverage(root="."):
-    """Suite-level completeness (AAS-TEST-05): every skill has a discovery scenario, and the
+    """Suite-level completeness (AAS-TEST-05): every suite loaded has a discovery scenario, and the
     discovery scenarios collectively disambiguate every overlap pair (a routing boundary is
     present in at least one direction)."""
     hits = []
@@ -215,7 +215,7 @@ def validate_coverage(root="."):
     with_disc = {name for name, _ in disc}
     for name in loaded:
         if name not in with_disc:
-            hits.append(f"{name}: no discovery scenario (AAS-TEST-05 needs one per skill)")
+            hits.append(f"{name}: no discovery scenario (AAS-TEST-05 needs one per suite)")
     # A routing boundary = an unordered {selected, not-selected} pair asserted by some scenario.
     boundaries = set()
     for name, e in disc:

@@ -35,7 +35,7 @@ NEGATED_ACTUAL_CHARGE_PREFIX = re.compile(
 
 
 def scan_bases(root):
-    """Every directory the guard walks: `examples/`, plus each skill's own templates/."""
+    """Every directory the guard walks: `examples/`, plus every `skills/*/templates/` there is."""
     bases = [os.path.join(root, d) for d in SCAN_DIRS]
     for pattern in SCAN_GLOBS:
         bases.extend(sorted(glob.glob(os.path.join(root, pattern))))
