@@ -95,25 +95,25 @@ usual cadence; their yes starts the install, as does a request that already asks
    and that environment, rather than this session — and stay with it until it lands.
 4. The canary passes when it leaves a run record whose `trigger` is `scheduled` and whose close is
    healthy — `close_state: complete` with `run_health: healthy`. On that record and not before,
-   record the installed job in the registry the runbook names, where the home view reads the
-   schedule from; setup is finished there. Say what the canary did either way: on a pass, that the
-   schedule is live and when it next runs; otherwise what stopped it, that it is not working yet,
-   and the next step, leaving the job unloaded and the registry unwritten.
+   write the job into the registry the runbook names, `installed` and `verified` both true, which is
+   where the home view reads the schedule from; setup is finished there, and the user hears that the
+   schedule is live and when it next runs. Otherwise remove the job the way the turn-off recipe
+   below does, leave the registry unwritten and `schedule.consented` as it is, and say what stopped
+   the canary and what the next step is.
 
 To turn it off, undo the install the way it was made — that cron line deleted, that launchd job
 unloaded and its file removed, or the host's own removal command — then clear the registry's
-`scheduling` marker (`installed: false`, or the object dropped) and say what was removed. A user who
-leaves it off in the first place hears that it starts whenever they ask, and that a search on demand
-is one sentence away.
+`scheduling` marker (`installed: false` or the object dropped) and say what was removed. A user who
+leaves it off hears that it starts whenever they ask, and a search on demand is one sentence away.
 
 ## Home
 
 Read, all of it local: `config.yaml` (enabled queries, `search.sources`, `schedule.frequency`,
-`schedule.consented`), the registry the runbook names, for whether the job is installed, the
-`updated_at` line of `preferences.md` (`created_at` where that is the only one), the newest
-`runs/<run_id>.json` and the digest it points at, and `jobs.jsonl` folded to one entry per `source` +
-`source_id` with the last line winning, counting a line that names another posting in `same_role_as`
-as that one role. Then render the card:
+`schedule.consented`), the registry the runbook names, for the schedule state, the `updated_at` line
+of `preferences.md` (`created_at` where that is the only one), the newest `runs/<run_id>.json` and
+the digest it points at, and `jobs.jsonl` folded to one entry per `source` + `source_id` with the
+last line winning, counting a line that names another posting in `same_role_as` as that one role.
+Then render the card:
 
 ```
 Job search — <workspace path>
@@ -132,9 +132,9 @@ What next? Just tell me:
 ```
 
 Sources are the ones `search.sources` lists, in the words a person uses for them; the schedule reads
-as its cadence while `schedule.consented` holds a date and the registry shows the job installed, and
-off otherwise; an older registry carrying `verified: false` is an install no canary proved, and
-reads as off. Last run is the newest record's `run_health`. A record whose `close_state` is
+as its cadence while `schedule.consented` holds a date and the registry's `scheduling` carries
+`installed` and `verified` both true, and off otherwise — an object missing either one is an install
+no canary proved. Last run is the newest record's `run_health`. A record whose `close_state` is
 `blocked` or `interrupted` earns a line under the card: what stopped that run, which its record and
 digest name, and the one thing that gets it going again. Before the first run, offer that search in
 place of the digest and pipeline lines. A brief older than 30 days, where runs have happened since,

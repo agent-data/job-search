@@ -54,7 +54,7 @@ path cannot be read, rather than picking a workspace it might not name. The scri
 | `runs/.started-<run_id>` — empty marker: this run is open | a run at start, deleted at close | the next run |
 | `reports/<date>-digest.md` — the digest the user reads | a run at close | the user, the home view |
 | `.gitignore` — copied from `<plugin-root>/templates/workspace.gitignore`; denies everything but itself | setup | git |
-| `~/.config/job-search/config.json` — the registry, which sits outside the workspace: `active_workspace`, plus `scheduling` holding the boolean `installed` and the strings `mechanism` (cron, launchd, or the host's own recurring-job command) and `scheduler_id` | setup, schedule changes | discovery, the home view |
+| `~/.config/job-search/config.json` — the registry, which sits outside the workspace: `active_workspace`, plus `scheduling` holding the booleans `installed` and `verified` — both true only after a canary proved the job — and the strings `mechanism` (cron, launchd, or the host's own) and `scheduler_id` | setup, schedule changes | discovery, the home view |
 
 ## One run, start to close
 

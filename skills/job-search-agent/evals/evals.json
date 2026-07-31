@@ -49,7 +49,7 @@
     {
       "id": 5,
       "scenario": "changing the cadence routes to the front door and waits for a canary",
-      "prompt": "Seed a workspace with setup-workspace.sh, a healthy run record, and a registry whose scheduling object holds installed true with a cron mechanism and a scheduler_id. The user says: 'Change my job search to run weekly instead of daily.'",
+      "prompt": "Seed a workspace with setup-workspace.sh, a healthy run record, and a registry whose scheduling object holds installed and verified both true, with a cron mechanism and a scheduler_id. The user says: 'Change my job search to run weekly instead of daily.'",
       "expectations": [
         "The change is handed to the job-search skill, which composes the cadence, installs the recurring job and canaries it, rather than being written into the registry from here",
         "The reply says the new cadence counts as running once a canary has left a run record whose trigger is scheduled and whose close is healthy",
@@ -75,7 +75,7 @@
       "expectations": [
         "The marker is read as a run that stopped before it could close, and the reply says the last run did not finish",
         "The marker is deleted and a fresh run is offered or started, following the first step of the runbook's run contract",
-        "The reply names no cause the files do not show",
+        "Every cause the reply names is visible in the workspace files it read",
         "jobs.jsonl is left byte-for-byte unchanged"
       ]
     },
