@@ -296,11 +296,56 @@ def test_non_iso_front_matter_date_fails(tmp_workspace):
     assert "INVALID preferences.md created_at-not-iso 07/30/2026" in r.stdout
 
 
-def test_full_timestamp_front_matter_date_passes(tmp_workspace):
-    body = VALID_PREFERENCES.replace("updated_at: 2026-07-30", "updated_at: 2026-07-30T18:04:00Z")
+@pytest.mark.parametrize(
+    "written",
+    [
+        "2026-07-30",
+        '"2026-07-30"',
+        "'2026-07-30'",
+        "2026-07-30   # the day I started looking",
+        "2026-07-30T18:04:00Z",
+        '"2026-07-30T18:04:00Z"',
+        "2026-07-30T18:04:00",
+        "2026-07-30T18:04:00-04:00",
+        "2026-07-30T18:04:00.512Z",
+    ],
+)
+def test_front_matter_date_spellings_pass(tmp_workspace, written):
+    """A quoted date is valid YAML and a working brief — reading it must not depend on the quotes."""
+    body = VALID_PREFERENCES.replace("created_at: 2026-07-30", "created_at: %s" % written)
     (tmp_workspace / "preferences.md").write_text(body, encoding="utf-8")
     r = run_validator(tmp_workspace)
     assert r.returncode == 0, r.stdout + r.stderr
+
+
+@pytest.mark.parametrize(
+    "written,observed",
+    [
+        ('"garbage"', "garbage"),
+        ('"07/30/2026"', "07/30/2026"),
+        ("2026-07-30T18:04:00garbage", "2026-07-30T18:04:00garbage"),
+        ('"2026-07-30T18:04:00garbage"', "2026-07-30T18:04:00garbage"),
+        ("2026-07-30-extra", "2026-07-30-extra"),
+    ],
+)
+def test_non_iso_front_matter_dates_fail_however_they_are_written(
+    tmp_workspace, written, observed
+):
+    """Stripping the quotes must not also stop the check: what is inside them still has to be a date."""
+    body = VALID_PREFERENCES.replace("created_at: 2026-07-30", "created_at: %s" % written)
+    (tmp_workspace / "preferences.md").write_text(body, encoding="utf-8")
+    r = run_validator(tmp_workspace)
+    assert r.returncode != 0
+    assert "INVALID preferences.md created_at-not-iso %s" % observed in r.stdout
+
+
+@pytest.mark.parametrize("written", ['""', "''"])
+def test_empty_front_matter_date_fails(tmp_workspace, written):
+    body = VALID_PREFERENCES.replace("created_at: 2026-07-30", "created_at: %s" % written)
+    (tmp_workspace / "preferences.md").write_text(body, encoding="utf-8")
+    r = run_validator(tmp_workspace)
+    assert r.returncode != 0
+    assert "INVALID preferences.md empty-value created_at" in r.stdout
 
 
 # ----------------------------------------------------------------------------------- run records
@@ -314,6 +359,17 @@ def test_offset_timestamp_in_run_record_fails(tmp_workspace):
     assert (
         "INVALID runs/%s.json started_at-not-utc 2026-07-16T14:30:00+00:00" % RUN_ID in r.stdout
     )
+
+
+@pytest.mark.parametrize(
+    "ts", ["2026-07-30T18:04:00garbage", "2026-07-16T14:30:00", "2026-07-16", "14:30:00Z"]
+)
+def test_run_record_timestamp_must_be_a_whole_utc_timestamp(tmp_workspace, ts):
+    """The `Z` rule is anchored at both ends — a trailing suffix does not sneak past it."""
+    write_run(tmp_workspace, run_record(started_at=ts))
+    r = run_validator(tmp_workspace)
+    assert r.returncode != 0
+    assert "INVALID runs/%s.json started_at-not-utc %s" % (RUN_ID, ts) in r.stdout
 
 
 def test_offset_completed_at_fails(tmp_workspace):

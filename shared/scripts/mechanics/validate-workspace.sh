@@ -71,14 +71,11 @@ json_str() {
   grep -o "\"$2\"[[:space:]]*:[[:space:]]*\"[^\"]*\"" "$1" 2>/dev/null | head -1 | cut -d'"' -f4
 }
 
-# ------------------------------------------------------------------------------------ config.yaml
-# config.yaml is written by setup and hand-edited by the user, and it stays simple enough to read
-# line by line: top-level keys at column 0, their settings indented under them. Required keys are
-# version, queries, search.sources, and schedule. Any other key a workspace carries is left alone.
-if [ ! -f "$WS/config.yaml" ]; then
-  invalid config.yaml missing-file
-else
-  awk '
+# One awk function, prepended to both file checks below, that reads a YAML scalar as written. Both
+# config.yaml values and preferences.md front-matter values go through it, so `2026-07-30` and
+# `"2026-07-30"` are read the same way. Keeping it in one place is the point: when only the config
+# check stripped quotes, a quoted date in the brief failed validation on a workspace that worked.
+AWK_SCALAR='
     function clean(v,   q, i) {
       # A quoted value is exactly what is between the quotes. An unquoted one runs up to a trailing
       # comment, and only a # that follows a space starts one.
@@ -93,6 +90,16 @@ else
       sub(/[ \t]+$/, "", v)
       return v
     }
+'
+
+# ------------------------------------------------------------------------------------ config.yaml
+# config.yaml is written by setup and hand-edited by the user, and it stays simple enough to read
+# line by line: top-level keys at column 0, their settings indented under them. Required keys are
+# version, queries, search.sources, and schedule. Any other key a workspace carries is left alone.
+if [ ! -f "$WS/config.yaml" ]; then
+  invalid config.yaml missing-file
+else
+  awk "$AWK_SCALAR"'
     {
       line = $0
       sub(/\r$/, "", line)
@@ -134,11 +141,14 @@ fi
 if [ ! -f "$WS/preferences.md" ]; then
   invalid preferences.md missing-file
 else
-  awk '
-    function iso(d) {
-      if (d ~ /^[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]$/) return 1
-      if (d ~ /^[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]/) return 1
-      return 0
+  awk "$AWK_SCALAR"'
+    function iso(d,   date, time) {
+      # A plain date, or a date and time. Both patterns are anchored at both ends, so a date with
+      # anything trailing it — `2026-07-30T18:04:00nonsense` — is not an ISO date.
+      date = "^[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]"
+      if (d ~ date "$") return 1
+      time = "T[0-9][0-9]:[0-9][0-9]:[0-9][0-9](\\.[0-9]+)?(Z|[+-][0-9][0-9]:[0-9][0-9])?$"
+      return d ~ (date time)
     }
     { line = $0; sub(/\r$/, "", line) }
     NR == 1 { if (line != "---") { no_front_matter = 1; exit } ; next }
@@ -149,16 +159,18 @@ else
       sub(/[ \t]*:.*$/, "", key)
       value = line
       sub(/^[A-Za-z_][A-Za-z0-9_-]*[ \t]*:[ \t]*/, "", value)
-      sub(/[ \t]+$/, "", value)
+      value = clean(value)
       if (key == "created_at") { created = value; has_created = 1 }
       if (key == "updated_at") { updated = value; has_updated = 1 }
     }
     END {
       if (NR == 0 || no_front_matter) { print "INVALID preferences.md front-matter"; exit }
       if (!closed) { print "INVALID preferences.md front-matter-unterminated"; exit }
-      if (!has_created) print "INVALID preferences.md missing-key created_at"
+      if (!has_created)       print "INVALID preferences.md missing-key created_at"
+      else if (created == "") print "INVALID preferences.md empty-value created_at"
       else if (!iso(created)) print "INVALID preferences.md created_at-not-iso " created
-      if (!has_updated) print "INVALID preferences.md missing-key updated_at"
+      if (!has_updated)       print "INVALID preferences.md missing-key updated_at"
+      else if (updated == "") print "INVALID preferences.md empty-value updated_at"
       else if (!iso(updated)) print "INVALID preferences.md updated_at-not-iso " updated
     }' "$WS/preferences.md" >> "$findings"
 fi
