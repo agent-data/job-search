@@ -21,11 +21,15 @@ it reports; a few checks are pure shell or visual.
 
 The terminal state (per the AAS-T-10 ruling) is **a structural gate + automated lanes + a shrinking, honestly-labeled manual residual** — not a manual cross-host ritual. What is now **automated** (⚙️, runs in `pytest` / a CLI, host-independent — no manual driving):
 
-- **Scripted mechanics** — `tests/test_mechanics_scripts.py`: the deterministic state operations (jobs.jsonl append/fold, schedule-line composition, workspace discovery) that the skills call out to, unit-tested directly.
+- **Scripted mechanics** — `tests/test_mechanics_scripts.py`: the deterministic state operations the skills call out to — dedup, the jobs.jsonl event-line append, schedule-line composition, workspace discovery, and the local support summary — each driven through `sh` (and `dash` where present) against a temp fixture.
+- **Workspace validator** — `tests/test_validate_workspace.py`: `shared/scripts/mechanics/validate-workspace.sh` run against workspaces built per case. It checks config.yaml's required keys, `---` front matter with ISO `created_at`/`updated_at` in preferences.md, the run-record shape and UTC `Z` timestamps, and — with `--post-close` — that no started-marker or scratch directory survived the run. These file rules used to live only as prose in the skills; the script is now what enforces them.
+- **Eval-case lint** — `tests/test_eval_cases.py`: every row in `evals/behaviors.md` names a case file that exists in `evals/cases/`, every case file carries the five header fields `evals/run_eval.py` reads (`behaviors`, `workspace`, `timeout_s`, `models`, `prompt`), and each case's `behaviors:` list matches the rows that name it. This checks that the eval config is coherent; it does not run an eval.
 - **Hardened skill evals** — `python3 scripts/eval_harness.py --root .` validates every `skills/*/evals/evals.json` for structural coherence (contiguous ids, well-formed scenarios, a **discovery** scenario per skill for the four overlap pairs, **stochastic** scenarios carrying `reps ≥ 5` + a **no-guidance control** arm, and — on milestone/liveness scenarios — a **fixed-time fixture** (`fixed_time`: a deterministic reference clock with a valid ISO `now` and a `checks` subset of `milestone`/`liveness`) so those derivations never read the wall clock) and rejects the pinned pack-authored `gpt-5*` literal regression family. Legacy version-1 selectors may resolve through host tier roles; version-2 test and runtime setup injects an exact host-resolved identifier. Pack-authored fixtures and prose never hard-code that identifier. `tests/test_eval_harness.py` unit-tests the rep-aggregation (pass-rate + variance), the control-delta, the fixed-time-fixture validation, and the **unique run marker** enforcement — the off-CI artifact check (`scripts/eval_harness.py --check-artifacts`) accepts a per-run `run_marker` and, for any `run_marked` assertion, requires the artifact to carry it, so a stale artifact left in a reused workspace can never create a false pass.
 - **Release integrity** — `scripts/check_release_integrity.py`: version-sync across the 7 manifests (six JSON plus the Hermes `plugin.yaml`).
 
 Verifying a host-specific action such as scheduling is now a **runtime config-time canary** check, replacing the deleted per-host **structural adapter validation**.
+
+How the skills *behave* is graded by the live behavior evals in `evals/` (§ Behavior evals), which are a **local release gate — CI never runs them**: each one spawns a real `claude -p` session against the live Job Postings API, which needs an API key and costs money. No test asserts substrings of documentation files; the suites that used to do that were retired on 2026-07-30 in favor of the evals plus `validate-workspace.sh`.
 
 What stays a **labeled TRANSITIONAL residual** (👤/🤖, driven by hand): the **behavioral cross-host matrix** — actually running a skill end-to-end on each of the eight hosts that are **not installable on the CI runner** (Codex/Cursor/opencode/Gemini/Copilot/Droid/Pi/Hermes Agent), and the **N ≥ 5 stochastic eval reps** (the discovery/verdict/injection/merge scenarios run against the shim to record real pass-rate + variance + the control delta). These are the **off-CI live-harness step** — expected, not a gap: CI proves the scenarios are *well-formed*; the behavioral reps prove they *pass*, and shrink as hosts become installable. A green structural gate must never be read as a passed behavioral matrix.
 
@@ -843,6 +847,12 @@ The 2026-07-30 skill overhaul (`docs/superpowers/specs/2026-07-30-skill-overhaul
 tests kept behaviors with **live behavioral eval runs** graded on transcripts and captured
 workspaces — never substring assertions against documentation. The behavior → eval matrix is
 `evals/behaviors.md` (rows B1–B14); the six cases live in `evals/cases/`.
+
+**These are the release gate, and you run them here, not in CI.** Every case spawns a real
+`claude -p` session against the live API, so a run needs your API key and spends metered calls;
+CI checks only that the case config is coherent (`tests/test_eval_cases.py`). Run the full
+matrix — six cases × two models — before tagging a release, and grade every row in
+`evals/behaviors.md`.
 
 Run one case (each case runs on **both** models):
 

@@ -55,11 +55,11 @@ now carries a runtime contract and CI-executable coverage: the schedule-health d
 expected fire instants **in the configured timezone** (DST-aware via stdlib `zoneinfo`), and
 [`tests/test_schedule_health.py`](../../tests/test_schedule_health.py) pins the 30-minute grace boundary, the
 one-vs-two missed-fire thresholds, and a daily fire across a daylight-saving transition against fixed clocks —
-so it is no longer informational-only. Interrupted-run recovery (a hard-kill mid-run) is likewise contracted
-and tested: the recovery map in
-[`../../shared/references/run-lifecycle.md`](../../shared/references/run-lifecycle.md)
-(`open_before_selection_settled` → close `interrupted` and restart cleanly) is exercised by
-`tests/test_run_lifecycle_pressure.py`.
+so it is no longer informational-only. Interrupted-run recovery (a hard-kill mid-run) was contracted by the
+recovery map in [`../../shared/references/run-lifecycle.md`](../../shared/references/run-lifecycle.md)
+(`open_before_selection_settled` → close `interrupted` and restart cleanly) and exercised by
+`tests/test_run_lifecycle_pressure.py` until 2026-07-30, when that suite was retired; the same recovery
+behavior is now graded end to end by the `kill-midrun` behavior eval (row B9 in `evals/behaviors.md`).
 **What (still open):** `notify.desktop_notify_on_block` (blocked-run desktop alert) and the CONCURRENCY edge
 (two overlapping runs racing the same workspace) remain untested.
 **Why:** Both are environment-dependent edges; `jobs.jsonl` is append-only so corruption risk is low.
@@ -70,8 +70,8 @@ because the append-only `jobs.jsonl` contract
 **How to apply:** Add a targeted test for the desktop-notify path and an overlapping-run guard when those
 surfaces are exercised in the field.
 **Linked tests:** resolved portions — [`tests/test_schedule_health.py`](../../tests/test_schedule_health.py)
-(timezone/DST + grace) and `tests/test_run_lifecycle_pressure.py` (interrupted recovery); none yet for the two
-open surfaces.
+(timezone/DST + grace) and the `kill-midrun` behavior eval, row B9 in `evals/behaviors.md` (interrupted
+recovery); none yet for the two open surfaces.
 
 ## P3 — schedule-line accepts an out-of-range --time (`TODO-TIME-RANGE`) — ✅ resolved (obsolete)
 **Resolved 2026-06-08 by removal.** The cron/launchd generators no longer exist — scheduling is native `/loop` (see [`../../shared/references/internals.md`](../../shared/references/internals.md)). The `/loop` line is composed from `schedule.frequency` alone (no `--time`), so there is no time value to range-check. No action needed.

@@ -1,17 +1,19 @@
 """Deterministic, fixed-clock pressure for T7.1: derive ongoing schedule health from local evidence.
 
-The single-source contract lives in shared/references/internals.md (§ Schedule health) with the run-record
-reader selection in shared/references/conventions.md and the doctrine one hop away in
-skills/job-search/references/home.md and skills/job-search-agent/references/scheduling-and-consent.md. The
-behavioural evals live in the two skills' evals.json (coverage_kind executable_fixture).
+The eight-state precedence table lives in shared/references/internals.md (§ Schedule health) as a marked
+contract block; the behavioural evals live in the two skills' evals.json (coverage_kind executable_fixture).
 
 This module does two jobs, mirroring tests/test_scheduling_eligibility.py:
 
-  (1) it PINS the precedence + liveness contract text structurally (the RED->GREEN driver for T7.1), and
+  (1) it parses the marked precedence table in internals.md and compares its tokens and ranks against the
+      reference implementation below, and
   (2) it is the EXECUTABLE REFERENCE for the deterministic precedence + 30-minute grace + one-vs-two
       missed-fire thresholds + the DST-aware next/previous-fire math, computed against a FAKE fixed clock
       (never wall-clock), so the capability is real, not merely asserted — the eval_harness.aggregate_reps
       precedent.
+
+How the surrounding prose in internals.md, home.md, and scheduling-and-consent.md reads is graded by the
+behavior evals in evals/ — never by substring assertions here.
 
 No live effects, no real scheduler, no network, no model, no agent-data account, and NOTHING metered: the
 health check is a local, unmetered read over the registry marker, the scheduler's own registration, and the
@@ -27,9 +29,6 @@ import pytest
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 INTERNALS = ROOT / "shared" / "references" / "internals.md"
-CONVENTIONS = ROOT / "shared" / "references" / "conventions.md"
-HOME = ROOT / "skills" / "job-search" / "references" / "home.md"
-SCHEDULING = ROOT / "skills" / "job-search-agent" / "references" / "scheduling-and-consent.md"
 
 # The canonical 8-state precedence, highest priority first. The reference implementation below emits
 # exactly these tokens; the contract table in internals.md must enumerate the same tokens in this order.
@@ -331,54 +330,6 @@ def test_internals_owns_the_eight_state_precedence_in_order():
     assert [tok for _, tok in rows] == list(PRECEDENCE), (
         "internals.md must enumerate the eight schedule-health states in the documented precedence order")
     assert [rank for rank, _ in rows] == [str(i) for i in range(1, 9)], "ranks must be 1..8 in order"
-
-
-def test_internals_documents_grace_and_missed_fire_thresholds():
-    text = INTERNALS.read_text(encoding="utf-8").lower()
-    assert "schedule health" in text
-    assert "30-minute" in text or "30 minute" in text, "the documented 30-minute grace period must appear"
-    assert "grace" in text
-    # the one-vs-two missed-fire thresholds and their labels
-    assert "not recently observed" in text and "needs attention" in text
-    # the three compared sources
-    assert "scheduled-attributable run" in text
-    assert "registration" in text and "registry" in text
-    # DST-aware and unmetered
-    assert "timezone" in text
-    assert "unmetered" in text or "local and unmetered" in text or "local, unmetered" in text
-
-
-def test_internals_scopes_liveness_to_verified_and_excludes_the_canary():
-    text = INTERNALS.read_text(encoding="utf-8").lower()
-    assert "canary" in text and "ordinary scheduled fire" in text
-    assert "verified" in text
-
-
-def test_conventions_defines_latest_scheduled_attributable_run_excluding_canary():
-    text = CONVENTIONS.read_text(encoding="utf-8")
-    low = text.lower()
-    assert "latest scheduled-attributable run" in low
-    assert "canary_run_id" in text  # excluded because a canary is not an ordinary scheduled fire
-    assert "internals.md" in text   # one hop to the precedence/liveness home
-
-
-def test_home_renders_derived_schedule_health_one_hop():
-    text = HOME.read_text(encoding="utf-8")
-    low = text.lower()
-    assert "schedule health" in low
-    assert "internals.md" in text  # points one hop; never restates the precedence
-    # the derived anomaly states are surfaced in the home status line
-    for token in ("not recently observed", "needs attention", "registration"):
-        assert token in low, f"home.md status line must surface the {token!r} schedule-health state"
-
-
-def test_scheduling_doctrine_names_local_unmetered_health_one_hop():
-    text = SCHEDULING.read_text(encoding="utf-8")
-    low = text.lower()
-    assert "schedule health" in low or "scheduler liveness" in low
-    assert "unmetered" in low
-    assert "internals.md" in text  # one hop to the single home
-    assert "canary" in low and "ordinary scheduled fire" in low
 
 
 # ===========================================================================

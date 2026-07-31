@@ -16,10 +16,6 @@ BINDING_PATH = pathlib.Path("runs/detail-model-binding.json")
 OLD_BINDING_ID = "binding-123e4567-e89b-42d3-a456-426614174000"
 INTERNALS = ROOT / "shared" / "references" / "internals.md"
 ERRORS = ROOT / "shared" / "references" / "errors.md"
-AGENT = ROOT / "skills" / "job-search-agent" / "SKILL.md"
-CUSTOMIZATION = ROOT / "skills" / "job-search-agent" / "references" / "customization.md"
-SCHEDULING = ROOT / "skills" / "job-search-agent" / "references" / "scheduling-and-consent.md"
-RUNNER = ROOT / "skills" / "job-search-run" / "SKILL.md"
 
 
 def _marked_table(path, marker):
@@ -2196,27 +2192,6 @@ def test_model_repair_user_rendering_is_complete_and_conversational():
         "raw_internal_class": ("never_show",),
         "invented_e_code": ("never_show",),
     }
-    rendered = re.sub(r"\s+", " ", ERRORS.read_text(encoding="utf-8").lower())
-    assert "say “repair the job-search models”" in rendered
-    assert "repair setup, activation, or canary failed" in rendered
-
-
-def test_agent_and_runner_skills_route_through_one_canonical_repair_flow():
-    agent = AGENT.read_text(encoding="utf-8").lower()
-    scheduling = SCHEDULING.read_text(encoding="utf-8").lower()
-    runner = RUNNER.read_text(encoding="utf-8").lower()
-    assert "exact-model repair" in agent
-    assert "one scoped confirmation" in scheduling
-    assert "exact-model-repair-confirmation" in scheduling
-    assert "disabled and unverified" in scheduling
-    assert "only a green real scheduled-path canary" in scheduling
-    assert "fresh calls-first context" in scheduling
-    assert "model-repair-rendering" in scheduling
-    assert "headless" in runner
-    assert "exact-model repair" in runner
-    assert "never substitute" in runner
-    assert "model-repair-rendering" in runner
-
 
 def test_exact_model_repair_eval_matrix_is_structural_and_executable():
     home = _evals("job-search")

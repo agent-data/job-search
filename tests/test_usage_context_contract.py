@@ -1,4 +1,10 @@
-"""Structural contract tests for calls-first agent-data usage decisions."""
+"""Structural contract tests for calls-first agent-data usage decisions.
+
+Everything here reads a machine-readable surface: a `<!-- namespace:name -->` marked block in a
+shared reference, a config template or fenced config example, a shell fixture, or an entry in a
+skill's evals.json. How the surrounding guidance prose reads is graded by the behavior evals in
+evals/ — never by substring assertions here.
+"""
 
 from pathlib import Path
 import json
@@ -9,20 +15,13 @@ ROOT = Path(__file__).resolve().parents[1]
 SHARED = ROOT / "shared" / "references"
 INTERNALS = SHARED / "internals.md"
 AGENT_DATA = SHARED / "agent-data-contract.md"
-VOICE = SHARED / "voice.md"
 CONVENTIONS = SHARED / "conventions.md"
 ERRORS = SHARED / "errors.md"
 PARALLELISM = SHARED / "parallelism.md"
 CONFIG_TEMPLATE = ROOT / "templates" / "config.example.yaml"
-CORE_BELIEFS = ROOT / "docs" / "design-docs" / "core-beliefs.md"
-ONBOARDING = ROOT / "skills" / "job-search" / "references" / "onboarding.md"
 HOME = ROOT / "skills" / "job-search" / "references" / "home.md"
 CUSTOMIZATION = ROOT / "skills" / "job-search-agent" / "references" / "customization.md"
-RUNNER = ROOT / "skills" / "job-search-run" / "SKILL.md"
-OPERATOR = ROOT / "skills" / "job-search-agent" / "SKILL.md"
 RUNNER_SETUP = ROOT / "skills" / "job-search-run" / "evals" / "files" / "setup-workspace.sh"
-TESTING_DOC = ROOT / "TESTING.md"
-EVAL_HARNESS = ROOT / "scripts" / "eval_harness.py"
 
 APPROVED_CONNECTED_BASELINE = (
     "Agent-data offers a 100-call monthly free tier. This search starts with 4 calls; "
@@ -373,23 +372,9 @@ def _forbidden_monetary_config_key_hits(root):
     return hits
 
 
-def _normalized_prose(path):
-    return " ".join(path.read_text(encoding="utf-8").split())
-
-
 def _eval(skill):
     path = ROOT / "skills" / skill / "evals" / "evals.json"
     return json.loads(path.read_text(encoding="utf-8"))
-
-
-def _runner_detail_section():
-    text = RUNNER.read_text(encoding="utf-8")
-    match = re.search(
-        r"(?ms)^4\. \*\*Read the details.*?(?=^5\. \*\*Consolidate)",
-        text,
-    )
-    assert match, "job-search-run is missing its posting-detail section"
-    return match.group(0)
 
 
 def test_config_v2_requires_one_detail_model_and_isolates_legacy_selectors():
@@ -432,7 +417,6 @@ def test_canonical_v2_config_example_also_leaves_live_model_insertion_to_setup()
     example = match.group("body")
     assert re.search(r"(?m)^version:\s*2\s*$", example)
     assert not re.search(r"(?m)^\s*detail_model\s*:", example)
-    assert "setup inserts" in example.lower()
 
 
 def test_exact_model_ownership_and_origin_enums_are_pinned_to_their_canonical_owners():
@@ -478,36 +462,13 @@ def test_exact_model_ownership_and_origin_enums_are_pinned_to_their_canonical_ow
     )
 
 
-def test_runner_preflight_uses_only_current_active_binding_provenance_and_v1_fails_closed():
-    runner = _normalized_prose(RUNNER).lower()
-    assert "runs/detail-model-binding.json" in runner
-    assert "active workspace" in runner
-    assert "exactly equals" in runner
-    assert "detail_model_binding_id" in runner
-    assert "never search prior run records" in runner
-    assert "missing, malformed, or mismatched" in runner
-    assert "interactive model repair" in runner
-    for condition in (
-        "missing selector",
-        "invalid selector",
-        "tier roster",
-        "tier resolution",
-        "exact primary model is unknown",
-        "unsupported",
-        "refused",
-    ):
-        assert condition in runner
-    assert "only after the exact resolved model has been observed executable" in runner
-
+def test_errors_owns_the_model_binding_block_contract():
     assert _code_table(
         ERRORS.read_text(encoding="utf-8"),
         "exact-model-contract",
         "model-binding-block",
         2,
     ) == {key: value for key, value in MODEL_BINDING_BLOCK.items()}
-    assert "detail_model_binding_unavailable" in runner
-    assert "blocked run record" in runner
-    assert "blocked digest" in runner
 
 
 def test_binding_sidecar_cannot_be_misread_as_a_run_record():
@@ -522,20 +483,7 @@ def test_binding_sidecar_cannot_be_misread_as_a_run_record():
         )
 
 
-def test_template_to_onboarding_writes_a_bound_runnable_v2_workspace_before_running():
-    onboarding = ONBOARDING.read_text(encoding="utf-8")
-    normalized = " ".join(onboarding.split()).lower()
-    assert "templates/config.example.yaml" in onboarding
-    assert "version: 2" in onboarding
-    assert "search.detail_model" in onboarding
-    assert "runs/detail-model-binding.json" in onboarding
-    assert "atomically" in normalized
-    assert "before the first live run" in normalized
-    assert "do not write" in normalized
-    assert "invalid workspace" in normalized
-    assert "keep `version: 1`" not in onboarding
-    assert "`balanced` tier" not in onboarding
-
+def test_onboarding_eval_expects_a_bound_runnable_v2_workspace_before_running():
     happy = next(case for case in _eval("job-search")["evals"] if case["id"] == 1)
     effects = " ".join(happy["expectations"]).lower()
     assert "version: 2" in effects
@@ -544,59 +492,6 @@ def test_template_to_onboarding_writes_a_bound_runnable_v2_workspace_before_runn
     assert "before the first live run" in effects
     assert "primary_model" in effects
     assert "session_inheritance" in effects
-
-
-def test_shipped_v2_surfaces_use_exact_ids_and_preserve_the_current_major():
-    core_text = CORE_BELIEFS.read_text(encoding="utf-8")
-    beliefs = " ".join(
-        _marked_block(
-            core_text,
-            "exact-model-contract",
-            "parallel-belief",
-        ).split()
-    ).lower()
-    assert "setup persists" in beliefs
-    assert "exact `search.detail_model`" in beliefs
-    assert "runtime" in beliefs
-    assert "tier token" not in beliefs
-    assert "self-selection from its own roster" not in beliefs
-    failure_belief = re.search(r"(?ms)^## 4\. No silent failures.*?(?=^## 5\.)", core_text)
-    assert failure_belief
-    failure_text = failure_belief.group(0).lower()
-    assert "internally named" in failure_text
-    assert "bounded non-user-facing class" in failure_text
-    assert "every blocked path is a named `e-*`" not in failure_text
-
-    operator = OPERATOR.read_text(encoding="utf-8")
-    assert "Always preserve `version: 1`" not in operator
-    assert "New workspaces use config `version: 2`" in operator
-
-    home = HOME.read_text(encoding="utf-8")
-    quick_actions = re.search(
-        r"(?ms)^## Quick actions.*?(?=^### Review-depth changes)", home
-    )
-    assert quick_actions
-    quick = quick_actions.group(0).lower()
-    assert "preserve the existing config major" in quick
-    assert "`search.detail_model`" in quick
-    assert "exact available model identifier" in quick
-    assert "runs/detail-model-binding.json" in quick
-    assert "model tier" not in quick
-    assert "detail-model tiers" not in quick
-
-    customization = CUSTOMIZATION.read_text(encoding="utf-8")
-    detail = re.search(
-        r"(?ms)^\*\*Detail-read model.*?(?=^---$)", customization
-    )
-    assert detail
-    detail_text = " ".join(detail.group(0).lower().split())
-    assert "`haiku`, `sonnet`, `opus`, or an exact model id" in detail_text
-    assert "tier aliases are valid run-record values" in detail_text
-    assert "setup" in detail_text
-    assert "explicit conversational user selection" in detail_text
-    assert "binds the tier" not in detail_text
-    assert "detail_model: fast" not in detail_text
-    assert "detail_model: high" not in detail_text
 
 
 def test_runner_eval_fixture_is_valid_and_eval_39_structurally_pins_fail_closed_matrix():
@@ -629,47 +524,12 @@ def test_runner_eval_fixture_is_valid_and_eval_39_structurally_pins_fail_closed_
         assert branch in scenario
 
 
-def test_review_depth_changes_pin_write_effects_for_v1_v2_and_one_off():
-    text = HOME.read_text(encoding="utf-8")
-    match = re.search(r"(?ms)^### Review-depth changes.*?(?=^### Usage help)", text)
-    assert match, "home.md is missing the complete Review-depth changes section"
-    section = " ".join(match.group(0).lower().split())
-
-    assert "saved version-2 depth-only edit" in section
-    assert "preserve the existing config major" in section
-    assert "valid `runs/detail-model-binding.json` byte-for-byte unchanged" in section
-    assert "saved version-1 depth-only edit" in section
-    assert "preserve version 1" in section
-    assert "write no sidecar" in section
-    assert "one-off" in section
-    assert "write neither config nor sidecar" in section
-    assert "do not attach a recurring multiplier" in section
-    assert "run it once without a second confirmation question" in section
-    assert "then give the canonical saved-cadence comparison as context" not in section
-    assert "apply it immediately without confirmation, preserve `version: 1`" not in section
-
-
 def test_parallel_choice_is_folded_into_initial_model_binding_not_a_later_refresh():
     evals = _eval("job-search")["evals"]
     parallel = next(case for case in evals if case["id"] == 8)
     contract = " ".join(" ".join(parallel["expectations"]).lower().split())
     assert "as part of initial setup finalization" in contract
     assert "atomically writes the matching current runs/detail-model-binding.json" in contract
-
-    onboarding = _normalized_prose(ONBOARDING).lower()
-    assert "later model-binding writes replace the whole sidecar" in onboarding
-    assert "later supported config, migration, and repair writes" not in onboarding
-
-
-def test_exact_model_test_guidance_distinguishes_legacy_selectors_from_v2_runtime_ids():
-    testing = _normalized_prose(TESTING_DOC).lower()
-    harness = _normalized_prose(EVAL_HARNESS).lower()
-    for text in (testing, harness):
-        assert "legacy version-1 selectors" in text
-        assert "host tier roles" in text
-        assert "version-2" in text
-        assert "exact host-resolved" in text
-        assert "pack-authored `gpt-5*` literal regression" in text
 
 
 def test_model_setup_is_one_time_and_unknown_primary_blocks_verified_scheduling():
@@ -685,25 +545,6 @@ def test_headless_runner_uses_the_one_line_exact_model_authority_without_reselec
         parallelism, "exact-model-contract", "runtime-detail-dispatch"
     ).strip()
     assert authority == RUNTIME_DETAIL_MODEL_AUTHORITY
-
-    runner = " ".join(_runner_detail_section().lower().split())
-    assert "../../shared/references/parallelism.md" in runner
-    assert "version 2" in runner
-    assert "version 1" in runner
-    assert "not an exact model identifier" in runner
-    assert "canonical version-1 resolver" in runner
-    assert "version-2 sequential fallback must execute the exact configured model" in runner
-    assert "version-1 sequential fallback must execute the exact resolved model" in runner
-    for forbidden in (
-        "least powerful model",
-        "bind the tier",
-        "portable tier token",
-        "own roster",
-        "scaled up for",
-    ):
-        assert forbidden not in runner, (
-            f"the headless runtime must not choose or tier-resolve the detail model: {forbidden!r}"
-        )
 
 
 def test_usage_decision_table_covers_exact_action_families_and_rules():
@@ -721,113 +562,18 @@ def test_free_tier_fact_is_exact_dated_and_loaded_from_its_canonical_owner():
     contract = AGENT_DATA.read_text(encoding="utf-8")
     pricing = _code_table(contract, "agent-data-metering-contract", "pricing", 3)
     assert pricing["free_tier"] == ("100_calls_per_month", "no_charge")
-    assert re.search(r"These values were verified on \d{4}-\d{2}-\d{2}\.", contract)
 
 
-def test_usage_decision_contract_loads_but_does_not_duplicate_the_free_tier_fact():
-    internals = INTERNALS.read_text(encoding="utf-8")
-    assert "(agent-data-contract.md#pricing-and-metering)" in internals
-    assert not re.search(r"(?i)monthly[ -]free[- ]tier|100[- _]calls?(?:[- _]|/)+per[- _]month", internals)
-    for literal in ("$0.008", "$0.0075", "$0.0067", "$0.005"):
-        for path in SHARED.glob("*.md"):
-            if path != AGENT_DATA:
-                assert literal not in path.read_text(encoding="utf-8"), (
-                    f"volatile dollar fact {literal!r} duplicated in {path.relative_to(ROOT)}"
-                )
-
-    for path in SHARED.glob("*.md"):
-        if path != AGENT_DATA:
-            text = path.read_text(encoding="utf-8")
-            assert "100_calls_per_month" not in text
-            assert not re.search(r"(?i)100[- ]calls?\s*(?:/|per)\s*month", text)
-
-
-def test_usage_context_is_single_homed_and_every_skill_reaches_it_one_hop():
+def test_usage_context_contract_block_is_single_homed():
     canonical_marker = "<!-- usage-context-contract:action-decisions -->"
     for path in SHARED.glob("*.md"):
         text = path.read_text(encoding="utf-8")
         if path == INTERNALS:
             assert canonical_marker in text
         else:
-            assert canonical_marker not in text
-
-    for name in ("agent-data-contract.md", "conventions.md", "errors.md"):
-        text = (SHARED / name).read_text(encoding="utf-8")
-        assert "(internals.md#agent-data-usage-decisions)" in text, (
-            f"{name} must point to the canonical usage decision table"
-        )
-
-    skills = sorted((ROOT / "skills").glob("*/SKILL.md"))
-    assert len(skills) == 5
-    for skill in skills:
-        assert "../../shared/references/internals.md" in skill.read_text(encoding="utf-8"), (
-            f"{skill.relative_to(ROOT)} needs a one-hop pointer to internals.md"
-        )
-
-
-def test_voice_single_homes_the_two_approved_user_facing_renderings():
-    voice = _normalized_prose(VOICE)
-    assert APPROVED_CONNECTED_BASELINE in voice
-    assert APPROVED_PREINSTALL in voice
-
-    shipped = [*SHARED.glob("*.md"), *ROOT.glob("skills/**/*.md")]
-    for sentence in (APPROVED_CONNECTED_BASELINE, APPROVED_PREINSTALL):
-        owners = [path.relative_to(ROOT).as_posix() for path in shipped
-                  if sentence in _normalized_prose(path)]
-        assert owners == ["shared/references/voice.md"], (
-            f"approved rendering must stay single-homed in voice.md: {sentence!r} -> {owners}"
-        )
-
-
-def test_t2_2_consumers_point_to_the_canonical_decision_table_and_rendering_owner():
-    consumers = [ONBOARDING, CUSTOMIZATION, RUNNER, OPERATOR]
-    for path in consumers:
-        text = path.read_text(encoding="utf-8")
-        assert "internals.md#agent-data-usage-decisions" in text, (
-            f"{path.relative_to(ROOT)} must point to the T2.1 action table, not restate it"
-        )
-        assert "voice.md" in text, (
-            f"{path.relative_to(ROOT)} must consume the shared user-facing rendering guidance"
-        )
-
-
-def test_t2_2_guidance_covers_preview_consent_quiet_and_actual_attempt_effects():
-    voice = VOICE.read_text(encoding="utf-8").lower()
-    onboarding = ONBOARDING.read_text(encoding="utf-8").lower()
-    customization = CUSTOMIZATION.read_text(encoding="utf-8").lower()
-    operator = OPERATOR.read_text(encoding="utf-8").lower()
-    runner = RUNNER.read_text(encoding="utf-8").lower()
-
-    for slot in ("before:", "after:", "variable work:", "confirm:"):
-        assert slot in voice, f"persistent-change rendering is missing {slot!r}"
-    assert "one or two sentences" in voice and "calls-only" in voice
-    assert "before the first metered" in onboarding and "scoped consent" in onboarding
-    assert "neutral or decreasing" in customization and "quiet" in customization
-    assert "scheduled/headless" in customization and "durable" in customization
-    assert "metered canary" in operator and "fresh scoped confirmation" in operator
-    assert "producer-authoritative" in runner and "completed attempt" in runner
-
-
-def test_operator_states_the_optional_equivalent_invariant_unconditionally():
-    operator = _normalized_prose(OPERATOR).lower()
-    assert (
-        "an optional dollar equivalent follows calls, is labeled a pay-as-you-go equivalent, "
-        "and is never described as an actual charge"
-    ) in operator
-
-
-def test_touched_guidance_has_no_equivalent_to_actual_charge_escape_hatch():
-    touched_guidance = [VOICE, ONBOARDING, CUSTOMIZATION, RUNNER, OPERATOR]
-    violations = []
-    for path in touched_guidance:
-        text = _normalized_prose(path).lower()
-        for pattern in FORBIDDEN_EQUIVALENT_CHARGE_EXCEPTIONS:
-            if pattern.search(text):
-                violations.append((path.relative_to(ROOT).as_posix(), pattern.pattern))
-    assert not violations, (
-        "computed pay-as-you-go equivalents can become actual charges when account data changes: "
-        f"{violations}"
-    )
+            assert canonical_marker not in text, (
+                f"{path.relative_to(ROOT)} duplicates the canonical usage-decision contract block"
+            )
 
 
 def test_behavioral_evals_keep_computed_equivalents_unconditionally_non_charge():

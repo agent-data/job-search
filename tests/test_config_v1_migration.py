@@ -14,16 +14,6 @@ FAKE_HOST = ROOT / "tests" / "fake-host-capabilities"
 CONVENTIONS = ROOT / "shared" / "references" / "conventions.md"
 INTERNALS = ROOT / "shared" / "references" / "internals.md"
 ERRORS = ROOT / "shared" / "references" / "errors.md"
-HOME = ROOT / "skills" / "job-search" / "references" / "home.md"
-CUSTOMIZATION = ROOT / "skills" / "job-search-agent" / "references" / "customization.md"
-RUNNER = ROOT / "skills" / "job-search-run" / "SKILL.md"
-PLAN = (
-    ROOT
-    / "docs"
-    / "exec-plans"
-    / "active"
-    / "2026-07-16-best-in-class-cost-aware-job-search-dx.md"
-)
 LIFECYCLE_APPEND = ROOT / "shared" / "scripts" / "mechanics" / "lifecycle-append.sh"
 RUN_ID = "2026-07-16T14-30-00Z"
 RUN_STARTED = "2026-07-16T10:30:00-04:00"
@@ -1013,39 +1003,6 @@ def test_canonical_contract_pins_passive_compatibility_transaction_and_cutoff():
     assert migration_error["user_rendering"] == (
         "observed_cause_preserved_work_next_step_exact_fix",
     )
-
-    task_match = re.search(
-        r"- \[[ x]\] \*\*T3\.2 \[BLOCKS, L\] Add safe version-1 compatibility "
-        r"and staged migration\.\*\*(.*?)(?=- \[[ x]\] \*\*T3\.3)",
-        PLAN.read_text(encoding="utf-8"),
-        re.DOTALL,
-    )
-    assert task_match, "missing T3.2 plan section"
-    task = task_match.group(1)
-    assert "- shared/references/build-stamp.md" in task
-
-
-def test_skill_surfaces_delegate_to_canonical_migration_contract_without_code_leaks():
-    home = HOME.read_text(encoding="utf-8").lower()
-    assert "passive version-1 home read" in home
-    assert "byte-for-byte" in home
-    assert "do not create `runs/detail-model-binding.json`" in home
-
-    customization = " ".join(
-        CUSTOMIZATION.read_text(encoding="utf-8").lower().split()
-    )
-    assert "version-1 staged migration" in customization
-    assert "single confirmation" in customization
-    assert "separate migration prompt" in customization
-
-    runner = " ".join(RUNNER.read_text(encoding="utf-8").lower().split())
-    assert "ordinary version-1 run" in runner
-    assert "byte-for-byte" in runner
-    assert "never create `runs/detail-model-binding.json`" in runner
-
-    for path in (HOME, CUSTOMIZATION, RUNNER):
-        text = path.read_text(encoding="utf-8")
-        assert "E-CONFIG-MIGRATION" not in text
 
 
 def test_evals_keep_case_39_structural_and_add_executable_migration_pressure():

@@ -1,14 +1,16 @@
 """Executable + structural pressure for T6.2: recurring-schedule ELIGIBILITY gates,
 native-first/OS/nothing-verified SELECTION, and the expanded registry STATE MACHINE.
 
-The single-source contract lives in shared/references/internals.md (the scheduling registry +
-scheduling-setup) with skills/job-search-agent/references/scheduling-and-consent.md carrying the
-doctrine one hop away. The behavioral evals live in skills/job-search-agent/evals/evals.json (ids
+The gate, selection, and state-machine tables live in shared/references/internals.md as marked
+contract blocks. The behavioral evals live in skills/job-search-agent/evals/evals.json (ids
 22-27, coverage_kind executable_fixture). This module does two jobs:
 
-  (1) pins that contract text + those evals structurally (the RED->GREEN driver for T6.2), and
+  (1) parses those marked tables and compares their tokens against the expected sets, and
   (2) drives the deterministic, local-only T6.1 fake-scheduler shim to prove the mechanical facts
       each eligibility eval consumes.
+
+How the surrounding prose reads is graded by the behavior evals in evals/ — never by substring
+assertions here.
 
 No real scheduler, cron, launchd, network, model, or agent-data account is touched: every effect
 stays inside a temp workspace + temp registry, driven only by the scenario capability fixtures.
@@ -22,15 +24,8 @@ import subprocess
 HERE = pathlib.Path(__file__).resolve().parent
 ROOT = HERE.parents[0]
 INTERNALS = ROOT / "shared" / "references" / "internals.md"
-CONVENTIONS = ROOT / "shared" / "references" / "conventions.md"
-ERRORS = ROOT / "shared" / "references" / "errors.md"
-SCHEDULING = ROOT / "skills" / "job-search-agent" / "references" / "scheduling-and-consent.md"
-AGENT = ROOT / "skills" / "job-search-agent" / "SKILL.md"
-ONBOARDING = ROOT / "skills" / "job-search" / "references" / "onboarding.md"
-HOME = ROOT / "skills" / "job-search" / "references" / "home.md"
 
 SHIM = str(HERE / "fake-scheduler")
-FIXTURES = HERE / "fixtures" / "scheduler"
 
 # The six eligibility gates the fake-scheduler probe exposes (pinned by test_fake_scheduler.py too).
 GATES = ("unattended", "canary_testable", "primary_model_preserving", "local_access", "reversible")
@@ -40,10 +35,6 @@ PRIMARY = "fixture-primary-exact"
 # ---------------------------------------------------------------------------
 # Contract-text parsing helpers
 # ---------------------------------------------------------------------------
-def _norm(path):
-    return re.sub(r"\s+", " ", path.read_text(encoding="utf-8").lower())
-
-
 def _marked_rows(path, marker):
     """Parse a `<!-- {marker} -->` ... `<!-- /{marker} -->` markdown table into
     {first_col: (other_cols...)}. Header + separator rows are dropped."""
@@ -83,16 +74,6 @@ def test_six_eligibility_gates_are_the_single_contract():
         "inspectable",
         "reversible",
     }, f"the six gates must be exactly enumerated, got {sorted(rows)}"
-    prose = _norm(INTERNALS)
-    # A candidate qualifies ONLY when it passes every gate.
-    assert "every gate" in prose or "every one of the six gates" in prose
-
-
-def test_gates_named_in_the_operator_doctrine():
-    scheduling = _norm(SCHEDULING)
-    for token in ("unattended", "canary", "reversible", "inspect"):
-        assert token in scheduling, f"scheduling-and-consent.md must name the {token} gate"
-    assert "preserv" in scheduling and "exact primary model" in scheduling
 
 
 # ---------------------------------------------------------------------------
@@ -116,8 +97,6 @@ def test_state_machine_installs_only_after_a_green_canary():
     commit = " ".join(rows["canary_commit"]).lower()
     assert "installed" in commit and "verified" in commit
     assert "no" in " ".join(rows["canary_failure"]).lower()
-    prose = _norm(INTERNALS)
-    assert "only the final" in prose and "post-canary" in prose
 
 
 def test_registry_write_preserves_unknown_fields_and_is_atomic():
@@ -188,26 +167,6 @@ def test_unowned_job_requires_inspect_and_adopt_or_replace():
     unowned = " ".join(rows.get("unowned_job", ())).lower()
     assert "inspect" in unowned
     assert "adopt" in unowned or "replace" in unowned
-    prose = _norm(INTERNALS)
-    assert "never clobber" in prose or "not silently clobber" in prose or "without clobbering" in prose
-
-
-# ---------------------------------------------------------------------------
-# (1f) conventions.md owns the on-disk registry file contract; errors.md names the failure
-# ---------------------------------------------------------------------------
-def test_conventions_owns_the_on_disk_registry_file_contract():
-    conv = _norm(CONVENTIONS)
-    assert "config.json" in conv
-    assert "atomic" in conv and "preserve" in conv
-    # It points one hop to internals.md for the schema/state machine rather than restating it.
-    assert "internals.md" in CONVENTIONS.read_text(encoding="utf-8")
-
-
-def test_errors_names_the_unverified_schedule_failure():
-    err = _norm(ERRORS)
-    assert "e-schedule-canary" in err
-    # Fail-closed surfacing: no installed marker, do not claim scheduled.
-    assert "not" in err and "installed" in err
 
 
 # ---------------------------------------------------------------------------

@@ -421,17 +421,10 @@ def test_no_fanned_reference_copy_remains():
     assert not fanned, f"fanned reference copies still present (must be single-homed): {fanned}"
 
 
-def test_run_lifecycle_contract_is_single_homed_and_consumed():
-    """T1.1: the lifecycle schema has one shared owner and every architecture/reference consumer links it."""
-    assert LIFECYCLE.is_file(), "shared/references/run-lifecycle.md is the required single contract home"
-
+def test_run_lifecycle_contract_is_not_restated_by_its_consumers():
+    """T1.1: the lifecycle schema has one shared owner; no consumer restates its contract structure."""
     for consumer in LIFECYCLE_CONSUMERS:
         consumer_text = consumer.read_text(encoding="utf-8")
-        targets = re.findall(r"\[[^]]+\]\(([^)#]+\.md)\)", consumer_text)
-        resolved = {(consumer.parent / target).resolve() for target in targets}
-        assert LIFECYCLE.resolve() in resolved, (
-            f"{consumer.relative_to(ROOT)} must link to shared/references/run-lifecycle.md")
-
         assert "<!-- lifecycle-contract:" not in consumer_text, (
             f"{consumer.relative_to(ROOT)} duplicates an owner-only semantic contract marker")
         assert LIFECYCLE_LEDGER_PATH not in consumer_text, (
