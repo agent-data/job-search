@@ -12,3 +12,7 @@ docs-private/
 preferences.md
 resumes/
 reports/
+
+# Eval run outputs — transcripts, captured workspaces, per-run grading. They carry machine paths
+# and live posting text; only the aggregate numbers in evals/baseline/ are committed.
+evals/results/
