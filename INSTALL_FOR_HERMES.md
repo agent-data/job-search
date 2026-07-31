@@ -243,7 +243,7 @@ Report to the user:
 - the plugin install path (`$HERMES_HOME/plugins/job-search`);
 - the config file you changed (`$CONFIG`) and what changed in it;
 - whether the plugin loaded (check 5) and which verification checks ran;
-- whether all five bare skill names were found (check 4);
+- whether all seven bare skill names were found (check 4);
 - any collision from Step 6;
 - that a new session (`/new`) is needed before the skills appear.
 

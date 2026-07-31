@@ -19,7 +19,7 @@ A statement that can be confirmed or refuted against code:
 - a config key or its allowed values
 - a file path or module the doc says exists or does X
 - a layer or component boundary the architecture describes
-- a count ("five skills", "nine named errors") checkable against the tree
+- a count ("seven skills", "four job sources") checkable against the tree
 
 Opinion, rationale, and product philosophy are NOT checkable — leave them alone.
 

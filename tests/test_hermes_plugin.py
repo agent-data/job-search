@@ -96,10 +96,13 @@ def test_synthetic_tree_is_a_complete_install(tmp_path):
     assert [name for name, _ in ctx.skills] == list(SKILLS)
 
 
-def test_register_registers_exactly_the_five_skills():
+def test_register_registers_exactly_the_shipped_skills():
+    """Every skill directory in the tree is registered, and nothing else. The adapter's SKILLS tuple
+    is hand-maintained, so a new skill that nobody added to it would never reach a Hermes session."""
     ctx = StubCtx()
     _load_adapter(ADAPTER).register(ctx)
     assert [name for name, _ in ctx.skills] == list(SKILLS)
+    assert sorted(SKILLS) == sorted(p.name for p in (ROOT / "skills").iterdir() if p.is_dir())
     for name, path in ctx.skills:
         assert path == ROOT / "skills" / name / "SKILL.md"
         assert path.is_file()

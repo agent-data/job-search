@@ -18,7 +18,7 @@ contracts now live in the `job-search-runbook` and `agent-data-reference` skills
 
 ## Superseded
 - [Verify-don't-encode: adapter-free portability, unattended scheduling, and config-time run verification](2026-07-11-verify-dont-encode-design.md) — _status: superseded_ (superseded by the [cost-aware recurring-jobs design](2026-07-16-cost-aware-verified-recurring-jobs-design.md), which retains runtime verification while replacing scheduling eligibility, model ownership, and cost-context scope)
-- [Three-Skill Job Search Redesign](2026-07-09-three-skill-redesign.md) — _status: superseded_ (superseded by the later plugin↔guide alignment work, which keeps all five skills)
+- [Three-Skill Job Search Redesign](2026-07-09-three-skill-redesign.md) — _status: superseded_ (superseded by the later plugin↔guide alignment work, which kept all five skills)
 - [Codex Portability — What It Takes to Run job-search on OpenAI Codex](codex-portability.md) — _status: superseded_ (superseded by the [Multi-Harness Portability dossier](multi-harness-portability.md), which generalizes it to seven harnesses)
 
 ---

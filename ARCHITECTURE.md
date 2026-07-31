@@ -99,16 +99,17 @@ rules, the workspace-discovery precedence, the scheduling marker, and the `jobs.
 The single source of truth for every runtime contract, in two files:
 [job-search-runbook](skills/job-search-runbook/SKILL.md) (the workspace, what each file holds, how one run opens and
 closes, what stays off disk) and [agent-data-reference](skills/agent-data-reference/SKILL.md) (the CLI, the per-source
-quirks, retries, what a call costs). The install lays down the whole pack tree, so both resolve in place
-from each skill — nothing is fanned into per-skill copies.
+quirks, retries, what a call costs). The install lays down the whole pack tree, so any skill can
+invoke either by name — nothing is fanned into per-skill copies.
 
 ### skill-layer
-The five programs: [job-search](skills/job-search/SKILL.md) (front door / home view),
+The five programs a user reaches: [job-search](skills/job-search/SKILL.md) (front door / home view),
 [job-search-run](skills/job-search-run/SKILL.md) (headless pass),
 [job-preference-interview](skills/job-preference-interview/SKILL.md) (brief builder),
 [evaluate-job-fit](skills/evaluate-job-fit/SKILL.md) (single-posting judge), and
 [job-search-agent](skills/job-search-agent/SKILL.md) (the operator manual). Skills hold playbooks and
-prose; they execute the deterministic core's pinned procedures and defer every contract to the references.
+prose; they execute the deterministic core's pinned procedures and defer every contract to the two
+reference skills above.
 
 ### hooks-guards
 CI guardrails (dev-side only — nothing executable ships to user machines):

@@ -12,7 +12,7 @@ this before you change product behavior: a change that regresses one of these is
 wrong direction. They split by how they hold. Most are non-negotiable because they are
 mechanically blocked in CI — the philosophy guard, the doc linter, the workspace validator, or a
 pytest suite fails the PR, so the regression can't land. There is no build step and no hook: nothing
-is generated into `skills/` or `shared/`, so there is nothing to check for drift. The rest are
+is generated into `skills/`, so there is nothing to check for drift. The rest are
 cultural: held by review and habit rather than tooling, and each belief's
 **Enforced by** says so honestly (some are wholly cultural; a couple have a mechanical backstop
 plus a residual judgment review must catch). The beliefs themselves are the canonical framing in
@@ -118,14 +118,14 @@ the skill that writes each one, listed in
   compose-by-reference model, AAS-PACK-02/BOUND-03). Where a host cannot resolve a path outside a
   skill's own directory, the build assembles that host's self-contained copies from the single source
   (AAS-DIST-03) — a generated copy, never hand-maintained.
-- **Enforced by.** There is no build step at all now — nothing is generated into `skills/` or
-  `shared/`, so there is nothing to fall out of sync. What holds the property is
+- **Enforced by.** There is no build step at all now — nothing is generated into `skills/`, so
+  there is nothing to fall out of sync. What holds the property is
   [scripts/doc_lint.py](../../scripts/doc_lint.py)'s duplication check
   (`no-shared-reference-duplication`, which guards both the knowledge base and the reference skills
   itself) and the per-host resolution tests in
   [tests/test_reference_resolution.py](../../tests/test_reference_resolution.py).
 - **How to verify.** `git ls-files 'skills/*/references/*.md'` prints nothing — there are no
-  skill-local reference files left; every skill reads the two shared references in place.
+  skill-local reference files left; every skill invokes the two reference skills by name.
   `python3 -m pytest -q tests/test_reference_resolution.py` → every in-place pointer resolves under
   each host's install.
 

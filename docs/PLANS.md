@@ -160,4 +160,5 @@ To run it:
 
 The gardening sweep covers the whole knowledge base as described in
 [`../ARCHITECTURE.md`](../ARCHITECTURE.md). The doc-reviewer never edits the `job-search-runbook` or `agent-data-reference` skills
-(those are the source of truth, owned by the build pipeline) and never edits code to fit a doc.
+(those are the source of truth, owned by whoever changes the runtime behavior they pin) and never
+edits code to fit a doc.

@@ -134,7 +134,7 @@ Add Job Search to the `plugin` array in your global OpenCode config at
 ```
 
 Restart OpenCode, then start with: **“Set up my job search.”** OpenCode installs the git package with
-Bun and the plugin registers the five bundled skills. If your config already has plugins, add this entry
+Bun and the plugin registers all seven bundled skills. If your config already has plugins, add this entry
 to the existing array rather than replacing it.
 
 See [`.opencode/INSTALL.md`](.opencode/INSTALL.md) for verification, revision pinning, local development,
