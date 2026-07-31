@@ -29,7 +29,7 @@ The terminal state (per the AAS-T-10 ruling) is **a structural gate + automated 
 
 Verifying a host-specific action such as scheduling is now a **runtime config-time canary** check, replacing the deleted per-host **structural adapter validation**.
 
-How the skills *behave* is graded by the live behavior evals in `evals/` (§ Behavior evals), which are a **local release gate — CI never runs them**: each one spawns a real `claude -p` session against the live Job Postings API, which needs an API key and costs money. No test asserts substrings of documentation files; the suites that used to do that were retired on 2026-07-30 in favor of the evals plus `validate-workspace.sh`.
+How the skills *behave* is graded by the live behavior evals in `evals/` (§ Behavior evals), which are a **local release gate — CI never runs them**: each one spawns a real `claude -p` session against the live Job Postings API, which needs an API key and costs money. No test asserts sentences of documentation prose; the suites that did were retired on 2026-07-30 in favor of the evals plus `validate-workspace.sh`. What still reads a reference file is a token comparison inside a marked contract block (`<!-- namespace:name -->` … `<!-- /namespace:name -->`), which pins a machine-readable table rather than any wording; those tests go when the files they read are deleted.
 
 What stays a **labeled TRANSITIONAL residual** (👤/🤖, driven by hand): the **behavioral cross-host matrix** — actually running a skill end-to-end on each of the eight hosts that are **not installable on the CI runner** (Codex/Cursor/opencode/Gemini/Copilot/Droid/Pi/Hermes Agent), and the **N ≥ 5 stochastic eval reps** (the discovery/verdict/injection/merge scenarios run against the shim to record real pass-rate + variance + the control delta). These are the **off-CI live-harness step** — expected, not a gap: CI proves the scenarios are *well-formed*; the behavioral reps prove they *pass*, and shrink as hosts become installable. A green structural gate must never be read as a passed behavioral matrix.
 
@@ -90,8 +90,11 @@ in `-p` commands anyway so the skill is invoked deterministically.
 ```bash
 cd "$JSOS" && python3 -m pytest -q
 ```
-**Expected:** `603 passed` **and `0 failed`** — treat **`0 failed`** as the real gate (the exact count grows as
-tests are added; bump this number when it does). Covers the doc linter, the philosophy guard, the release-integrity checks, the scripted-mechanics unit tests, the **eval-scenario validator +
+**Expected:** `547 passed` **and `0 failed`** — treat **`0 failed`** as the real gate. The count moves in both
+directions: it grows when tests are added and it dropped by 141 on 2026-07-30 when the documentation-prose
+suites were retired. Update the number here whenever it changes. Covers the doc linter, the philosophy guard,
+the release-integrity checks, the scripted-mechanics unit tests, the workspace validator
+(`test_validate_workspace.py`), the eval-case lint (`test_eval_cases.py`), the **eval-scenario validator +
 harness math** (`test_eval_harness.py`), and the fake-shim self-tests (incl. the `bad-query` scenario behind
 T7.12) — dev tooling only; the runtime state procedures are exercised by the live tests below and the skill evals.
 **Result:** ⬜
@@ -824,7 +827,7 @@ entries carry a date mark; the first-Ashby-pass footnote is present.
 - ⬜ Scheduling correct (the composed `/loop <interval>` matches the pinned table per frequency; `/loop` sets `mechanism:loop`; **zero-Python user path** proven with python3 masked) (§9)
 - ⬜ **No numeric scores/weights, budget config, or invented charge** in files or unsolicited chat; accurate calls-first usage context is labeled, and users control frequency, sources, and review depth (§10)
 - ⬜ Docs match reality (install commands, error table, sample digest) (§11)
-- ⬜ Full regression green: `pytest` (**603**; gate on `0 failed`) + the eval structural gate (`eval_harness.py`) + all five skills' evals (**179** scenarios) (§0.3, §12)
+- ⬜ Full regression green: `pytest` (**547**; gate on `0 failed`) + the eval structural gate (`eval_harness.py`) + all five skills' evals (**179** scenarios) (§0.3, §12)
 - ⬜ Planned config slash-command tests are marked **N/A (pending build)**, not green (§13)
 - ⬜ Multi-source: live Ashby/Greenhouse/Lever rows; shim multi-source run shows per-source counts + first-pass footnote; one source down never blanks the run (§14)
 

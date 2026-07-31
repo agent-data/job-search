@@ -31,6 +31,9 @@ APPROVED_PREINSTALL = (
     "Agent-data offers a 100-call monthly free tier—enough to get started with this search."
 )
 
+# Agent-data's per-call prices, which change whenever its plans change.
+VOLATILE_PRICE_LITERALS = ("$0.008", "$0.0075", "$0.0067", "$0.005")
+
 FORBIDDEN_EQUIVALENT_CHARGE_EXCEPTIONS = (
     re.compile(r"unless live account data says otherwise"),
     re.compile(
@@ -562,6 +565,25 @@ def test_free_tier_fact_is_exact_dated_and_loaded_from_its_canonical_owner():
     contract = AGENT_DATA.read_text(encoding="utf-8")
     pricing = _code_table(contract, "agent-data-metering-contract", "pricing", 3)
     assert pricing["free_tier"] == ("100_calls_per_month", "no_charge")
+
+
+def test_per_call_dollar_prices_live_in_one_shared_reference():
+    """Agent-data's per-call prices change when its plans change. One copy can be corrected; a
+    second copy goes stale silently and the agent then quotes a price that is no longer real.
+
+    The test does not name the owning file. Right now that is agent-data-contract.md; a later task
+    moves these facts to a new shared reference and deletes the old one, and this guard follows
+    them without an edit."""
+    owners = {}
+    for path in sorted(SHARED.glob("*.md")):
+        text = path.read_text(encoding="utf-8")
+        found = [literal for literal in VOLATILE_PRICE_LITERALS if literal in text]
+        if found:
+            owners[path.relative_to(ROOT).as_posix()] = found
+    assert len(owners) <= 1, (
+        f"the per-call dollar prices {list(VOLATILE_PRICE_LITERALS)} are copied into more than one "
+        f"shared reference, so a price change now has to be made in several places: {owners}"
+    )
 
 
 def test_usage_context_contract_block_is_single_homed():
