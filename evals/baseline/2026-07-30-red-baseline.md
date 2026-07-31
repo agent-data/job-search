@@ -53,10 +53,17 @@ transcripts, no user data.
 | position of the greeting among visible outputs | 4th | 2nd or 3rd | 2nd |
 | permission dialogs in the first 10 min | 35 | not measurable | not measurable |
 
-### Measurement condition for every timing row above
+### Measurement condition for the timing rows above
 
-Time to first live result is the moment a **metered** `search-jobs` result came back — not the free
-`agent-data docs` call that precedes it in some runs.
+**In the GREEN columns**, time to first live result is the moment a **metered** `search-jobs` result
+came back — not the free `agent-data docs` call that precedes it in some runs. An earlier draft took
+the docs call for the search and understated one figure by 32 s.
+
+**RED's 190 s was not re-measured under that rule.** It came from the earlier harness and its own
+first-result event was never re-checked, so the two columns are not known to be measured the same
+way. The direction is safe for the release argument: if RED also timed a free call, the true RED
+figure is larger, and the GREEN figures beat it by more. It is not safe for anything that needs the
+gap's size.
 
 What is known about the service these runs ran against, and nothing beyond it: every session behind
 the GREEN column ran inside the window **18:18:28Z–20:11:25Z on 2026-07-31**, and no session was
@@ -134,8 +141,17 @@ headless case, because nobody is there to say yes; a run that records one anyway
 
 B11 needs a long-lived token that only an interactive `claude setup-token` can produce, so the canary
 cannot run inside this suite. On sonnet the flow behaves honestly without it: it records consent,
-states the blocker, leaves the registry unwritten, and tells the user the schedule is not live. It
-does leave the launchd job file on disk, which the turn-off recipe says to remove.
+states the blocker, leaves the registry unwritten, and tells the user the schedule is not live.
+
+One thing it got wrong, since fixed. It left the launchd job file on disk — a job the user had just
+been told is not working, which macOS loads at the next login. The recipe has two endings, and a
+canary that cannot be fired is not the passing one, so the job should have been removed. The owning
+skill was reworded to name that ending explicitly, and the case was re-run twice on sonnet: both runs
+left no job file, nothing loaded, and no cron line.
+
+**What that re-run does not prove.** Neither post-fix run installed anything — both stopped earlier,
+at the missing credential — so the removal branch itself has still never been exercised. The re-run
+establishes the outcome a user would see, not that the reworded branch fires.
 
 ## Detail-read spread on one seed
 
