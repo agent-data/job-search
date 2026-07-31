@@ -670,8 +670,8 @@ scheduler, or the user declines the machine change, offer an **in-session loop**
 from inside an open session that installs nothing but runs **only while a session is open** — as the **named
 fallback**. On either path, **cloud schedulers do not qualify**: a cloud runner can't see the local
 `~/.job-search` workspace or the local agent-data auth, so a run there reaches neither the user's data nor
-their credentials and produces nothing — the test any candidate scheduler must pass. (Full doctrine, consent
-framing, and canary spec: the operator manual's `scheduling-and-consent.md`.)
+their credentials and produces nothing — the test any candidate scheduler must pass. (The `job-search`
+skill owns the offer the user answers, the consent it records, and the canary that proves the schedule.)
 
 **Eligibility gates — a candidate scheduler qualifies only when it passes every one of these six.** Probe a
 mechanism, then check each gate; a single failure disqualifies it for a *verified* recurring job (an
@@ -713,8 +713,8 @@ command/launchd or interval translation. **Fallback (no shell runtime) — compo
 zero so cron gets `8`/`5`, not `08`/`05`. (Both soft-defaults — Monday for weekly, `08:00` for the time —
 match the script and are pinned by `tests/test_mechanics_scripts.py`.) The whole handoff is **one decision,
 not a yes/no plus a separate frequency question**: offer **Daily — recommended / Different schedule / Not
-now** (the operator manual's `scheduling-and-consent.md` → The handoff owns that option UX and the single
-confirmation's contents); check the scheduling marker first so you never re-ask. **Daily** fixes the cadence
+now** (the `job-search` skill owns that offer and the single confirmation's contents); check the
+scheduling marker first so you never re-ask. **Daily** fixes the cadence
 at `daily`; **Different schedule** asks one cadence question; **Not now** declines with **no machine change,
 no marker, and no recipe dump**. On a scheduled choice, give the `schedule_enable_with_canary` calls-first
 context from **Agent-data usage decisions** and show the user the exact machine change inside **one scoped
@@ -756,7 +756,7 @@ the canary is green.** The **in-session-loop fallback** (`mechanism: loop`) can 
 layer — it registers in no scheduler job list and its run *is* this session — so verify it differently:
 confirm its **first in-session fire** leaves a fresh run that passes the same exact run_id,
 `lifecycle-fold.sh`, matching `closed=true` authority gate, then record the marker. Full consent-framed
-flow: the operator manual's `scheduling-and-consent.md` §the canary. Only then set the scheduling marker
+flow: the `job-search` skill's recurring-job section. Only then set the scheduling marker
 (write rules above — recording the mechanism actually used). After that proof succeeds, apply the
 schedule-setup-owned local milestone procedure in [run-lifecycle.md](run-lifecycle.md); registration alone
 does not satisfy that procedure.

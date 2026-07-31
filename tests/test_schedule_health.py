@@ -1,7 +1,7 @@
 """Deterministic, fixed-clock pressure for T7.1: derive ongoing schedule health from local evidence.
 
 The eight-state precedence table lives in shared/references/internals.md (§ Schedule health) as a marked
-contract block; the behavioural evals live in the two skills' evals.json (coverage_kind executable_fixture).
+contract block. No skill derives that health any more (see the closing note).
 
 This module does two jobs, mirroring tests/test_scheduling_eligibility.py:
 
@@ -12,8 +12,8 @@ This module does two jobs, mirroring tests/test_scheduling_eligibility.py:
       (never wall-clock), so the capability is real, not merely asserted — the eval_harness.aggregate_reps
       precedent.
 
-How the surrounding prose in internals.md, home.md, and scheduling-and-consent.md reads is graded by the
-behavior evals in evals/ — never by substring assertions here.
+How the surrounding prose in internals.md reads is graded by the behavior evals in evals/ — never by
+substring assertions here.
 
 No live effects, no real scheduler, no network, no model, no agent-data account, and NOTHING metered: the
 health check is a local, unmetered read over the registry marker, the scheduler's own registration, and the
@@ -332,27 +332,7 @@ def test_internals_owns_the_eight_state_precedence_in_order():
     assert [rank for rank, _ in rows] == [str(i) for i in range(1, 9)], "ranks must be 1..8 in order"
 
 
-# ===========================================================================
-# (3) The behavioural evals are appended, executable-fixture, and cover the states
-# ===========================================================================
-def _evals(skill):
-    import json
-    path = ROOT / "skills" / skill / "evals" / "evals.json"
-    return json.loads(path.read_text(encoding="utf-8"))["evals"]
-
-
-def test_agent_schedule_health_evals_are_executable_fixture_and_cover_the_matrix():
-    agent = _evals("job-search-agent")
-    health = [c for c in agent if "schedule health" in c["scenario"].lower()
-              or "schedule liveness" in c["scenario"].lower()]
-    assert health, "job-search-agent must carry schedule-health derivation evals"
-    assert all(c.get("coverage_kind") == "executable_fixture" for c in health)
-    matrix = " ".join(" ".join([c["scenario"], c["prompt"], *c["expectations"]]).lower() for c in health)
-    for phrase in ("registration drift", "blocked", "needs attention", "not recently observed",
-                   "grace", "daylight", "canary", "unmetered"):
-        assert phrase in matrix, f"agent schedule-health evals miss {phrase!r}"
-
-
-# The home view stopped deriving schedule health in the 2026-07-30 skill overhaul (it reads the
-# consent date in config.yaml and whether the job is installed), so the front door carries no
-# schedule-health eval. The agent skill still derives it, and the test above covers that.
+# The behavioural schedule-health evals this section checked lived in the two skills' evals.json.
+# The 2026-07-30 skill overhaul removed the derivation they graded: the home view reads the consent
+# date in config.yaml and whether the job is installed, and the operator manual is a routing card, so
+# neither skill derives an eight-state health any more. The precedence table above is what remains.

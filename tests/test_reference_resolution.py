@@ -50,12 +50,10 @@ HOST_MANIFESTS = {
 
 # The hand-authored skill-local reference ORIGINALS that legitimately remain under skills/ (no
 # shared/references twin). Everything else under skills/*/references/ was a build-fanned copy and is
-# gone. The front door's two playbooks (home.md, onboarding.md) left with the 2026-07-30 rewrite that
-# folded the home view and the first-run flow into skills/job-search/SKILL.md.
-SKILL_LOCAL_ORIGINALS = {
-    "skills/job-search-agent/references/customization.md",
-    "skills/job-search-agent/references/scheduling-and-consent.md",
-}
+# gone. The set is now empty: the 2026-07-30 rewrite folded the home view and the first-run flow into
+# skills/job-search/SKILL.md and shrank the operator manual to a routing card, deleting the last two
+# playbooks. Every skill reads shared/references/ in place, so a skill-local pointer now dangles.
+SKILL_LOCAL_ORIGINALS = set()
 
 # A reference-file PATH pointer: an in-place shared ref (`../../shared/references/x.md`,
 # `../../../shared/references/x.md`) or a kept skill-local ref (`references/x.md`,
@@ -325,7 +323,7 @@ def _contract_token_groups(text):
 
 
 def _pointer_files():
-    """Files whose reference pointers must resolve: every SKILL.md + the four skill-local originals."""
+    """Files whose reference pointers must resolve: every SKILL.md (no skill-local originals remain)."""
     files = sorted((ROOT / "skills").glob("*/SKILL.md"))
     files += [ROOT / rel for rel in sorted(SKILL_LOCAL_ORIGINALS)]
     return files
@@ -378,10 +376,10 @@ def test_every_reference_resolves_in_place_on_host(host):
                 assert target.parent == SHARED or SHARED in target.parents, (
                     f"{host}: {f.relative_to(ROOT)} -> `{ptr}` does not land in shared/references")
             else:
-                # a skill-local pointer may only reach one of the four kept originals
+                # no skill-local originals remain, so any skill-local pointer is dangling
                 assert target.relative_to(ROOT).as_posix() in SKILL_LOCAL_ORIGINALS, (
                     f"{host}: {f.relative_to(ROOT)} -> `{ptr}` is a skill-local pointer that is not "
-                    f"one of the four kept originals")
+                    f"one of the kept originals (the set is empty)")
 
 
 def test_marker_present_in_single_home():
@@ -415,7 +413,7 @@ def test_every_skill_reaches_the_marked_home_on_host(host):
 
 
 def test_no_fanned_reference_copy_remains():
-    """The fan-out is gone: the only *.md under skills/*/references/ are the four skill-local originals
+    """The fan-out is gone: no *.md remains under skills/*/references/ at all
     (no shared-twin copy, no references/platform/ adapter copy)."""
     present = set()
     for refs in (ROOT / "skills").glob("*/references"):

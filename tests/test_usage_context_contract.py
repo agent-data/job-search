@@ -19,7 +19,6 @@ CONVENTIONS = SHARED / "conventions.md"
 ERRORS = SHARED / "errors.md"
 PARALLELISM = SHARED / "parallelism.md"
 CONFIG_TEMPLATE = ROOT / "templates" / "config.example.yaml"
-CUSTOMIZATION = ROOT / "skills" / "job-search-agent" / "references" / "customization.md"
 RUNNER_SETUP = ROOT / "skills" / "job-search-run" / "evals" / "files" / "setup-workspace.sh"
 
 # Agent-data's per-call prices, which change whenever its plans change.
@@ -470,11 +469,12 @@ def test_binding_sidecar_cannot_be_misread_as_a_run_record():
     assert _code_table(conventions, "exact-model-contract", "run-record-selection", 2) == {
         key: value for key, value in RUN_RECORD_SELECTION.items()
     }
-    for consumer in (INTERNALS, CUSTOMIZATION):
-        text = consumer.read_text(encoding="utf-8")
-        assert "runs/*.json" not in text, (
-            f"{consumer.relative_to(ROOT)} must not admit the detail-model sidecar as a run record"
-        )
+    # The operator manual carried the second consumer of this rule until the 2026-07-30 rewrite
+    # shrank it to a routing card; internals.md is the one that remains.
+    text = INTERNALS.read_text(encoding="utf-8")
+    assert "runs/*.json" not in text, (
+        f"{INTERNALS.relative_to(ROOT)} must not admit the detail-model sidecar as a run record"
+    )
 
 
 def test_runner_eval_fixture_pins_calls_first_context_and_a_validator_checked_close():
@@ -573,11 +573,17 @@ def test_behavioral_evals_keep_computed_equivalents_unconditionally_non_charge()
                         violations.append((data["skill_name"], case["id"], pattern.pattern))
     assert not violations, f"behavioral evals condition equivalent-vs-charge semantics: {violations}"
 
-    usage_case = next(case for case in _eval("job-search-agent")["evals"] if case["id"] == 11)
+    # The operator manual's usage fixture pinned a stored pay-as-you-go equivalent until the
+    # 2026-07-30 rewrite: a run record now stores call counts only, so the fixture asks for the
+    # counts as stored and for any dollar figure to be called an estimate.
+    usage_case = next(
+        case for case in _eval("job-search-agent")["evals"]
+        if "what the last run spent" in case["scenario"]
+    )
     expectations = " ".join(usage_case["expectations"]).lower()
-    assert "stored 0.063 value byte-for-byte" in expectations
-    assert "never describes that computed value as an actual charge" in expectations
-    assert "authoritative live account data is unavailable in this scenario" in expectations
+    assert "as they are stored" in expectations
+    assert "estimate rather than an actual charge" in expectations
+    assert "agent-data.motie.dev/settings/billing" in expectations
 
 
 def test_t2_2_effect_evals_cover_the_fake_only_red_cases():
@@ -585,7 +591,10 @@ def test_t2_2_effect_evals_cover_the_fake_only_red_cases():
     (the 2026-07-30 rewrite counts calls in the run record instead); what the runner's fixtures now
     pin about usage lives in test_runner_eval_fixture_pins_calls_first_context... above. The front
     door's two approved-sentence fixtures went with the same rewrite: the cost facts are stated in
-    the agent's own words now, so its first-run fixture pins the ordering instead of the wording."""
+    the agent's own words now, so its first-run fixture pins the ordering instead of the wording.
+    The operator manual's review-depth and repeat-consent fixtures went with the same rewrite, which
+    left one cost decision in that skill: a config change that raises what a run opens with states
+    the new cost before it is saved."""
     search = _eval("job-search")
     agent = _eval("job-search-agent")
 
@@ -594,27 +603,14 @@ def test_t2_2_effect_evals_cover_the_fake_only_red_cases():
     assert "before the first search-jobs entry" in first_run
     assert "free monthly calls" in first_run
 
-    agent_by_scenario = {case["scenario"]: case for case in agent["evals"]}
-    increases = agent_by_scenario[
-        "persistent source and cadence increases preview before one scoped write"
-    ]
-    decreases = agent_by_scenario[
-        "decreasing cadence and disabling a source are immediate and quiet"
-    ]
-    canary = agent_by_scenario[
-        "a failed metered schedule canary needs fresh consent before the second attempt"
-    ]
-    assert "byte-for-byte unchanged" in " ".join(increases["expectations"])
-    assert "no confirmation question" in " ".join(decreases["expectations"])
-    assert "no second-attempt metered row" in " ".join(canary["expectations"])
-    assert all("fake" in case["prompt"].lower() or "shim" in case["prompt"].lower()
-               for case in (increases, decreases, canary))
-
-    # The canonical one-off rule replaces the older redundant-confirmation eval behavior.
-    for case_id in (6, 8):
-        case = next(case for case in agent["evals"] if case["id"] == case_id)
-        joined = " ".join(case["expectations"])
-        assert "without a redundant confirmation" in joined
+    increases = next(
+        case for case in agent["evals"]
+        if "states the new cost before saving it" in case["scenario"]
+    )
+    joined = " ".join(increases["expectations"]).lower()
+    assert "before config.yaml is written" in joined
+    assert "comments and shape preserved" in joined
+    assert "setup-workspace.sh" in increases["prompt"]
 
 
 def test_no_budget_credits_or_cost_key_in_persisted_config_surfaces():

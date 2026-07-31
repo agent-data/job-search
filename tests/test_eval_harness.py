@@ -647,20 +647,10 @@ def test_validator_flags_fixed_time_empty_checks(tmp_path):
     assert any("fixed_time.checks" in h for h in hits)
 
 
-def test_real_suite_schedule_health_scenarios_carry_a_liveness_fixed_time():
-    """Every schedule-health (liveness) scenario pins a deterministic clock so its missed-fire /
-    grace / DST derivation is reproducible — not wall-clock."""
-    loaded = eh.load_evals(str(ROOT))
-    liveness = []
-    for skill in ("job-search-agent", "job-search"):
-        for e in loaded[skill][1]["evals"]:
-            if "schedule health" in e.get("scenario", "").lower():
-                liveness.append((skill, e))
-    assert liveness, "expected schedule-health liveness scenarios"
-    for skill, e in liveness:
-        ft = e.get("fixed_time")
-        assert isinstance(ft, dict), f"{skill}#{e['id']} schedule-health scenario needs a fixed_time"
-        assert "liveness" in ft.get("checks", []), f"{skill}#{e['id']} fixed_time must check liveness"
+# The suite's schedule-health liveness fixtures went with the derivation they graded: the
+# 2026-07-30 skill overhaul left the home view reading the consent date and whether the job is
+# installed, and shrank the operator manual to a routing card, so no skill scenario pins a
+# liveness clock. The validator's fixed_time rules stay covered by the unit tests above.
 
 
 # The milestone fixed-time fixtures this file used to require of job-search-run went away with the

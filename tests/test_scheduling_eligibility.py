@@ -2,12 +2,12 @@
 native-first/OS/nothing-verified SELECTION, and the expanded registry STATE MACHINE.
 
 The gate, selection, and state-machine tables live in shared/references/internals.md as marked
-contract blocks. The behavioral evals live in skills/job-search-agent/evals/evals.json (ids
-22-27, coverage_kind executable_fixture). This module does two jobs:
+contract blocks. No skill carries eligibility evals any more (see the note where they were checked).
+This module does two jobs:
 
   (1) parses those marked tables and compares their tokens against the expected sets, and
   (2) drives the deterministic, local-only T6.1 fake-scheduler shim to prove the mechanical facts
-      each eligibility eval consumes.
+      those tables describe.
 
 How the surrounding prose reads is graded by the behavior evals in evals/ — never by substring
 assertions here.
@@ -54,11 +54,6 @@ def _marked_rows(path, marker):
             continue
         rows[cells[0]] = tuple(cells[1:])
     return rows
-
-
-def _evals(skill):
-    path = ROOT / "skills" / skill / "evals" / "evals.json"
-    return json.loads(path.read_text(encoding="utf-8"))["evals"]
 
 
 # ---------------------------------------------------------------------------
@@ -169,33 +164,11 @@ def test_unowned_job_requires_inspect_and_adopt_or_replace():
     assert "adopt" in unowned or "replace" in unowned
 
 
-# ---------------------------------------------------------------------------
-# (2) The behavioral evals are structural + executable-fixture backed
-# ---------------------------------------------------------------------------
-def test_scheduling_evals_are_structural_and_executable():
-    agent = _evals("job-search-agent")
-    sched = [case for case in agent if 22 <= case["id"] <= 27]
-    assert [c["id"] for c in sched] == [22, 23, 24, 25, 26, 27]
-    assert all(c.get("coverage_kind") == "executable_fixture" for c in sched)
-    matrix = " ".join(c["scenario"].lower() for c in sched)
-    for phrase in (
-        "eligible native",
-        "falls back to an eligible os",
-        "no eligible scheduler",
-        "session-only",
-        "legacy loop",
-        "unverified legacy",
-        "unowned scheduler job",
-        "inspect and adopt-or-replace",
-    ):
-        assert phrase in matrix, f"scheduling eval matrix missing {phrase!r}"
-    joined = " ".join(
-        " ".join([c["prompt"], *c["expectations"]]).lower() for c in sched
-    )
-    # The evals consume the fake-scheduler fixtures + the eligibility/state-machine contract.
-    assert "native-eligible" in joined and "os-eligible" in joined
-    assert "installed=true" in joined and "verified=true" in joined
-    assert "canary_run_id" in joined
+# The behavioral scheduling evals this section checked (six-gate eligibility, the legacy markers,
+# the adopt-or-replace path) went with the 2026-07-30 skill overhaul: the operator manual hands a
+# schedule change to the front door, which installs the job and proves it with a canary, so its
+# evals.json carries no eligibility fixtures. The contract tables above and the shim proof below
+# are what remains.
 
 
 # ---------------------------------------------------------------------------

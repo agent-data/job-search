@@ -3,7 +3,7 @@ title: Multi-Harness Portability — Research Dossier (Codex · Cursor · openco
 status: aspirational
 verified: partial
 last_reviewed: 2026-07-22
-code_refs: [shared/references/internals.md, shared/references/conventions.md, shared/references/voice.md, shared/references/parallelism.md, shared/references/errors.md, shared/references/agent-data-contract.md, skills/job-search/SKILL.md, skills/job-search-agent/references/scheduling-and-consent.md, skills/job-search-agent/references/customization.md, skills/job-search-run/SKILL.md, scripts/build.sh, .claude-plugin/plugin.json, .opencode/plugins/job-search.js, docs/design-docs/codex-portability.md]
+code_refs: [shared/references/internals.md, shared/references/conventions.md, shared/references/voice.md, shared/references/parallelism.md, shared/references/errors.md, shared/references/agent-data-contract.md, skills/job-search/SKILL.md, skills/job-search-agent/SKILL.md, skills/job-search-run/SKILL.md, scripts/build.sh, .claude-plugin/plugin.json, .opencode/plugins/job-search.js, docs/design-docs/codex-portability.md]
 ---
 # Multi-Harness Portability — Research Dossier
 
@@ -290,7 +290,7 @@ consent-based scheduler exists (Claude `/loop`; Codex Automations): use it, inst
 fallback** (explicit yes, exact line shown before writing, never silent, never auto-installed,
 user-removable). The blanket "never install crontab/launchd" prohibition is lifted **only at Tier 2**.
 A cloud scheduler that can't see `~/.job-search` or the local agent-data auth does **not** qualify as
-Tier 1 (per [scheduling-and-consent.md](../../skills/job-search-agent/references/scheduling-and-consent.md),
+Tier 1 (per scheduling-and-consent.md, the operator-manual playbook of the time,
 which rejects cloud `/schedule` for exactly that reason). Belief #7 keeps its INTENT (consent-gated;
 no SILENT/auto privileged write) while the mechanism generalizes.
 **Before** (scheduling-and-consent.md): "## Mechanism: native `/loop` (the only one the agent sets
@@ -428,7 +428,7 @@ The **relaxed rule:** schedule with a host's NATIVE LOCAL consent-based schedule
 sanctioned fallback** — explicit user consent, the exact line shown to the user, never silent, never
 auto-installed. A **CLOUD** scheduler that cannot see the local `~/.job-search` workspace or the local
 agent-data auth does **NOT** count (the repo rejects cloud `/schedule` for exactly that reason —
-[scheduling-and-consent.md](../../skills/job-search-agent/references/scheduling-and-consent.md) L12-13).
+scheduling-and-consent.md L12-13, as that playbook read then).
 
 | Platform | Tier | Native local scheduler? | Recommended mechanism | Registry `scheduling.mechanism` | Evidence (local vs cloud determination) |
 |---|---|---|---|---|---|

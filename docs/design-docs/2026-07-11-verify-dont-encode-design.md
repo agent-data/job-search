@@ -4,7 +4,7 @@ title: "Verify-don't-encode: adapter-free portability, unattended scheduling, an
 status: superseded
 verified: partial
 last_reviewed: 2026-07-16
-code_refs: [shared/references/internals.md, shared/references/conventions.md, shared/references/parallelism.md, shared/references/errors.md, shared/references/agent-data-contract.md, shared/references/voice.md, skills/job-search-agent/references/scheduling-and-consent.md, skills/job-search/SKILL.md, skills/job-search-run/SKILL.md, docs/design-docs/core-beliefs.md, scripts/doc_lint.py, .github/workflows/ci.yml]
+code_refs: [shared/references/internals.md, shared/references/conventions.md, shared/references/parallelism.md, shared/references/errors.md, shared/references/agent-data-contract.md, shared/references/voice.md, skills/job-search-agent/SKILL.md, skills/job-search/SKILL.md, skills/job-search-run/SKILL.md, docs/design-docs/core-beliefs.md, scripts/doc_lint.py, .github/workflows/ci.yml]
 claimed_paths: [skills, shared/references, scripts]
 owner_area: Skills & references
 repos: [job-search-os]

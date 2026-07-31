@@ -43,10 +43,11 @@ def test_shared_ref_restating_another_ref_fails(tmp_path):
 
 
 def test_skill_local_original_restating_owned_literal_fails(tmp_path):
-    # customization.md is a skill-local ORIGINAL (no shared/references/customization.md) -> scanned;
-    # it restates the source enum with no pointer.
+    # Any skills/*/references/*.md with no shared/references twin is a skill-local ORIGINAL and is
+    # scanned. The pack ships none today, so this fixture writes one; it restates the source enum
+    # with no pointer.
     _mk(tmp_path, "shared/references/agent-data-contract.md", f"`--source` ({SRC}).\n")
-    _mk(tmp_path, "skills/job-search-agent/references/customization.md", f"Sources line: {SRC}.\n")
+    _mk(tmp_path, "skills/job-search-agent/references/local-playbook.md", f"Sources line: {SRC}.\n")
     r = run_lint(tmp_path)
     assert r.returncode == 1 and "job source enum" in r.stdout, r.stdout + r.stderr
 

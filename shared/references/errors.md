@@ -118,8 +118,8 @@ The user is shown the exact observed gap (which eligibility gate failed · regis
 was blocked) and the honest state — it is **not** scheduled — and, where a mechanism runs but cannot be
 unattended-verified, the **session-only** in-session loop is offered as the named fallback. Like the
 model-binding class, the raw `E-SCHEDULE-CANARY` token is never shown as a user-facing code; a blocked canary
-run record may carry it internally. The canary **run execution and rollback** flow lives in the operator
-manual's `scheduling-and-consent.md`; this entry owns only the named-failure surface and the no-marker
+run record may carry it internally. The canary **run execution and rollback** flow lives in
+`internals.md` → Scheduling setup; this entry owns only the named-failure surface and the no-marker
 guarantee.
 
 <!-- scheduling-contract:unverified-schedule -->

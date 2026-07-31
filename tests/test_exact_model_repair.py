@@ -38,11 +38,6 @@ def _marked_table(path, marker):
     return rows
 
 
-def _evals(skill):
-    path = ROOT / "skills" / skill / "evals" / "evals.json"
-    return json.loads(path.read_text(encoding="utf-8"))["evals"]
-
-
 def _run_host(tmp_path, scenario, *args):
     env = dict(
         os.environ,
@@ -2193,39 +2188,7 @@ def test_model_repair_user_rendering_is_complete_and_conversational():
         "invented_e_code": ("never_show",),
     }
 
-def test_exact_model_repair_eval_matrix_is_structural_and_executable():
-    """The runner half of this matrix (its repair and lifecycle fixtures, ids 42-51) left with the
-    model-binding and ledger apparatus in the 2026-07-30 job-search-run rewrite, and the front
-    door's half (ids 25-31) left with the same apparatus when its onboarding and home playbooks were
-    folded into one skill. The agent skill still owns exact-model repair, and its fixtures are what
-    this checks."""
-    agent = _evals("job-search-agent")
-    # Select the exact-model-repair fixtures by id (not a trailing positional slice) so appended
-    # scheduling evals (22+) do not shift them.
-    agent_repair = [case for case in agent if 15 <= case["id"] <= 21]
-    assert [case["id"] for case in agent_repair] == [15, 16, 17, 18, 19, 20, 21]
-    agent_matrix = " ".join(case["scenario"].lower() for case in agent_repair)
-    for phrase in (
-        "one confirmation",
-        "same-id detail rewrite",
-        "green canary",
-        "partial activation rollback",
-        "unscheduled detail repair",
-        "exact staged binding provenance",
-    ):
-        assert phrase in agent_matrix
-    provenance_case = next(case for case in agent if case["id"] == 21)
-    provenance_text = " ".join(
-        [provenance_case["prompt"], *provenance_case["expectations"]]
-    ).lower()
-    for phrase in (
-        "authority consumed",
-        "stale id",
-        "strictly chronologically newer",
-        "disk/transaction mismatch",
-        "malformed registry scheduling",
-        "semantic-equal byte rewrite",
-        "candidate-bound failure scenario",
-    ):
-        assert phrase in provenance_text
-    assert all(case.get("coverage_kind") == "executable_fixture" for case in agent_repair)
+# The exact-model-repair eval matrix this file ended with is gone. Its last fixtures lived in the
+# operator manual's evals.json, and the 2026-07-30 skill overhaul shrank that skill to a routing
+# card: no skill stages, canaries or rolls back an exact model binding now. The contract blocks
+# checked above are what remains of the apparatus.

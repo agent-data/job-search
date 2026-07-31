@@ -21,9 +21,8 @@ truth. The install lays down the whole pack tree, so each skill resolves them **
 `./scripts/build.sh` is **stamp-only**: it regenerates `shared/references/build-stamp.md` (the deterministic
 build stamp) and nothing else. It does **not** copy or sync references into the skills.
 
-A skill's own `SKILL.md`, its `evals/`, and the handful of authored playbooks under
-`skills/<skill>/references/` (e.g. `customization.md`, `scheduling-and-consent.md`) are
-**authored originals**, not generated — edit them in place.
+A skill's own `SKILL.md` and its `evals/` are **authored originals**, not generated — edit them in
+place.
 
 ## Before you open a PR: everything must be green
 
