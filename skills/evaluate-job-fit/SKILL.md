@@ -18,8 +18,12 @@ Scope: exactly one posting. Batches are job-search-run's job — it invokes this
   caller that hands you the path — job-search-run briefs every detail worker with one — names it
   directly. With no workspace yet, judge against a brief the user pastes.
 - The posting: a pasted job description, a saved `source_id` from `jobs.jsonl`, or a `source_url`+`posting_id`
-  pair to read fresh via agent-data `get-posting` (see `../../shared/references/agent-data.md`; disclose that this
-  reads one posting before doing it).
+  pair to read fresh. That read is the `get-posting` recipe in `../../shared/references/agent-data.md`:
+  read it there and send the call in the shape it gives, and say you are reading one posting before you
+  do. A read that comes back rejected does not stop the judgment — judge that posting from what the
+  request already carries, its title, company and location, record everything the full text would have
+  settled as an unknown, and set `needs_human_check: true`. After two rejections in a row, judge the
+  postings that are left the same way, without another read.
 
 ## Method (model inference — read, reason, judge)
 1. Read the brief's **must-haves/dealbreakers, strong preferences, nice-to-haves, red flags**.

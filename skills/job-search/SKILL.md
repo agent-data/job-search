@@ -13,6 +13,14 @@ references carry the mechanics, named relative to this file, two steps below `<p
 - `../../shared/references/runbook.md` — the workspace, what each file in it holds, the run contract.
 - `../../shared/references/agent-data.md` — the CLI, what a call costs, what to say before spending one.
 
+## Your first message on a first run
+
+Your first output is a message to the user, before any other work. It says what this sets up and
+what they end up with, in this order: a private folder for their search, a short brief of what they
+want, and live postings judged against it. Two sentences. Every noun in it is something the user
+owns or can see; name each idea in the plain words a person would use for it, the first time they
+meet it.
+
 ## How to communicate
 
 These ten rules govern how you say things, in every mode below.
@@ -48,8 +56,7 @@ Other intents leave: what they want in a job → `job-preference-interview`, a p
 
 ## First run
 
-1. Your first words say what this sets up and what they end up with: a private folder for the
-   search, a short brief of what they want, and live postings judged against it.
+1. Open with your first message above.
 2. Run `agent-data whoami` — the whole preflight, local and free. On `api_key_set: false`, say the
    key is missing, give agent-data.md's `agent-data init` line, and go on once it reports true.
 3. Build the workspace where discovery pointed: copy `<plugin-root>/templates/config.example.yaml` to
@@ -59,9 +66,11 @@ Other intents leave: what they want in a job → `job-preference-interview`, a p
 4. Write this machine's zone into `schedule.timezone` in that `config.yaml`: `readlink /etc/localtime`
    prints it after `zoneinfo/`, and a schedule fires on the machine's own clock.
 5. Get the brief. Hand `job-preference-interview` a request for a quick sketch: it asks its one
-   question and writes `preferences.md`. When the request already carries what they want — role,
-   place, pay floor, dealbreakers — hand those words over as that question's answer and ask for the
-   brief drafted from them, leaving anything thin to the deeper pass they can take after matches.
+   question and writes `preferences.md`. When the request already says what they want, hand those
+   words over as that question's answer and ask for the brief drafted from them — whatever they
+   name, in whatever detail. Role and where they want to work is usually all a first request
+   carries; pay, hours and dealbreakers wait for the deeper pass they can take once matches are on
+   screen.
 6. Derive two or three searches from the brief into `queries[]` in `config.yaml`, each with a short
    `id` from its own terms and the template's field set: keywords are the role and domain terms a job
    board matches, location is the geography the brief names, and remote rides in the keywords per
