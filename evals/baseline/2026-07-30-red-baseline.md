@@ -53,6 +53,21 @@ transcripts, no user data.
 | position of the greeting among visible outputs | 4th | 2nd or 3rd | 2nd |
 | permission dialogs in the first 10 min | 35 | not measurable | not measurable |
 
+### Measurement condition for every timing row above
+
+**Both** columns of the timing rows — RED and GREEN, time to first live result and wall-clock —
+were measured **before the 2026-07-31 latency fix to the job-postings API**. Every run behind the
+GREEN column ran before it; none of these numbers includes any of that improvement.
+
+A run made after that fix will be faster for reasons that have nothing to do with the skill rewrite.
+Do not compare a later run's timing against these rows to credit or fault the skills, and do not
+update the GREEN timing figures with a post-fix run — the comparison only holds while both sides
+were measured under the same service. If a future pass wants timing numbers, it needs a fresh
+RED-equivalent measured under the same conditions.
+
+The rows that carry the release argument are unaffected by service latency and stay comparable:
+metered-call counts, lines read before the first API call, and every behavior pass or fail below.
+
 Every eval runs with permissions pre-accepted, so no dialog is ever shown; that row's GREEN number
 has to come from an interactive session, not from this suite.
 
@@ -69,9 +84,13 @@ so they are not a like-for-like saving. See the behavior rows below.
 | target | met? |
 |---|---|
 | read path before the first API call ≤ 700 lines | yes — worst case 271 |
-| quickstart time to first live result ≤ 190 s | yes — 121 s sonnet, 75 s haiku |
+| quickstart time to first live result ≤ 190 s | yes — 121 s sonnet, 75 s haiku, both sides pre-fix |
 | headless metered calls ≤ 64 on the same seed | yes — 43 and 50 across two sonnet reps, 40 haiku |
 | B1–B12 pass on both models | **no** — four rows, below |
+
+The time-to-first-result row is the one target that rests on a timing measurement, so it carries the
+caveat above: it is a valid comparison because both sides were measured under the same service, and
+it stops being one the moment either side is re-measured after the latency fix.
 
 ## Behavior rows
 
