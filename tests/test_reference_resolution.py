@@ -26,7 +26,7 @@ import pytest
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 SKILLS = ROOT / "skills"
-# Unique marker planted in the one file holding the job-postings reference.
+# Unique marker written into the one file holding the job-postings reference.
 MARKER = "reference-resolution-marker:8f2a4c1e-single-home"
 
 # The two references promoted to skills on 2026-07-31. Every other skill reaches one by this name.
@@ -246,7 +246,8 @@ _COMPUTED_PTR = re.compile(r"(?:<plugin-root>/|(?:\.\./){2,})((?:[A-Za-z0-9._-]+
 # `references/` directory. The lookbehind rejects a match inside a longer path, where the directory
 # name is not the start of the pointer.
 #
-# Two shapes an earlier version of this pattern let through, both caught by planting them:
+# Two forms an earlier version of this pattern let through, both found by inserting the defective
+# text into a skill file and running the suite:
 #   - the trailing file name is optional, so a bare `templates/` is a pointer too. Requiring an
 #     extension is the same mistake `_COMPUTED_PTR` above records having made once already.
 #   - `./scripts/foo.sh` is the form the failing run actually executed. Dropping `.` from the
@@ -332,7 +333,7 @@ def test_no_computed_pointer_survives_anywhere():
         + "\n  ".join(offenders))
 
 
-@pytest.mark.parametrize("planted", [
+@pytest.mark.parametrize("known_bad", [
     "copy `<plugin-root>/templates/config.example.yaml` to `config.yaml`",   # a file
     "copy a template out of `<plugin-root>/templates/`",                     # a whole directory
     "the copyable examples in `../../templates/`",                           # relative, directory
@@ -342,17 +343,17 @@ def test_no_computed_pointer_survives_anywhere():
     "the discovery step in `../../shared/references/runbook.md`",            # a promoted reference
     "a script under `<plugin-root>/shared/scripts/mechanics/`",              # the promoted directory
 ])
-def test_the_gate_catches_a_reintroduced_computed_pointer(planted):
-    """The gate above only earns trust if it fires. Planting each shape of pointer this restructure
-    removed — file or directory, token-prefixed or `../../`-prefixed — must produce an offender.
-    The last three were exempt while the two scripts and the two references were a later task's to
-    move; that task landed, so they are offenders now."""
-    offenders = _computed_offenders_in("skills/job-search/SKILL.md", planted)
-    assert offenders, f"the gate did not catch a reintroduced pointer: {planted!r}"
+def test_the_gate_catches_a_reintroduced_computed_pointer(known_bad):
+    """The gate above only earns trust if it fires. Each pointer this restructure removed — file or
+    directory, token-prefixed or `../../`-prefixed — must produce an offender when it appears in a
+    skill file. The last three were exempt while the two scripts and the two references were a later
+    task's to move; that task landed, so they are offenders now."""
+    offenders = _computed_offenders_in("skills/job-search/SKILL.md", known_bad)
+    assert offenders, f"the gate did not catch a reintroduced pointer: {known_bad!r}"
 
 
 # Every rule below starts with this: not inside a longer path, and an optional `./`. Written once
-# because writing it twice is how the `./` spelling got back in — `_COLOCATED_PTR` matched it and
+# because writing it twice is how the `./` form got back in — `_COLOCATED_PTR` matched it and
 # the bare-name rule beside it did not, and the form the live failure executed was `./…`.
 _NOT_IN_A_PATH = r"(?<![\w./-])(?:\./)?"
 
@@ -459,15 +460,16 @@ def test_no_reference_skill_addresses_a_file_from_its_own_directory():
         "`skills/<skill>/…`:\n  " + "\n  ".join(offenders))
 
 
-@pytest.mark.parametrize("planted", [
-    # This list is the gate. Every spelling anyone has defeated it with is kept here by name,
-    # permanently, because the gate has now been declared working twice and defeated twice — both
-    # times by a spelling nobody had planted, never by a flaw anyone spotted by reading it.
+@pytest.mark.parametrize("known_bad", [
+    # This list is the gate. Every way of writing the defect that anyone has got past it is kept
+    # here as a test case, permanently, because the gate has now been declared working twice and
+    # defeated twice — both times by a form no test case covered, never by a flaw anyone found by
+    # reading the rule.
     #
     # Round 2: the sentence that failed live.
     "Run this skill's `scripts/workspace-discovery.sh`.",
-    # Round 3: three spellings that beat the first regex — it required a file extension and its
-    # lookbehind could not see past a leading `./`.
+    # Round 3: three more ways of writing it that beat the first regex — it required a file
+    # extension and its lookbehind could not see past a leading `./`.
     "Run this skill's `./scripts/workspace-discovery.sh`.",
     "Take a template out of this skill's `templates/`, and the scripts are in `scripts/`.",
     "Run this skill's `workspace-discovery.sh`.",
@@ -484,16 +486,16 @@ def test_no_reference_skill_addresses_a_file_from_its_own_directory():
     "Check the close with `scripts/validate-workspace.sh <workspace>`.",
     "The shape is in `templates/run-record.example.json`.",
 ])
-def test_the_reference_gate_catches_a_reintroduced_colocated_pointer(planted):
-    """The gate above only earns trust if it fires — on every spelling, not on one.
+def test_the_reference_gate_catches_a_reintroduced_colocated_pointer(known_bad):
+    """The gate above only earns trust if it fires — on every way of writing the defect, not on one.
 
-    A gate whose adversarial cases live only in a review transcript is a gate that drifts back.
+    A gate whose known-bad examples live only in a review transcript is a gate that drifts back.
     Each entry above passed the whole suite at some point: the first before the gate existed, the
     next three against its first regex, and the next six against its second, where the `./` hole
     the third round closed in one rule was reopened in the rule the third round added."""
-    assert _colocated_offenders_in("skills/job-search-runbook/SKILL.md", planted,
+    assert _colocated_offenders_in("skills/job-search-runbook/SKILL.md", known_bad,
                                    SKILLS / "job-search-runbook"), (
-        f"the gate did not catch a reintroduced co-located pointer: {planted!r}")
+        f"the gate did not catch a reintroduced co-located pointer: {known_bad!r}")
 
 
 @pytest.mark.parametrize("allowed", [
@@ -521,11 +523,11 @@ def test_the_reference_gate_covers_a_directory_it_was_never_told_about(tmp_path)
     skill = tmp_path / "a-reference-skill"
     (skill / "bin").mkdir(parents=True)
     (skill / "bin" / "probe-helper.sh").write_text("#!/bin/sh\n")
-    for planted in ("run this skill's `bin/probe-helper.sh`",
-                    "run this skill's `./bin/probe-helper.sh`",
-                    "run this skill's `probe-helper.sh`"):
-        assert _colocated_offenders_in("x/SKILL.md", planted, skill), (
-            f"a derived directory went ungated: {planted!r}")
+    for known_bad in ("run this skill's `bin/probe-helper.sh`",
+                      "run this skill's `./bin/probe-helper.sh`",
+                      "run this skill's `probe-helper.sh`"):
+        assert _colocated_offenders_in("x/SKILL.md", known_bad, skill), (
+            f"a derived directory went ungated: {known_bad!r}")
     assert _colocated_offenders_in(
         "x/SKILL.md", "run the plugin's `skills/a-reference-skill/bin/probe-helper.sh`", skill) == []
 

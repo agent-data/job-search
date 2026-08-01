@@ -202,7 +202,8 @@ routing worse. Both were measured live on sonnet and haiku. Aggregates only, lik
 **The mechanism is the argument here. The counts below support it and cannot carry it alone.**
 
 Two of the three miss shapes 0.8.0 measured are now impossible rather than merely rarer, and the
-third — the one the evals caught *after* the restructure — is gated in the four spellings below.
+third — the one the evals caught *after* the restructure — is gated in the four written forms
+below.
 Each row was put back into a single SKILL.md and the suite run, so these are failure counts, not
 expectations:
 
@@ -219,13 +220,14 @@ expectations:
 | a file in a directory the gate was never told about | **1** | the same test |
 
 **What "gated" claims, exactly.** Those rows are ways of writing one defect, and the gate has been
-declared working twice and defeated twice — each time by a spelling nobody had planted, never by a
-flaw anyone found by reading it. Its first version required a file name with an extension and could
-not see past a leading `./`, the form the failing run executed; its second reopened the same `./`
-hole in the rule it had just added. **Twelve spellings are planted in the suite by name now, and
-the claim goes no further than those twelve.** Each one someone defeats it with becomes a permanent case,
-which is the only thing that has actually worked. Nothing here gates a defect nobody has written
-down yet, and past experience says more spellings exist.
+declared working twice and defeated twice — each time by a way of writing the defect that no test
+case covered, never by a flaw anyone found by reading the rule. Its first version required a file
+name with an extension and could not see past a leading `./`, the form the failing run executed;
+its second reopened the same `./` hole in the rule it had just added. **Twelve written forms are
+test cases in the suite now, by name, and the claim goes no further than those twelve.** Each one
+someone gets past the gate with becomes a permanent case, which is the only thing that has actually
+worked. Nothing here gates a defect nobody has written down yet, and past experience says more
+forms exist.
 
 The two template paths those shapes missed four times in the 0.8.0 runs are opened four times in the
 runs after, and missed none.
