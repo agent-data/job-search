@@ -3,8 +3,8 @@
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Rebuild the plugin's five skills, shared references, structures, and scripts to the
-census-proven shape — ~9k words total, positive recipes, validators over prose, behavior evals on
-sonnet+haiku — per `docs/superpowers/specs/2026-07-30-skill-overhaul-design.md`.
+shape the corpus review proved out — ~9k words total, positive recipes, validators over prose,
+behavior evals on sonnet+haiku — per `docs/superpowers/specs/2026-07-30-skill-overhaul-design.md`.
 
 **Architecture:** Five self-contained skills (≤150 lines each) + a two-file shared core
 (`agent-data.md` gotchas/cost, `runbook.md` mechanics) + started-marker/end-record run contract +
@@ -17,9 +17,10 @@ for eval execution, live agent-data API (no mocks, ever).
 ## Global Constraints
 
 - Work happens directly on `main`; commit after every task; do NOT push (user pushes).
-- NEVER commit anything referencing external users of the Job Postings API (emails, org ids,
-  per-user telemetry). Private evidence lives in `docs-private/` (gitignored). Eval baselines
-  committed as aggregate numbers only — no machine paths, no org ids.
+- NEVER commit anything that identifies or measures the people who use the Job Postings API — no
+  addresses, no account ids, no per-account figures. Evidence of that kind stays outside the
+  repository. Eval baselines are committed as aggregate numbers only, with no machine paths and
+  no account ids.
 - Workspace file formats stay compatible: `preferences.md`, `jobs.jsonl`, `config.yaml`, digest
   files unchanged. Old run records must remain readable; old ledgers are ignored, never deleted.
 - All 8 harness adapters keep working (Claude Code, Codex, Cursor, opencode, Gemini, Copilot,
@@ -80,7 +81,7 @@ prompt: >
 - [ ] **Step 3: Write `evals/run_eval.py`** (~120 lines): stash any `~/.job-search` aside,
   optionally seed from `evals/seeds/<case>/`, spawn
   `claude -p <prompt> --model <m> --allowedTools Bash,Read,Write,Edit,Glob,Grep,Skill,AskUserQuestion,TodoWrite --permission-mode acceptEdits --verbose --output-format stream-json`
-  with wall-clock line-stamping (reuse the runner pattern proven in the census evals: Popen +
+  with wall-clock line-stamping (reuse the runner pattern proven in the earlier eval runs: Popen +
   readline loop + timeout kill), capture the workspace, restore the stash. `kill-midrun` support:
   `--kill-after-event <regex-on-tool-name>` terminates the child after the first `search-jobs`
   Bash call completes.
@@ -418,8 +419,8 @@ def test_missing_front_matter_fails(tmp_workspace):
 - [ ] **Step 2: Delete** the files. `grep -rn "internals.md\|conventions.md\|run-lifecycle\|
   voice.md\|parallelism.md\|errors.md\|agent-data-contract\|build-stamp\|update.md\|
   lifecycle-append\|lifecycle-fold\|support-summary" . --include="*.md" --include="*.py"
-  --include="*.sh" --include="*.json" --include="*.yaml" | grep -v docs-private | grep -v
-  docs/superpowers` → empty.
+  --include="*.sh" --include="*.json" --include="*.yaml" | grep -v <the gitignored private
+  directory> | grep -v docs/superpowers` → empty.
 - [ ] **Step 3:** `pytest` green; `run_eval.py --case headless-run --model sonnet` still passes
   (proves no live dependency on deleted files).
 - [ ] **Step 4: Word/line accounting** — `wc -w skills/*/SKILL.md shared/references/*.md` total
@@ -451,7 +452,7 @@ def test_missing_front_matter_fails(tmp_workspace):
 
 **Files:**
 - Create: `evals/results/…` (local, gitignored — add `evals/results/` to `.gitignore`)
-- Create: `docs-private/2026-07-30-overhaul-eval-report.md` (private: full outputs)
+- Create: a private eval report outside the repository (full outputs)
 - Modify: `evals/baseline/2026-07-30-red-baseline.md` (append the GREEN aggregate table)
 
 **Interfaces:**
@@ -478,9 +479,8 @@ def test_missing_front_matter_fails(tmp_workspace):
 
 - [ ] **Step 1:** Fresh terminal, real TUI, this machine: delete `~/.job-search` (stash first if
   present), run the README quickstart sentence end-to-end including saying yes to the schedule,
-  watching the canary complete. This is the eval-5 surface — the churn surface — driven by a
-  human.
-- [ ] **Step 2:** Note every rough edge in `docs-private/2026-07-30-overhaul-eval-report.md`;
+  watching the canary complete. This is the eval-5 surface, driven by a human.
+- [ ] **Step 2:** Note every rough edge in the private eval report;
   fix blockers (loop with Task 13's per-case re-runs); leave polish items listed.
 - [ ] **Step 3: Commit** any fixes — `git commit -am "fix(skills): dogfood findings"`
 
@@ -496,4 +496,5 @@ def test_missing_front_matter_fails(tmp_workspace):
 - Type consistency: marker/record/scratch names identical across Tasks 5, 7, 9, 11; behavior ids
   B1-B14 defined in Task 1 and cited in 7/8/9/13; validator flag `--post-close` consistent in
   3/7.
-- Privacy: private outputs route to docs-private/; evals/results gitignored; baselines aggregate.
+- Privacy: private outputs stay outside the repository; evals/results gitignored; baselines
+  aggregate.

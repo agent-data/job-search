@@ -1,21 +1,21 @@
 # Job-search skill overhaul — design
 
 **Date:** 2026-07-30 · **Status:** awaiting review · **Approach:** rebuild every surface on the
-structural shape the census proved out (approach A, user-approved with four amendments).
+structural shape the corpus review proved out (approach A, user-approved with four amendments).
 
 ## Evidence base
 
-Held privately (not in this repository): a 2026-07-30 churn analysis of live usage and a 12-entry
-per-file census with a cross-cutting pass, both built from live evals of this plugin plus service
-telemetry. Aggregate findings this design relies on: 79% churn among classifiable users with
-retention concentrated entirely in scheduled runs; six live-eval failure classes (F1
-recitation/ordering, F2 unenforced prose contracts, F3 self-inconsistency, F4 path traps, F5
-instruction tax, F6 unsatisfiable model-ID rule); ~54% of the 59,213-word corpus with no observed
-execution in evals, no repo-visible consumer, or an unmeasurable audience; everything agents
-demonstrably followed totaling under ~2,000 words; and the run-lifecycle system (~11.4k words +
-1,008 script lines + 144 CI tests) going 0-for-3 in live runs while every run still produced a
-correct digest. Evidence-tier discipline applies: server telemetry observes API calls only;
-plugin-local state is unobservable; the eval set covers N=6 runs.
+Every figure below measures this repository's own files and its own eval runs. Priorities were
+also informed by evidence held outside this repository; none of it is reproduced here.
+
+Live evals of the plugin produced six failure classes: F1 recitation/ordering, F2 unenforced prose
+contracts, F3 self-inconsistency, F4 path traps, F5 instruction tax, F6 unsatisfiable model-ID
+rule. A file-by-file read of the corpus found ~54% of its 59,213 words with no observed execution
+in evals, no repo-visible consumer, or an audience nobody can measure; everything agents
+demonstrably followed totals under ~2,000 words; and the run-lifecycle system (~11.4k words +
+1,008 script lines + 144 CI tests) went 0-for-3 in live runs while every run still produced a
+correct digest. Evidence-tier discipline applies: plugin-local state is unobservable from outside
+a run, and the eval set covers N=6 runs.
 
 ## Goals
 
@@ -35,7 +35,7 @@ API-side fixes (latency, billing — separate track). New features. Any change t
 workspace file formats (preferences.md, jobs.jsonl, config.yaml, digests remain compatible).
 Dropping any of the 8 supported harnesses.
 
-## Design laws (from the census; constraints on every file written)
+## Design laws (from the corpus review; constraints on every file written)
 
 1. Positive recipes with worked examples; no prohibitions where shape is the failure; no quoted
    anti-examples or sayable samples anywhere.
@@ -184,7 +184,7 @@ eval suite + validator become the gate; scripts keep ordinary script tests.
 
 Existing workspaces work untouched. Old ledgers are ignored; old run records remain readable
 (tolerant reader). Hermes/Codex/Cursor/opencode/Gemini/Copilot/Droid/Pi adapters reference no
-deleted contract (census-verified: zero lifecycle references outside the repo); each gets a
+deleted contract (the corpus review found zero lifecycle references in them); each gets a
 structural re-verification pass. Version bump: minor (0.8.0) with a CHANGELOG migration note.
 
 ## Landing order
@@ -200,5 +200,5 @@ structural re-verification pass. Version bump: minor (0.8.0) with a CHANGELOG mi
 ## Decisions recorded
 
 - Work proceeds on `main` (user-confirmed 2026-07-30).
-- The churn analysis and census stay private (they reference external users of the Job Postings
-  API); this spec carries only aggregate figures. Private copies live outside the committed tree.
+- Evidence that is not a measurement of this repository's own files or its own eval runs stays
+  outside the committed tree. This spec reproduces none of it.
