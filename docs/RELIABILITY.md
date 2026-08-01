@@ -189,8 +189,8 @@ Reliability claims are only as good as their tests. Four layers back this system
   repeatedly and for free.
 - **The live behavior evals** in [../evals/](../evals/) check the *model's* behavior against the
   real API: `run_eval.py` spawns a real session, captures the transcript and the workspace it
-  produced, and a grader reads them. `behaviors.md` maps the fourteen kept behaviors B1–B14 onto
-  the six cases. This is the layer that proves the reliability claims above — that a blocked gate
+  produced, and a grader reads them. `behaviors.md` maps sixteen behaviors B1–B16 onto
+  the seven cases. This is the layer that proves the reliability claims above — that a blocked gate
   really does close the run and say what stopped it, that a killed run is reported on the next
   pass, that judgment stays qualitative. Scenario suites in the five user-facing skills, at
   `skills/<skill>/evals/evals.json`, cover routing and narrower flows against the shim.

@@ -2,9 +2,17 @@
 
 The behavior evals themselves run against the live API and are a local release gate, never a CI
 step. What CI can check is that the two halves of the config still agree: every matrix row names a
-case file that exists, every case file carries the five header fields `run_eval.py` reads, and the
+case file that exists, every case file carries the header fields its runner reads, and the
 `behaviors:` list in a case matches the rows that name it. Case files are configuration, so
 matching their keys and ids here is a structural check, not a documentation-substring assertion.
+
+A case comes in one of two shapes, and carries exactly one of them:
+
+* one `prompt`, graded as a whole session — `run_eval.py` runs these;
+* a list of `phrases`, each its own session, graded on which skill it loaded —
+  `run_triggering.py` runs these.
+
+Both shapes carry `behaviors`, `workspace`, `timeout_s` and `models`.
 
 The header parse is deliberately dependency-free (no PyYAML): CI installs pytest and nothing else,
 and these five fields are all flat top-level keys.
@@ -19,7 +27,9 @@ EVALS = ROOT / "evals"
 BEHAVIORS = EVALS / "behaviors.md"
 CASES_DIR = EVALS / "cases"
 
-REQUIRED_HEADER_FIELDS = ("behaviors", "workspace", "timeout_s", "models", "prompt")
+REQUIRED_HEADER_FIELDS = ("behaviors", "workspace", "timeout_s", "models")
+# Exactly one of these says how the case supplies what it sends.
+PROMPT_FIELDS = ("prompt", "phrases")
 BEHAVIOR_ID = re.compile(r"^B([1-9][0-9]*)$")
 CASE_FILENAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]*\.yaml")
 
@@ -98,6 +108,10 @@ def test_case_header_carries_every_required_field(case):
     assert len(keys) == len(set(keys)), f"{case}: duplicate top-level keys {keys}"
     missing = [field for field in REQUIRED_HEADER_FIELDS if field not in keys]
     assert not missing, f"{case}: header is missing {missing}"
+    supplied = [field for field in PROMPT_FIELDS if field in keys]
+    assert len(supplied) == 1, (
+        f"{case}: a case carries exactly one of {list(PROMPT_FIELDS)}, got {supplied}"
+    )
 
 
 @pytest.mark.parametrize("case", [path.name for path in _case_paths()])
@@ -115,6 +129,16 @@ def test_case_header_values_are_in_range(case):
     models = _flow_list(text, "models")
     assert models, f"{case}: models must name at least one model"
     assert set(models) <= {"sonnet", "haiku"}, f"{case}: unknown model in {models}"
+
+    if re.search(r"(?m)^phrases:[ \t]*$", text):
+        phrases = re.findall(r"(?m)^[ \t]+-[ \t]+id:[ \t]*(\S+)", text)
+        assert phrases, f"{case}: phrases must list at least one entry, each with an id"
+        assert len(phrases) == len(set(phrases)), f"{case}: duplicate phrase ids {phrases}"
+        prompts = re.findall(r"(?m)^[ \t]+prompt:[ \t]*(\S.*)$", text)
+        assert len(prompts) == len(phrases), (
+            f"{case}: {len(phrases)} phrases carry {len(prompts)} prompts; each needs its own"
+        )
+        return
 
     prompt = re.search(r"(?m)^prompt:[ \t]*(\S.*)?$", text)
     assert prompt, f"{case}: prompt is missing"

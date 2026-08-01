@@ -1,6 +1,6 @@
 ---
 name: agent-data-reference
-description: "The job-postings API the job-search skills call, not something a user asks for: the agent-data CLI and listing id, the per-source quirks, the get-posting recipe, retries, what a call costs."
+description: "Not user-facing; job-search-agent takes user questions. What the job-search skills read before calling the job-postings API: agent-data CLI, listing id, per-source quirks, get-posting, retries, cost."
 ---
 
 # agent-data-reference — the job-postings API

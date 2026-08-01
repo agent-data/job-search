@@ -938,12 +938,12 @@ Capture reality so the next review can compare against it (this is the boomerang
 The 2026-07-30 skill overhaul (`docs/superpowers/specs/2026-07-30-skill-overhaul-design.md`)
 tests kept behaviors with **live behavioral eval runs** graded on transcripts and captured
 workspaces — never substring assertions against documentation. The behavior → eval matrix is
-`evals/behaviors.md` (rows B1–B14); the six cases live in `evals/cases/`.
+`evals/behaviors.md` (rows B1–B16); the seven cases live in `evals/cases/`.
 
 **These are the release gate, and you run them here, not in CI.** Every case spawns a real
 `claude -p` session against the live API, so a run needs your API key and spends metered calls;
 CI checks only that the case config is coherent (`tests/test_eval_cases.py`). Run the full
-matrix — six cases × two models — before tagging a release, and grade every row in
+matrix — seven cases × two models — before tagging a release, and grade every row in
 `evals/behaviors.md`.
 
 Run one case (each case runs on **both** models):
@@ -952,6 +952,18 @@ Run one case (each case runs on **both** models):
 python3 evals/run_eval.py --case fit --model sonnet     # cheapest case
 python3 evals/run_eval.py --case quickstart --model haiku
 ```
+
+`triggering` is the one case `run_eval.py` does not run. It holds many prompts rather than one —
+each trigger phrase gets its own session, and what is graded is which skill loaded — so it has its
+own driver, which reuses the same session and workspace-stash code:
+
+```bash
+python3 evals/run_triggering.py --model sonnet --reps 9
+python3 evals/run_triggering.py --model haiku --reps 9 --phrases cost-probe,cli-probe
+```
+
+Each session is killed the moment its first `Skill` call returns, so a routing probe spends no API
+calls. It writes `routing.json` with the skill each session selected and the per-phrase rate.
 
 The runner spawns a real `claude -p` session against the **live** Job Postings API (no mocks)
 and writes `evals/results/<ts>-<case>-<model>/` containing:

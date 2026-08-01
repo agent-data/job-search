@@ -1,7 +1,12 @@
-# Behavior → eval matrix (B1–B14)
+# Behavior → eval matrix (B1–B16)
 
-The 14 kept behaviors from `docs/superpowers/specs/2026-07-30-skill-overhaul-design.md` §Eval
-plan, one row id each. Later tasks cite rows by id (B1…B14). Every case runs on **both** models:
+B1–B14 are the 14 kept behaviors from
+`docs/superpowers/specs/2026-07-30-skill-overhaul-design.md` §Eval plan, one row id each. B15 and
+B16 were added by the 2026-07-31 skill locality restructure, which gave every file a skill reads an
+address inside the skill's own directory and grew the plugin from five skills to seven. Each of
+those changes needs its own measurement: that files resolve, and that routing still lands on the
+skill that owns the phrase.
+Later tasks cite rows by id (B1…B16). Every case runs on **both** models:
 
 ```bash
 python3 evals/run_eval.py --case <case> --model sonnet
@@ -30,6 +35,36 @@ documentation files.
 | B12 | fit judgment: dealbreakers cited, unknowns surfaced, no fabricated posting facts | fit.yaml | grader-judged transcript |
 | B13 | read-path budget: files/lines read before the first API call ≤ target (~650 lines) | quickstart.yaml | artifact check (sum of Read-tool lines before the first metered call in the transcript) |
 | B14 | wall-clock and metered calls vs the RED baseline | headless-run.yaml | artifact check (`result.json` wall seconds + metered-call count from the transcript, compared against `evals/baseline/2026-07-30-red-baseline.md`) |
+| B15 | every plugin file the agent opens resolves on the first attempt, and no miss costs a recovery search | quickstart.yaml, headless-run.yaml | artifact check (`evals/grade_b15.py`) |
+| B16 | each trigger phrase loads the skill that owns it, and neither reference skill is selected for a user's words | triggering.yaml | artifact check (`evals/run_triggering.py` writes the selected skill per session and the per-phrase rate) |
 
 Each case file's `behaviors:` header lists exactly the rows above that name it, so a case run
 tells you which rows it graded.
+
+## How B15 is graded
+
+`evals/grade_b15.py <run-dir>` replays the run's `transcript.jsonl` and counts the file opens the
+agent got wrong. It takes the plugin directory from the run's own `init` event, so a transcript
+recorded against an older checkout is graded against the tree that was live for it (`--tree` points
+the existence check at a worktree when the checkout has since moved).
+
+- Every `Read` whose `file_path` sits under the plugin directory is one open.
+- Every `Bash` command contributes one open per whitespace-separated token that starts with the
+  plugin directory — `cat <path>`, `bash <path>`, and a bare `<path>` run as a script all count.
+  A sweep that looked only at `Read` would miss all three.
+- An open is a **miss** when the path is not a file in the tree. A `Read` also counts as a miss when
+  its result came back an error. A `Bash` command's non-zero exit does not count: that is usually
+  the script's own verdict, not a path that failed to resolve.
+- A `Glob`, `Grep`, `pwd`, or `ls` in the 60 seconds after a miss counts as a **recovery search**.
+  A miss costs one wasted call, and then however many calls the agent spends hunting for the file
+  while the user watches the raw tool output.
+- Paths under the plugin's own `evals/` directory are skipped — those are the harness's scratch and
+  results, not something a skill pointed the agent at.
+
+The row passes when a run's miss count is zero.
+
+The method is deliberately wider than the 0.8.0 measurement it replaces, which counted only `Read`
+calls on `shared/references/` and `templates/` paths. On the two 0.8.0 runs that were measured by
+hand it returns the same miss counts, and on other 0.8.0 runs it finds misses the narrower scope did
+not report — reference filenames the model invented, and workspace files it looked for inside a
+skill directory.

@@ -187,3 +187,125 @@ that was never reached.
 
 The canary that proves a recurring job (B11) needs a long-lived token an interactive login creates,
 so it stays unproven here and belongs to the human dogfood.
+
+---
+
+# LOCALITY — 2026-08-01 live evals after the skill locality restructure
+
+The restructure moved every file a skill reads to an address inside the skill that reads it, and
+promoted the two shared references to skills — five skills became seven. Two questions had to be
+answered with numbers before it could ship: do files resolve, and did the two extra skills make
+routing worse. Both were measured live on sonnet and haiku. Aggregates only, like the blocks above: no paths, no run ids, no transcripts.
+
+## Pointer misses, before and after
+
+Behavior row B15, graded by `evals/grade_b15.py`, which replays a run's transcript and checks every
+path under the plugin directory the run opened — by `Read`, or named in a `Bash` command — against
+the tree that run actually saw. On the two runs the 0.8.0 review measured by hand it returns the
+same miss counts, so the two columns below are the same measurement.
+
+| | 0.8.0 (five skills, `shared/`, plugin-relative pointers) | after the restructure (seven skills, co-located paths) |
+|---|---|---|
+| runs graded | 12 | 9 |
+| plugin file opens | 89 | 48 |
+| **opens that missed** | **5** | **0** |
+| recovery searches after a miss | 5 | 0 |
+| references reached by skill name instead of by path | 0 | 25 |
+
+The 0.8.0 misses came in three shapes. Two of them are now structurally impossible: no SKILL.md
+contains `../../` or a plugin-root token, and `tests/test_skill_frontmatter.py` and
+`tests/test_reference_resolution.py` fail the build if one appears. The third — a model inventing a
+reference filename — is still possible, because nothing stops a model naming a file that was never
+there. It did not happen in any of the nine runs above.
+
+## Read path, first result, metered calls
+
+| measurement | GREEN sonnet | GREEN haiku | LOCALITY sonnet | LOCALITY haiku |
+|---|---|---|---|---|
+| lines read before the first API call, first run | 271 (4 files) | 224–248 (2–4 files) | 98 (5 files) | not reached |
+| lines read before the first API call, daily pass | 252 (4 files) | — | 49 (2 files) | 18, 18, 173 (1–6 files) |
+| time to first live result, first run | 88–121 s | 107 s | 94 s | not reached |
+| time to first live result, daily pass | — | — | 48 s | 57 s and 66 s |
+| metered calls, first run | 13 | 10 | 17 | not reached |
+| metered calls, one daily pass (same seed) | 43–50 | 40 | 55 | 31 and 44 |
+
+**Read the read-path rows with one correction.** They no longer count the same text. A reference now
+arrives through the Skill tool rather than a `Read`, so its body never appears as read lines. The
+honest claim is that fewer files are opened and none of the opens is wasted — not that less text
+reaches the model.
+
+**The timing row is not comparable to the GREEN column.** A latency fix to the job-postings API was
+deployed on 2026-07-31; every GREEN timing number predates it and every LOCALITY number postdates
+it, so the two describe different services. Metered-call counts, read-path lines, and every behavior
+pass or fail are latency-independent and stay comparable across all three blocks.
+
+The sonnet daily pass spent 55 metered calls against the GREEN column's 43 and 50. Its 51 detail
+reads sit just above the 25–49 spread five earlier sonnet runs produced from the identical seed, so
+this is the same variation the GREEN block already records for this configuration rather than a new
+cost. It stays under RED's 64.
+
+## Routing across the now-seven skills
+
+Behavior row B16, case `evals/cases/triggering.yaml`. Each trigger phrase runs as its own session
+from a fresh workspace, 9 reps per phrase per model — the rep count behind the 0.8.0 skill-selection
+finding, so the two are comparable. What is graded is which skill the session loaded. **"before" is
+this same case run against the plugin as it stood one commit before the promotion**, on the same day
+and the same machine, not a figure carried over from an earlier block.
+
+| phrase | sonnet before | sonnet after | haiku before | haiku after |
+|---|---|---|---|---|
+| set up job search | 9/9 | 9/9 | 5/9 | **9/9** |
+| the README quickstart sentence | 9/9 | 9/9 | 0/9 | 0/9 |
+| keep this running daily | 9/9 | 9/9 | 0/9 | 0/9 |
+| check my job search | 9/9 | 9/9 | 3/9 | 2/9 |
+| run a search now | 9/9 | 9/9 | 9/9 | 9/9 |
+| why did my run fail | 9/9 | 9/9 | 0/9 | 0/9 |
+
+No phrase routes measurably worse than before the promotion, and one routes much better: on haiku,
+`set up job search` went from five reps in nine to nine in nine. The one phrase reading lower —
+`check my job search` on haiku — was re-run at 27 reps a side: 10 of 27 before, 8 of 27 after,
+Fisher exact two-sided p = 0.773. In both conditions its majority destination is `job-search-run`, a
+skill the promotion did not touch.
+
+The phrases haiku still misses do not lose to a skill in this pack. `keep this running daily` goes
+to the host's own scheduling skill, `why did my run fail` to a general debugging skill, and the
+README quickstart sentence to the preferences interview — all three at identical rates before and
+after. That is the same finding the GREEN block records, now measured at nine reps per phrase
+instead of one.
+
+## What the promotion put at risk, measured and fixed
+
+A skill that other skills consult claims no user phrases, so any user sentence selecting one is a
+routing defect. Three probes tested exactly that, each using a promoted skill's own most user-shaped
+description phrase. The number is how often the probe selected a reference skill:
+
+| probe | sonnet as promoted | sonnet shipping | haiku as promoted | haiku shipping |
+|---|---|---|---|---|
+| a cost question | **9/9** | 0/9 | 0/9 | 0/9 |
+| a workspace question | **9/9** | 0/9 | 0/9 | 0/9 |
+| naming the agent-data CLI | 0/9 | 0/9 | 2/9 | 2/9 |
+
+The first shipped descriptions took two ordinary user questions on sonnet in every rep. Appending a
+redirect did not fix it — the cost probe still landed 9 of 9. What fixed it was putting the redirect
+**first**, ahead of what the file holds, and rewording the one phrase that reads like a user's
+sentence. Five rounds of measurement say one thing: the router matches the description's own words,
+a negative clause does not cancel a phrase the description also contains, and a redirect works only
+once it precedes the content list. Both descriptions stay inside the 200-character budget the
+frontmatter test enforces.
+
+One residual, which no wording moved: on haiku, naming the agent-data CLI selects the job-postings
+reference on 2 reps of 9. That points at the skill's name rather than its description — it shares a
+prefix with a separate marketplace skill that claims that phrase, and both load in the same list.
+Before the promotion those same reps selected no skill at all, so nothing that worked stopped
+working.
+
+## Measurement condition
+
+Every figure above was measured on 2026-08-01 UTC, one session at a time, against the live API, with
+the plugin loaded from the working tree. The before column comes from checking the tree out at the
+last commit before the promotion and running the identical case.
+
+Two behavior results outside B15 and B16 are worth recording. One haiku daily pass of three stopped
+after judging a single posting and left the run open — no record, no digest, an orphaned start
+marker; the other two closed healthy. And no fresh-workspace run in this block read a previous
+eval's captured workspace, with the captured briefs renamed out of the way for the duration.

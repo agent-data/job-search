@@ -85,8 +85,8 @@ file. They are **credit-free** — every `agent-data` call goes through the fake
 is billed. Keep them that way: if you add a skill or a code path that talks to `agent-data`, route the
 scenario through the shim rather than the live CLI.
 
-The **live behavior evals** in `evals/` are the release gate. `evals/behaviors.md` maps the fourteen kept
-behaviors B1–B14 onto the six cases in `evals/cases/`, and each case runs on two models:
+The **live behavior evals** in `evals/` are the release gate. `evals/behaviors.md` maps sixteen
+behaviors B1–B16 onto the seven cases in `evals/cases/`, and each case runs on two models:
 
 ```bash
 python3 evals/run_eval.py --case fit --model sonnet

@@ -1,6 +1,6 @@
 ---
 name: job-search-runbook
-description: "Workspace mechanics for the job-search skills, not something a user asks for: the workspace-discovery and validate-workspace scripts, what each workspace file holds, how one run opens and closes."
+description: "Not user-facing; job-search takes user questions. Mechanics the job-search skills read before a run: the workspace-discovery and validate-workspace scripts, the file table, how a run opens and closes."
 ---
 
 # job-search-runbook — workspace, run contract, scratch

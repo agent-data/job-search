@@ -127,7 +127,7 @@ exercised with no network and no credits. Scenario suites in the five user-facin
 checked for structural coherence by [scripts/eval_harness.py](scripts/eval_harness.py) and driven through
 the skill-creator skill. And the live behavior evals in [evals/](evals/) — `run_eval.py` spawns a real
 session against the live Job Postings API and captures the transcript and the workspace it produced, which
-a grader reads; `behaviors.md` maps the fourteen kept behaviors B1–B14 onto the six cases in `cases/`.
+a grader reads; `behaviors.md` maps sixteen behaviors B1–B16 onto the seven cases in `cases/`.
 Because those runs cost real metered calls they are a local release gate, not a CI step. See
 [TESTING.md](TESTING.md) for the matrix.
 
