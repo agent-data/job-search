@@ -13,6 +13,14 @@ python3 evals/run_eval.py --case <case> --model sonnet
 python3 evals/run_eval.py --case <case> --model haiku
 ```
 
+`triggering` is the one case `run_eval.py` cannot run — it holds a list of phrases instead of a
+single `prompt`, and `run_eval.py` raises `KeyError: 'prompt'` on it. It has its own driver:
+
+```bash
+python3 evals/run_triggering.py --model sonnet --reps 9
+python3 evals/run_triggering.py --model haiku --reps 9
+```
+
 Grading methods used below: **grader-judged transcript** (a grader agent reads the stamped
 `transcript.jsonl` and judges the behavior), **artifact check** (a deterministic read of the
 captured `workspace/`, `result.json`, or transcript tool calls), **validator**
@@ -48,23 +56,36 @@ agent got wrong. It takes the plugin directory from the run's own `init` event, 
 recorded against an older checkout is graded against the tree that was live for it (`--tree` points
 the existence check at a worktree when the checkout has since moved).
 
-- Every `Read` whose `file_path` sits under the plugin directory is one open.
-- Every `Bash` command contributes one open per whitespace-separated token that starts with the
-  plugin directory — `cat <path>`, `bash <path>`, and a bare `<path>` run as a script all count.
-  A sweep that looked only at `Read` would miss all three.
+- Every `Read` whose `file_path` sits under the plugin directory is one open — **including a `Read`
+  aimed at a directory**, which comes back `EISDIR` and is a real failed open. An earlier version of
+  this grader dropped directories before checking the error and could not see that shape at all;
+  a reference is only a directory to aim at because it became a skill, so the blind spot sat exactly
+  where the new failures live.
+- Every `Bash` command contributes one open per path it names under the plugin directory —
+  `cat <path>`, `bash <path>`, and a bare `<path>` run as a script all count. Paths are followed
+  through `cd`, so `cd <skill dir> && ./scripts/foo.sh` is one open on that script; a scan that kept
+  only tokens already rooted at the plugin directory sees nothing there.
+- A path the command text cannot show — assembled from a variable that expanded to nothing — is
+  picked up from the shell's own `No such file or directory` line instead. Absolute paths under the
+  plugin directory are left to the command-text scan, so nothing is counted twice.
 - An open is a **miss** when the path is not a file in the tree. A `Read` also counts as a miss when
   its result came back an error. A `Bash` command's non-zero exit does not count: that is usually
   the script's own verdict, not a path that failed to resolve.
-- A `Glob`, `Grep`, `pwd`, or `ls` in the 60 seconds after a miss counts as a **recovery search**.
-  A miss costs one wasted call, and then however many calls the agent spends hunting for the file
-  while the user watches the raw tool output.
+- A `Glob`, `Grep`, `pwd`, `ls`, or `find` in the 60 seconds after a miss counts as a **recovery
+  search**. A miss costs one wasted call, and then however many calls the agent spends hunting for
+  the file while the user watches the raw tool output.
 - Paths under the plugin's own `evals/` directory are skipped — those are the harness's scratch and
   results, not something a skill pointed the agent at.
 
 The row passes when a run's miss count is zero.
 
 The method is deliberately wider than the 0.8.0 measurement it replaces, which counted only `Read`
-calls on `shared/references/` and `templates/` paths. On the two 0.8.0 runs that were measured by
-hand it returns the same miss counts, and on other 0.8.0 runs it finds misses the narrower scope did
-not report — reference filenames the model invented, and workspace files it looked for inside a
-skill directory.
+calls on `shared/references/` and `templates/` paths. Restricted to that narrower scope it returns
+the 0.8.0 published miss counts exactly, including a denominator of 11 on the sonnet quickstart.
+Widened, it finds misses the narrower scope did not report — reference filenames the model invented,
+workspace files it looked for inside a skill directory, a script reached through `cd`, and a
+reference opened as a directory.
+
+**Widen the grader before trusting a clean sweep.** Every widening in the list above was added
+because a shape it could not see turned out to be present. A run graded clean by a narrow grader is
+not evidence that the run was clean.

@@ -11,8 +11,8 @@ run opens and closes, and what stays off disk.
 ## Find the workspace
 
 Every path below that names a file in the user's workspace is relative to the `workspace` this step
-prints. The few that name a file inside the plugin instead say so where they are written. Run this
-skill's `scripts/workspace-discovery.sh`.
+prints. The few that name a file inside the plugin instead say so where they are written. Run the
+plugin's `skills/job-search-runbook/scripts/workspace-discovery.sh`.
 
 It prints three lines:
 
@@ -75,8 +75,8 @@ path cannot be read, rather than picking a workspace it might not name. The scri
    counts metered calls: `searches`, `detail_reads`, everything else in `other`, and their sum in
    `total_metered`. Then write `reports/<date>-digest.md`. Then delete `runs/.started-<run_id>` and
    `runs/.scratch/<run_id>/`.
-5. **Check the close** — this skill's `scripts/validate-workspace.sh <workspace> --post-close
-   <run_id>`. It prints nothing and exits 0 when the workspace is right; each line it does print
+5. **Check the close** — the plugin's `skills/job-search-runbook/scripts/validate-workspace.sh
+   <workspace> --post-close <run_id>`. It prints nothing and exits 0 when the workspace is right; each line it does print
    names one file and one broken rule to fix.
 
 A run that has to stop early closes the same way: `close_state` is `blocked` when you can name what

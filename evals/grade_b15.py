@@ -5,16 +5,27 @@ resolve on the first attempt, and did any miss cost a recovery search?
 Usage: python3 evals/grade_b15.py evals/results/<run-dir> [<run-dir> ...]
        python3 evals/grade_b15.py --json evals/results/<run-dir>
 
-Method (the C10 method of the 2026-07-30 matrix, widened so it cannot miss a shape):
+Method (the 2026-07-30 matrix's method, widened four times — each widening added because a
+shape the grader could not see turned out to be present in the runs it had already graded):
 
-* Every `Read` whose `file_path` sits under the plugin directory counts as an open.
-* Every `Bash` command counts one open per whitespace-separated token that starts with the
-  plugin directory and is not a directory — this catches `cat <path>`, `bash <path>`, and a
-  bare `<path>` run as a script, which a Read-only sweep would not see.
-* An open is a **miss** when its tool result came back an error, or when the path it named
-  does not exist in the tree. Both are checked; either one counts.
-* A `Glob`, `Grep`, `pwd`, or `ls` issued in the 60 seconds after a miss counts as a
-  **recovery search** — the flailing C10 measured, not just the wasted call.
+* Every `Read` whose `file_path` sits under the plugin directory counts as an open, **including
+  a Read aimed at a directory**, which returns EISDIR and is a real failed open. Discarding
+  directories before checking the error hid that shape completely.
+* Every `Bash` command counts one open per path it names under the plugin directory. Paths are
+  followed through `cd`, so `cd <skill dir> && ./scripts/foo.sh` is one open on that script;
+  keeping only tokens already rooted at the plugin directory sees nothing there. `=` splits as
+  a separator, so a shell assignment `SCRIPT=/abs/path` yields the path and not a mangled token.
+* A path the command text cannot show — assembled from a variable that expanded to nothing — is
+  taken from the shell's own "No such file or directory" line. Absolute paths under the plugin
+  directory are left to the command-text scan, so nothing is counted twice.
+* An open is a **miss** when the path is not a file in the tree; a `Read` also misses when its
+  result came back an error. A `Bash` non-zero exit does not count — that is usually the
+  script's own verdict, not a path that failed to resolve.
+* A `Glob`, `Grep`, `pwd`, `ls`, or `find` issued in the 60 seconds after a miss counts as a
+  **recovery search** — the calls the agent spends hunting, not just the wasted one.
+
+Restricted to the 2026-07-30 scope (Read only, on `shared/references/` and `templates/` paths)
+this returns that matrix's published counts exactly: 1 of 11 and 2 of 6.
 
 The plugin directory comes from the transcript's own `init` event, so a run recorded against
 a different checkout is graded against the tree that was live for it. `--tree` overrides it
@@ -34,8 +45,16 @@ REF_SKILLS = ("job-search:job-search-runbook", "job-search:agent-data-reference"
 REF_SUBSET = re.compile(
     r"(shared/references/|/templates/|^templates/"
     r"|skills/(job-search-runbook|agent-data-reference)/SKILL\.md)")
-RECOVERY_BASH = re.compile(r"^\s*(pwd|ls)\b")
+RECOVERY_BASH = re.compile(r"^\s*(pwd|ls|find)\b")
 RECOVERY_WINDOW_S = 60.0
+# A shell reports a path it could not open. This is how a failed open is caught when the command
+# text cannot show the path — built from a variable that expanded to nothing, most often.
+SHELL_NOT_FOUND = re.compile(r"(\S+): No such file or directory")
+# What makes a path plugin-internal even when it is not rooted at the plugin directory.
+PLUGIN_SHAPED = re.compile(r"(^|/)(skills|shared|templates|scripts)/")
+SEGMENT_SPLIT = re.compile(r"(?:&&|\|\||[;\n|])")
+CD_SEGMENT = re.compile(r"^\s*cd\s+(\S+)")
+GLOB_CHARS = set("*?[]{}$")
 
 
 def events(transcript):
@@ -65,6 +84,14 @@ def plugin_dir(transcript, name="job-search"):
     return None
 
 
+def session_cwd(transcript):
+    """The directory the session starts in, which is what a relative path resolves against."""
+    for _, ev in events(transcript):
+        if ev.get("type") == "system" and ev.get("subtype") == "init":
+            return ev.get("cwd")
+    return None
+
+
 def init_skills(transcript, prefix="job-search:"):
     for _, ev in events(transcript):
         if ev.get("type") == "system" and ev.get("subtype") == "init":
@@ -72,13 +99,51 @@ def init_skills(transcript, prefix="job-search:"):
     return []
 
 
-def bash_paths(command, root):
-    """Every token in a shell command that names a file under the plugin directory."""
+def bash_paths(command, root, cwd=None):
+    """Every path a shell command names under the plugin directory, absolute or relative.
+
+    A relative path is only visible once you know what directory the shell is standing in, so
+    this walks the command segment by segment and follows `cd`. Without that,
+    `cd <skill dir> && ./scripts/foo.sh` yields nothing, and that is a real failed open.
+    """
+    out, here = [], cwd
+    for segment in SEGMENT_SPLIT.split(command or ""):
+        moved = CD_SEGMENT.match(segment)
+        if moved:
+            target = moved.group(1).strip("\"'")
+            here = target if os.path.isabs(target) else (
+                os.path.normpath(os.path.join(here, target)) if here else None)
+            continue
+        # `=` splits too: a shell assignment like `SCRIPT=/abs/path` holds a real path, and
+        # leaving it glued to the variable name makes the token look like a relative path.
+        for tok in re.split(r"[\s<>()=\"']+", segment):
+            tok = tok.strip().rstrip(",")
+            if not tok or GLOB_CHARS & set(tok):
+                continue
+            if tok.startswith(root + "/"):
+                out.append(os.path.normpath(tok))
+            elif here and ("/" in tok) and not os.path.isabs(tok):
+                resolved = os.path.normpath(os.path.join(here, tok.lstrip("./") if
+                                                         tok.startswith("./") else tok))
+                if resolved.startswith(root + "/"):
+                    out.append(resolved)
+    return out
+
+
+def shell_reported_misses(result_text, root):
+    """Plugin paths the shell said it could not open, taken from the command's own output.
+
+    The input-side scan can only see paths the command spells out. A path assembled from a
+    variable that expanded to nothing never appears there, and the only place it shows up is the
+    error the shell printed. Absolute paths under the plugin directory are left to the input-side
+    scan, so nothing is counted twice.
+    """
     out = []
-    for tok in re.split(r"[\s;|&<>()\"']+", command or ""):
-        tok = tok.rstrip(",")
-        if tok.startswith(root + "/"):
-            out.append(tok)
+    for path in SHELL_NOT_FOUND.findall(result_text or ""):
+        if path.startswith(root + "/"):
+            continue  # the input-side scan already has this one
+        if PLUGIN_SHAPED.search(path) and not path.startswith("./"):
+            out.append(path)
     return out
 
 
@@ -89,6 +154,7 @@ def grade(run_dir, tree=None):
     root = plugin_dir(transcript)
     if not root:
         return {"run": os.path.basename(run_dir), "error": "no plugin path in init event"}
+    cwd = session_cwd(transcript)
     opens, recoveries, ref_hits, uses = [], [], [], {}
     tool_events = []  # (t, name, input) for every tool call, for the recovery window
 
@@ -106,26 +172,37 @@ def grade(run_dir, tree=None):
                 if not u:
                     continue
                 t0, name, inp = u
+                body = b.get("content")
+                body = body if isinstance(body, str) else json.dumps(body)
+                err = bool(b.get("is_error"))
                 if name == "Read" and str(inp.get("file_path", "")).startswith(root + "/"):
-                    attempts = [inp["file_path"]]
+                    attempts = [(inp["file_path"], False)]
                 elif name == "Bash":
-                    attempts = bash_paths(inp.get("command", ""), root)
+                    attempts = [(p, False) for p in bash_paths(inp.get("command", ""), root, cwd)]
+                    attempts += [(p, True) for p in shell_reported_misses(body, root)]
                 else:
                     continue
-                err = bool(b.get("is_error"))
-                for p in attempts:
+                for p, from_shell_error in attempts:
                     if p.startswith(os.path.join(root, "evals") + os.sep):
                         continue  # the run's own scratch and results, not a plugin reference
                     resolved = p if not tree else os.path.join(tree, os.path.relpath(p, root))
-                    if os.path.isdir(resolved):
+                    if from_shell_error:
+                        # The shell already said it could not open this one.
+                        exists, miss = False, True
+                    elif name == "Bash" and os.path.isdir(resolved):
                         continue  # a directory named in a shell command is not a file open
-                    exists = os.path.isfile(resolved)
-                    # A Bash call reports one exit status for the whole command, and a non-zero
-                    # exit is usually the script's own verdict, not a path that did not resolve.
-                    # Only a Read's error is evidence about the path; for Bash, existence decides.
-                    miss = (not exists) if name == "Bash" else ((not exists) or err)
-                    opens.append({"t": t0, "tool": name, "path": p,
-                                  "exists": exists, "is_error": err, "miss": miss})
+                    else:
+                        exists = os.path.isfile(resolved)
+                        # A Bash call reports one exit status for the whole command, and a
+                        # non-zero exit is usually the script's own verdict, not a path that did
+                        # not resolve — so for Bash, existence decides. A Read's error is
+                        # evidence about the path itself, including a Read aimed at a directory,
+                        # which is a real failed open and is why the directory skip above is
+                        # scoped to Bash.
+                        miss = (not exists) if name == "Bash" else ((not exists) or err)
+                    opens.append({"t": t0, "tool": name, "path": p, "exists": exists,
+                                  "is_error": err, "miss": miss,
+                                  "seen_in": "shell error" if from_shell_error else "command"})
 
     for m in [o for o in opens if o["miss"]]:
         for t, name, inp in tool_events:

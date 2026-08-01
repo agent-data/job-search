@@ -43,9 +43,9 @@ All notable changes to this project are documented here. The format is based on
 - **`skills/job-search-runbook/scripts/validate-workspace.sh` enforces the file rules.** Config keys,
   the brief's front matter, run-record fields and UTC timestamps, and — with
   `--post-close <run_id>` — that the run left no marker and no scratch directory behind.
-- **Behavior is graded by live evals.** `evals/` holds `run_eval.py`, the fourteen kept behaviors
-  B1–B14 in `behaviors.md`, six cases in `cases/`, and the pre-rewrite baseline numbers B14
-  compares against. Runs spawn a real session against the live Job Postings API, so they are a
+- **Behavior is graded by live evals.** `evals/` holds `run_eval.py` and `run_triggering.py`,
+  sixteen behaviors B1–B16 in `behaviors.md`, seven cases in `cases/`, and the pre-rewrite baseline
+  numbers B14 compares against. Runs spawn a real session against the live Job Postings API, so they are a
   local release gate; CI checks only that the case config is coherent.
 
 ### Removed

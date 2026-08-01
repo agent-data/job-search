@@ -199,24 +199,50 @@ routing worse. Both were measured live on sonnet and haiku. Aggregates only, lik
 
 ## Pointer misses, before and after
 
+**The mechanism is the argument here; the counts below support it and cannot carry it alone.**
+
+Two of the three miss shapes 0.8.0 measured are now impossible rather than merely rarer. No SKILL.md
+addresses a file by counting directory steps up or through a plugin-root token, and reintroducing
+either shape into any one SKILL.md fails 11 tests across
+`tests/test_skill_frontmatter.py::test_no_skill_counts_directory_steps_up` and
+`tests/test_reference_resolution.py::test_no_computed_pointer_survives_anywhere` (checked by putting
+one back and running the suite). The two template paths that those shapes missed four times in the
+0.8.0 runs are opened four times in the runs after, and missed none.
+
 Behavior row B15, graded by `evals/grade_b15.py`, which replays a run's transcript and checks every
-path under the plugin directory the run opened — by `Read`, or named in a `Bash` command — against
-the tree that run actually saw. On the two runs the 0.8.0 review measured by hand it returns the
-same miss counts, so the two columns below are the same measurement.
+path under the plugin directory the run opened — by `Read`, or named in a `Bash` command, including
+a path reached through `cd` and one the shell reported it could not open — against the tree that run
+actually saw. Both columns are graded by the same script at the same width.
 
 | | 0.8.0 (five skills, `shared/`, plugin-relative pointers) | after the restructure (seven skills, co-located paths) |
 |---|---|---|
 | runs graded | 12 | 9 |
-| plugin file opens | 89 | 48 |
-| **opens that missed** | **5** | **0** |
-| recovery searches after a miss | 5 | 0 |
+| plugin file opens | 91 | 54 |
+| **opens that missed** | **6 (6.6%)** | **2 (3.7%)** |
+| runs with at least one failed open | 4 of 12 | 2 of 9 |
+| recovery searches after a miss | 9 | 5 |
 | references reached by skill name instead of by path | 0 | 25 |
 
-The 0.8.0 misses came in three shapes. Two of them are now structurally impossible: no SKILL.md
-contains `../../` or a plugin-root token, and `tests/test_skill_frontmatter.py` and
-`tests/test_reference_resolution.py` fail the build if one appears. The third — a model inventing a
-reference filename — is still possible, because nothing stops a model naming a file that was never
-there. It did not happen in any of the nine runs above.
+**The count on its own proves nothing.** Fisher exact two-sided on the per-open rates is p = 0.710,
+and on runs with at least one failed open p = 0.659. Even a clean sweep would not have carried the
+conclusion: zero misses in 54 opens has probability 0.027 under the 0.8.0 rate, which is suggestive
+and not decisive. The claim these numbers support is **the restructure reduced pointer misses** — not
+that pointer misses went away.
+
+They did not go away. Two failed opens survive in the runs after, and neither is one of the shapes
+the restructure removed:
+
+- A skill's text told the agent to run "this skill's" script. The agent was executing a *different*
+  skill at the time — the sentence lives in a reference that siblings read — so it resolved the
+  possessive against its own directory, failed, and spent three `ls` calls over about 7 seconds
+  finding the real path. Fixed here: both pointers in that reference now name
+  `skills/<skill>/scripts/…` in full.
+- An agent read a reference by its **directory** rather than its `SKILL.md`, got `EISDIR`, and spent
+  two `find` calls recovering. A reference is only a directory to aim at because it became a skill,
+  so this shape is new since the promotion.
+
+The third 0.8.0 shape — a model inventing a reference filename — remains possible, because nothing
+stops a model naming a file that was never there. It did not occur in the nine runs after.
 
 ## Read path, first result, metered calls
 
@@ -230,9 +256,9 @@ there. It did not happen in any of the nine runs above.
 | metered calls, one daily pass (same seed) | 43–50 | 40 | 55 | 31 and 44 |
 
 **Read the read-path rows with one correction.** They no longer count the same text. A reference now
-arrives through the Skill tool rather than a `Read`, so its body never appears as read lines. The
-honest claim is that fewer files are opened and none of the opens is wasted — not that less text
-reaches the model.
+arrives through the Skill tool rather than a `Read`, so its body never appears as read lines. What
+the rows support is that fewer files are opened — not that less text reaches the model, and not that
+every open lands: two of 54 still did not, and they are described above.
 
 **The timing row is not comparable to the GREEN column.** A latency fix to the job-postings API was
 deployed on 2026-07-31; every GREEN timing number predates it and every LOCALITY number postdates
