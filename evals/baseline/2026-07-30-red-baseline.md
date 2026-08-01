@@ -199,38 +199,55 @@ routing worse. Both were measured live on sonnet and haiku. Aggregates only, lik
 
 ## Pointer misses, before and after
 
-**The mechanism is the argument here; the counts below support it and cannot carry it alone.**
+**The mechanism is the argument here. The counts below support it and cannot carry it alone.**
 
-Two of the three miss shapes 0.8.0 measured are now impossible rather than merely rarer. No SKILL.md
-addresses a file by counting directory steps up or through a plugin-root token, and reintroducing
-either shape into any one SKILL.md fails 11 tests across
-`tests/test_skill_frontmatter.py::test_no_skill_counts_directory_steps_up` and
-`tests/test_reference_resolution.py::test_no_computed_pointer_survives_anywhere` (checked by putting
-one back and running the suite). The two template paths that those shapes missed four times in the
-0.8.0 runs are opened four times in the runs after, and missed none.
+Two of the three miss shapes 0.8.0 measured are now impossible rather than merely rarer, and the
+third — the one the evals caught *after* the restructure — is gated as of this block. Each shape was
+put back into a single SKILL.md and the suite run, so these are failure counts, not expectations:
+
+| pointer shape reintroduced | tests that fail | which |
+|---|---|---|
+| `../../shared/references/runbook.md` | **11** | `test_every_reference_resolves_in_place_on_host` (8, one per host), `test_every_plugin_file_a_skill_names_exists`, `test_no_computed_pointer_survives_anywhere`, `test_no_skill_counts_directory_steps_up` |
+| `<plugin-root>/templates/x.yaml` | **2** | `test_every_plugin_file_a_skill_names_exists`, `test_no_computed_pointer_survives_anywhere` |
+| a reference skill naming its own `scripts/<file>` | **1** | `test_no_reference_skill_addresses_a_file_from_its_own_directory` |
+
+The two template paths those shapes missed four times in the 0.8.0 runs are opened four times in the
+runs after, and missed none.
 
 Behavior row B15, graded by `evals/grade_b15.py`, which replays a run's transcript and checks every
 path under the plugin directory the run opened — by `Read`, or named in a `Bash` command, including
 a path reached through `cd` and one the shell reported it could not open — against the tree that run
 actually saw. Both columns are graded by the same script at the same width.
 
-| | 0.8.0 (five skills, `shared/`, plugin-relative pointers) | after the restructure (seven skills, co-located paths) |
-|---|---|---|
-| runs graded | 12 | 9 |
-| plugin file opens | 91 | 54 |
-| **opens that missed** | **6 (6.6%)** | **2 (3.7%)** |
-| runs with at least one failed open | 4 of 12 | 2 of 9 |
-| recovery searches after a miss | 9 | 5 |
-| references reached by skill name instead of by path | 0 | 25 |
+**Two 0.8.0 denominators, because the choice changes the headline.** The window named above holds
+**24 sessions across six cases**. Only two of those cases — `quickstart` and `headless-run` — were
+re-run after the restructure, so a like-for-like comparison uses the 12 sessions of those two cases,
+and a whole-window comparison uses all 24. Both are given; neither is picked for its result.
 
-**The count on its own proves nothing.** Fisher exact two-sided on the per-open rates is p = 0.710,
-and on runs with at least one failed open p = 0.659. Even a clean sweep would not have carried the
-conclusion: zero misses in 54 opens has probability 0.027 under the 0.8.0 rate, which is suggestive
-and not decisive. The claim these numbers support is **the restructure reduced pointer misses** — not
-that pointer misses went away.
+| | 0.8.0, whole window (24 sessions, six cases) | 0.8.0, the two cases re-run after (12 sessions) | after the restructure (9 sessions, the same two cases) |
+|---|---|---|---|
+| plugin file opens | 136 | 91 | 54 |
+| **opens that missed** | **6 (4.4%)** | **6 (6.6%)** | **2 (3.7%)** |
+| runs with at least one failed open | 4 of 24 | 4 of 12 | 2 of 9 |
+| recovery searches after a miss | 9 | 9 | 5 |
+| references reached by skill name instead of by path | 0 | 0 | 25 |
 
-They did not go away. Two failed opens survive in the runs after, and neither is one of the shapes
-the restructure removed:
+Both 0.8.0 columns carry the same six misses; they differ only in how many opens sit beside them.
+The `fit`, `fault-503`, `kill-midrun` and `schedule` sessions add 45 opens and no misses.
+
+**On the counts alone, nothing is established.** Fisher exact two-sided against the post column is
+**p = 1.000** on the whole window and **p = 0.710** on the two re-run cases; on runs with at least
+one failed open, p = 0.659. Even a clean sweep would not have carried the strong claim: zero misses
+in 54 opens has probability 0.025 under the two-case 0.8.0 rate (exact binomial), which is
+suggestive and not decisive. **What these numbers support is that the restructure reduced pointer
+misses — not that pointer misses went away, and on the wider denominator not even that much.**
+
+**B15's verdict: it fails on 2 of the 9 runs after**, both haiku daily passes. The row's pass rule
+is a miss count of zero and those runs have one each; it passes on every sonnet run and on every
+`quickstart` run.
+
+The misses did not go away. Two failed opens survive in the runs after, and neither is one of the
+shapes the restructure removed:
 
 - A skill's text told the agent to run "this skill's" script. The agent was executing a *different*
   skill at the time — the sentence lives in a reference that siblings read — so it resolved the

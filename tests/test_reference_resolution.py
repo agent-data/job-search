@@ -333,6 +333,71 @@ def test_the_gate_catches_a_reintroduced_computed_pointer(planted):
     assert offenders, f"the gate did not catch a reintroduced pointer: {planted!r}"
 
 
+def _colocated_offenders_in(rel, text):
+    """Co-located pointers written inside a reference skill — a file addressed as `scripts/x.sh` or
+    `templates/x.json`, with no skill named."""
+    out = []
+    for m in _COLOCATED_PTR.finditer(text):
+        line = f"{rel} -> `{m.group(0)}`"
+        if line not in out:
+            out.append(line)
+    return out
+
+
+def test_no_reference_skill_addresses_a_file_from_its_own_directory():
+    """A reference skill names every file in full, `skills/<skill>/…`, never `scripts/<file>`.
+
+    The two shapes gated above were caught by the 0.8.0 evals. This one was caught by the evals
+    *after* the restructure, and it is the same defect wearing different clothes. The runbook said
+    "run this skill's `scripts/workspace-discovery.sh`"; a model executing `job-search-run` read
+    that sentence, bound it to its own directory, ran `cd <job-search-run> && ./scripts/…`, got
+    exit 127, and spent three `ls` calls finding the real path.
+
+    Why the rule is scoped to reference skills and not to all seven: a co-located pointer says "the
+    directory of the skill this text belongs to", and that is only unambiguous when the skill that
+    owns the text is the skill doing the work. A user-triggered skill is entered and then acts, so
+    the two coincide and the short form is correct — it is the form Task 1 established. A reference
+    skill is never the one acting: its text is always carried out by a sibling, so the same pointer
+    resolves against whichever skill happens to be executing.
+
+    This checks the pointer's form, which is what a test can settle. The possessive that introduced
+    it — "this skill's" — is prose, and prose is not what makes the address ambiguous; writing the
+    skill out in full fixes the sentence whether or not a possessive precedes it.
+    """
+    offenders = []
+    for name in REFERENCE_SKILLS:
+        f = SKILLS / name / "SKILL.md"
+        offenders += _colocated_offenders_in(f.relative_to(ROOT).as_posix(),
+                                             f.read_text(encoding="utf-8"))
+    assert not offenders, (
+        "a reference skill is read while a different skill is executing, so a pointer relative to "
+        "'this skill' resolves against the wrong directory. Name the owning skill in full, "
+        "`skills/<skill>/…`:\n  " + "\n  ".join(offenders))
+
+
+@pytest.mark.parametrize("planted", [
+    "Run this skill's `scripts/workspace-discovery.sh`.",
+    "Check the close with `scripts/validate-workspace.sh <workspace>`.",
+    "The shape is in `templates/run-record.example.json`.",
+])
+def test_the_reference_gate_catches_a_reintroduced_colocated_pointer(planted):
+    """The gate above only earns trust if it fires. Each of these passed the whole suite before it
+    existed, including the exact sentence that failed live."""
+    assert _colocated_offenders_in("skills/job-search-runbook/SKILL.md", planted), (
+        f"the gate did not catch a reintroduced co-located pointer: {planted!r}")
+
+
+@pytest.mark.parametrize("allowed", [
+    "run the plugin's `skills/job-search-runbook/scripts/workspace-discovery.sh`",
+    "the shape is `skills/job-search-run/templates/run-record.example.json`",
+    "the ten rules under **How to communicate** in `../job-search/SKILL.md`",
+])
+def test_the_reference_gate_leaves_a_fully_named_pointer_alone(allowed):
+    """A gate that fired on everything would be no gate. A reference skill naming the owning skill
+    in full is the form this asks for, and must pass."""
+    assert _colocated_offenders_in("skills/job-search-runbook/SKILL.md", allowed) == []
+
+
 @pytest.mark.parametrize("allowed", [
     "copy this skill's `templates/config.example.yaml` to `config.yaml`",
     "the shape is `skills/job-search-run/templates/run-record.example.json`",
