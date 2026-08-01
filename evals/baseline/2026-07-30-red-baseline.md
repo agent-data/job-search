@@ -214,14 +214,18 @@ expectations:
 | the same with a leading `./` | **1** | the same test |
 | the same as a bare `templates/` or `scripts/` | **2** | the same test, plus `test_every_plugin_file_a_skill_names_exists` |
 | the same as a bare file name, no directory | **1** | the same test |
+| a bare file name with a leading `./` | **1** | the same test |
+| the same inside a fenced command, or after `cd … &&` | **1** | the same test |
+| a file in a directory the gate was never told about | **1** | the same test |
 
-**What "gated" claims, exactly.** The last four rows are four ways of writing one defect, and the
-first version of that gate caught only the first of them: it required a file name with an extension,
-so a bare `templates/` slipped past, and its lookbehind could not see past a leading `./` — the form
-the failing run actually executed. All four are planted in the suite by name now, so the gate is
-checked against the spellings that beat it rather than against the one it was written for. What is
-gated is the address; a reference skill that names one of its own files without naming itself fails,
-however it spells it. Nothing here gates a defect nobody has written down yet.
+**What "gated" claims, exactly.** Those rows are ways of writing one defect, and the gate has been
+declared working twice and defeated twice — each time by a spelling nobody had planted, never by a
+flaw anyone found by reading it. Its first version required a file name with an extension and could
+not see past a leading `./`, the form the failing run executed; its second reopened the same `./`
+hole in the rule it had just added. **Twelve spellings are planted in the suite by name now, and
+the claim goes no further than those twelve.** Each one someone defeats it with becomes a permanent case,
+which is the only thing that has actually worked. Nothing here gates a defect nobody has written
+down yet, and past experience says more spellings exist.
 
 The two template paths those shapes missed four times in the 0.8.0 runs are opened four times in the
 runs after, and missed none.

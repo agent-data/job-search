@@ -252,6 +252,16 @@ _COMPUTED_PTR = re.compile(r"(?:<plugin-root>/|(?:\.\./){2,})((?:[A-Za-z0-9._-]+
 #   - `./scripts/foo.sh` is the form the failing run actually executed. Dropping `.` from the
 #     lookbehind does not reach it — the character before `scripts` is `/`, which the lookbehind
 #     also rejects — so the `./` has to be matched explicitly.
+#
+# This pattern feeds `_plugin_file_pointers` as well as the reference gate, so widening it widened
+# both: a bare `templates/` or `scripts/` written in any of the seven SKILL.md files is now a
+# dangling-pointer failure when that directory does not exist beside it. That is the behaviour to
+# want — a pointer at a directory the skill does not have is broken wherever it is written — but it
+# is a second effect of one edit, so it is recorded here rather than left to be discovered.
+#
+# Its three directory names are fixed because it is shared. The per-skill rule in
+# `_colocated_offenders_in` derives the set from the skill instead, which is what covers a
+# directory nobody listed here.
 _COLOCATED_PTR = re.compile(
     r"(?<![\w./-])(?:\./)?(?:templates|scripts|references)/"
     r"(?:[A-Za-z0-9._-]+(?:\.[A-Za-z0-9]+)?)?")
@@ -341,35 +351,80 @@ def test_the_gate_catches_a_reintroduced_computed_pointer(planted):
     assert offenders, f"the gate did not catch a reintroduced pointer: {planted!r}"
 
 
+# Every rule below starts with this: not inside a longer path, and an optional `./`. Written once
+# because writing it twice is how the `./` spelling got back in — `_COLOCATED_PTR` matched it and
+# the bare-name rule beside it did not, and the form the live failure executed was `./…`.
+_NOT_IN_A_PATH = r"(?<![\w./-])(?:\./)?"
+
+
+def _own_subdirs(skill_dir):
+    """Every directory inside this skill, whatever it is called.
+
+    Derived rather than hardcoded. `_COLOCATED_PTR` knows only `templates|scripts|references`
+    because it is shared with the resolution tests; a skill that grows a `bin/` would slip past it,
+    and did when that was tried."""
+    return sorted(d.name for d in skill_dir.iterdir() if d.is_dir())
+
+
 def _own_file_names(skill_dir):
-    """Every file name living in this skill's own `scripts/` or `templates/` directory."""
-    return sorted({f.name for sub in ("scripts", "templates")
-                   for f in (skill_dir / sub).glob("*") if f.is_file()})
+    """Every file name living in a directory of this skill's own, at any depth."""
+    return sorted({f.name for d in skill_dir.iterdir() if d.is_dir()
+                   for f in d.rglob("*") if f.is_file()})
+
+
+def _body_without_frontmatter(text):
+    """The SKILL.md body, with the YAML frontmatter block removed."""
+    if text.startswith("---\n"):
+        end = text.find("\n---", 4)
+        if end != -1:
+            return text[end + 4:]
+    return text
 
 
 def _colocated_offenders_in(rel, text, skill_dir=None):
     """Every way a reference skill can name one of its own files without naming itself.
 
-    Two shapes, because the address is what has to be unambiguous and there is more than one way
+    Three rules, because the address is what has to be unambiguous and there is more than one way
     to leave it ambiguous:
-      - a path starting at the co-located directory — `scripts/x.sh`, `./scripts/x.sh`, `templates/`;
-      - a bare file name that happens to be one of this skill's own files, with no directory at
-        all. `workspace-discovery.sh` on its own tells a reader nothing about where to find it.
-    A name inside a full `skills/<skill>/…` path is preceded by `/`, which the lookbehind rejects,
-    so the written form this gate asks for never trips it.
+      - a path starting at a co-located directory this file knows by name — `scripts/x.sh`,
+        `./scripts/x.sh`, a bare `templates/`;
+      - the same, for a directory this skill actually has, whatever it is called, so a new `bin/`
+        is covered without editing a list here;
+      - a bare file name that is one of this skill's own files, with no directory at all.
+        `workspace-discovery.sh` on its own tells a reader nothing about where to find it.
+
+    A name inside a full `skills/<skill>/…` path is preceded by `/`, which every rule's lookbehind
+    rejects, so the written form this gate asks for never trips it.
+
+    **The bare-name rule reads the body only, never the frontmatter.** A `description:` is a routing
+    surface — a router reads it to choose a skill, and nobody executes a path out of it — and it has
+    a 200-character budget that a full `skills/<skill>/scripts/<file>` path does not fit inside. So
+    the remedy this rule demands is unavailable there, and applying it to frontmatter would leave a
+    gate whose only escape is writing the script names without their extensions by luck.
     """
     out = []
-    for m in _COLOCATED_PTR.finditer(text):
-        line = f"{rel} -> `{m.group(0)}`"
+
+    def add(tok, why=""):
+        line = f"{rel} -> `{tok}`{why}"
         if line not in out:
             out.append(line)
-    names = _own_file_names(skill_dir) if skill_dir else []
-    if names:
-        bare = re.compile(r"(?<![\w./-])(?:" + "|".join(re.escape(n) for n in names) + r")\b")
-        for m in bare.finditer(text):
-            line = f"{rel} -> `{m.group(0)}` (a file of this skill's, named without the skill)"
-            if line not in out:
-                out.append(line)
+
+    for m in _COLOCATED_PTR.finditer(text):
+        add(m.group(0))
+    if skill_dir:
+        subdirs = _own_subdirs(skill_dir)
+        if subdirs:
+            own_dir = re.compile(_NOT_IN_A_PATH + r"(?:" +
+                                 "|".join(re.escape(d) for d in subdirs) + r")/"
+                                 r"(?:[A-Za-z0-9._-]+(?:\.[A-Za-z0-9]+)?)?")
+            for m in own_dir.finditer(text):
+                add(m.group(0))
+        names = _own_file_names(skill_dir)
+        if names:
+            bare = re.compile(_NOT_IN_A_PATH + r"(?:" +
+                              "|".join(re.escape(n) for n in names) + r")\b")
+            for m in bare.finditer(_body_without_frontmatter(text)):
+                add(m.group(0), " (a file of this skill's, named without the skill)")
     return out
 
 
@@ -405,12 +460,27 @@ def test_no_reference_skill_addresses_a_file_from_its_own_directory():
 
 
 @pytest.mark.parametrize("planted", [
-    # The sentence that failed live, then the three spellings of it that defeated this gate's
-    # first regex. Each passed the whole suite at some point, so each is kept here by name.
+    # This list is the gate. Every spelling anyone has defeated it with is kept here by name,
+    # permanently, because the gate has now been declared working twice and defeated twice — both
+    # times by a spelling nobody had planted, never by a flaw anyone spotted by reading it.
+    #
+    # Round 2: the sentence that failed live.
     "Run this skill's `scripts/workspace-discovery.sh`.",
+    # Round 3: three spellings that beat the first regex — it required a file extension and its
+    # lookbehind could not see past a leading `./`.
     "Run this skill's `./scripts/workspace-discovery.sh`.",
     "Take a template out of this skill's `templates/`, and the scripts are in `scripts/`.",
     "Run this skill's `workspace-discovery.sh`.",
+    # Round 4: six more, all the same `./` hole reopened in the bare-name rule, which had been
+    # built with the lookbehind but without the `./` alternative.
+    "Run this skill's `./workspace-discovery.sh`.",
+    "Check the close with `./validate-workspace.sh <workspace> --post-close <run_id>`.",
+    "Run `cd skills/job-search-runbook/scripts && ./workspace-discovery.sh`.",
+    "```bash\n./workspace-discovery.sh\n```",
+    'Run `sh ./workspace-discovery.sh` or `bash -c "./workspace-discovery.sh"`.',
+    # The live failure with one directory segment removed, which is as close to it as prose gets.
+    'Run `cd "$dir" && ./workspace-discovery.sh && echo ok`.',
+    # Written forms that were caught from the start, kept so a rewrite cannot lose them.
     "Check the close with `scripts/validate-workspace.sh <workspace>`.",
     "The shape is in `templates/run-record.example.json`.",
 ])
@@ -418,8 +488,9 @@ def test_the_reference_gate_catches_a_reintroduced_colocated_pointer(planted):
     """The gate above only earns trust if it fires — on every spelling, not on one.
 
     A gate whose adversarial cases live only in a review transcript is a gate that drifts back.
-    The first of these passed before the gate existed; the next three passed against its first
-    regex, which required a file extension and could not see past a leading `./`."""
+    Each entry above passed the whole suite at some point: the first before the gate existed, the
+    next three against its first regex, and the next six against its second, where the `./` hole
+    the third round closed in one rule was reopened in the rule the third round added."""
     assert _colocated_offenders_in("skills/job-search-runbook/SKILL.md", planted,
                                    SKILLS / "job-search-runbook"), (
         f"the gate did not catch a reintroduced co-located pointer: {planted!r}")
@@ -439,6 +510,39 @@ def test_the_reference_gate_leaves_a_fully_named_pointer_alone(allowed):
     this skill's own files."""
     assert _colocated_offenders_in("skills/job-search-runbook/SKILL.md", allowed,
                                    SKILLS / "job-search-runbook") == []
+
+
+def test_the_reference_gate_covers_a_directory_it_was_never_told_about(tmp_path):
+    """A skill that grows a new directory is covered without anyone editing a list.
+
+    `_COLOCATED_PTR` knows three directory names because it is shared with the resolution tests.
+    The per-skill rule derives the set from the skill itself, so a `bin/` nobody anticipated is
+    caught — it was not, before this test existed."""
+    skill = tmp_path / "a-reference-skill"
+    (skill / "bin").mkdir(parents=True)
+    (skill / "bin" / "probe-helper.sh").write_text("#!/bin/sh\n")
+    for planted in ("run this skill's `bin/probe-helper.sh`",
+                    "run this skill's `./bin/probe-helper.sh`",
+                    "run this skill's `probe-helper.sh`"):
+        assert _colocated_offenders_in("x/SKILL.md", planted, skill), (
+            f"a derived directory went ungated: {planted!r}")
+    assert _colocated_offenders_in(
+        "x/SKILL.md", "run the plugin's `skills/a-reference-skill/bin/probe-helper.sh`", skill) == []
+
+
+def test_the_bare_name_rule_leaves_the_routing_description_alone(tmp_path):
+    """A `description:` names what a skill holds; nobody executes a path out of it, and the full
+    `skills/<skill>/scripts/<file>` form the gate asks for does not fit its 200-character budget.
+    Demanding it there would leave a gate whose only escape is naming the scripts without their
+    extensions and hoping nobody adds them."""
+    skill = tmp_path / "a-reference-skill"
+    (skill / "scripts").mkdir(parents=True)
+    (skill / "scripts" / "validate-workspace.sh").write_text("#!/bin/sh\n")
+    fm = ('---\nname: a-reference-skill\n'
+          'description: "Not user-facing. Holds validate-workspace.sh."\n---\n\n# body\n')
+    assert _colocated_offenders_in("x/SKILL.md", fm, skill) == []
+    assert _colocated_offenders_in("x/SKILL.md", fm + "Run `validate-workspace.sh`.\n", skill), (
+        "the body is still gated even when the frontmatter is not")
 
 
 @pytest.mark.parametrize("allowed", [
