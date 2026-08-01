@@ -202,14 +202,26 @@ routing worse. Both were measured live on sonnet and haiku. Aggregates only, lik
 **The mechanism is the argument here. The counts below support it and cannot carry it alone.**
 
 Two of the three miss shapes 0.8.0 measured are now impossible rather than merely rarer, and the
-third — the one the evals caught *after* the restructure — is gated as of this block. Each shape was
-put back into a single SKILL.md and the suite run, so these are failure counts, not expectations:
+third — the one the evals caught *after* the restructure — is gated in the four spellings below.
+Each row was put back into a single SKILL.md and the suite run, so these are failure counts, not
+expectations:
 
 | pointer shape reintroduced | tests that fail | which |
 |---|---|---|
 | `../../shared/references/runbook.md` | **11** | `test_every_reference_resolves_in_place_on_host` (8, one per host), `test_every_plugin_file_a_skill_names_exists`, `test_no_computed_pointer_survives_anywhere`, `test_no_skill_counts_directory_steps_up` |
 | `<plugin-root>/templates/x.yaml` | **2** | `test_every_plugin_file_a_skill_names_exists`, `test_no_computed_pointer_survives_anywhere` |
 | a reference skill naming its own `scripts/<file>` | **1** | `test_no_reference_skill_addresses_a_file_from_its_own_directory` |
+| the same with a leading `./` | **1** | the same test |
+| the same as a bare `templates/` or `scripts/` | **2** | the same test, plus `test_every_plugin_file_a_skill_names_exists` |
+| the same as a bare file name, no directory | **1** | the same test |
+
+**What "gated" claims, exactly.** The last four rows are four ways of writing one defect, and the
+first version of that gate caught only the first of them: it required a file name with an extension,
+so a bare `templates/` slipped past, and its lookbehind could not see past a leading `./` — the form
+the failing run actually executed. All four are planted in the suite by name now, so the gate is
+checked against the spellings that beat it rather than against the one it was written for. What is
+gated is the address; a reference skill that names one of its own files without naming itself fails,
+however it spells it. Nothing here gates a defect nobody has written down yet.
 
 The two template paths those shapes missed four times in the 0.8.0 runs are opened four times in the
 runs after, and missed none.

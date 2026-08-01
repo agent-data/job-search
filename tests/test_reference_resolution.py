@@ -245,8 +245,16 @@ _COMPUTED_PTR = re.compile(r"(?:<plugin-root>/|(?:\.\./){2,})((?:[A-Za-z0-9._-]+
 # A co-located pointer written in a SKILL.md: the skill's own `templates/`, `scripts/` or
 # `references/` directory. The lookbehind rejects a match inside a longer path, where the directory
 # name is not the start of the pointer.
+#
+# Two shapes an earlier version of this pattern let through, both caught by planting them:
+#   - the trailing file name is optional, so a bare `templates/` is a pointer too. Requiring an
+#     extension is the same mistake `_COMPUTED_PTR` above records having made once already.
+#   - `./scripts/foo.sh` is the form the failing run actually executed. Dropping `.` from the
+#     lookbehind does not reach it — the character before `scripts` is `/`, which the lookbehind
+#     also rejects — so the `./` has to be matched explicitly.
 _COLOCATED_PTR = re.compile(
-    r"(?<![\w./-])(?:templates|scripts|references)/[A-Za-z0-9._-]+\.[A-Za-z0-9]+")
+    r"(?<![\w./-])(?:\./)?(?:templates|scripts|references)/"
+    r"(?:[A-Za-z0-9._-]+(?:\.[A-Za-z0-9]+)?)?")
 
 # The same file addressed from the repo root, which is how a SKILL.md names a file another skill owns.
 _ROOT_SKILL_PTR = re.compile(
@@ -333,14 +341,35 @@ def test_the_gate_catches_a_reintroduced_computed_pointer(planted):
     assert offenders, f"the gate did not catch a reintroduced pointer: {planted!r}"
 
 
-def _colocated_offenders_in(rel, text):
-    """Co-located pointers written inside a reference skill — a file addressed as `scripts/x.sh` or
-    `templates/x.json`, with no skill named."""
+def _own_file_names(skill_dir):
+    """Every file name living in this skill's own `scripts/` or `templates/` directory."""
+    return sorted({f.name for sub in ("scripts", "templates")
+                   for f in (skill_dir / sub).glob("*") if f.is_file()})
+
+
+def _colocated_offenders_in(rel, text, skill_dir=None):
+    """Every way a reference skill can name one of its own files without naming itself.
+
+    Two shapes, because the address is what has to be unambiguous and there is more than one way
+    to leave it ambiguous:
+      - a path starting at the co-located directory — `scripts/x.sh`, `./scripts/x.sh`, `templates/`;
+      - a bare file name that happens to be one of this skill's own files, with no directory at
+        all. `workspace-discovery.sh` on its own tells a reader nothing about where to find it.
+    A name inside a full `skills/<skill>/…` path is preceded by `/`, which the lookbehind rejects,
+    so the written form this gate asks for never trips it.
+    """
     out = []
     for m in _COLOCATED_PTR.finditer(text):
         line = f"{rel} -> `{m.group(0)}`"
         if line not in out:
             out.append(line)
+    names = _own_file_names(skill_dir) if skill_dir else []
+    if names:
+        bare = re.compile(r"(?<![\w./-])(?:" + "|".join(re.escape(n) for n in names) + r")\b")
+        for m in bare.finditer(text):
+            line = f"{rel} -> `{m.group(0)}` (a file of this skill's, named without the skill)"
+            if line not in out:
+                out.append(line)
     return out
 
 
@@ -368,7 +397,7 @@ def test_no_reference_skill_addresses_a_file_from_its_own_directory():
     for name in REFERENCE_SKILLS:
         f = SKILLS / name / "SKILL.md"
         offenders += _colocated_offenders_in(f.relative_to(ROOT).as_posix(),
-                                             f.read_text(encoding="utf-8"))
+                                             f.read_text(encoding="utf-8"), f.parent)
     assert not offenders, (
         "a reference skill is read while a different skill is executing, so a pointer relative to "
         "'this skill' resolves against the wrong directory. Name the owning skill in full, "
@@ -376,26 +405,40 @@ def test_no_reference_skill_addresses_a_file_from_its_own_directory():
 
 
 @pytest.mark.parametrize("planted", [
+    # The sentence that failed live, then the three spellings of it that defeated this gate's
+    # first regex. Each passed the whole suite at some point, so each is kept here by name.
     "Run this skill's `scripts/workspace-discovery.sh`.",
+    "Run this skill's `./scripts/workspace-discovery.sh`.",
+    "Take a template out of this skill's `templates/`, and the scripts are in `scripts/`.",
+    "Run this skill's `workspace-discovery.sh`.",
     "Check the close with `scripts/validate-workspace.sh <workspace>`.",
     "The shape is in `templates/run-record.example.json`.",
 ])
 def test_the_reference_gate_catches_a_reintroduced_colocated_pointer(planted):
-    """The gate above only earns trust if it fires. Each of these passed the whole suite before it
-    existed, including the exact sentence that failed live."""
-    assert _colocated_offenders_in("skills/job-search-runbook/SKILL.md", planted), (
+    """The gate above only earns trust if it fires — on every spelling, not on one.
+
+    A gate whose adversarial cases live only in a review transcript is a gate that drifts back.
+    The first of these passed before the gate existed; the next three passed against its first
+    regex, which required a file extension and could not see past a leading `./`."""
+    assert _colocated_offenders_in("skills/job-search-runbook/SKILL.md", planted,
+                                   SKILLS / "job-search-runbook"), (
         f"the gate did not catch a reintroduced co-located pointer: {planted!r}")
 
 
 @pytest.mark.parametrize("allowed", [
+    # Each carries something the gate looks for and must still pass, so an over-firing gate is
+    # caught here: a `scripts/` segment inside a rooted path, a `templates/` segment inside a
+    # rooted path, and plain file names that are not this skill's own files.
     "run the plugin's `skills/job-search-runbook/scripts/workspace-discovery.sh`",
     "the shape is `skills/job-search-run/templates/run-record.example.json`",
-    "the ten rules under **How to communicate** in `../job-search/SKILL.md`",
+    "the workspace holds `config.yaml`, `preferences.md` and `jobs.jsonl`",
 ])
 def test_the_reference_gate_leaves_a_fully_named_pointer_alone(allowed):
     """A gate that fired on everything would be no gate. A reference skill naming the owning skill
-    in full is the form this asks for, and must pass."""
-    assert _colocated_offenders_in("skills/job-search-runbook/SKILL.md", allowed) == []
+    in full is the form this asks for and must pass, as must a plain file name that is not one of
+    this skill's own files."""
+    assert _colocated_offenders_in("skills/job-search-runbook/SKILL.md", allowed,
+                                   SKILLS / "job-search-runbook") == []
 
 
 @pytest.mark.parametrize("allowed", [

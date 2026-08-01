@@ -31,6 +31,15 @@ The plugin directory comes from the transcript's own `init` event, so a run reco
 a different checkout is graded against the tree that was live for it. `--tree` overrides it
 when the checkout has since moved (the pre-promotion baseline is graded from a worktree).
 
+**This depends on where the graded session was standing.** Relative paths resolve against the
+session's own cwd, and the branch that does it accepts any token containing a `/` — a `sed`
+expression, `AI/ML`, an unexpanded `~/Library/LaunchAgents`. Those become candidate opens and
+would each be counted a miss; today they are all discarded because `run_eval.py` puts every
+session's cwd inside the plugin's own `evals/` tree, which this script skips. Point a session's
+cwd anywhere else under the plugin and the false misses appear. The fix is to require a
+candidate to look like a path before resolving it, rather than to depend on where the harness
+stands; until then, re-check this script's output whenever the harness cwd moves.
+
 Also reported, for comparability with the 0.8.0 C10 rows: the **reference-and-template
 subset**, the files C10 scoped itself to. Pre-promotion those live under `shared/references/`
 and `templates/`; post-promotion the templates live under `skills/*/templates/` and the two
