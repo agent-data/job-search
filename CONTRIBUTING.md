@@ -46,7 +46,7 @@ The seven `SKILL.md` files are what every run reads before it can do anything, s
 combined length is a product cost, not a style question. Measure before and after any change to them:
 
 ```bash
-wc -w skills/*/SKILL.md   # 9,096 total as of 0.8.0; the budget is 10,000
+wc -w skills/*/SKILL.md   # 9,092 total; the budget is 10,000
 ```
 
 If a change needs more words there, cut somewhere else in the same PR. Detail that only a contributor needs

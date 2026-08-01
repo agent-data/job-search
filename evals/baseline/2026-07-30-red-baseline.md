@@ -202,7 +202,7 @@ routing worse. Both were measured live on sonnet and haiku. Aggregates only, lik
 **The mechanism is the argument here. The counts below support it and cannot carry it alone.**
 
 Two of the three miss shapes 0.8.0 measured are now impossible rather than merely rarer, and the
-third — the one the evals caught *after* the restructure — is gated in the four written forms
+third — the one the evals caught *after* the restructure — is gated in the seven written forms
 below.
 Each row was put back into a single SKILL.md and the suite run, so these are failure counts, not
 expectations:
@@ -223,8 +223,11 @@ expectations:
 declared working twice and defeated twice — each time by a way of writing the defect that no test
 case covered, never by a flaw anyone found by reading the rule. Its first version required a file
 name with an extension and could not see past a leading `./`, the form the failing run executed;
-its second reopened the same `./` hole in the rule it had just added. **Twelve written forms are
-test cases in the suite now, by name, and the claim goes no further than those twelve.** Each one
+its second reopened the same `./` hole in the rule it had just added. **Sixteen written forms are
+test cases in the suite now, by name — twelve in the parametrize list, three more in
+`test_the_reference_gate_covers_a_directory_it_was_never_told_about`, one in
+`test_the_bare_name_rule_leaves_the_routing_description_alone` — and the claim goes no further
+than those sixteen.** Each one
 someone gets past the gate with becomes a permanent case, which is the only thing that has actually
 worked. Nothing here gates a defect nobody has written down yet, and past experience says more
 forms exist.

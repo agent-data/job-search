@@ -242,6 +242,12 @@ DEFERRED_DIRS = {str(pathlib.PurePosixPath(p).parent) for p in DEFERRED_MOVES}
 # missing the very pointer shape it exists to catch.
 _COMPUTED_PTR = re.compile(r"(?:<plugin-root>/|(?:\.\./){2,})((?:[A-Za-z0-9._-]+/)*[A-Za-z0-9._-]*)")
 
+# Every pointer rule in this file starts with this: not inside a longer path, and an optional
+# `./`. Written once because writing it twice is how the `./` form got back in — `_COLOCATED_PTR`
+# matched it and the bare-name rule did not, and the form the live failure executed was `./…`.
+_NOT_IN_A_PATH = r"(?<![\w./-])(?:\./)?"
+
+
 # A co-located pointer written in a SKILL.md: the skill's own `templates/`, `scripts/` or
 # `references/` directory. The lookbehind rejects a match inside a longer path, where the directory
 # name is not the start of the pointer.
@@ -264,7 +270,7 @@ _COMPUTED_PTR = re.compile(r"(?:<plugin-root>/|(?:\.\./){2,})((?:[A-Za-z0-9._-]+
 # `_colocated_offenders_in` derives the set from the skill instead, which is what covers a
 # directory nobody listed here.
 _COLOCATED_PTR = re.compile(
-    r"(?<![\w./-])(?:\./)?(?:templates|scripts|references)/"
+    _NOT_IN_A_PATH + r"(?:templates|scripts|references)/"
     r"(?:[A-Za-z0-9._-]+(?:\.[A-Za-z0-9]+)?)?")
 
 # The same file addressed from the repo root, which is how a SKILL.md names a file another skill owns.
@@ -350,12 +356,6 @@ def test_the_gate_catches_a_reintroduced_computed_pointer(known_bad):
     task's to move; that task landed, so they are offenders now."""
     offenders = _computed_offenders_in("skills/job-search/SKILL.md", known_bad)
     assert offenders, f"the gate did not catch a reintroduced pointer: {known_bad!r}"
-
-
-# Every rule below starts with this: not inside a longer path, and an optional `./`. Written once
-# because writing it twice is how the `./` form got back in — `_COLOCATED_PTR` matched it and
-# the bare-name rule beside it did not, and the form the live failure executed was `./…`.
-_NOT_IN_A_PATH = r"(?<![\w./-])(?:\./)?"
 
 
 def _own_subdirs(skill_dir):
