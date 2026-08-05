@@ -81,7 +81,7 @@ Four new event types join the `evaluated` one it already holds:
 |---|---|---|
 | `call` | a script, after every agent-data call | route, source, query, rows returned, rows new, request id, whether it succeeded |
 | `surfaced` | a script, from the search response | every metadata field the row arrived with |
-| `queued` | a script, when the scan sends a posting for a full read | the provisional band and the question the read must settle |
+| `queued` | a script, when the scan sends a posting for a full read | that this posting is to be read — nothing else |
 | `detail` | a script, from the get-posting response | `description_markdown` and the detail-only fields |
 | `evaluated` | a script, from the model's judgment | relevant, band, reasoning, dealbreakers, unknowns, needs-human-check |
 
@@ -93,7 +93,7 @@ Eight scripts, placed in the skill that owns the step:
 |---|---|---|
 | `open-run.sh` | runbook | one clock read mints `run_id` and `started_at`; creates the marker; takes the brief revision; runs the workspace checks |
 | `record-api-response.sh` | run | turns one agent-data response into the events it implies |
-| `queue-detail-read.sh` | run | marks one posting for a full read, with the question that read must settle |
+| `queue-detail-read.sh` | run | marks one posting as one to read in full |
 | `list-detail-read-queue.sh` | run | prints the queued postings, one per line, for handing to readers |
 | `record-judgment.sh` | run | records one posting's judgment |
 | `run-counts.sh` | run | prints this run's counts, `agent_data_usage` included |
@@ -108,8 +108,8 @@ file, the row and the field.
 ### What the model still supplies
 
 Judgments — relevant or not, which band, the reasoning, the dealbreakers, the unknowns, whether a
-human should confirm. The provisional band and open question for a posting it queues. And three
-values at close it alone knows: `trigger`, `scheduler_id`, `close_state`.
+human should confirm. Which postings to read in full. And three values at close it alone knows:
+`trigger`, `scheduler_id`, `close_state`.
 
 It supplies no count, no timestamp, no posting id, no URL, and no JSON.
 
@@ -202,25 +202,46 @@ over a hundred unjudged candidates". Today nothing stops it.
 
 ## 8. The detail-read queue
 
-The scan settles the rows that plainly break a must-have and queues the rest. A queued posting
-carries two values that today live only in the coordinating agent's context:
+The scan settles the rows that plainly break a must-have and queues the rest. Queuing records one
+fact and no more — that this posting is one to read:
 
 ```
-queue-detail-read.sh jobs.jsonl --run-id … --source linkedin --source-id 4449006488 \
-  --provisional strong \
-  --question "Is this role remote within the US?"
+queue-detail-read.sh jobs.jsonl --run-id … --source linkedin --source-id 4449006488
 ```
 
-Both are required. A queued posting with no open question is one the scan should have settled
-itself, so an empty `--question` fails at the script rather than at a grader
-(AAS-AUTO-07, AAS-FORM-14). This replaces the "steer" prose at `job-search-run/SKILL.md:57-65`
-and makes `job-search-run/evals/evals.json:194` mechanically checkable.
+It exists so the run can mark a posting without editing `jobs.jsonl`, and so the list of what is
+still to read survives outside the coordinating agent's context.
+
+**Nothing about the expected judgment is carried into the queue**, and the `steer` this replaces —
+`job-search-run/SKILL.md:57-65,73`, a provisional band plus the open question a read must settle —
+is deleted rather than reworked, along with the two eval assertions that graded it
+(`job-search-run/evals/evals.json:193,194`). Two reasons, and the second is the one that decides
+it:
+
+- A provisional band anchors the reader on a verdict before it has read anything, which works
+  directly against `evaluate-job-fit`'s own correction that "the strong/moderate line is the one
+  that slips" and that a tie goes to the lower band.
+- A named question becomes the scope of the answer. The read is meant to produce an analysis of
+  the posting that stands as the reasoning for the judgment; handed "Is this role remote within
+  the US?", a reader answers that and stops.
+
+`evaluate-job-fit/SKILL.md:42-44` already owns this behavior and places it correctly — the reader,
+which has the posting in front of it, derives the open question and writes it into `reasoning`:
+"There is no separate question field; the question lives in `reasoning`." The steer handed that
+question down from the orchestrator, which has only seen a summary row. One home, and the
+better-informed party (AAS-BOUND-03).
+
+*Inference, not measured: `2026-07-30-skill-overhaul-design.md:74` credits "summary-scan steer"
+with killing 65% of detail calls as one phrase. The mechanism that removes a call is the scan
+deciding not to read, which this design keeps; the steer is guidance passed to a read that is
+already happening. Re-measure detail-call count against the RED baseline after the change rather
+than assuming the credit separates cleanly.*
 
 `list-detail-read-queue.sh` prints one tab-separated line per queued, not-yet-judged posting:
-`source`, `source_id`, `posting_id_at_seen`, `source_url`, `title`, `company_name`, `provisional`,
-`question`. That is what a reader is briefed with, and it is the only thing the run hands out —
-the coordinating agent never opens `jobs.jsonl`, which grows past what a context window can hold.
-The queue shrinks as judgments land.
+`source`, `source_id`, `posting_id_at_seen`, `source_url`, `title`, `company_name`. That is what a
+reader needs to fetch and judge the posting, and nothing that pre-judges it. It is also the only
+thing the run hands out — the coordinating agent never opens `jobs.jsonl`, which grows past what a
+context window can hold. The queue shrinks as judgments land.
 
 ## 9. Storing descriptions — a deliberate rule reversal
 
@@ -285,7 +306,7 @@ exec-plans keep their wording as written records.
 | `INSTALL_FOR_HERMES.md` | 264 | "any `~`/`${VAR}` spelling of the same directory" |
 | `docs/superpowers/plans/2026-07-23-hermes-plugin-install.md` | 720 | the same sentence |
 | `docs/design-docs/multi-harness-portability.md` | 588 | "command spelling" |
-| `skills/job-search-run/SKILL.md` | 62, 64, 73 | "a steer" as a noun |
+| `skills/job-search-run/SKILL.md` | 62, 64, 73 | "a steer" as a noun — deleted with the concept, per §8 |
 | `skills/job-search-run/evals/evals.json` | 174, 193, 194 | the same |
 
 `evals/baseline/2026-07-30-red-baseline.md:178` ("the close state's presence and spelling") is
@@ -354,7 +375,8 @@ Prompt changes follow the two in-repo guides. The rules this design leans on:
 |---|---|
 | AAS-FORM-08 | bundling deterministic mechanics as scripts, where a runtime exists |
 | AAS-AUTO-11 | scripts cheapen mechanics; judgment stays with the model |
-| AAS-FORM-14, AAS-AUTO-07 | `--question` and `--provisional` as required slots rather than prose |
+| AAS-FORM-14 | the run record's counts are structured slots, not sentences a model composes |
+| AAS-BOUND-03 | the open question a read must settle keeps its one home in `evaluate-job-fit` |
 | AAS-BOUND-03, AAS-FORM-04 | `open-run.sh` calls `validate-workspace.sh` rather than restating it |
 | AAS-BOUND-08 | the invariants live in the validator |
 | AAS-BOUND-09 | the detail-read queue and stored descriptions are handed over as paths and rows |
