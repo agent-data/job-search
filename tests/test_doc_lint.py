@@ -61,7 +61,8 @@ def _valid_agents_md():
     links = ["ARCHITECTURE.md", "docs/design-docs/index.md", "docs/design-docs/core-beliefs.md",
              "docs/exec-plans/index.md", "docs/product-specs/index.md", "docs/QUALITY_SCORE.md",
              "docs/PRODUCT_SENSE.md", "docs/RELIABILITY.md", "docs/SECURITY.md",
-             "docs/INTERFACE.md", "docs/PLANS.md", "shared/references/"]
+             "docs/INTERFACE.md", "docs/PLANS.md",
+             "skills/job-search-runbook/SKILL.md", "skills/agent-data-reference/SKILL.md"]
     return "# Agent Map\n\n" + "\n".join(f"- [{t}]({t})" for t in links) + "\n"
 
 def test_agents_map_valid_passes(tmp_path):
@@ -160,7 +161,7 @@ def test_code_refs_missing_fails(tmp_path):
 def test_dup_pointer_with_link_passes(tmp_path):
     d = tmp_path / "docs"; d.mkdir()
     (d / "a.md").write_text(
-        "Frequencies live in [conventions.md](../shared/references/conventions.md); "
+        "Frequencies live in [job-search-runbook](../skills/job-search-runbook/SKILL.md); "
         "it lists every-2-hours among others.\n")
     r = run_lint(tmp_path, "--only", "no-shared-reference-duplication")
     assert r.returncode == 0, r.stdout + r.stderr
@@ -179,7 +180,7 @@ def test_dup_exempts_exec_plans(tmp_path):
 
 def test_dup_exempts_historical_design_doc(tmp_path):
     d = tmp_path / "docs" / "design-docs"; d.mkdir(parents=True)
-    body = _design_fm(status="historical") + "The run_id format is YYYY-MM-DDTHH-MM-SSZ here.\n"
+    body = _design_fm(status="historical") + "Cadences here include every-2-hours.\n"
     (d / "old.md").write_text(body)
     r = run_lint(tmp_path, "--only", "no-shared-reference-duplication")
     assert r.returncode == 0, r.stdout
@@ -189,13 +190,6 @@ def test_dup_exempts_generated(tmp_path):
     (g / "x.md").write_text("frequencies include every-2-hours per the CLI.\n")
     r = run_lint(tmp_path, "--only", "no-shared-reference-duplication")
     assert r.returncode == 0, r.stdout
-
-def test_dup_status_enum_comma_form_fails(tmp_path):
-    d = tmp_path / "docs"; d.mkdir()
-    (d / "a.md").write_text("Pipeline statuses: new, interested, applied, rejected, archived.\n")
-    r = run_lint(tmp_path, "--only", "no-shared-reference-duplication")
-    assert r.returncode == 1 and "job status enum" in r.stdout
-
 
 def test_index_lists_all_siblings_passes(tmp_path):
     d = tmp_path / "docs" / "design-docs"; d.mkdir(parents=True)

@@ -2,7 +2,7 @@
 
 Catalogued design documentation. The **living** principles are in `core-beliefs.md`; the dated
 specs below are **historical** snapshots of the original design (kept for rationale; the live
-contracts now live in `shared/references/`).
+contracts now live in the `job-search-runbook` and `agent-data-reference` skills).
 
 ## Living
 - [Core Beliefs — Agent-First Operating Principles](core-beliefs.md) — _status: current_
@@ -18,7 +18,7 @@ contracts now live in `shared/references/`).
 
 ## Superseded
 - [Verify-don't-encode: adapter-free portability, unattended scheduling, and config-time run verification](2026-07-11-verify-dont-encode-design.md) — _status: superseded_ (superseded by the [cost-aware recurring-jobs design](2026-07-16-cost-aware-verified-recurring-jobs-design.md), which retains runtime verification while replacing scheduling eligibility, model ownership, and cost-context scope)
-- [Three-Skill Job Search Redesign](2026-07-09-three-skill-redesign.md) — _status: superseded_ (superseded by the later plugin↔guide alignment work, which keeps all five skills)
+- [Three-Skill Job Search Redesign](2026-07-09-three-skill-redesign.md) — _status: superseded_ (superseded by the later plugin↔guide alignment work, which kept all five skills)
 - [Codex Portability — What It Takes to Run job-search on OpenAI Codex](codex-portability.md) — _status: superseded_ (superseded by the [Multi-Harness Portability dossier](multi-harness-portability.md), which generalizes it to seven harnesses)
 
 ---
@@ -39,7 +39,7 @@ each doc's frontmatter `status`.
 |-------|---------|
 | `current` | Live and authoritative — the team stands behind it today; keep it true as the code changes. (In use: core-beliefs, the style guide, the onboarding spec.) |
 | `superseded` | Replaced by a newer doc; kept only for history. Excluded from the no-shared-reference-duplication check, like `historical`. (In use: `codex-portability.md`.) |
-| `historical` | A frozen snapshot of past design — read for rationale, not as the live contract (which now lives in `shared/references/`). Wears a snapshot banner. (In use: the three dated `2026-06-05-*` design specs.) |
+| `historical` | A frozen snapshot of past design — read for rationale, not as the live contract (which now lives in the two reference skills). Wears a snapshot banner. (In use: the three dated `2026-06-05-*` design specs.) |
 | `aspirational` | Describes intended, not-yet-built behavior. (Defined; none live yet.) |
 
 **`verified`** — how thoroughly the doc's checkable claims were confirmed against the code/corpus.

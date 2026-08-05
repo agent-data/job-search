@@ -6,7 +6,6 @@
     "mechanism_token": "harness-native-loop",
     "unattended": false,
     "canary_testable": true,
-    "primary_model_preserving": true,
     "local_access": true,
     "reversible": true,
     "session_bound": true

@@ -1,0 +1,9 @@
+# The README quickstart sentence, from a fresh workspace: full first-run onboarding
+# through live matches and the schedule offer.
+behaviors: [B1, B2, B3, B4, B10, B13, B15]
+workspace: fresh
+timeout_s: 1500
+models: [sonnet, haiku]
+prompt: >
+  Set up my job search. I'm looking for a senior product-design role,
+  remote in the US, at a mission-driven company.

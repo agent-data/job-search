@@ -4,12 +4,16 @@
 Reject numeric fit-score math, budget/credit/cost config controls, and unverified claims
 about an actual charge. Accurate calls-first usage with a labeled pay-as-you-go equivalent
 is allowed, as is salary display text. Honored-on-request scores live only in chat, never in
-committed artifacts — so this scans examples/ and templates/, not user conversations or
-prose that defines the philosophy.
-"""
-import argparse, os, re, sys
+committed artifacts — so this scans the shipped examples and the copyable templates, not user
+conversations or prose that defines the philosophy.
 
-SCAN_DIRS = ("examples", "templates")
+Each template lives inside the one skill that copies it, so the scan walks `examples/` plus every
+`skills/*/templates/` directory. There is no longer a root-level `templates/` to walk.
+"""
+import argparse, glob, os, re, sys
+
+SCAN_DIRS = ("examples",)
+SCAN_GLOBS = (os.path.join("skills", "*", "templates"),)
 PATTERNS = [
     (re.compile(r"\bfit score\b", re.I), "fit score"),
     (re.compile(r"\b\d{1,3}\s*/\s*100\b"), "N/100 score"),
@@ -30,10 +34,17 @@ NEGATED_ACTUAL_CHARGE_PREFIX = re.compile(
 )
 
 
+def scan_bases(root):
+    """Every directory the guard walks: `examples/`, plus every `skills/*/templates/` there is."""
+    bases = [os.path.join(root, d) for d in SCAN_DIRS]
+    for pattern in SCAN_GLOBS:
+        bases.extend(sorted(glob.glob(os.path.join(root, pattern))))
+    return bases
+
+
 def scan(root):
     hits = []
-    for d in SCAN_DIRS:
-        base = os.path.join(root, d)
+    for base in scan_bases(root):
         for dirpath, _, files in os.walk(base):
             for fn in files:
                 if not fn.endswith((".md", ".yaml", ".yml")):

@@ -36,14 +36,15 @@ page coverage take effect immediately.
 
 For the exact config recipes (how to add a query, change frequency, update the brief, or change
 review depth) and the preview arithmetic,
-see [`../shared/references/internals.md`](../shared/references/internals.md).
+see the `job-search-runbook` skill.
 
 For the product philosophy behind this (prose-over-knobs, conversational-first),
 see [`design-docs/core-beliefs.md`](design-docs/core-beliefs.md).
 
-How skills speak — the plain-English outcome-first voice, the banned internal vocabulary,
-and the render-inline rule for briefs and digests — is owned by
-[`../shared/references/voice.md`](../shared/references/voice.md).
+How skills speak — plain English, outcome first, no internal vocabulary, briefs and digests
+rendered inline rather than described — is carried by each skill's own `SKILL.md`, and graded by
+behavior rows B1 and B2 in [`../evals/behaviors.md`](../evals/behaviors.md) rather than pinned in a
+style reference.
 
 ---
 
@@ -52,7 +53,7 @@ and the render-inline rule for briefs and digests — is owned by
 `/job-search` is the entry point for all user interactions. On first run it routes to
 onboarding (see [`product-specs/new-user-onboarding.md`](product-specs/new-user-onboarding.md));
 for a returning user it routes to the home view described in
-[`../skills/job-search/references/home.md`](../skills/job-search/references/home.md).
+[`../skills/job-search/SKILL.md`](../skills/job-search/SKILL.md).
 
 The home view is a compact, glanceable dashboard — not a log dump. A returning user
 sees at a glance:
@@ -65,11 +66,10 @@ sees at a glance:
   the latest digest's Run health line as a fallback.
 - **Latest digest summary** — the date and the counts line from the newest digest.
 - **Pipeline counts** — totals grouped by job status (the status vocabulary is owned by
-  [`conventions.md`](../shared/references/conventions.md)) and how many need a human check.
+  the `job-search-runbook` skill) and how many need a human check.
 - **One-time deeper-coverage offer** — only after the latest local run provides the qualifying
   evidence, and never again after it is shown; the marker and eligibility rules are owned by
-  [`internals.md`](../shared/references/internals.md) and
-  [`home.md`](../skills/job-search/references/home.md).
+  the `job-search-runbook` skill.
 - **Quick actions** — conversational prompts: run a search now, add or edit a query,
   change frequency or review depth, explain usage, update preferences, toggle the schedule,
   show the latest digest.
@@ -105,7 +105,7 @@ links, incomplete deeper coverage, partial failures, and a brief-age nudge when 
 
 The **exact digest format** (section layout, counts line shape, run-health vocabulary,
 footnote conventions) is owned by
-[`../shared/references/conventions.md`](../shared/references/conventions.md) — refer
+the `job-search-runbook` skill — refer
 there; it is not reproduced here.
 
 For how the digest is produced (the search loop, dedup, evaluation, detail reads,
@@ -123,12 +123,15 @@ from the interface's side, what the user meets is the blocked digest in place of
 match listing and the same blocked state named in the home view on their next `/job-search`.
 
 Every failure is named internally and reaches the user as a plain, four-part cause · preserved
-work · next step · exact fix message they can act on — never the raw internal code. There are no
-silent failures, and the user never sees a code token. The internal name lives only in the run
-record and the operator manual.
+work · next step · exact fix — sentences a user can act on. There are no silent failures, and there
+is no code token to leak, because there is no error-code catalogue: the run says what stopped it in
+the words the user would use, at the step that hit it.
 
-Full error catalog with exact cause+fix wording, and the internal-vs-user rendering rule:
-[`../shared/references/errors.md`](../shared/references/errors.md).
+What a stopped run writes is the record and the digest: `close_state` (`complete` / `blocked` /
+`interrupted`) and `run_health` (`healthy` / `degraded`) in `runs/<run_id>.json`, whose shape is
+[`run-record.example.json`](../skills/job-search-run/templates/run-record.example.json), plus a digest whose
+body is the cause and the fix. The close sequence is owned by
+the `job-search-runbook` skill.
 
 ---
 
@@ -144,9 +147,10 @@ consent-gated (the exact change is shown first and written only on an explicit y
 recorded as running only after a **config-time canary** proves the real invocation works.
 
 The OS state — the registry, the local jobs file, the schedule marker — is plain files the host
-agent reads and writes natively, following the pinned procedures in `shared/references/`. None of
+agent reads and writes natively, following the pinned procedures in the `job-search-runbook` and
+`agent-data-reference` skills. None of
 it is user-facing; users never interact with those files directly.
 
 For the full surface and how the scheduling mechanisms and canary work, see
 [`../ARCHITECTURE.md`](../ARCHITECTURE.md) and
-[`../shared/references/internals.md`](../shared/references/internals.md) (Scheduling setup).
+the `job-search-runbook` skill (Scheduling setup).

@@ -1,6 +1,9 @@
 import subprocess, sys, pathlib
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 GUARD = ROOT / "scripts" / "philosophy_guard.py"
+# Templates live inside the skill that copies them, so a synthetic tree puts them where the guard
+# walks: skills/<skill>/templates/.
+TEMPLATES = pathlib.Path("skills") / "job-search" / "templates"
 
 def run_guard(target):
     return subprocess.run([sys.executable, str(GUARD), "--root", str(target)],
@@ -31,8 +34,8 @@ def test_prose_budget_word_not_flagged(tmp_path):
     assert run_guard(tmp_path).returncode == 0, run_guard(tmp_path).stdout
 
 def test_budget_config_field_flagged(tmp_path):
-    (tmp_path / "templates").mkdir()
-    (tmp_path / "templates" / "cfg.yaml").write_text("budget: 100\n")
+    (tmp_path / TEMPLATES).mkdir(parents=True)
+    (tmp_path / TEMPLATES / "cfg.yaml").write_text("budget: 100\n")
     r = run_guard(tmp_path)
     assert r.returncode == 1 and "cfg.yaml" in r.stdout
 
@@ -44,7 +47,7 @@ def test_allows_calls_first_payg_equivalent(tmp_path):
     assert r.returncode == 0, r.stdout
 
 def test_still_flags_direct_quoted_and_list_config_fields(tmp_path):
-    (tmp_path / "templates").mkdir()
+    (tmp_path / TEMPLATES).mkdir(parents=True)
     cases = {
         "credits.yaml": "credits: 100\n",
         "cost.yaml": "cost: 100\n",
@@ -53,7 +56,7 @@ def test_still_flags_direct_quoted_and_list_config_fields(tmp_path):
         "list-cost.yaml": "- cost: 100\n",
     }
     for name, content in cases.items():
-        (tmp_path / "templates" / name).write_text(content)
+        (tmp_path / TEMPLATES / name).write_text(content)
     r = run_guard(tmp_path)
     assert r.returncode == 1
     assert all(name in r.stdout for name in cases)

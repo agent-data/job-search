@@ -3,7 +3,7 @@ title: Codex Portability — What It Takes to Run job-search on OpenAI Codex
 status: superseded
 verified: partial
 last_reviewed: 2026-06-22
-code_refs: [shared/references/internals.md, shared/references/voice.md, shared/references/parallelism.md, scripts/build.sh, .claude-plugin/plugin.json]
+code_refs: [.claude-plugin/plugin.json]
 ---
 # Codex Portability — What It Takes to Run job-search on OpenAI Codex
 
@@ -22,14 +22,14 @@ code_refs: [shared/references/internals.md, shared/references/voice.md, shared/r
 
 **Feasible, and mostly mechanical.** The data / state / judgment core is already harness-agnostic and
 needs zero Codex-specific work. The Claude coupling is shallow and concentrated — it lives in a
-handful of [`shared/references/`](../../shared/references/internals.md) files plus a few skill
+handful of `shared/references/` files plus a few skill
 playbooks, and every Claude-specific mechanism has a clean Codex equivalent. The only founding-belief
 collision — scheduling — resolves without violating the belief, because Codex ships a native,
 consent-based scheduler (**Automations**) that installs nothing on the user's machine.
 
 Recommended path: **keep ONE `skills/` tree, read in place via a per-harness manifest, and add a thin
-platform-adapter layer** — *manifest-only, zero-codegen*. [`build.sh`](../../scripts/build.sh) only
-**syncs** [`shared/references/`](../../shared/references/internals.md) into each skill; it does **not**
+platform-adapter layer** — *manifest-only, zero-codegen*. `build.sh` only
+**syncs** `shared/references/` into each skill; it does **not**
 emit a separate bundle. Each host's plugin/skill manager reads the same on-disk tree via a thin
 hand-committed manifest (e.g. `.codex-plugin/plugin.json` beside `.claude-plugin/`, both pointing at
 `skills/`). That preserves the single-source-of-truth belief (#5 in [core-beliefs.md](core-beliefs.md))
@@ -56,14 +56,14 @@ assessment:
 These need no Codex-specific work; they are data, contracts, and judgment, defined once and pointed to
 (never restated) here:
 
-- The user-facing config schema and the prose preferences brief — [`conventions.md`](../../shared/references/conventions.md).
+- The user-facing config schema and the prose preferences brief — `conventions.md`.
 - The append-only job event log and its fold-to-state rule, the per-run audit records, and the digest
-  format — [`conventions.md`](../../shared/references/conventions.md).
+  format — `conventions.md`.
 - The machine registry (XDG-based, env-overridable) and the workspace-discovery / first-run
-  precedence — POSIX one-liners in [`internals.md`](../../shared/references/internals.md).
+  precedence — POSIX one-liners in `internals.md`.
 - The named-error catalog and the agent-data CLI contract —
-  [`errors.md`](../../shared/references/errors.md) and [`agent-data-contract.md`](../../shared/references/agent-data-contract.md).
-- The voice rules and the qualitative-only philosophy — [`voice.md`](../../shared/references/voice.md)
+  `errors.md` and `agent-data-contract.md`.
+- The voice rules and the qualitative-only philosophy — `voice.md`
   and [core-beliefs.md](core-beliefs.md).
 
 The agent-data CLI is itself harness-independent — the skills already shell out to it, and Codex
@@ -76,17 +76,17 @@ Severity = how much work / risk the swap carries, not importance.
 | Mechanism (where it's coupled) | Codex equivalent | Sev | Action |
 |---|---|---|---|
 | Skill frontmatter `user-invocable` / `disable-model-invocation` (every `SKILL.md`) | `name` + `description` frontmatter, plus an optional `agents/openai.yaml` (`policy.allow_implicit_invocation`, `interface.display_name`) | LOW | Generate `openai.yaml` per skill at build |
-| Bundled per-skill [`references/`](../../shared/references/internals.md) dir | Native — Codex skills read `references/`, `scripts/`, `assets/` | LOW | none |
+| Bundled per-skill `references/` dir | Native — Codex skills read `references/`, `scripts/`, `assets/` | LOW | none |
 | Loose-skill install path `~/.claude/skills/` | `~/.codex/skills/` or the cross-runtime `~/.agents/skills/` | LOW | Build emit target / install step |
 | Packaging [`.claude-plugin/plugin.json`](../../.claude-plugin/plugin.json) + `marketplace.json` | Codex "plugin" bundle (distribution layer over skills; manifest format under-documented) **or** ship as a skills directory | MED | Add a Codex manifest or skills-dir emit |
-| Namespaced slash `/job-search:job-search-run` ([`internals.md`](../../shared/references/internals.md)) | `$job-search-run` mention, the `/skills` picker, or implicit-by-description | MED | Rewrite the verbatim recipe strings |
-| The closed-choice question tool ([`voice.md`](../../shared/references/voice.md), onboarding, interview) | **No structured-choice UI in Codex** — fall back to the numbered-prose path `voice.md` already specifies for non-interactive hosts | **HIGH** | The fallback exists; accept an onboarding UX regression |
-| Subagent fan-out ([`parallelism.md`](../../shared/references/parallelism.md), [`job-search-run`](../../skills/job-search-run/SKILL.md)) | `spawn_agent` / `wait_agent` / `close_agent`, gated behind `[features] multi_agent = true` in `~/.codex/config.toml` | MED | Framing is already tool-neutral; document the flag as a prereq |
-| `/loop` scheduling ([`internals.md`](../../shared/references/internals.md)) | **Two-tier relaxed rule** — Tier 1: Codex **Automations** (cron-syntax, consent-based, installs nothing) in the App; Tier 2 (pure CLI, no automation subcommand): consent-gated `cron`/`launchd` wrapping `codex exec` — shown before write, explicit yes, user-removable. Cloud rejected | MED | Map the recipe per tier; set the registry `scheduling.mechanism` (`codex-automation` App / `cron`\|`launchd` CLI) |
+| Namespaced slash `/job-search:job-search-run` (`internals.md`) | `$job-search-run` mention, the `/skills` picker, or implicit-by-description | MED | Rewrite the verbatim recipe strings |
+| The closed-choice question tool (`voice.md`, onboarding, interview) | **No structured-choice UI in Codex** — fall back to the numbered-prose path `voice.md` already specifies for non-interactive hosts | **HIGH** | The fallback exists; accept an onboarding UX regression |
+| Subagent fan-out (`parallelism.md`, [`job-search-run`](../../skills/job-search-run/SKILL.md)) | `spawn_agent` / `wait_agent` / `close_agent`, gated behind `[features] multi_agent = true` in `~/.codex/config.toml` | MED | Framing is already tool-neutral; document the flag as a prereq |
+| `/loop` scheduling (`internals.md`) | **Two-tier relaxed rule** — Tier 1: Codex **Automations** (cron-syntax, consent-based, installs nothing) in the App; Tier 2 (pure CLI, no automation subcommand): consent-gated `cron`/`launchd` wrapping `codex exec` — shown before write, explicit yes, user-removable. Cloud rejected | MED | Map the recipe per tier; set the registry `scheduling.mechanism` (`codex-automation` App / `cron`\|`launchd` CLI) |
 | `claude -p` headless ([`job-search-run`](../../skills/job-search-run/SKILL.md), RELIABILITY, TESTING) | `codex exec` (`--json`, `--output-schema`, `--sandbox`, `-o`) with the active workspace as cwd or passed via `--add-dir` | MED | `codex exec` returns **real exit codes** (see belief note), but `workspace-write` must be able to write the job-search workspace |
-| Desktop notification (the `notify` block — [`conventions.md`](../../shared/references/conventions.md)) | Codex App **Triage** / notifications; no-op on pure CLI | MED | Remap or drop on CLI |
+| Desktop notification (the `notify` block — `conventions.md`) | Codex App **Triage** / notifications; no-op on pure CLI | MED | Remap or drop on CLI |
 | Model buckets `haiku` \| `sonnet` \| `opus` \| `inherit` (customization) | Codex models (`gpt-5.x` / `gpt-5-codex` / o-series; local default is `gpt-5.5`) + `inherit` | LOW–MED | Keep the fast-vs-capable buckets, map the names |
-| File tools + "never shell redirection" ([`internals.md`](../../shared/references/internals.md), [`conventions.md`](../../shared/references/conventions.md)) | `shell` (`cat`/`grep`/`find`) + `apply_patch` for structured create/edit | LOW | Re-phrase "use the file tools" tool-neutrally |
+| File tools + "never shell redirection" (`internals.md`, `conventions.md`) | `shell` (`cat`/`grep`/`find`) + `apply_patch` for structured create/edit | LOW | Re-phrase "use the file tools" tool-neutrally |
 | CI ([`.github/workflows/ci.yml`](../../.github/workflows/ci.yml)) — pytest / philosophy_guard / doc_lint / structural-validation (`validate_platforms.py`) / build-sync. **There is no separate Codex CI gate**, and no `claude plugin validate --strict` step | Codex skill validation, or none — add a Codex row to the structural-validation step if a Codex target lands | LOW | Dev-side only |
 | Instructions file `CLAUDE.md` vs **`AGENTS.md`** | Codex reads `AGENTS.md` + `~/.codex/AGENTS.md` | LOW | Repo already ships [AGENTS.md](../../AGENTS.md) — already aligned |
 
@@ -129,11 +129,11 @@ Introduce a thin per-platform adapter under `shared/references/` (e.g. `platform
 6. the notification channel.
 
 Refactor the coupled reference files so they reference the *active platform's* adapter instead of
-naming Claude tools inline (most of the prose — e.g. [`parallelism.md`](../../shared/references/parallelism.md)
-and the question rules in [`voice.md`](../../shared/references/voice.md) — is already tool-neutral and
+naming Claude tools inline (most of the prose — e.g. `parallelism.md`
+and the question rules in `voice.md` — is already tool-neutral and
 needs little change). Add a thin hand-committed Codex manifest (`.codex-plugin/plugin.json` with
 `skills: "./skills/"`) pointing at the SAME one tree; Codex reads it in place. **No `dist/` bundle, no
-codegen** — [`build.sh`](../../scripts/build.sh) keeps doing only what it does today: sync
+codegen** — `build.sh` keeps doing only what it does today: sync
 `shared/references/` into each skill's `references/` (and, when the adapter layer lands, copy the
 selected `platform/<active>.md` adapter in). Keep the evals and CI green for **both** targets.
 

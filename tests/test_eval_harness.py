@@ -1,7 +1,7 @@
 """Unit tests for scripts/eval_harness.py — the eval-scenario validator + the live-harness
 support math (rep aggregation, control-delta).
 
-Two jobs: (1) prove the REAL five evals.json are coherent, carry a discovery scenario per skill,
+Two jobs: (1) prove the REAL five evals.json are coherent, carry a discovery scenario each,
 mark the named judgment-heavy scenarios stochastic with a control arm, and hold no pack-authored `gpt-5*`
 literal from the pinned regression family; (2) unit-test the deterministic helpers the off-CI live harness
 feeds observed pass/fail into (aggregate_reps / control_delta).
@@ -78,8 +78,10 @@ def test_discovery_scenarios_cover_the_four_overlap_pairs():
 
 
 def test_named_judgment_scenarios_are_stochastic():
-    """The audit-named judgment-heavy scenarios (fit verdicts, injection, cross-source merge)
-    must be repped + controlled — not left single-shot (AAS-TEST-08)."""
+    """The audit-named judgment-heavy scenarios (fit verdicts, injection) must be repped +
+    controlled — not left single-shot (AAS-TEST-08). The cross-source merge scenario left the
+    runner's fixtures with the merge/pagination machinery when job-search-run was rewritten on the
+    marker+record contract; the near-duplicate collapse that replaced it is deterministic."""
     loaded = eh.load_evals(str(ROOT))
 
     def scenario(skill, sid):
@@ -88,7 +90,6 @@ def test_named_judgment_scenarios_are_stochastic():
     named = [
         ("evaluate-job-fit", 1), ("evaluate-job-fit", 2), ("evaluate-job-fit", 3),  # fit verdicts
         ("job-search-run", 13),   # injection-resistance
-        ("job-search-run", 19),   # cross-source merge
     ]
     for skill, sid in named:
         e = scenario(skill, sid)
@@ -245,32 +246,47 @@ def test_control_delta_no_lift_is_flagged():
 # the mode is invoked only with an explicit path, so CI's --root run never needs them.
 # ---------------------------------------------------------------------------
 def _artifacts_workspace(tmp_path):
+    """A workspace holding only files a run actually writes: the slim run record, the digest,
+    the jobs.jsonl event log, and config.yaml. Field names and shapes come from
+    skills/job-search-run/templates/run-record.example.json,
+    skills/job-search-run/templates/jobs-event.example.json and
+    skills/job-search/templates/config.example.yaml, so each assertion kind below points at a live
+    structure."""
     ws = tmp_path / "ws"
     (ws / "runs").mkdir(parents=True)
+    (ws / "reports").mkdir(parents=True)
     run_id = "2026-07-17T12-00-00Z"
     record = {
+        "run_id": run_id,
         "trigger": "scheduled",
-        "scheduler_id": "job-1",
+        "scheduler_id": "com.job-search.daily",
+        "brief_revision": "9f2c41a7be05",
+        "close_state": "complete",
         "run_health": "healthy",
-        "lifecycle": {"close_state": "complete"},
-        "primary_model": "fixture-primary-exact",
+        "sources": ["linkedin", "ashby"],
+        "queries": ["ai-eng-remote", "ml-platform-sf"],
+        "agent_data_usage": {"searches": 4, "detail_reads": 5, "other": 1, "total_metered": 10},
+        "started_at": "2026-07-17T12:00:00Z",
+        "completed_at": "2026-07-17T12:08:47Z",
     }
     (ws / "runs" / f"{run_id}.json").write_text(json.dumps(record), encoding="utf-8")
-    ledger = [
-        {"event": "run_started", "phase": "preflight"},
-        {"event": "phase_changed", "phase": "searching"},
-        {"event": "posting_state", "state": "queued"},
-        {"event": "phase_changed", "phase": "finalizing"},
-        {"event": "run_closed", "close_state": "complete"},
+    events = [
+        {"event": "evaluated", "source": "linkedin", "source_id": "4012345678",
+         "run_id": run_id, "status": "new"},
+        {"event": "evaluated", "source": "ashby", "source_id": "a1b2c3d4",
+         "run_id": run_id, "status": "new"},
+        {"event": "status_changed", "source": "linkedin", "source_id": "4012345678",
+         "status": "interested"},
     ]
-    (ws / "runs" / f".lifecycle-{run_id}.jsonl").write_text(
-        "\n".join(json.dumps(r) for r in ledger), encoding="utf-8"
+    (ws / "jobs.jsonl").write_text(
+        "\n".join(json.dumps(r) for r in events), encoding="utf-8"
     )
-    (ws / "runs" / f"{run_id}-digest.md").write_text(
-        "# Job search digest\nRun health: healthy\n", encoding="utf-8"
+    (ws / "reports" / "2026-07-17-digest.md").write_text(
+        "# Job search digest — 2026-07-17\nRun health: healthy\n", encoding="utf-8"
     )
     (ws / "config.yaml").write_text(
-        'version: 2\nsearch:\n  detail_model: "fixture-detail-exact"\n', encoding="utf-8"
+        'version: 2\nsearch:\n  sources: ["linkedin", "ashby"]\n  freshness: "past-2-weeks"\n',
+        encoding="utf-8",
     )
     return ws, run_id
 
@@ -282,14 +298,16 @@ def _all_kinds_evidence(ws, run_id):
             {"kind": "file_exists", "path": f"runs/{run_id}.json"},
             {"kind": "json_field_equals", "path": f"runs/{run_id}.json",
              "field": "trigger", "equals": "scheduled"},
+            # dotted traversal, against the record's one nested object
             {"kind": "json_field_equals", "path": f"runs/{run_id}.json",
-             "field": "lifecycle.close_state", "equals": "complete"},
-            {"kind": "jsonl_event_sequence", "path": f"runs/.lifecycle-{run_id}.jsonl",
-             "field": "phase", "sequence": ["preflight", "searching", "finalizing"]},
-            {"kind": "text_absent", "path": f"runs/{run_id}-digest.md",
+             "field": "agent_data_usage.total_metered", "equals": 10},
+            # default field ("event"), against the append-only log a run writes
+            {"kind": "jsonl_event_sequence", "path": "jobs.jsonl",
+             "sequence": ["evaluated", "status_changed"]},
+            {"kind": "text_absent", "path": "reports/2026-07-17-digest.md",
              "pattern": "Here's what I found so far"},
             {"kind": "text_matches", "path": "config.yaml",
-             "pattern": r'detail_model:\s*"fixture-detail-exact"'},
+             "pattern": r'freshness:\s*"past-2-weeks"'},
         ],
     }
 
@@ -303,7 +321,7 @@ def test_check_artifacts_flags_json_field_mismatch(tmp_path):
     ws, run_id = _artifacts_workspace(tmp_path)
     evidence = {"workspace": str(ws), "assertions": [
         {"kind": "json_field_equals", "path": f"runs/{run_id}.json",
-         "field": "run_health", "equals": "blocked"}]}
+         "field": "run_health", "equals": "degraded"}]}
     hits = eh.check_artifacts(evidence)
     assert len(hits) == 1 and "run_health" in hits[0]
 
@@ -316,20 +334,20 @@ def test_check_artifacts_flags_missing_file(tmp_path):
 
 
 def test_check_artifacts_text_absent_catches_forbidden_surface(tmp_path):
-    ws, run_id = _artifacts_workspace(tmp_path)
-    (ws / "runs" / f"{run_id}-digest.md").write_text(
+    ws, _ = _artifacts_workspace(tmp_path)
+    (ws / "reports" / "2026-07-17-digest.md").write_text(
         "Here's what I found so far", encoding="utf-8")
     evidence = {"workspace": str(ws), "assertions": [
-        {"kind": "text_absent", "path": f"runs/{run_id}-digest.md",
+        {"kind": "text_absent", "path": "reports/2026-07-17-digest.md",
          "pattern": "Here's what I found so far"}]}
     assert len(eh.check_artifacts(evidence)) == 1
 
 
 def test_check_artifacts_jsonl_sequence_out_of_order_fails(tmp_path):
-    ws, run_id = _artifacts_workspace(tmp_path)
+    ws, _ = _artifacts_workspace(tmp_path)
     evidence = {"workspace": str(ws), "assertions": [
-        {"kind": "jsonl_event_sequence", "path": f"runs/.lifecycle-{run_id}.jsonl",
-         "field": "phase", "sequence": ["finalizing", "preflight"]}]}
+        {"kind": "jsonl_event_sequence", "path": "jobs.jsonl",
+         "sequence": ["status_changed", "evaluated"]}]}
     assert len(eh.check_artifacts(evidence)) == 1
 
 
@@ -361,7 +379,7 @@ def test_check_artifacts_text_matches_absent_pattern_fails_closed(tmp_path):
     ws, _ = _artifacts_workspace(tmp_path)
     evidence = {"workspace": str(ws), "assertions": [
         {"kind": "text_matches", "path": "config.yaml",
-         "pattern": r'detail_model:\s*"never-configured-this-exact-model"'}]}
+         "pattern": r'freshness:\s*"never-configured-this-window"'}]}
     hits = eh.check_artifacts(evidence)
     assert len(hits) == 1 and "text_matches" in hits[0] and "config.yaml" in hits[0]
 
@@ -369,14 +387,14 @@ def test_check_artifacts_text_matches_absent_pattern_fails_closed(tmp_path):
 def test_check_artifacts_jsonl_malformed_line_fails_closed(tmp_path):
     # A malformed JSONL line in a jsonl_event_sequence target fails closed — the sequence would
     # otherwise match, so the malformed line (not an ordering miss) is what must trip the hit.
-    ws, run_id = _artifacts_workspace(tmp_path)
-    (ws / "runs" / f".lifecycle-{run_id}.jsonl").write_text(
-        '{"event": "run_started", "phase": "preflight"}\n'
+    ws, _ = _artifacts_workspace(tmp_path)
+    (ws / "jobs.jsonl").write_text(
+        '{"event": "evaluated", "source": "linkedin"}\n'
         "{not valid json here\n"
-        '{"event": "run_closed", "phase": "finalizing"}\n', encoding="utf-8")
+        '{"event": "status_changed", "source": "linkedin"}\n', encoding="utf-8")
     evidence = {"workspace": str(ws), "assertions": [
-        {"kind": "jsonl_event_sequence", "path": f"runs/.lifecycle-{run_id}.jsonl",
-         "field": "phase", "sequence": ["preflight", "finalizing"]}]}
+        {"kind": "jsonl_event_sequence", "path": "jobs.jsonl",
+         "sequence": ["evaluated", "status_changed"]}]}
     hits = eh.check_artifacts(evidence)
     assert len(hits) == 1 and "malformed" in hits[0]
 
@@ -393,22 +411,26 @@ def test_check_artifacts_invalid_json_target_fails_closed(tmp_path):
 
 
 # ---------------------------------------------------------------------------
-# T7.2: surface enforcement — belief 4's internal/user separation is checkable.
-# A user-facing artifact (chat/digest/home/notification) must never carry a raw
-# E-* code; the internal record must retain it. The `surface` flag makes the
-# harness enforce the correct direction, extending --check-artifacts additively.
+# T7.2: surface enforcement — belief 4's internal/user separation is checkable on the side that
+# still has a product behind it. A user-facing artifact (chat, digest, home view, notification)
+# must never carry a raw E-* code. The companion `internal_record` surface, which required a run
+# record to RETAIN such a code, was retired on 2026-07-31: no shipped file writes an E-* code any
+# more, so the rule demanded a shape the product cannot produce.
 # ---------------------------------------------------------------------------
 STRUCTURED_DIGEST = (
-    "# Job search digest\n"
-    "Run health: blocked (action needed)\n\n"
+    "# Job search digest — 2026-07-17\n"
+    "Run health: degraded\n\n"
     "agent-data's API allowance has been reached, so this run cannot continue until "
     "calls are available. Check your account at "
     "https://agent-data.motie.dev/settings/billing. Your existing matches are "
     "unaffected.\n"
 )
+# The E-QUOTA token is fixture data for the raw-code matcher, not a claim that any run writes
+# one. The record's own fields are written in the shape
+# skills/job-search-run/templates/run-record.example.json has.
 LEAKED_CODE_DIGEST = STRUCTURED_DIGEST + "\n(internal classification: E-QUOTA)\n"
-RECORD_WITH_CODE = {"run_health": "blocked", "error": {"code": "E-QUOTA"}}
-RECORD_WITHOUT_CODE = {"run_health": "blocked", "error": {"reason": "quota rejected"}}
+BLOCKED_RECORD = {"run_id": "2026-07-17T12-00-00Z", "close_state": "blocked",
+                  "run_health": "degraded"}
 
 
 def _belief4_workspace(base, digest_body, record):
@@ -422,7 +444,7 @@ def _belief4_workspace(base, digest_body, record):
 
 
 def test_check_artifacts_user_facing_surface_rejects_a_raw_error_code(tmp_path):
-    ws, _ = _belief4_workspace(tmp_path, LEAKED_CODE_DIGEST, RECORD_WITH_CODE)
+    ws, _ = _belief4_workspace(tmp_path, LEAKED_CODE_DIGEST, BLOCKED_RECORD)
     evidence = {"workspace": str(ws), "assertions": [
         {"kind": "file_exists", "path": "reports/2026-07-17-digest.md",
          "surface": "user_facing"}]}
@@ -431,53 +453,32 @@ def test_check_artifacts_user_facing_surface_rejects_a_raw_error_code(tmp_path):
 
 
 def test_check_artifacts_user_facing_surface_passes_when_structured(tmp_path):
-    ws, _ = _belief4_workspace(tmp_path, STRUCTURED_DIGEST, RECORD_WITH_CODE)
+    ws, _ = _belief4_workspace(tmp_path, STRUCTURED_DIGEST, BLOCKED_RECORD)
     evidence = {"workspace": str(ws), "assertions": [
         {"kind": "file_exists", "path": "reports/2026-07-17-digest.md",
          "surface": "user_facing"}]}
     assert eh.check_artifacts(evidence) == []
 
 
-def test_check_artifacts_internal_record_surface_requires_the_code(tmp_path):
-    ws, run_id = _belief4_workspace(tmp_path, STRUCTURED_DIGEST, RECORD_WITHOUT_CODE)
-    evidence = {"workspace": str(ws), "assertions": [
-        {"kind": "file_exists", "path": f"runs/{run_id}.json",
-         "surface": "internal_record"}]}
-    hits = eh.check_artifacts(evidence)
-    assert len(hits) == 1 and "internal_record" in hits[0]
-
-
-def test_check_artifacts_internal_record_surface_passes_with_the_code(tmp_path):
-    ws, run_id = _belief4_workspace(tmp_path, STRUCTURED_DIGEST, RECORD_WITH_CODE)
-    evidence = {"workspace": str(ws), "assertions": [
-        {"kind": "json_field_equals", "path": f"runs/{run_id}.json",
-         "field": "error.code", "equals": "E-QUOTA", "surface": "internal_record"}]}
-    assert eh.check_artifacts(evidence) == []
-
-
-def test_check_artifacts_surface_enforces_both_directions_at_once(tmp_path):
-    good_ws, gid = _belief4_workspace(tmp_path / "good", STRUCTURED_DIGEST, RECORD_WITH_CODE)
-    good = {"workspace": str(good_ws), "assertions": [
-        {"kind": "file_exists", "path": "reports/2026-07-17-digest.md", "surface": "user_facing"},
-        {"kind": "file_exists", "path": f"runs/{gid}.json", "surface": "internal_record"}]}
-    assert eh.check_artifacts(good) == []
-    # Inverted separation: the code leaked to the digest AND vanished from the record -> both fail.
-    bad_ws, bid = _belief4_workspace(tmp_path / "bad", LEAKED_CODE_DIGEST, RECORD_WITHOUT_CODE)
-    bad = {"workspace": str(bad_ws), "assertions": [
-        {"kind": "file_exists", "path": "reports/2026-07-17-digest.md", "surface": "user_facing"},
-        {"kind": "file_exists", "path": f"runs/{bid}.json", "surface": "internal_record"}]}
-    assert len(eh.check_artifacts(bad)) == 2
+def test_check_artifacts_retired_internal_record_surface_is_rejected(tmp_path):
+    # The retirement is the assertion: naming the removed surface is now a schema error, so an
+    # evidence file still carrying it fails loudly instead of silently checking nothing.
+    ws, run_id = _belief4_workspace(tmp_path, STRUCTURED_DIGEST, BLOCKED_RECORD)
+    with pytest.raises(ValueError):
+        eh.check_artifacts({"workspace": str(ws), "assertions": [
+            {"kind": "file_exists", "path": f"runs/{run_id}.json",
+             "surface": "internal_record"}]})
 
 
 def test_check_artifacts_rejects_an_unknown_surface(tmp_path):
-    ws, run_id = _belief4_workspace(tmp_path, STRUCTURED_DIGEST, RECORD_WITH_CODE)
+    ws, run_id = _belief4_workspace(tmp_path, STRUCTURED_DIGEST, BLOCKED_RECORD)
     with pytest.raises(ValueError):
         eh.check_artifacts({"workspace": str(ws), "assertions": [
             {"kind": "file_exists", "path": f"runs/{run_id}.json", "surface": "operator"}]})
 
 
 def test_cli_check_artifacts_flags_a_user_facing_code_leak(tmp_path):
-    ws, _ = _belief4_workspace(tmp_path, LEAKED_CODE_DIGEST, RECORD_WITH_CODE)
+    ws, _ = _belief4_workspace(tmp_path, LEAKED_CODE_DIGEST, BLOCKED_RECORD)
     ep = tmp_path / "current-artifacts.json"
     ep.write_text(json.dumps({"workspace": str(ws), "assertions": [
         {"kind": "file_exists", "path": "reports/2026-07-17-digest.md",
@@ -646,30 +647,15 @@ def test_validator_flags_fixed_time_empty_checks(tmp_path):
     assert any("fixed_time.checks" in h for h in hits)
 
 
-def test_real_suite_schedule_health_scenarios_carry_a_liveness_fixed_time():
-    """Every schedule-health (liveness) scenario pins a deterministic clock so its missed-fire /
-    grace / DST derivation is reproducible — not wall-clock."""
-    loaded = eh.load_evals(str(ROOT))
-    liveness = []
-    for skill in ("job-search-agent", "job-search"):
-        for e in loaded[skill][1]["evals"]:
-            if "schedule health" in e.get("scenario", "").lower():
-                liveness.append((skill, e))
-    assert liveness, "expected schedule-health liveness scenarios"
-    for skill, e in liveness:
-        ft = e.get("fixed_time")
-        assert isinstance(ft, dict), f"{skill}#{e['id']} schedule-health scenario needs a fixed_time"
-        assert "liveness" in ft.get("checks", []), f"{skill}#{e['id']} fixed_time must check liveness"
+# The suite's schedule-health liveness fixtures went with the derivation they graded: the
+# 2026-07-30 skill overhaul left the home view reading the consent date and whether the job is
+# installed, and shrank the operator manual to a routing card, so no skill scenario pins a
+# liveness clock. The validator's fixed_time rules stay covered by the unit tests above.
 
 
-def test_real_suite_has_milestone_fixed_time_fixtures():
-    """The run-lifecycle milestone-timestamp scenarios pin a deterministic clock."""
-    loaded = eh.load_evals(str(ROOT))
-    milestone = [
-        e for e in loaded["job-search-run"][1]["evals"]
-        if isinstance(e.get("fixed_time"), dict) and "milestone" in e["fixed_time"].get("checks", [])
-    ]
-    assert milestone, "job-search-run must carry milestone fixed-time fixtures"
+# The milestone fixed-time fixtures this file used to require of job-search-run went away with the
+# per-phase milestone timestamps themselves (metrics.json and the ledger) in the 2026-07-30 rewrite. The validator's fixed_time rules are still covered by the unit tests above and by the
+# schedule-health liveness fixtures in the test just before this comment.
 
 
 # ---------------------------------------------------------------------------
@@ -681,14 +667,18 @@ def test_real_suite_has_milestone_fixed_time_fixtures():
 # (which carries a different marker, or none) fails even a file_exists assertion.
 # Additive: no run_marker / no run_marked -> identical to before.
 # ---------------------------------------------------------------------------
+DIGEST_REL = "reports/2026-07-17-digest.md"  # the digest _artifacts_workspace writes
+
+
 def _stamped_workspace(tmp_path, marker):
     ws, run_id = _artifacts_workspace(tmp_path)
     # Stamp THIS run's marker into the run-specific artifacts.
     (ws / "runs" / f"{run_id}.json").write_text(
-        json.dumps({"trigger": "scheduled", "run_marker": marker,
-                    "lifecycle": {"close_state": "complete"}}), encoding="utf-8")
-    (ws / "runs" / f"{run_id}-digest.md").write_text(
-        f"# Job search digest\nRun health: healthy\n<!-- run: {marker} -->\n", encoding="utf-8")
+        json.dumps({"run_id": run_id, "trigger": "scheduled", "run_marker": marker,
+                    "close_state": "complete", "run_health": "healthy"}), encoding="utf-8")
+    (ws / DIGEST_REL).write_text(
+        f"# Job search digest — 2026-07-17\nRun health: healthy\n<!-- run: {marker} -->\n",
+        encoding="utf-8")
     return ws, run_id
 
 
@@ -697,17 +687,17 @@ def test_check_artifacts_run_marker_passes_when_the_artifact_carries_it(tmp_path
     ws, run_id = _stamped_workspace(tmp_path, marker)
     evidence = {"workspace": str(ws), "run_marker": marker, "assertions": [
         {"kind": "file_exists", "path": f"runs/{run_id}.json", "run_marked": True},
-        {"kind": "file_exists", "path": f"runs/{run_id}-digest.md", "run_marked": True}]}
+        {"kind": "file_exists", "path": DIGEST_REL, "run_marked": True}]}
     assert eh.check_artifacts(evidence) == []
 
 
 def test_check_artifacts_run_marker_fails_on_a_stale_artifact(tmp_path):
     # The digest exists (file_exists alone would PASS) but predates this run: it carries no
     # fresh marker, so run_marked catches the stale artifact and fails.
-    ws, run_id = _artifacts_workspace(tmp_path)  # unstamped digest from a prior run
+    ws, _ = _artifacts_workspace(tmp_path)  # unstamped digest from a prior run
     fresh = "runmark-fresh-XYZ-999"
     evidence = {"workspace": str(ws), "run_marker": fresh, "assertions": [
-        {"kind": "file_exists", "path": f"runs/{run_id}-digest.md", "run_marked": True}]}
+        {"kind": "file_exists", "path": DIGEST_REL, "run_marked": True}]}
     hits = eh.check_artifacts(evidence)
     assert len(hits) == 1 and "run_marker" in hits[0] and fresh in hits[0]
 
@@ -716,10 +706,10 @@ def test_check_artifacts_run_marker_defeats_a_stale_false_pass_end_to_end(tmp_pa
     # Run A stamped its marker; Run B (a distinct nonce) reuses the workspace. B's assertions
     # would falsely pass on A's leftover digest without the marker check.
     marker_a = "runmark-A-111"
-    ws, run_id = _stamped_workspace(tmp_path, marker_a)
+    ws, _ = _stamped_workspace(tmp_path, marker_a)
     marker_b = "runmark-B-222"
     evidence_b = {"workspace": str(ws), "run_marker": marker_b, "assertions": [
-        {"kind": "file_exists", "path": f"runs/{run_id}-digest.md", "run_marked": True}]}
+        {"kind": "file_exists", "path": DIGEST_REL, "run_marked": True}]}
     hits = eh.check_artifacts(evidence_b)
     assert len(hits) == 1 and marker_b in hits[0]
 
@@ -754,10 +744,10 @@ def test_check_artifacts_rejects_an_empty_run_marker(tmp_path):
 
 
 def test_cli_check_artifacts_flags_a_stale_run_marker(tmp_path):
-    ws, run_id = _artifacts_workspace(tmp_path)
+    ws, _ = _artifacts_workspace(tmp_path)
     ep = tmp_path / "current-artifacts.json"
     ep.write_text(json.dumps({"workspace": str(ws), "run_marker": "runmark-fresh", "assertions": [
-        {"kind": "file_exists", "path": f"runs/{run_id}-digest.md", "run_marked": True}]}),
+        {"kind": "file_exists", "path": DIGEST_REL, "run_marked": True}]}),
         encoding="utf-8")
     r = subprocess.run([sys.executable, str(MODULE), "--check-artifacts", str(ep)],
                        capture_output=True, text=True)
@@ -768,15 +758,17 @@ def test_cli_check_artifacts_flags_a_stale_run_marker(tmp_path):
 # T9.1: the crown-jewel judgment-heavy set stays stochastic (reps>=5 + control)
 # ---------------------------------------------------------------------------
 def test_crown_jewel_judgment_scenarios_are_marked_stochastic():
-    """The baited-shortcut resistance scenarios whose verdict is model-judgment (fair-share
-    selection, stop-after-first-match resistance) must be repped + controlled, alongside the
-    fit-verdict / injection / merge set already locked above (AAS-TEST-08)."""
+    """The baited-shortcut resistance scenario whose verdict is model-judgment — every posting on
+    the read list judged, with no early stop after the first strong match — must be repped +
+    controlled, alongside the fit-verdict / injection set locked above (AAS-TEST-08). The
+    weighted fair-share selection scenario left with the finite-allocator machinery in the
+    job-search-run rewrite."""
     loaded = eh.load_evals(str(ROOT))
 
     def scenario(skill, sid):
         return next(e for e in loaded[skill][1]["evals"] if e["id"] == sid)
 
-    for skill, sid in [("job-search-run", 34), ("job-search-run", 60)]:
+    for skill, sid in [("job-search-run", 15)]:
         e = scenario(skill, sid)
         assert e.get("stochastic") is True, f"{skill}#{sid} should be stochastic"
         assert e.get("reps", 0) >= eh.MIN_REPS, f"{skill}#{sid} reps < {eh.MIN_REPS}"

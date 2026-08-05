@@ -3,7 +3,7 @@ title: Plan B/D — Design Delta & Resolved Decisions
 status: historical
 verified: unverified
 last_reviewed: 2026-06-07
-code_refs: [shared/references/conventions.md, shared/references/internals.md]
+code_refs: []
 ---
 
 # Spec delta: Job Search OS — Claude-Code-driven Onboarding + OS internals (Plan B/D)

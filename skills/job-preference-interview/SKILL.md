@@ -1,6 +1,6 @@
 ---
 name: job-preference-interview
-description: Build, refine, deepen, or import the user's Job Preferences Brief at a depth they choose — a quick free-form sketch (~1 question), a standard interview, or a thorough pass — producing a prose preferences.md (Summary, Must-haves/dealbreakers, Strong preferences, Nice-to-haves, Red flags). Use when the user wants to define or change what they want in a job, or to go deeper than a first-run quick sketch — "set up my job preferences", "what I want in a job", "redo my preferences interview", "change my must-haves", "make my brief more thorough", "import my preferences brief". Not the front door or home view (→ job-search), and not for judging a specific posting (→ evaluate-job-fit).
+description: Build, refine, deepen, or import the user's Job Preferences Brief — a quick free-form sketch from one question, a standard interview, or a thorough pass — producing a prose preferences.md (Summary, Must-haves/dealbreakers, Strong preferences, Nice-to-haves, Red flags). Use when the user wants to define or change what they want in a job, or to go deeper than a first-run quick sketch — "set up my job preferences", "what I want in a job", "redo my preferences interview", "change my must-haves", "make my brief more thorough", "import my preferences brief". Not the front door or home view (→ job-search), and not for judging a specific posting (→ evaluate-job-fit).
 ---
 
 # job-preference-interview
@@ -8,196 +8,114 @@ description: Build, refine, deepen, or import the user's Job Preferences Brief a
 > To configure, extend, customize, or troubleshoot the agent itself (or understand its
 > capabilities), use the **job-search-agent** skill — the operator manual.
 
-Build the user's **Job Preferences Brief** at a depth they choose — from a one-line sketch to a thorough
-interview — the prose `preferences.md` that `evaluate-job-fit` later reads next to a posting to judge it.
-Follow `../../shared/references/voice.md` for how you talk and how you present the finished brief — and don't narrate
-setup mechanics (no "resolving the workspace", no reference-file talk; your first words open the
-conversation itself).
+Build the user's **Job Preferences Brief** — the prose `preferences.md` that `evaluate-job-fit` later reads next
+to a posting to judge it. This skill asks questions and waits for the answers, so it runs with the user present;
+a scheduled run has nobody to answer. Your first words open the conversation itself, not the mechanics behind it.
+How you say everything here — a word defined where it first lands, one question at a time, state in the present
+tense — follows the ten rules under **How to communicate** in `../job-search/SKILL.md`.
 
-## Purpose
-Produce a **prose** brief a model can read against a job posting and judge it **qualitatively**:
-relevant or not, and if relevant weak / moderate / strong, with plain-language reasoning. The brief is the
-"what I want" half of the system; `evaluate-job-fit` is the reader.
-
-**No numbers.** Do not produce a fit score, a numeric scale, per-category point values, or category weights, and
-do not ask the user to rank categories against each other numerically. Importance is expressed by which **bucket** a
-factor lands in (must-have vs. strong preference vs. nice-to-have), never as math. Capture compensation, hours,
-and the like as plain words ("at least ~$180K base", "no regular on-call"), never as a formula.
-
-This skill is **interactive only** — it asks questions and waits for answers. Never invoke it in a headless or
-scheduled run.
+The brief is prose a model reads against a posting to judge it **qualitatively**: relevant or not, and if relevant
+weak / moderate / strong, with plain-language reasoning. Importance lives in which **bucket** a factor lands in —
+must-have vs. strong preference vs. nice-to-have — never in math: no fit score, no numeric scale, no per-category
+points or weights, and no asking the user to rank categories against each other numerically. Compensation, hours,
+and the like are captured in plain words: at least ~$180K base, no regular on-call.
 
 ## Where it writes
-Find the workspace with the **Discovery procedure** in `../../shared/references/internals.md` (one fact-gathering
-command, then its precedence rules) and never hard-code its path.
+Find the workspace with the discovery step in the `job-search-runbook` skill; the brief is the path
+`workspace.preferences_path` names in that workspace's `config.yaml`, default `preferences.md`. When no workspace
+is set up yet, write to the resolved default path and say in one line where the brief went.
 
-- Write the brief to `<workspace>/<config.workspace.preferences_path>` (default `preferences.md`).
-- If discovery reports `first_run: true` **and** you were invoked standalone (no workspace set up yet), write
-  to the resolved default path anyway and tell the user exactly where it went. (If onboarding owns the
-  workspace, it tells you where to write.)
-- If a `preferences.md` already exists, you are **updating** it — read it first, fill gaps, and confirm changes
-  rather than silently overwriting.
-- Put `created_at:` and `updated_at:` front-matter lines at the top, matching
-  `templates/preferences.example.md`. On a **new** brief set both to today; on an **update** keep `created_at`
-  and refresh `updated_at` to today — the home view measures staleness from `updated_at`:
+A brief that already exists is an **update**: read it first, fill the gaps, and confirm changes rather than
+overwriting. Copy the front matter — and the whole finished shape — from this skill's
+`templates/preferences.example.md`. A new brief carries today's date in both `created_at` and
+`updated_at`; an update keeps `created_at` and moves `updated_at` to today, because the home view
+measures staleness from `updated_at`. When the user changes the brief while a search is running,
+writing the updated brief is still your whole job; what the running search does with it is the
+job-search front door's feedback routing.
 
-  ```
-  ---
-  created_at: 2026-06-05
-  updated_at: 2026-06-08
-  ---
-  # Job Preferences Brief
-  ...
-  ```
+## How deep to go
+What the user asked for decides. Someone who wants to move fast, or a hand-off from the front door asking for a
+sketch, gets the **quick sketch**; anyone else gets the **interview** — and when they ask for a thorough pass,
+work every dimension with follow-ups and fill all four buckets. Say that a brief can be deepened anytime, since a
+later pass reads what exists and enriches it, and either path produces the same five-section brief.
 
-When you're invoked to change the brief **while a search is active** (the user reacted to a match or the
-digest), your job is still just to write the updated brief. Applying that change to the running search —
-recording the brief revision, letting the remaining queue pick it up, and rechecking already-shown matches
-only when the outcome could change — is the **job-search** front door's feedback routing (its home view's
-**Applying your feedback**), not yours. That routing records the `brief_revision` and applies the in-flight
-settling rule owned by `../../shared/references/run-lifecycle.md`.
-
-## Choose a depth (offer all three; give the question estimate)
-Before you ask anything, let the user choose how deep to go — and make clear they can **start light and deepen
-later** (a follow-up interview reads the existing brief and *enriches* it, never overwrites). **The depth ask
-happens even when another skill invoked you.** Onboarding's hand-off, an args string ("standard interview",
-"one question at a time"), or any invoker's description of this skill never counts as the user's choice — only
-the user's own words do (they already said "just a quick sketch" / "make it thorough" → honor that and skip
-the ask). The failure mode: an invoker pre-picks "standard", the depth question silently disappears, and the
-user never learns a one-question sketch existed.
-
-Ask it as a closed choice (`../../shared/references/voice.md` → Asking questions — prefer your host's
-native question interface; numbered prose only if it has none). Header `Depth`. The lead sentence is
-yours to word, and **whether you introduce the brief at all depends on
-how you got here**:
-
-- **Mid-onboarding** (invoked with onboarding context): onboarding has *just* told the user what the
-  brief is — don't say it again. Open with the depth ask only, e.g. "How deep do you want to go? You
-  can start light and go deeper anytime."
-- **Standalone** (the user came straight here): introduce the brief in one line of your own — the
-  plain-English picture of what they want that every posting gets judged against — then ask how deep
-  to go.
-
-Options (present these labels and descriptions as written):
-
-1. **Quick sketch** — "~1 question — describe what you want in a sentence or two; see matching jobs right away."
-2. **Standard interview** — "~6–10 questions, one at a time, over what matters most."
-3. **Thorough interview** — "~15–20 questions across every dimension, for the most precise brief."
-
-(Standalone only — not mid-onboarding, where import was just declined — add a fourth option: **Import** —
-"already have one written down? Paste it or give me the path.")
-
-Whatever the depth, the **output is the same five-section brief** (below): depth changes how much you ask, not
-the shape of the result. If a brief already exists, any path **updates** it — read it first, fill gaps, and
-confirm changes rather than overwriting.
-
-### Quick sketch — the fast escape hatch
-For users who'd rather see jobs now than answer questions:
-1. Ask once: *"In a sentence or two — what are you after? (role, where, pay floor, anything that's a
-   dealbreaker)"*. Take whatever they give you; don't push for more.
-2. Draft the five-section brief from **only what they actually said**, plus *safe, direct* implications (e.g. an
-   on-call **red flag** from "good work-life balance") — a stated role / location / pay floor becomes a
-   **Must-have**, softer wants go to **Strong preferences / Nice-to-haves**. **Don't invent preferences they
-   didn't express**; leave a section empty rather than padding it — they can deepen it later. Ask **at most one**
-   follow-up, and only if a likely must-have is missing entirely. **If they share material** (a resume, cover
-   letter, or notes), treat it as **background evidence** — context to inform the brief, never an existing
-   brief and never silently turned into must-haves/preferences; on any conflict, what they actually *said*
-   wins over a résumé line (an old title, a past location, a former stack).
-3. Write it, **show it rendered in your reply** (no code fence), say in one line where it went, and tell the
-   user plainly they can **run a deeper interview anytime** to sharpen it — then hand back so they can run a
-   search.
+### Quick sketch
+1. Ask one question — what they are after in a sentence or two: role, where, pay floor, and anything that is a
+   dealbreaker. Take whatever they give you.
+2. Draft the five-section brief from **only what they actually said**, plus *safe, direct* implications (an
+   on-call **red flag** from wanting good work-life balance). A stated role, location, or pay floor becomes a
+   **Must-have**; softer wants go to **Strong preferences** or **Nice-to-haves**. A section they said nothing
+   about stays empty rather than padded with preferences they never expressed. Ask **at most one** follow-up, and
+   only where the user answered here and a likely must-have is missing entirely; a sketch handed to you with its
+   answer already in it is drafted from those words, and the gaps wait for a deeper pass.
+3. Material they share — a resume, a cover letter, notes — is **background evidence** that informs the brief,
+   never an existing brief and never silently turned into must-haves; where it conflicts with what they said,
+   what they said wins.
+4. Write it, show it rendered in your reply, say in one line where it went, and tell them a deeper interview can
+   sharpen it whenever they want. Then hand back so they can run a search.
 
 ## Interview method
-This is the **Standard** and **Thorough** path — same method, different coverage. **Standard** (~6–10 questions)
-works the core dimensions below and skips whatever the user says doesn't matter. **Thorough** (~15–20) works
-through *every* dimension with follow-ups and deliberately fleshes out all four buckets — nice-to-haves and red
-flags included.
-
-### Standing rules (apply to every question)
-- Ask **one main question at a time** (a single tight, directly-related follow-up is fine). **Wait** for the
-  answer before moving on. Never dump a long checklist of questions.
-- **Adapt** to answers — let each reply decide what to probe next.
-- **Make vague answers concrete.** When you hear "good culture", "decent pay", "work-life balance", ask a
-  follow-up that turns it into something **observable** a reader could actually check against a posting
-  ("good culture" → "small teams, low meeting load, ships weekly"; "decent pay" → "base at least ~$X").
-- **Make answering easy.** Offer a few example options or a simple scale when it helps, and **always** let the
-  user say "no preference", "skip", or "that's a dealbreaker". When a question is a genuine pick-one with 2–4
-  natural answers (IC vs. manager; remote / hybrid / onsite), ask it as a closed choice
-  (`../../shared/references/voice.md` → Asking questions — prefer your host's native question
-  interface; numbered prose only if it has none); open questions stay prose.
-- Keep every message short — one or two sentences (plus a closed choice's option lines when you're asking
-  one); don't lecture or pad. Relax this only when the user explicitly asks you to explain something at
-  greater length.
-
-### Flow
-1. **Start** with the user's current situation and what's prompting the search ("What's making you look now?"),
-   then work through the dimensions below.
-2. **Reflect back every 4–5 questions** in 1–2 sentences so the user can correct you.
-3. **Finish** when you have enough detail or the user says they're done — then write the brief.
+The interview works the dimensions below and skips whatever the user says does not matter — about 6–10 questions,
+or 15–20 on a thorough pass.
+- Ask **one main question at a time** (a single tight, directly-related follow-up is fine) and **wait** for the
+  answer before moving on. **Adapt** — let each reply decide what to probe next.
+- **Make vague answers concrete.** Good culture, decent pay, work-life balance each need a follow-up that turns
+  them into something **observable** a reader could check against a posting: small teams, low meeting load, ships
+  weekly; base at least ~$X.
+- **Make answering easy.** Offer a few example options or a simple scale where it helps, and **always** leave room
+  for no preference, skip, or that's a dealbreaker.
+- Keep every message to one or two sentences, plus a closed choice's option lines — longer only when the user asks
+  you to explain something at greater length.
+- **Start** with what is prompting the search, **reflect back** every 4–5 questions in 1–2 sentences so the user
+  can correct you, and **finish** when you have enough detail or the user says they are done.
 
 ## Dimensions to cover
-Skip any the user says don't matter; add others if they come up. For each, learn **what** they want, **how much
-it matters** (which bucket), and **what would be a dealbreaker**.
-
+Skip any the user says don't matter; add others that come up. For each, learn **what** they want, **how much it
+matters** (which bucket), and **what would be a dealbreaker**.
 1. **Role** — function, title, seniority, scope, day-to-day, IC vs. manager.
 2. **Industry / domain / mission** — the kind of product, problem, or work.
-3. **Company** — size, stage (early startup → enterprise), culture, values, reputation.
-4. **Compensation** — base, bonus, equity, benefits, and a minimum acceptable. Capture as **prose**, never as
-   math ("≥ ~$180K base; equity matters; benefits flexible").
+3. **Company** — size, stage (early startup through enterprise), culture, values, reputation.
+4. **Compensation** — base, bonus, equity, benefits, a minimum acceptable, as **prose**: ≥ ~$180K base.
 5. **Location & arrangement** — remote / hybrid / onsite, geography, travel, relocation.
 6. **Work-life balance** — hours, intensity, on-call, PTO, flexibility.
 7. **Growth** — learning, promotion path, mentorship, skill development.
 8. **Team & management** — team size, manager style, reporting lines, whether they manage.
 9. **Tools / tech stack / skills / methods** used day to day.
 10. **Stability vs. risk** — job security, funding stage, risk tolerance.
-11. **Hard constraints / dealbreakers** — anything that's an automatic no.
+11. **Hard constraints / dealbreakers** — anything that is an automatic no.
 
 ## Calibration (qualitative buckets, NOT weights)
-At a natural point — once the dimensions are mostly covered — sort the factors into four buckets. This replaces
-any scoring: importance lives in the bucket, full stop.
-
+Once the dimensions are mostly covered, sort the factors into four buckets. That sorting is where importance
+lives, and a relative ordering the user volunteers is captured in words inside its bucket.
 - **Must-haves / dealbreakers** — absent or violated = automatic reject. Phrase each as a **binary, checkable**
-  condition ("Remote within the US, or SF Bay onsite").
+  condition: remote within the US, or SF Bay onsite.
 - **Strong preferences** — really want it; a strong match should hit most of these.
 - **Nice-to-haves** — pluses, not requirements.
 - **Red flags** — things whose presence makes a posting worse / a likely pass.
 
-Do **not** ask the user to assign numbers or weights, and do **not** ask how categories trade off against each
-other numerically. If they volunteer a relative ordering, capture it in words inside the bucket.
-
 ## Output: the brief
-Write the prose document to the path above, with **exactly** these sections —
-`../../shared/references/conventions.md` ("preferences.md — prose brief") owns the authoritative set (names + order);
-the gloss below is orientation, not a second source of truth:
-
+Write the prose document to the resolved path in the shape of this skill's `templates/preferences.example.md` —
+the front matter, then these five sections in this order:
 - **Summary** — 2–3 sentences capturing the ideal role in plain language.
-- **Must-haves / dealbreakers** — the binary filters; each phrased so a reader can check it against a posting.
+- **Must-haves / dealbreakers** — the binary filters, each phrased so a reader can check it against a posting.
 - **Strong preferences** — the heavily-wanted, non-binary criteria.
 - **Nice-to-haves** — the pluses.
 - **Red flags** — anti-preferences whose presence weighs against a posting.
 
-Every item is **plain and observable** — something a reader could verify against a posting's text, not an
-internal feeling. Skip an empty section's bullets rather than inventing filler.
+Every item is **plain and observable** — something a reader could verify against a posting's text, not an internal
+feeling — and a section the user gave nothing for keeps its heading and skips its bullets rather than carrying
+filler. The brief ends with the one-line **How to use this** note the template closes with.
 
-End the brief with a one-line **How to use this** note, e.g.:
-
-> _How to use this: your job-search assistant reads this brief next to each posting and judges whether it's relevant, and if so
-> whether it's a weak, moderate, or strong match — with reasoning. No score._
-
-After writing, **show the user the brief itself** — print `preferences.md`'s body directly in your reply as
-normal message text (rendered markdown; no code fence, skip the front-matter lines — see
-`../../shared/references/voice.md`), say in one line where it's saved, and offer to refine any section.
+After writing, **show the user the brief itself** — print `preferences.md`'s body directly in your reply as normal
+message text, rendered markdown outside any code fence, front-matter lines skipped — say in one line where it's
+saved, and offer to refine any section.
 
 ## Import an existing brief
-If the user already has a brief, accept a **file path** or **pasted prose** instead of interviewing from
-scratch.
-
+A user who already has a brief hands you a **file path** or **pasted prose** instead of an interview.
 1. **Validate it's usable.** It should be prose with at least a **Summary** and **Must-haves**.
-2. **If it carries a numeric rubric or category weights** (a fit-score scale, per-category points, percentage
-   weights), tell the user this system is **qualitative only** and offer to **convert it to prose** — keep the criteria,
-   drop the numbers, and reshape into the five sections above.
-3. **If it's thin** (missing sections, vague items), offer a few targeted enrich questions to fill the gaps —
-   using the same one-question-at-a-time method.
-4. Map its contents onto the five sections, add the `created_at:` + `updated_at:` front-matter lines, and write
-   `preferences.md` at the resolved path. Show the finished brief rendered in your reply the same way (no
-   code fence), and confirm in one line where it's saved.
+2. **Convert a numeric rubric or category weights** — a fit-score scale, per-category points, percentage weights.
+   Tell the user this system is **qualitative only** and offer to convert the brief to prose: keep the criteria,
+   drop the numbers, reshape into the five sections.
+3. **Fill thin or vague sections** with a few targeted questions, asked the same one-question-at-a-time way.
+4. Map its contents onto the five sections, add the front matter, and write the brief at the resolved path. Show
+   it rendered in your reply the same way, and confirm in one line where it's saved.

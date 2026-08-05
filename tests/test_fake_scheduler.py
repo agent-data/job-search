@@ -4,9 +4,11 @@ These tests use only temp workspaces and the scenario capability fixtures. They 
 exercise a real scheduler, cron, launchd, network, model, or agent-data account. The shim
 reads one scenario fixture and writes its state, log, and any scheduled-path artifacts to the
 temp workspace via env vars. The tests prove the seven operations (probe, register-disabled,
-inspect, fire, enable, disable, remove) behave deterministically across the ten scenarios,
-that every operation is logged, and that a successful fire creates the scheduled-path
-artifacts (run record, digest, lifecycle ledger) the T6.2/T6.3 canary flow consumes.
+inspect, fire, enable, disable, remove) behave deterministically across the nine scenarios,
+that every operation is logged, and that a successful fire creates the scheduled-path artifacts
+(run record, digest) the front door's canary consumes. The phase ledger, milestone events and
+exact-model fields the shim used to emit were deleted on 2026-07-31 with the contracts that
+defined them, and the tests that graded those emissions went with them.
 """
 import json
 import os
@@ -23,7 +25,6 @@ SCENARIOS = [
     "native-session-bound",
     "native-no-canary",
     "os-eligible",
-    "model-binding-lost",
     "registration-failure",
     "execution-pre-meter-failure",
     "execution-metered-failure",
@@ -31,8 +32,6 @@ SCENARIOS = [
     "scheduled-success",
 ]
 
-PRIMARY = "fixture-primary-exact"
-DETAIL = "fixture-detail-exact"
 
 
 def run(op_args, scenario, state, log, extra_env=None):
@@ -60,10 +59,6 @@ def write_definition(tmp_path, **overrides):
         "workspace": str(workspace),
         "cadence": "daily",
         "invocation": "job-search-run --headless",
-        "primary_model": PRIMARY,
-        "primary_model_origin": "session_inheritance",
-        "detail_model": DETAIL,
-        "detail_model_origin": "configured_user",
         "trigger": "scheduled",
     }
     definition.update(overrides)
@@ -82,7 +77,7 @@ def register(tmp_path, scenario, job_id="job-fixture-1", **def_overrides):
 # ---------------------------------------------------------------------------
 # Fixtures exist and describe capability profiles
 # ---------------------------------------------------------------------------
-def test_all_ten_scenario_fixtures_exist_and_parse():
+def test_every_scenario_fixture_exists_and_parses():
     for scenario in SCENARIOS:
         fixture = FIXTURES / f"{scenario}.json"
         assert fixture.is_file(), f"missing fixture {fixture}"
@@ -99,10 +94,11 @@ def test_no_extra_scenario_fixtures():
 # ---------------------------------------------------------------------------
 # probe — capability inspection (what T6.2 eligibility consumes)
 # ---------------------------------------------------------------------------
+# The eligibility gates the shim still reports. `primary_model_preserving` went with the
+# exact-model apparatus on 2026-07-31: nothing in the pack pins a scheduled run to a model.
 GATES = (
     "unattended",
     "canary_testable",
-    "primary_model_preserving",
     "local_access",
     "reversible",
 )
@@ -137,13 +133,6 @@ def test_probe_os_eligible_is_os_mechanism_and_passes_every_gate(tmp_path):
     state, log = paths(tmp_path)
     probe = json.loads(run(["probe"], "os-eligible", state, log).stdout)
     assert probe["mechanism"] == "os"
-    assert all(probe[g] is True for g in GATES)
-
-
-def test_silent_model_loss_looks_eligible_at_probe(tmp_path):
-    # The model-binding loss is silent: it cannot be seen at probe, only at the real canary fire.
-    state, log = paths(tmp_path)
-    probe = json.loads(run(["probe"], "model-binding-lost", state, log).stdout)
     assert all(probe[g] is True for g in GATES)
 
 
@@ -229,40 +218,19 @@ def test_scheduled_success_creates_the_scheduled_path_artifacts(tmp_path):
     assert body["close_state"] == "complete"
     assert body["trigger"] == "scheduled"
     assert body["scheduler_id"] == "job-fixture-1"
-    assert body["primary_model"] == PRIMARY
-    assert body["primary_model_preserved"] is True
     assert body["metered_consumed"] is True
 
+    # The canary's proof bit, exactly as the front door reads it off the record.
     runs = workspace / "runs"
     record = json.loads((runs / f"{body['run_id']}.json").read_text())
     assert record["trigger"] == "scheduled"
     assert record["scheduler_id"] == "job-fixture-1"
+    assert record["close_state"] == "complete"
     assert record["run_health"] == "healthy"
-    assert record["lifecycle"]["close_state"] == "complete"
-    assert record["primary_model"] == PRIMARY
-    assert record["detail_model"] == DETAIL
+    assert record["agent_data_usage"]["total_metered"] >= 1
     assert (runs / f"{body['run_id']}-digest.md").is_file()
-
-    ledger_path = runs / f".lifecycle-{body['run_id']}.jsonl"
-    rows = [json.loads(line) for line in ledger_path.read_text().splitlines()]
-    phases = [row["phase"] for row in rows if "phase" in row]
-    # Monotonic, adjacent forward phases through the quiet scheduled path to complete.
-    assert phases == [
-        "preflight",
-        "searching",
-        "selection_settled",
-        "reviewing_initial_batch",
-        "early_results_shown",
-        "reviewing_remaining",
-        "finalizing",
-    ]
-    assert rows[0]["event"] == "run_started"
-    assert rows[-1]["event"] == "run_closed"
-    assert rows[-1]["close_state"] == "complete"
-    # A quiet scheduled run never claims the early-results milestone.
-    milestones = [row["milestone"] for row in rows if row.get("event") == "milestone"]
-    assert "early_results_shown" not in milestones
-    assert {"final_run_record_written", "final_digest_written"} <= set(milestones)
+    assert "lifecycle" not in record          # the lifecycle block was dropped from the record
+    assert not list(runs.glob(".lifecycle-*.jsonl"))   # and the ledger with it
 
 
 def test_scheduled_digest_has_no_interactive_user_surface(tmp_path):
@@ -278,36 +246,27 @@ def test_pre_meter_failure_is_blocked_and_consumes_no_metered_consent(tmp_path):
     r, _, _, workspace = fire(tmp_path, "execution-pre-meter-failure")
     assert r.returncode == 0, r.stderr  # a blocked canary is a recorded outcome, not a crash
     body = json.loads(r.stdout)
-    assert body["run_health"] == "blocked"
+    assert body["close_state"] == "blocked"
+    assert body["run_health"] == "degraded"
     assert body["metered_calls"] == 0
     assert body["metered_consumed"] is False
     record = json.loads((workspace / "runs" / f"{body['run_id']}.json").read_text())
-    assert record["run_health"] == "blocked"
-    assert record["lifecycle"]["close_state"] == "blocked"
-    assert record["agent_data_usage"]["metered_calls"] == 0
-    assert record["error"]["code"].startswith("E-")
+    assert record["close_state"] == "blocked"
+    assert record["run_health"] == "degraded"
+    assert record["agent_data_usage"]["total_metered"] == 0
+    assert record["stopped_by"]        # a blocked close names what stopped it
 
 
 def test_metered_failure_is_blocked_after_a_metered_call(tmp_path):
     r, _, _, workspace = fire(tmp_path, "execution-metered-failure")
     body = json.loads(r.stdout)
-    assert body["run_health"] == "blocked"
+    assert body["close_state"] == "blocked"
+    assert body["run_health"] == "degraded"
     assert body["metered_calls"] >= 1
     assert body["metered_consumed"] is True
     record = json.loads((workspace / "runs" / f"{body['run_id']}.json").read_text())
-    assert record["agent_data_usage"]["metered_calls"] >= 1
-    assert record["lifecycle"]["close_state"] == "blocked"
-
-
-def test_model_binding_lost_completes_but_drops_the_exact_model(tmp_path):
-    r, _, _, workspace = fire(tmp_path, "model-binding-lost")
-    body = json.loads(r.stdout)
-    # The run itself completes healthy; the canary must catch that the model was NOT preserved.
-    assert body["run_health"] == "healthy"
-    assert body["primary_model_preserved"] is False
-    assert body["primary_model"] != PRIMARY
-    record = json.loads((workspace / "runs" / f"{body['run_id']}.json").read_text())
-    assert record["primary_model"] != PRIMARY
+    assert record["agent_data_usage"]["total_metered"] >= 1
+    assert record["close_state"] == "blocked"
 
 
 def test_not_canary_testable_fire_is_unsupported(tmp_path):

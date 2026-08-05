@@ -21,11 +21,15 @@ it reports; a few checks are pure shell or visual.
 
 The terminal state (per the AAS-T-10 ruling) is **a structural gate + automated lanes + a shrinking, honestly-labeled manual residual** — not a manual cross-host ritual. What is now **automated** (⚙️, runs in `pytest` / a CLI, host-independent — no manual driving):
 
-- **Scripted mechanics** — `tests/test_mechanics_scripts.py`: the deterministic state operations (jobs.jsonl append/fold, schedule-line composition, workspace discovery) that the skills call out to, unit-tested directly.
+- **Scripted mechanics** — `tests/test_mechanics_scripts.py` (28 tests, `pytest -q tests/test_mechanics_scripts.py`): the deterministic state operations the skills call out to — dedup, the jobs.jsonl event-line append, schedule-line composition, and workspace discovery — each driven through `sh` against a temp fixture, plus one case that runs `sh -n` and strict `dash -n` over all five bundled scripts, wherever their owning skill keeps them, so none of them is quietly bash-only. The fifth script, `validate-workspace.sh`, is syntax-checked here and behavior-tested in the next bullet.
+- **Workspace validator** — `tests/test_validate_workspace.py`: `skills/job-search-runbook/scripts/validate-workspace.sh` run against workspaces built per case. It checks config.yaml's required keys, `---` front matter with ISO `created_at`/`updated_at` in preferences.md, the run-record shape and UTC `Z` timestamps, and — with `--post-close` — that no started-marker or scratch directory survived the run. These file rules used to live only as prose in the skills; the script is now what enforces them.
+- **Eval-case lint** — `tests/test_eval_cases.py`: every row in `evals/behaviors.md` names a case file that exists in `evals/cases/`, every case file carries the five header fields `evals/run_eval.py` reads (`behaviors`, `workspace`, `timeout_s`, `models`, `prompt`), and each case's `behaviors:` list matches the rows that name it. This checks that the eval config is coherent; it does not run an eval.
 - **Hardened skill evals** — `python3 scripts/eval_harness.py --root .` validates every `skills/*/evals/evals.json` for structural coherence (contiguous ids, well-formed scenarios, a **discovery** scenario per skill for the four overlap pairs, **stochastic** scenarios carrying `reps ≥ 5` + a **no-guidance control** arm, and — on milestone/liveness scenarios — a **fixed-time fixture** (`fixed_time`: a deterministic reference clock with a valid ISO `now` and a `checks` subset of `milestone`/`liveness`) so those derivations never read the wall clock) and rejects the pinned pack-authored `gpt-5*` literal regression family. Legacy version-1 selectors may resolve through host tier roles; version-2 test and runtime setup injects an exact host-resolved identifier. Pack-authored fixtures and prose never hard-code that identifier. `tests/test_eval_harness.py` unit-tests the rep-aggregation (pass-rate + variance), the control-delta, the fixed-time-fixture validation, and the **unique run marker** enforcement — the off-CI artifact check (`scripts/eval_harness.py --check-artifacts`) accepts a per-run `run_marker` and, for any `run_marked` assertion, requires the artifact to carry it, so a stale artifact left in a reused workspace can never create a false pass.
 - **Release integrity** — `scripts/check_release_integrity.py`: version-sync across the 7 manifests (six JSON plus the Hermes `plugin.yaml`).
 
 Verifying a host-specific action such as scheduling is now a **runtime config-time canary** check, replacing the deleted per-host **structural adapter validation**.
+
+How the skills *behave* is graded by the live behavior evals in `evals/` (§ Behavior evals), which are a **local release gate — CI never runs them**: each one spawns a real `claude -p` session against the live Job Postings API, which needs an API key and costs money. No test asserts sentences of documentation prose; the suites that did were retired on 2026-07-30 in favor of the evals plus `validate-workspace.sh`. Two pytest files still open a reference file, and neither reads it for wording: `tests/test_reference_resolution.py` follows every path a SKILL.md names, from each host's install view, and fails on a dangling one, and `tests/test_usage_context_contract.py` checks that pricing and metering facts have exactly one owning file (the `agent-data-reference` skill).
 
 What stays a **labeled TRANSITIONAL residual** (👤/🤖, driven by hand): the **behavioral cross-host matrix** — actually running a skill end-to-end on each of the eight hosts that are **not installable on the CI runner** (Codex/Cursor/opencode/Gemini/Copilot/Droid/Pi/Hermes Agent), and the **N ≥ 5 stochastic eval reps** (the discovery/verdict/injection/merge scenarios run against the shim to record real pass-rate + variance + the control delta). These are the **off-CI live-harness step** — expected, not a gap: CI proves the scenarios are *well-formed*; the behavioral reps prove they *pass*, and shrink as hosts become installable. A green structural gate must never be read as a passed behavioral matrix.
 
@@ -56,7 +60,7 @@ live under the temp dir.
 
 **Isolation pre-flight — run before any destructive/live test (cheap insurance).** Prove the redirect is live so
 nothing can reach your real data (this evaluates the same registry expression the skills' Discovery procedure
-uses — `shared/references/internals.md`):
+uses — the `job-search-runbook` skill):
 ```bash
 REG="${JOBSEARCH_OS_REGISTRY:-${XDG_CONFIG_HOME:-${JOBSEARCH_OS_HOME:-$HOME}/.config}/job-search/config.json}"
 case "$REG" in "$JSOS_TEST"/*) echo "isolation OK → registry $REG" ;; *) echo "LEAK: registry $REG outside $JSOS_TEST" ;; esac
@@ -86,8 +90,24 @@ in `-p` commands anyway so the skill is invoked deterministically.
 ```bash
 cd "$JSOS" && python3 -m pytest -q
 ```
-**Expected:** `603 passed` **and `0 failed`** — treat **`0 failed`** as the real gate (the exact count grows as
-tests are added; bump this number when it does). Covers the doc linter, the philosophy guard, the release-integrity checks, the scripted-mechanics unit tests, the **eval-scenario validator +
+**Expected:** `429 passed` **and `0 failed`** — treat **`0 failed`** as the real gate. The count moves in both
+directions: it grows when tests are added, and it fell three times as the 2026-07-30 overhaul landed. First
+688 → 547, when the documentation-prose suites were retired. Then, on 2026-07-31, **554 → 377 → 374 → 372**:
+554 was the measured count once tasks 5–10 had added their own tests; deleting the shared reference corpus and
+the structures it defined (the exact-model binding sidecar, the version-1 migration, the lifecycle ledger,
+the eight-state schedule health) took the tests that read them with it (**−177**); trimming the scheduler
+shim to the contracts that survive took three more (**−3**); retiring the `internal_record` assertion
+surface, which required a run record to carry a raw `E-*` code no shipped file writes any more, replaced its
+three tests with one that rejects the retired name (**−2**). It then grew on the same day as the skill
+locality restructure landed: **372 → 385 → 408**, the co-location gates first and then the frontmatter and
+locality suite that came with promoting the two shared references to skills. It grew four more times as
+the locality proof and its gates landed: **408 → 411 → 418 → 421 → 429** — the eval-case lint gained the
+second case shape, a list of trigger phrases in place of one prompt (**+3**), and
+`test_reference_resolution.py` gained three rounds of checks that reject a pointer naming a file in the
+reference skill's own directory, each round adding the written forms the previous rule let pass
+(**+7**, **+3**, **+8**). Update the number here whenever it changes. Covers the doc linter, the philosophy guard,
+the release-integrity checks, the scripted-mechanics unit tests, the workspace validator
+(`test_validate_workspace.py`), the eval-case lint (`test_eval_cases.py`), the **eval-scenario validator +
 harness math** (`test_eval_harness.py`), and the fake-shim self-tests (incl. the `bad-query` scenario behind
 T7.12) — dev tooling only; the runtime state procedures are exercised by the live tests below and the skill evals.
 **Result:** ⬜
@@ -104,8 +124,8 @@ export JSOS_CANON_LOC="United States"           # large location → rarely empt
 **Sparse-data fallback (apply to any LIVE test).** If a live search returns **0 results**: broaden the canonical
 query once (drop the location); if still 0, re-run the *same assertion* against the fake-shim **`happy`** scenario
 (§7 setup) and mark the live result **N/A — market-quiet**, not ❌. A bug looks different from an empty market: a
-bug throws a named `E-*`, mis-shapes the digest, or crashes; a quiet market returns a clean "0 results — broaden
-keywords" (T7.10). Only the former is a ❌.
+bug closes the run `blocked`, mis-shapes the digest, or crashes; a quiet market completes healthy and says "0
+results — broaden keywords" (T7.11). Only the former is a ❌.
 
 > Prefer realism? You may swap in your own role/location as an **optional** variant — but grade the canonical run.
 
@@ -131,9 +151,10 @@ claude --plugin-dir "$JSOS" -p "reply with the single word LOADED and do nothing
 ```bash
 cd "$JSOS" && python3 -m pytest -q tests/test_reference_resolution.py
 ```
-**Expected:** `0 failed` — the shared contracts live **once** under `shared/references/` and resolve in place
-from each skill (skills point at `../../shared/references/<file>.md`); there are **no per-skill bundled copies**.
-The build is stamp-only: `./scripts/build.sh` regenerates `shared/references/build-stamp.md` and nothing else.
+**Expected:** `0 failed` — the shared contracts live **once**, in the `job-search-runbook` and
+`agent-data-reference` skills, and each of the other five invokes whichever of the two it needs and
+nothing outside them; there are **no per-skill bundled copies**.
+Nothing is generated into `skills/`, so there is no build step to re-run.
 **Result:** ⬜
 
 ### T1.4 Trigger resolves — 🤖
@@ -220,18 +241,18 @@ last run health), the latest digest summary (date + counts), a pipeline snapshot
 ### T4.2 Add a query conversationally — 🤖
 Say: **"add a query for 'staff machine learning engineer' in 'Remote'."**
 **Verify (👤):** `cat "$JSOS_TEST/.job-search/config.yaml"` → a new `queries[]` entry with those keywords/location,
-`enabled: true`, `version: 1` intact, **no budget/score fields added**.
+`enabled: true`, `version: 2` intact, **no budget/score fields added**.
 **Result:** ⬜
 
 ### T4.2b Edit a query conversationally — 🤖
 Say: **"change the location on the staff ML query to 'United States'."**
 **Verify (👤):** `config.yaml` → that **same** `queries[]` item's `location` is updated; its `id`/`keywords`
-unchanged, other queries untouched, `version: 1` intact.
+unchanged, other queries untouched, `version: 2` intact.
 **Result:** ⬜
 
 ### T4.2c Remove a query conversationally — 🤖
 Say: **"drop the staff ML query."**
-**Verify (👤):** `config.yaml` → that item is gone; remaining queries intact; `version: 1` intact.
+**Verify (👤):** `config.yaml` → that item is gone; remaining queries intact; `version: 2` intact.
 **Result:** ⬜
 
 ### T4.3 Change frequency conversationally — 🤖
@@ -267,7 +288,7 @@ posting's `source_id` with `"status":"interested"`; the home pipeline count refl
 ### T4.7 Conversational robustness — the interface IS the product — 🤖
 The config interface is natural language, so test more than one phrasing per action. For each cell, send the
 phrasing and record whether Claude makes the **right** edit — or asks **one** clarifying question when genuinely
-ambiguous. It must never silently do the wrong thing; **`version: 1` stays; no score/budget fields ever appear.**
+ambiguous. It must never silently do the wrong thing; **`version: 2` stays; no score/budget fields ever appear.**
 
 | Action | Multi-intent | Oblique | Negative / exclude | Typo / loose |
 |---|---|---|---|---|
@@ -277,24 +298,26 @@ ambiguous. It must never silently do the wrong thing; **`version: 1` stays; no s
 
 **Expected, per cell:** correct `config.yaml`/`jobs.jsonl` edit **or** one targeted clarifying question
 (e.g. "by 'so often' do you mean hourly→daily?"); multi-intent applies **both** changes; negative phrasings
-**exclude** (add an exclusion / mark not-interested), never add the thing. `version: 1` preserved throughout.
+**exclude** (add an exclusion / mark not-interested), never add the thing. `version: 2` preserved throughout.
 **Verify (👤):** `cat "$JSOS_TEST/.job-search/config.yaml"` after the multi-intent + typo rows; fold the state
 after the status row.
 **Result:** ⬜
 
 ### T4.8 Home failure-states — don't bury problems — 🤖 + 👤
-The healthy home is T4.1; these are the states `home.md:26-92` says must render specifically. Build each, then
-say **"/job-search:job-search"**:
+The healthy home is T4.1; these are the states the front door
+([`skills/job-search/SKILL.md`](skills/job-search/SKILL.md), the home-view step) must render specifically.
+Build each, then say **"/job-search:job-search"**:
 - **No runs yet** (workspace exists, no digest): complete onboarding but **decline** the sample run (or
   `rm "$JSOS_TEST/.job-search/reports/"*.md`). → Home says *"No runs yet — want me to run your first search
   now?"*, not an empty digest block.
-- **Last run blocked:** seed a blocked run-health record, then open home:
+- **Last run blocked:** seed a record whose run stopped early, then open home:
   ```bash
   mkdir -p "$JSOS_TEST/.job-search/runs"
-  printf '{"run_health":"blocked","error":"E-QUOTA"}\n' > "$JSOS_TEST/.job-search/runs/2099-01-01T00-00-00Z.json"
+  printf '{"close_state":"blocked","run_health":"degraded","stopped_by":"the monthly allowance is spent"}\n' \
+    > "$JSOS_TEST/.job-search/runs/2099-01-01T00-00-00Z.json"
   ```
-  → Home **names `E-QUOTA`** with its billing recovery and says existing matches are unaffected — it does
-  **not** bury the failure under a cheery summary.
+  → Home says the last run stopped because the monthly allowance is spent, points at the billing page, and
+  says existing matches are unaffected — it does **not** bury the failure under a cheery summary.
 - **Stale brief (>3 months):** age the brief, then open home:
   ```bash
   sed -i.bak 's/created_at:.*/created_at: 2025-01-01/' "$JSOS_TEST/.job-search/preferences.md"
@@ -321,14 +344,17 @@ Immediately run it again.
 `evaluated` events; no `get-posting` calls; Run health healthy; exits 0.
 **Result:** ⬜
 
-### T5.3 Headless first-run with no workspace → E-NO-CONFIG — 👤
+### T5.3 Headless first-run with no workspace — 👤
 ```bash
 T2=$(mktemp -d)
 JOBSEARCH_OS_REGISTRY="$T2/absent.json" JOBSEARCH_OS_HOME="$T2" \
   claude --plugin-dir "$JSOS" -p "/job-search:job-search-run"     # no --workspace, empty sandbox
 echo "exit: $?"; rm -rf "$T2"
 ```
-**Expected:** names **E-NO-CONFIG** (run the job-search skill); makes no calls; no `runs/` record is written (no workspace) — the failure is visible because the next job-search visit routes to onboarding; the process exits **0** (do not assert non-zero).
+**Expected:** the reply says there is no job search set up yet and names the job-search skill as the way to
+set one up; it makes no `agent-data` calls. Nothing is written under `$T2` — with no workspace there is
+nowhere to put a run record, and the failure stays visible because the next job-search visit routes to
+onboarding. The process exits **0** (do not assert non-zero).
 **Result:** ⬜
 
 ### T5.4 Headless **+ live** run — the actual scheduled path — 👤  ★ production path
@@ -346,8 +372,7 @@ ls -t "$JSOS_TEST/.job-search/reports/"*.md | head -1   # a digest exists / was 
 (Run health line, counts line, Strong→Moderate→Weak); the summary lands in `cron.log`. Fresh matches **or** a clean
 "you've already seen all N of these" dedup digest are both passes (dedup if T5.1 already searched this workspace);
 0 live results → §0.4 fallback.
-**Cross-check** `/loop` runs this same skill headlessly each interval — per the interval table in
-`shared/references/internals.md`, daily composes to
+**Cross-check** `/loop` runs this same skill headlessly each interval — daily composes to
 `/loop 24h /job-search:job-search-run` (loose-skill installs → `/loop 24h /job-search-run`).
 **Result:** ⬜
 
@@ -380,10 +405,12 @@ PATH="$SH5/_bin:$PATH" JOBSEARCH_FIXTURES="$JSOS/tests/fixtures" JOBSEARCH_TEST_
   claude --plugin-dir "$JSOS" -p "/job-search:job-search-run --workspace $SH5"; echo "exit: $?"
 cat "$SH5/reports/"*.md 2>/dev/null; rm -rf "$SH5"
 ```
-**Expected:** writes a `runs/<id>.json` with `run_health: blocked` naming **E-SERVICE-DOWN**, so the next job-search home view surfaces it; the headless `claude -p` process returns **0**, so do not assert on `$?`; the digest's Run-health line reads exactly **`Run health: blocked (action needed)`**
-(the full set is `healthy | partial (<why>) | degraded (job sources flaky) | blocked (action needed)`); the body is
-the **E-SERVICE-DOWN** message ("unreachable right now … next scheduled run will retry"), **not** a match list.
-(`degraded`/`partial` digest shapes are strengthened in T7.9/T7.7.)
+**Expected:** the three blocked-close conditions from §7, with the dead service as the cause. The digest's
+health line reads **`Run health: degraded`** and its body says the service is unreachable and the next
+scheduled run will retry — **not** a match list. `run_health` is one word: `healthy` when every search
+answered and every candidate reached a judgment, `degraded` on every other close, a blocked one included.
+What stopped the run is carried by `close_state` plus the digest's own wording, not by a code.
+(The degraded digest shape is pushed harder in T7.7/T7.9.)
 **Result:** ⬜
 
 ---
@@ -409,11 +436,51 @@ in the reasoning. Unknowns are never counted against it.
 
 ---
 
-## 7. Named-error paths (no silent failures)
+## 7. Blocked and degraded paths (no silent failures)
+
+Every test in this section grades the same three observable things, so read this once instead of re-reading
+it per row. There is no error-code catalogue any more — nothing to look a code up in, and no code to assert
+on. What a blocked run owes the user is:
+
+Below, `$WS` stands for whichever throwaway workspace the row built (`$T3`, `$SH`, and so on).
+
+1. **A closed run record.** `runs/<run_id>.json` exists, with `close_state: blocked` and
+   `run_health: degraded`. Read it: `cat "$WS/runs/"*.json`. The record is what the *next* front-door visit
+   reads, so a scheduled run that failed overnight is named the next morning — that is the whole point of
+   writing it before stopping.
+2. **A digest that says what stopped it.** `reports/<date>-digest.md` leads with `Run health: degraded`,
+   and its body is the cause and the fix in plain words, not a match list and not a cheery summary. Grade
+   the sentences: would a user who read only this know what happened and what to do?
+3. **No leftovers.** `"$JSOS/skills/job-search-runbook/scripts/validate-workspace.sh" "$WS" --post-close <run_id>`
+   exits 0 and prints nothing — the started-marker and the scratch directory are gone even though the run
+   stopped early.
+
+**Condition 3 only applies where the rest of the workspace is valid.** The validator grades the whole
+workspace, not just the run's leftovers, so a row that deliberately seeds a broken file will fail it on
+that file no matter how cleanly the run closed. Measured on T7.4's seed (a workspace from
+`setup-workspace.sh` with `preferences.md` emptied):
+
+```
+$ skills/job-search-runbook/scripts/validate-workspace.sh "$WS" --post-close 2026-07-30T09-00-00Z
+INVALID preferences.md front-matter
+exit=1
+```
+
+That is the validator working correctly, not the run failing. Each row below says which conditions it
+grades; where a row grades 1 and 2 only, check the leftovers by hand instead —
+`ls -a "$WS/runs/"` shows no `.started-*` and no `.scratch/`.
+
+Two things that are **not** pass conditions. The headless `claude -p` process returns **0** even on a
+blocked run (a skill cannot set the host process's exit status), so never assert on `$?`. And no exact
+wording is required: two runs may explain the same block in different sentences and both pass, as long as
+the cause and the fix are there.
+
+A run that *finishes* its work while something went wrong is a different close: `close_state: complete`
+with `run_health: degraded`. Those rows say so.
 
 ### Live-triggerable
 
-### T7.1 E-NO-AUTH — 👤
+### T7.1 The CLI is not authenticated — 👤
 ```bash
 T3=$(mktemp -d); cp -R "$JSOS_TEST/.job-search" "$T3/.job-search" 2>/dev/null || true
 AGENT_DATA_API_KEY="" JOBSEARCH_OS_HOME="$T3" JOBSEARCH_OS_REGISTRY="$T3/reg.json" \
@@ -421,28 +488,45 @@ AGENT_DATA_API_KEY="" JOBSEARCH_OS_HOME="$T3" JOBSEARCH_OS_REGISTRY="$T3/reg.jso
 echo "exit: $?"; rm -rf "$T3"
 ```
 *(If your key is in `~/.agent-data/config.json`, temporarily test in a shell where it isn't, or skip — the eval covers it.)*
-**Expected:** halts with **E-NO-AUTH** (names the `export AGENT_DATA_API_KEY=…` fix); nothing pulled; writes a `runs/<id>.json` with `run_health: blocked` naming **E-NO-AUTH**, so the next job-search home view surfaces it; the headless `claude -p` process returns **0**, so do not assert on `$?`.
+**Grades conditions 1, 2, and 3.**
+**Expected:** the cause is the missing API key and the fix is the exact command that sets one
+(`agent-data init --api-key …`, or exporting `AGENT_DATA_API_KEY`). Nothing is pulled — no `search-jobs`,
+no `get-posting`.
 **Result:** ⬜
 
-### T7.2 E-NO-AGENT-DATA — 👤
+### T7.2 The CLI is not installed — 👤
+The workspace has to be real, or there is nowhere to write the record this row grades. Build one, then hide
+`agent-data` by putting **only** `claude` on the PATH:
 ```bash
-T4=$(mktemp -d)
-PATH="/usr/bin:/bin" JOBSEARCH_OS_HOME="$T4" JOBSEARCH_OS_REGISTRY="$T4/reg.json" \
-  claude --plugin-dir "$JSOS" -p "/job-search:job-search-run --workspace $T4/.job-search"  # agent-data not on this PATH
-echo "exit: $?"; rm -rf "$T4"
+T4=$(mktemp -d); bash "$JSOS/skills/job-search-run/evals/files/setup-workspace.sh" "$T4/.job-search" >/dev/null
+mkdir -p "$T4/bin"; ln -s "$(command -v claude)" "$T4/bin/claude"
+command -v agent-data          # note where it really is — the mask below must not include that directory
+PATH="$T4/bin:/usr/bin:/bin" JOBSEARCH_OS_HOME="$T4" JOBSEARCH_OS_REGISTRY="$T4/reg.json" \
+  claude --plugin-dir "$JSOS" -p "/job-search:job-search-run --workspace $T4/.job-search"
+echo "exit: $?"; cat "$T4/.job-search/runs/"*.json; rm -rf "$T4"
 ```
-**Expected:** **E-NO-AGENT-DATA** naming the `npm install -g agent-data` fix; writes a `runs/<id>.json` with `run_health: blocked` naming **E-NO-AGENT-DATA**, so the next job-search home view surfaces it; the headless `claude -p` process returns **0**, so do not assert on `$?`. *(The trimmed
-PATH needs no python3 — the skills are zero-dependency; see T9.4.)*
+`agent-data` commonly sits in the same directory as `claude` (both under `~/.local/bin` on this machine),
+which is why the symlink exists rather than a trimmed `$PATH` — dropping the directory would take `claude`
+with it. If your `claude` needs a runtime that isn't in `/usr/bin` or `/bin`, add that directory too; the
+only thing this row requires is that `agent-data` is absent.
+**Grades conditions 1, 2, and 3.**
+**Expected:** the cause is the missing `agent-data` command and the fix is `npm install -g agent-data`.
+*(The masked PATH needs no python3 — the skills are zero-dependency; see T9.4.)*
 **Result:** ⬜
 
-### T7.3 E-NO-CONFIG — covered by T5.3. **Result:** ⬜
-### T7.4 E-NO-PREFERENCES — 👤
+### T7.3 No workspace at all — covered by T5.3. Grades neither 1 nor 3: there is no workspace, so there is nowhere to write a record and nothing to validate. **Result:** ⬜
+### T7.4 The preferences brief is empty — 👤
 ```bash
 T5=$(mktemp -d); bash "$JSOS/skills/job-search-run/evals/files/setup-workspace.sh" "$T5/.job-search" >/dev/null
 : > "$T5/.job-search/preferences.md"
-claude --plugin-dir "$JSOS" -p "/job-search:job-search-run --workspace $T5/.job-search"; echo "exit: $?"; rm -rf "$T5"
+claude --plugin-dir "$JSOS" -p "/job-search:job-search-run --workspace $T5/.job-search"; echo "exit: $?"
+ls -a "$T5/.job-search/runs/"; rm -rf "$T5"
 ```
-**Expected:** **E-NO-PREFERENCES** naming the job-preference-interview skill; nothing pulled; writes a `runs/<id>.json` with `run_health: blocked` naming **E-NO-PREFERENCES**, so the next job-search home view surfaces it; the headless `claude -p` process returns **0**, so do not assert on `$?`.
+**Grades conditions 1 and 2 only.** The seed empties `preferences.md` on purpose, so the validator will
+report `INVALID preferences.md front-matter` and exit 1 whatever the run did — that is the broken seed, not
+a leftover. Check the leftovers from the `ls -a` instead: no `.started-*` and no `.scratch/`.
+**Expected:** the cause is the empty brief — there is nothing to judge postings against — and the fix names
+the job-preference-interview skill. Nothing is pulled.
 **Result:** ⬜
 
 ### Fake-shim only (deterministic error injection — cannot be forced on the live API)
@@ -456,48 +540,46 @@ export FAKE="PATH=$SH/_bin:$PATH JOBSEARCH_FIXTURES=$JSOS/tests/fixtures"
 Run each by giving Claude: *"run the job-search-run skill with --workspace $SH and the fake shim (PATH=$SH/_bin:$PATH,
 JOBSEARCH_FIXTURES=$JSOS/tests/fixtures, JOBSEARCH_TEST_SCENARIO=<scenario>) and show the digest + exit code."*
 
+`setup-workspace.sh` builds `$SH` from the repo templates, so every file in it is valid and **every row
+below grades all three conditions**, plus whatever its own Expected column adds. A row marked "blocked
+close" ends `close_state: blocked` / `run_health: degraded`; the rest complete.
+
 | Test | scenario | Expected | Result |
 |---|---|---|---|
-| T7.5 **E-QUOTA** | `quota` | plain-language quota note leads with the billing recovery and exact zero prior metered calls; rejected attempt is unmetered; no retry or invented balance/charge; existing matches intact; writes a `runs/<id>.json` with `run_health: blocked` naming **E-QUOTA**, so the next job-search home view surfaces it; the headless `claude -p` process returns **0**, so do not assert on `$?` | ⬜ |
-| T7.6 **E-SERVICE-DOWN** | `down` | "service down" digest, Run health blocked; **no** search/get-posting calls; writes a `runs/<id>.json` with `run_health: blocked` naming **E-SERVICE-DOWN**, so the next job-search home view surfaces it; the headless `claude -p` process returns **0**, so do not assert on `$?` | ⬜ |
-| T7.7 **E-UPSTREAM-STRETCH** | `stretch` | retries the 502 with backoff, opens each source's circuit after two consecutive failed queries against it (the shim fails every source → all stretched); writes a **partial** digest (Run health `partial (all sources unavailable)`); doesn't crash | ⬜ |
-| T7.8 invalid-pair (non-error) | `invalid-pair` | no retry; summary-only judgment + "detail link expired" footnote; `detail_read:false`; run completes, exit 0 | ⬜ |
-| T7.9 degraded (non-error) | `degraded` | Run-health line reads `degraded (job sources flaky)`; digest notes results this run may be affected; **no detail-read cap** (reads promising matches as normal); still produces matches; exit 0 | ⬜ |
-| T7.10 many promising postings | `many-promising` | every promising posting is evaluated; if the host hits a subagent/thread limit, it continues in rolling batches or falls back sequentially; capacity backpressure alone does **not** make Run health partial | ⬜ |
-| T7.11 zero / all-known | `zero-empty` | "Searches ran but returned 0 results — broaden keywords"; exit 0. (All-known: pre-seed jobs.jsonl with the happy ids → "No new postings — you've already seen all N of these.") | ⬜ |
+| T7.5 monthly allowance spent | `quota` | **blocked close.** The digest leads with the spent allowance and the billing page as the fix, and states the run's actual prior metered calls — zero here, because the very first attempt was rejected. The rejected attempt is not counted as metered. No retry, no invented balance or charge. Postings already in `jobs.jsonl` are untouched | ⬜ |
+| T7.6 service unreachable | `down` | **blocked close.** No `search-jobs` and no `get-posting` calls at all. The digest says the service is unreachable and that the next scheduled run will retry, instead of a match list | ⬜ |
+| T7.7 every source keeps failing | `stretch` | retries the 502 with backoff, then stops searching a source after two consecutive failed queries against it (the shim fails every source, so all stop). The digest reads `Run health: degraded` and names every source as unavailable. It does not crash | ⬜ |
+| T7.8 stale detail links | `invalid-pair` | no retry — a dead id/URL pair is not going to become live. Those postings are judged from their summaries with a "detail link expired" footnote and `detail_read:false`. The run **completes** (`close_state: complete`), exit 0 | ⬜ |
+| T7.9 flaky sources, run still finishes | `degraded` | the digest's health line reads `degraded` and names the flaky sources as what degraded the run, and notes that this run's results may be incomplete. Promising matches are still read in full — nothing caps detail reads here — and matches are still produced. `close_state` stays **`complete`**: the run finished its work | ⬜ |
+| T7.10 many promising postings | `many-promising` | every promising posting is evaluated; if the host hits a subagent or thread limit, it continues in rolling batches or falls back to working the list in order. Hitting that limit is not by itself a reason for `run_health: degraded` | ⬜ |
+| T7.11 zero results / all already seen | `zero-empty` | completes healthy: "Searches ran but returned 0 results — broaden keywords", exit 0. (All-known variant: pre-seed `jobs.jsonl` with the happy ids → "No new postings — you've already seen all N of these.") | ⬜ |
 
 ```bash
 rm -rf "$SH"
 ```
 
-The next three reuse the same fake shim and are fully **offline** (no credits). Each builds its own throwaway
+The next two reuse the same fake shim and are fully **offline** (no credits). Each builds its own throwaway
 workspace, so they don't depend on the shared `$SH` above.
 
-### T7.11 E-CONFIG-VERSION — a config from a newer version halts — 👤
-```bash
-SHV=$(mktemp -d); bash "$JSOS/skills/job-search-run/evals/files/setup-workspace.sh" "$SHV" >/dev/null
-sed -i.bak 's/^version: 1/version: 3/' "$SHV/config.yaml"      # pretend a newer skill wrote it
-PATH="$SHV/_bin:$PATH" JOBSEARCH_FIXTURES="$JSOS/tests/fixtures" \
-  claude --plugin-dir "$JSOS" -p "/job-search:job-search-run --workspace $SHV"; echo "exit: $?"; rm -rf "$SHV"
-```
-**Expected:** **E-CONFIG-VERSION** ("written by a newer version … update the job-search skills"); HALT at
-preflight (no `search-jobs`/`get-posting`); writes a `runs/<id>.json` with `run_health: blocked` naming **E-CONFIG-VERSION**, so the next job-search home view surfaces it; the headless `claude -p` process returns **0**, so do not assert on `$?`.
-**Result:** ⬜
+*(There is no config-version test any more. Nothing in the pack halts on a `config.yaml` version it does not
+recognise — `validate-workspace.sh` requires `version` to be present and numeric, and that is all. If a
+future release reintroduces a schema break, add the test back with it.)*
 
-### T7.12 E-BAD-QUERY — skip the bad query, keep the good ones — 👤
-E-BAD-QUERY is **non-blocking** (skip the query, continue). Build a workspace with one good and one malformed
+### T7.12 One malformed query is skipped, the good ones still run — 👤
+A rejected query is **non-blocking**: skip it, keep going. Build a workspace with one good and one malformed
 query (the `bad-query` scenario rejects only the `INVALID` sentinel location with a `422`):
 ```bash
 SHB=$(mktemp -d); bash "$JSOS/skills/job-search-run/evals/files/setup-workspace.sh" "$SHB" >/dev/null
 cat > "$SHB/config.yaml" <<'YAML'
-version: 1
+version: 2
 workspace:
   preferences_path: "preferences.md"
 queries:
   - { id: "good", keywords: "software engineer", location: "United States",   limit: 10, enabled: true }
   - { id: "bad",  keywords: "data engineer",     location: "INVALID-LOCATION", limit: 10, enabled: true }
 search:
-  detail_model: "balanced"  # valid legacy-v1 selector
+  sources: ["linkedin"]
+  freshness: "any"
 schedule:
   frequency: "daily"
   time: "08:00"
@@ -506,12 +588,13 @@ PATH="$SHB/_bin:$PATH" JOBSEARCH_FIXTURES="$JSOS/tests/fixtures" JOBSEARCH_TEST_
   claude --plugin-dir "$JSOS" -p "/job-search:job-search-run --workspace $SHB"; echo "exit: $?"
 cat "$SHB/reports/"*.md 2>/dev/null; rm -rf "$SHB"
 ```
-**Expected:** the **bad** query → **E-BAD-QUERY** naming the param (`location`, from `details[].loc`) + the
-"fix it in `config.yaml`" guidance, and is **skipped**; the **good** query still runs and produces matches; Run
-health **partial**; **no retry** on the 422 (`retryable:false`); run **completes, exit 0** (skip, not halt).
+**Expected:** the **bad** query is skipped, and the digest says which query was skipped, which parameter the
+service rejected (`location`, from `details[].loc`), and that fixing it means editing `config.yaml`. The
+**good** query still runs and produces matches. The 422 is **not retried** (`retryable:false`). The run
+**completes** — `close_state: complete`, `run_health: degraded` because a query was lost — exit 0.
 **Result:** ⬜
 
-### T7.13 detail-fetch-failed (non-error) — retry, then fall back to summary — 👤
+### T7.13 A detail read fails — retry, then judge from the summary — 👤
 ```bash
 SHD=$(mktemp -d); bash "$JSOS/skills/job-search-run/evals/files/setup-workspace.sh" "$SHD" >/dev/null
 PATH="$SHD/_bin:$PATH" JOBSEARCH_FIXTURES="$JSOS/tests/fixtures" JOBSEARCH_TEST_SCENARIO=detail-fetch-failed \
@@ -523,7 +606,23 @@ and judges from the **summary** (footnote that the detail couldn't be read); `de
 the run **completes, exit 0** (a footnote, not a failure).
 **Result:** ⬜
 
-### T7.14 Pagination and usage-context matrix — 🤖 + 👤 (fake shim, fully offline)
+### T7.14 A run that died mid-flight is reported, not hidden — 👤
+The one blocked-shaped state that isn't an API failure: the previous run was killed before it could close, so
+its started-marker is still there and it has no record.
+```bash
+SHK=$(mktemp -d); bash "$JSOS/skills/job-search-run/evals/files/setup-workspace.sh" "$SHK" >/dev/null
+: > "$SHK/runs/.started-2026-07-30T09-00-00Z"; mkdir -p "$SHK/runs/.scratch/2026-07-30T09-00-00Z"
+PATH="$SHK/_bin:$PATH" JOBSEARCH_FIXTURES="$JSOS/tests/fixtures" JOBSEARCH_TEST_SCENARIO=happy \
+  claude --plugin-dir "$JSOS" -p "/job-search:job-search-run --workspace $SHK"; echo "exit: $?"
+ls -a "$SHK/runs/"; rm -rf "$SHK"
+```
+**Expected:** the run says up front that the last run did not finish, deletes the stale marker and its scratch
+directory, and then does this run's work normally — a fresh record and digest, `close_state: complete`. Nothing
+is silently swallowed, and no stale `.started-*` survives. This is behavior row B9; the `kill-midrun` eval case
+covers the same ground with a real kill.
+**Result:** ⬜
+
+### T7.15 Pagination and usage-context matrix — 🤖 + 👤 (fake shim, fully offline)
 
 Use the named eval prompt as the setup recipe for each row; each recipe creates its own temporary workspace,
 redirected registry, fake-shim call log, and artifact assertions. Drive one pass manually here as an offline
@@ -569,10 +668,9 @@ and duplicate/merge volume. Record the observation; do not auto-tune `max_new_po
 ```bash
 T6=$(mktemp -d)
 mkdir -p "$T6/job-search"                                  # LEGACY (visible) location
-cp "$JSOS/templates/config.example.yaml" "$T6/job-search/config.yaml"
+cp "$JSOS/skills/job-search/templates/config.example.yaml" "$T6/job-search/config.yaml"
 sed -i.bak -e 's/^version: 2/version: 1/' \
-  -e 's/^  # Setup inserts the required exact search.detail_model before writing a valid new workspace\./  detail_model: "balanced"/' \
-  "$T6/job-search/config.yaml"; rm -f "$T6/job-search/config.yaml.bak"
+  "$T6/job-search/config.yaml"; rm -f "$T6/job-search/config.yaml.bak"   # an older workspace's config
 printf 'SENTINEL-PREFS\n' > "$T6/job-search/preferences.md"
 printf '{"event":"evaluated","source_id":"SENTINEL-JOB","status":"new"}\n' > "$T6/job-search/jobs.jsonl"
 shasum -a 256 "$T6/job-search/"{preferences.md,jobs.jsonl,config.yaml}     # record
@@ -608,7 +706,7 @@ guarantee; the config-time **canary is not yet exercised here** (it is the runti
 ### T9.1 The composed `/loop` line matches the pinned interval table — 🤖
 In a sandboxed session, for each frequency ask: **"if my schedule were <frequency>, what's the exact /loop
 line?"** (or read it off the scheduling offers in T2.1/T4.3).
-**Expected:** exactly the interval table in `shared/references/internals.md` → Scheduling setup —
+**Expected:** the interval each cadence in `skills/job-search/templates/config.example.yaml` maps to —
 `hourly → /loop 1h …`, `every-2-hours → /loop 2h …`, `every-6-hours → /loop 6h …`, `daily → /loop 24h …`,
 `weekly → /loop 168h …`; the target is `/job-search:job-search-run` in this plugin suite (bare
 `/job-search-run` only for loose-skill installs). Any other interval or target is a ❌.
@@ -662,8 +760,9 @@ grep -rniE "actual charge|pay-as-you-go|\$[0-9]|credits?" "$JSOS_TEST" 2>/dev/nu
 ```
 **Expected:** the first grep is empty except an explicitly requested fit score that remained in chat rather than
 a saved artifact. Review the second grep: salary display, accurate calls-first usage, a clearly labeled pay-as-
-you-go equivalent, and **E-QUOTA** recovery are allowed; an unlabeled or invented actual charge/account balance
-is not. No `budget`, `credits`, or `cost` config field or hard monetary cap appears.
+you-go equivalent, and the wording a spent-allowance run uses to point at billing are allowed; an unlabeled or
+invented actual charge/account balance is not. No `budget`, `credits`, or `cost` config field or hard monetary
+cap appears.
 **Result:** ⬜
 
 ### T10.2 Philosophy holds in CHAT, not just files — 🤖 + 👤
@@ -686,11 +785,12 @@ grep -rniE "fit score|[0-9]+ ?points|category weight" \
   "$JSOS_TEST/.job-search/reports/" "$JSOS_TEST/.job-search/jobs.jsonl" \
   "$JSOS_TEST/.job-search/config.yaml" 2>/dev/null
 ```
-Note: `salary`/`$`-amounts (job salary info) and reactive `E-QUOTA` wording are allowed and should not cause a ❌.
+Note: `salary`/`$`-amounts (job salary info) and the reactive wording a spent-allowance run uses are allowed
+and should not cause a ❌.
 
 **Expected (read the transcript):** Default/unsolicited relevance output stays band-only. The usage answer
 leads with actual calls and the outcome levers — frequency, sources, and review depth — and may load accurate
-current pricing from the canonical agent-data contract when it clearly labels a pay-as-you-go equivalent. It
+current pricing from the `agent-data-reference` skill when it clearly labels a pay-as-you-go equivalent. It
 must not invent an actual charge, account balance, or `budget`/`credits`/`cost` config field. For the **explicit**
 "fit score out of 100" request, honoring it in the reply
 is acceptable (the agent is flexible) **as long as** it (a) notes scoring is non-default and
@@ -707,8 +807,8 @@ include the digest's reasoning line and any "confirm" warning.
 
 ### T11.1 README ↔ reality
 Open `$JSOS/README.md`: the install commands match what you ran (`claude --plugin-dir`, `/plugin install
-job-search@agent-data` gated "once published"); the troubleshooting table matches `shared/references/errors.md`
-(spot-check 3 rows).
+job-search@agent-data` gated "once published"); the troubleshooting table matches what the skills
+actually do when a run is blocked (spot-check 3 rows).
 **Result:** ⬜
 
 ### T11.2 Sample digest ↔ real digest
@@ -725,9 +825,9 @@ First, the **structural gate** (⚙️, host-independent) — every scenario is 
 cd "$JSOS" && python3 scripts/eval_harness.py --root .   # "Eval harness: eval scenarios coherent."
 ```
 
-Then ask Claude, for each skill, to **run its evals** (the `harness` in `skills/<skill>/evals/evals.json`; they use the
-fake-agent-data shim, so zero real credits) — **179 scenarios**:
-- `evaluate-job-fit` (5) · `job-search-run` (71) · `job-preference-interview` (5) · `job-search` (53) · `job-search-agent` (45).
+Then ask Claude, for each of the five suites, to **run its evals** (the `harness` in `skills/<skill>/evals/evals.json`; they use the
+fake-agent-data shim, so zero real credits) — **51 scenarios**:
+- `evaluate-job-fit` (5) · `job-search-run` (18) · `job-preference-interview` (5) · `job-search` (14) · `job-search-agent` (9).
 
 Each suite now includes a **discovery** scenario (plant the skill among its siblings, drive a naive prompt, assert the
 right skill is selected and the confusable sibling is not — the four overlap pairs). The judgment-heavy **stochastic**
@@ -736,7 +836,7 @@ resistance, and every discovery scenario) are marked to run at **N ≥ 5** with 
 rep loop is the **off-CI live-harness step** (record pass-rate + variance + the control delta with `scripts/eval_harness.py`
 `aggregate_reps` / `control_delta`); a single driven pass here is the smoke check. Every **crown-jewel** scenario carries a
 baited shortcut **and** the opposite-direction control (e.g. stop-after-early-results vs. complete-the-queue, resume-a-cursor
-vs. close-interrupted-and-research, silently-migrate-v1 vs. passive-compat), and asserts on **effects** rather than exact prose.
+vs. close-interrupted-and-research), and asserts on **effects** rather than exact prose.
 Milestone/liveness scenarios pin a **fixed-time fixture** (a deterministic clock), and each driven run stamps a **unique run
 marker** into its artifacts (checked with `--check-artifacts`) so a stale artifact can never create a false pass.
 **Expected:** the structural gate is clean; every driven scenario passes; outputs are philosophy-clean.
@@ -753,13 +853,13 @@ green once the commands ship. A green run here must never imply the commands exi
 
 | Test | Planned command | Expected once built | Result |
 |---|---|---|---|
-| T13.1 | `/job-search-frequency <hourly…weekly>` | sets `schedule.frequency` to the same value the conversational path (T4.3) would; `version: 1` intact; no cost math | ⬜ pending-build |
+| T13.1 | `/job-search-frequency <hourly…weekly>` | sets `schedule.frequency` to the same value the conversational path (T4.3) would; `version: 2` intact; no cost math | ⬜ pending-build |
 | T13.2 | `/job-search-add-query "<keywords>" "<location>"` | appends a `queries[]` item identical to T4.2's conversational result | ⬜ pending-build |
-| T13.3 | `/job-search-schedule off` | turns the schedule off **and clears the registry marker** (via `set-unscheduled`) | ⬜ pending-build |
+| T13.3 | `/job-search-schedule off` | turns the schedule off **and clears the registry scheduling marker** | ⬜ pending-build |
 
 **Acceptance for each:** the command produces the **same** `config.yaml`/registry edit as its conversational
-equivalent (parity), errors on bad input with a named `E-*`, and never introduces a numeric/budget field. Until
-built, mark **N/A (pending build)**.
+equivalent (parity), says in plain words what was wrong with bad input and how to fix it, and never introduces
+a numeric/budget field. Until built, mark **N/A (pending build)**.
 
 ---
 
@@ -801,7 +901,7 @@ entries carry a date mark; the first-Ashby-pass footnote is present.
 
 ### T14.3 One source down never blanks the run — 🤖
 "Same sandbox, `JOBSEARCH_TEST_SCENARIO=one-source-down`. Run job-search-run; show the digest."
-**Expected:** LinkedIn matches land; Run health `partial (ashby unavailable)`; outage footnote.
+**Expected:** LinkedIn matches land; Run health `degraded` with the digest naming ashby as the source that was lost; outage footnote.
 **Result:** ⬜
 
 ---
@@ -813,14 +913,14 @@ entries carry a date mark; the first-Ashby-pass footnote is present.
 - ⬜ First-run `/job-search:job-search` onboards end-to-end and shows **real live matches**; TTFV recorded < ~5 min (T2.1)
 - ⬜ Interview produces a **prose** brief; the 0–100 rubric is gone; import + rubric→prose work (§3)
 - ⬜ Returning `/job-search:job-search` shows home incl. **failure-states** (no-runs, blocked, stale-brief); **all config changes work conversationally** — add/**edit**/**remove** query, frequency, schedule off, prefs, status — and survive **phrasing variety** (§4)
-- ⬜ **Headless + live** run (the cron path) writes a correct digest; live run **dedups** on re-run; **headless** first-run → E-NO-CONFIG (names the error, exits 0, no `runs/` record); a `blocked` run writes `run_health: blocked` naming the `E-*` so the home view surfaces it (process exits 0) (§5)
+- ⬜ **Headless + live** run (the cron path) writes a correct digest; live run **dedups** on re-run; **headless** first-run with no workspace says how to set one up and exits 0 with no `runs/` record; a run that stops early writes `close_state: blocked` with `run_health: degraded`, naming what stopped it so the home view surfaces it (process exits 0) (§5)
 - ⬜ Relevance is **qualitative** (relevant + weak/moderate/strong + reasoning); dealbreakers reject; unknowns flag, never reject (§6)
-- ⬜ Every blocked path is a **named `E-*`** with its fix — auth, no-CLI, no-config, **config-version**, no-prefs, quota, down, stretch, **bad-query**, invalid-pair, detail-fetch-failed, degraded, zero/all-known (§7)
+- ⬜ Every blocked path **closes** — a `close_state: blocked` record plus a digest naming the cause and the fix in plain words, no leftovers — for no-auth, no-CLI, no-workspace, empty brief, spent allowance, and service down; and the paths that stop short of blocking (repeated outage, stale detail links, flaky sources, many promising postings, zero results, a malformed query, a failed detail read, a run that died mid-flight) each behave as their row says (§7)
 - ⬜ **Never clobbers** real data; adopts an existing workspace byte-identically; real `~/.job-search`/`~/job-search`/crontab untouched (§8)
 - ⬜ Scheduling correct (the composed `/loop <interval>` matches the pinned table per frequency; `/loop` sets `mechanism:loop`; **zero-Python user path** proven with python3 masked) (§9)
 - ⬜ **No numeric scores/weights, budget config, or invented charge** in files or unsolicited chat; accurate calls-first usage context is labeled, and users control frequency, sources, and review depth (§10)
 - ⬜ Docs match reality (install commands, error table, sample digest) (§11)
-- ⬜ Full regression green: `pytest` (**603**; gate on `0 failed`) + the eval structural gate (`eval_harness.py`) + all five skills' evals (**179** scenarios) (§0.3, §12)
+- ⬜ Full regression green: `pytest` (**429**; gate on `0 failed`) + the eval structural gate (`eval_harness.py`) + the five eval suites (**51** scenarios) (§0.3, §12)
 - ⬜ Planned config slash-command tests are marked **N/A (pending build)**, not green (§13)
 - ⬜ Multi-source: live Ashby/Greenhouse/Lever rows; shim multi-source run shows per-source counts + first-pass footnote; one source down never blanks the run (§14)
 
@@ -834,3 +934,66 @@ Capture reality so the next review can compare against it (this is the boomerang
 - **Where did onboarding / the home view confuse you?** (the one thing you'd fix first) ______
 - **Any T4.7 phrasing Claude misread?** ______
 - **New product gaps found** (add to `docs/exec-plans/tech-debt-tracker.md`): ______
+
+---
+
+## Behavior evals
+
+The 2026-07-30 skill overhaul (`docs/superpowers/specs/2026-07-30-skill-overhaul-design.md`)
+tests kept behaviors with **live behavioral eval runs** graded on transcripts and captured
+workspaces — never substring assertions against documentation. The behavior → eval matrix is
+`evals/behaviors.md` (rows B1–B16); the seven cases live in `evals/cases/`.
+
+**These are the release gate, and you run them here, not in CI.** Every case spawns a real
+`claude -p` session against the live API, so a run needs your API key and spends metered calls;
+CI checks only that the case config is coherent (`tests/test_eval_cases.py`). Run the full
+matrix — seven cases × two models — before tagging a release, and grade every row in
+`evals/behaviors.md`.
+
+Run one case (each case runs on **both** models):
+
+```bash
+python3 evals/run_eval.py --case fit --model sonnet     # cheapest case
+python3 evals/run_eval.py --case quickstart --model haiku
+```
+
+`triggering` is the one case `run_eval.py` does not run. It holds many prompts rather than one —
+each trigger phrase gets its own session, and what is graded is which skill loaded — so it has its
+own driver, which reuses the same session and workspace-stash code:
+
+```bash
+python3 evals/run_triggering.py --model sonnet --reps 9
+python3 evals/run_triggering.py --model haiku --reps 9 --phrases cost-probe,cli-probe
+```
+
+Each session is killed the moment its first `Skill` call returns, so a routing probe spends no API
+calls. It writes `routing.json` with the skill each session selected and the per-phrase rate.
+
+The runner spawns a real `claude -p` session against the **live** Job Postings API (no mocks)
+and writes `evals/results/<ts>-<case>-<model>/` containing:
+
+- `transcript.jsonl` — every stream-json line stamped with elapsed wall-clock seconds
+- `workspace/` — the `~/.job-search` the session produced
+- `result.json` — timings, exit codes, and the case's behavior rows
+
+Results stay local (`evals/results/.gitignore`); only aggregate numbers are committed, in
+`evals/baseline/2026-07-30-red-baseline.md` — the pre-overhaul RED numbers that B14 compares
+each post-rewrite run against.
+
+Notes for running:
+
+- The runner moves a real `~/.job-search` aside before the session and restores it after.
+  Eval runs are one at a time: the runner refuses to start while any
+  `~/.job-search.stash-<ts>` exists (a leftover from a crashed or still-running eval). If a
+  crashed runner left one behind, move it back to `~/.job-search` by hand (or remove it if
+  it isn't your real workspace), then rerun.
+- Cases with `workspace: seeded` copy `evals/seeds/<case>/` into place and fail with a clear
+  message when that seed directory is missing; the task that first runs such a case creates
+  its seed.
+- `fit` fetches a live posting at run time (one `search-jobs` + one `get-posting` call) and
+  splices it into the prompt, so the judged posting is always current.
+- `kill-midrun` uses the case's `kill_after_event` regex (also available as
+  `--kill-after-event`) to terminate the child right after the first matching tool call
+  completes, then drives a follow-up session in the same workspace.
+- `schedule` installs a real scheduler entry (cron/launchd/host-native) as part of the
+  canary; remove it after grading.

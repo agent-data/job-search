@@ -1,3 +1,9 @@
+# The CI gate is the shell-script tests, the workspace validator's self-tests, the eval-case
+# lint, and the three repo linters below. Nothing is generated into skills/, so there
+# is no build step to check. How the skills behave is graded by the behavior evals
+# in evals/ — they spawn a real `claude -p` session against the live Job Postings API, which
+# costs money and needs an API key, so they run locally as a release gate (see TESTING.md
+# § Behavior evals) and never here.
 name: ci
 on:
   push: { branches: [main] }
@@ -12,7 +18,7 @@ jobs:
         with: { python-version: "3.11" }
       - name: Install test dependencies
         run: python3 -m pip install pytest
-      - name: Unit tests
+      - name: Tests (mechanics scripts, workspace validator, eval-case lint)
         run: python3 -m pytest -q
       - name: Philosophy guard
         run: python3 scripts/philosophy_guard.py --root .
@@ -24,8 +30,3 @@ jobs:
           if [ "${{ github.event_name }}" = "pull_request" ]; then
             python3 scripts/check_release_integrity.py --root . --check-version-bump --base "${{ github.event.pull_request.base.sha }}"
           fi
-      - name: Build is a no-op (bundled copies in sync)
-        run: |
-          ./scripts/build.sh
-          test -z "$(git status --porcelain skills shared/references/build-stamp.md)" \
-            || { echo "build.sh changed bundled skill copies or shared/references/build-stamp.md — commit the re-sync"; git --no-pager diff --stat skills shared/references/build-stamp.md; exit 1; }

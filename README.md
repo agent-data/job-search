@@ -26,7 +26,7 @@ Job Search gets live postings through the [agent-data](https://agent-data.dev) c
 1. If the CLI is missing, the agent offers to install it with `npm install -g agent-data`. If a global install needs different permissions, it gives you the exact command to run.
 2. If authentication is missing, the agent helps you create an API key, runs `agent-data init --api-key <KEY> -y`, and verifies it with `agent-data whoami`. The agent-data CLI stores the key in its own config, outside this repository.
 
-Agent-data offers a 100-call monthly free tier; the example below uses 9 metered calls. Before a choice increases expected usage, Job Search previews the change. After each run, it reports actual attempts. Any dollar amount is labeled as a pay-as-you-go equivalent, not an account charge. See the [agent-data contract](shared/references/agent-data-contract.md) or your [billing page](https://agent-data.motie.dev/settings/billing) for current details.
+Agent-data offers a 100-call monthly free tier; the example below uses 9 metered calls. Before a choice increases expected usage, Job Search previews the change. After each run, it reports actual attempts. Any dollar amount is labeled as a pay-as-you-go equivalent, not an account charge. See [what a run spends](skills/agent-data-reference/SKILL.md) or your [billing page](https://agent-data.motie.dev/settings/billing) for current details.
 
 ## What a run looks like
 
@@ -79,11 +79,11 @@ These expectations apply to every listed agent:
 
 Job Search is compatible with Claude Code, Codex, Cursor, opencode, Gemini CLI, GitHub Copilot CLI, Factory Droid, Pi, and Hermes Agent.
 
-The primary model is inherited from the session that creates the job. Setup records an exact detail-review model, and scheduled runs reuse it. A recurring schedule is recorded only after the agent tests the actual invocation and confirms that it can reach agent-data and write the workspace.
+Every run — the one you ask for and the one a schedule starts — reads and judges postings on the model of the session it runs in. Nothing pins a separate model for the search. A recurring schedule is recorded only after the agent runs the real scheduled command once and confirms that it reached agent-data and wrote the workspace.
 
 </details>
 
-If something fails, ask the agent to “create a support summary.” It shows you a local diagnostic containing system and run-health metadata, without preferences, posting content, match details, credentials, cursors, or environment dumps. Nothing is uploaded automatically. You can review the file and attach it to a [GitHub issue](https://github.com/agent-data/job-search/issues).
+If something fails, ask **“why did my last run fail?”** or **“how does my job search agent work?”** The agent reads the run's own record and the digest it wrote, both already on your machine, and tells you what stopped the run and what fixes it — spent monthly allowance, a source that was down, a query that found nothing, a schedule that stopped firing. Nothing is uploaded, and nothing is sent anywhere. To report a bug, copy what it tells you into a [GitHub issue](https://github.com/agent-data/job-search/issues); read the run record at `~/.job-search/runs/` first if you want to check what it contains.
 
 ## Installation
 
@@ -134,7 +134,7 @@ Add Job Search to the `plugin` array in your global OpenCode config at
 ```
 
 Restart OpenCode, then start with: **“Set up my job search.”** OpenCode installs the git package with
-Bun and the plugin registers the five bundled skills. If your config already has plugins, add this entry
+Bun and the plugin registers all seven bundled skills. If your config already has plugins, add this entry
 to the existing array rather than replacing it.
 
 See [`.opencode/INSTALL.md`](.opencode/INSTALL.md) for verification, revision pinning, local development,
@@ -181,7 +181,7 @@ After installation, start a new Hermes Agent session and use the Quickstart sent
 
 ## For contributors
 
-Start with [AGENTS.md](AGENTS.md). It points to the [architecture](ARCHITECTURE.md), [contributor workflow](CONTRIBUTING.md), [test guide](TESTING.md), and canonical runtime contracts in [`shared/references/`](shared/references/).
+Start with [AGENTS.md](AGENTS.md). It points to the [architecture](ARCHITECTURE.md), [contributor workflow](CONTRIBUTING.md), [test guide](TESTING.md), and the canonical runtime contracts in [job-search-runbook](skills/job-search-runbook/SKILL.md) and [agent-data-reference](skills/agent-data-reference/SKILL.md).
 
 ## License
 

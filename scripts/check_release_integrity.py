@@ -135,23 +135,17 @@ def _git_changed_paths(root, base):
     return sorted(paths), hits
 
 
-def _is_generated_stamp(path):
-    return pathlib.PurePosixPath(path).name == "build-stamp.md"
-
-
 def _is_skill_eval(path):
     parts = pathlib.PurePosixPath(path).parts
     return len(parts) >= 4 and parts[0] == "skills" and parts[2] == "evals"
 
 
 def _is_runtime_surface(path):
-    if _is_generated_stamp(path) or _is_skill_eval(path):
+    if _is_skill_eval(path):
         return False
-    return (
-        path.startswith("skills/")
-        or path.startswith("shared/references/")
-        or path.startswith("shared/scripts/")
-    )
+    # Everything shipped lives under skills/ since the 2026-07-31 restructure: the two references
+    # became skills and the last mechanics scripts moved into one, so shared/ is gone.
+    return path.startswith("skills/")
 
 
 def _primary_version_at(root, base):

@@ -3,7 +3,7 @@ title: Plan B/D — Handoff
 status: historical
 verified: unverified
 last_reviewed: 2026-06-07
-code_refs: [shared/references/conventions.md, shared/references/internals.md]
+code_refs: []
 ---
 
 # Handoff — Job Search OS: Plan B (Claude-Code-driven Onboarding) + Plan D (Packaging)

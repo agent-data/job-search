@@ -4,6 +4,88 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.0] — 2026-07-31
+
+### Changed
+- **All five skills rewritten onto a two-skill shared core.** The mechanics live in two skills of
+  their own: `job-search-runbook` (find the workspace, what each file holds, one run start to close,
+  running it unattended, scratch, what stays off disk) and `agent-data-reference` (the CLI, the four
+  sources and their quirks, retries, what a call costs). Each of those five invokes whichever of
+  the two it needs and nothing outside them, so a first run reaches live postings after a much
+  shorter read: the whole agent-facing corpus — all seven `SKILL.md` files — is 9,092 words
+  (`wc -w skills/*/SKILL.md`).
+- **Every runtime file lives inside the skill that owns it.** `shared/` is gone: the two references
+  became the skills above, and the two mechanics scripts more than one skill runs —
+  `workspace-discovery.sh` and `validate-workspace.sh` — moved into
+  `skills/job-search-runbook/scripts/`. A skill needing the mechanics invokes the skill holding them
+  by name; a skill needing a file another skill owns names it as
+  `skills/<skill>/<dir>/<file>`.
+- **The run contract is a marker plus a record.** A run creates the empty marker
+  `runs/.started-<run_id>` when it opens and deletes it at close, after writing
+  `runs/<run_id>.json` and `reports/<date>-digest.md`. The record carries `close_state`
+  (`complete` | `blocked` | `interrupted`) and `run_health` (`healthy` | `degraded`); its full
+  shape is `skills/job-search-run/templates/run-record.example.json`. A marker left behind means the
+  previous run died
+  mid-flight: the next run says so, deletes the marker, and goes on.
+- **Failures are graded on what the user reads, not on a code.** A run that cannot proceed still
+  closes — a record with `close_state: blocked` and `run_health: degraded`, and a digest whose
+  body says in plain words what stopped it and what fixes it. The `E-*` code catalogue that used
+  to carry that wording is gone from every shipped file.
+- **A `templates/` directory inside the skill that copies from it is the contract.** `run-record.example.json` and
+  `jobs-event.example.json` join `config.example.yaml`, `workspace.gitignore` and
+  `preferences.example.md`, so the exact shape of every workspace file is a file you can read rather
+  than prose in a skill. Each one sits in the `templates/` directory of the single skill that copies
+  it — `skills/job-search/`, `skills/job-search-run/`, `skills/job-preference-interview/` — and the
+  three scripts with one caller each moved the same way, into that skill's `scripts/`. A skill names
+  its own file as `templates/<file>` or `scripts/<file>`, an address that needs no path arithmetic;
+  the live evals measured both models mis-resolving the plugin-root-token and `../../…` forms those
+  replace.
+- **`skills/job-search-runbook/scripts/validate-workspace.sh` enforces the file rules.** Config keys,
+  the brief's front matter, run-record fields and UTC timestamps, and — with
+  `--post-close <run_id>` — that the run left no marker and no scratch directory behind.
+- **Behavior is graded by live evals.** `evals/` holds `run_eval.py` and `run_triggering.py`,
+  sixteen behaviors B1–B16 in `behaviors.md`, seven cases in `cases/`, and the pre-rewrite baseline
+  numbers B14 compares against. Runs spawn a real session against the live Job Postings API, so they are a
+  local release gate; CI checks only that the case config is coherent.
+
+### Removed
+Two of these you will notice as a user:
+
+- **The update banner is gone.** In 0.7.0 the home view told you when a newer plugin version had been
+  published and gave you the command to get it. Nothing checks now
+  (`git grep -niE "update available|newer version" -- skills/ README.md` returns nothing),
+  because the check read the build stamp, which went with the build step. Until it comes
+  back, get updates the way your host offers them — `/plugin` in Claude Code, `codex plugin add`, and
+  so on, per the install section in the README. Tracked as `TODO-UPDATE-AVAILABLE` in
+  `docs/exec-plans/tech-debt-tracker.md`.
+- **"Create a support summary" is gone.** In 0.7.0 you could ask for a local, whitelist-only
+  diagnostic file to attach to a bug report. To report a problem now, ask "why did my last run fail?"
+  — the agent reads the run record and digest already on your machine and explains what happened —
+  and paste that into the issue. The underlying files are `~/.job-search/runs/<run_id>.json` and
+  `~/.job-search/reports/<date>-digest.md`; read them before pasting, since nothing filters them for
+  you the way the old summary did.
+
+The rest is internal. The legacy shared corpus and the machinery it defined: `conventions.md`,
+`errors.md`, `internals.md`, `voice.md`, `parallelism.md`, `update.md`, `build-stamp.md`,
+`agent-data-contract.md`, `run-lifecycle.md`, the four skill-local reference files, the
+lifecycle-ledger and support-summary scripts, and the build stamp with its generator
+(`scripts/build.sh`, `scripts/build_stamp.py`). 27 files were deleted since 0.7.0
+(`git diff -M30% --diff-filter=D --name-only 257fa2f..HEAD | wc -l`). The rename threshold is
+lowered from git's default 50% so that `dedup.sh` — which moved into `skills/job-search-run/`
+and grew a `--near` mode in the same release, leaving it 48% similar — counts as moved rather
+than deleted.
+
+### Compatibility
+- **Existing workspaces keep working, unchanged.** `config.yaml` stays at `version: 2`; the
+  required keys are still `version`, `queries`, `search.sources`, and `schedule`.
+- A run no longer writes the lifecycle ledger `runs/.lifecycle-<run_id>.jsonl` or the binding file
+  `runs/detail-model-binding.json`, and it no longer reads either one. A workspace that still holds
+  them from an earlier version is left alone — nothing reads them, nothing deletes them; remove
+  them by hand if you want them gone. (`metrics.json` was specified but never written by any
+  shipped file, so no workspace has one to leave behind.)
+- `search.detail_model` is no longer written or read. A workspace that still carries it is valid;
+  the key is simply ignored, and every detail read runs on the host's own model.
+
 ## [0.7.0] — 2026-07-23
 
 ### Added

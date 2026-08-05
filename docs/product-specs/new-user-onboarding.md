@@ -2,8 +2,8 @@
 title: New-User Onboarding
 status: current
 verified: partial
-last_reviewed: 2026-07-19
-code_refs: [skills/job-search/SKILL.md, skills/job-search/references/onboarding.md, shared/references/internals.md]
+last_reviewed: 2026-07-31
+code_refs: [skills/job-search/SKILL.md]
 ---
 
 # New-User Onboarding
@@ -26,17 +26,17 @@ are only invocable namespaced; bare `/job-search` for loose-skill installs). On 
 procedure to read the workspace state. When discovery reports `first_run: true` the skill routes to the
 first-run playbook; when `first_run: false` it routes to the returning-user home. The routing
 logic and both playbooks are owned by [`skills/job-search/SKILL.md`](../../skills/job-search/SKILL.md);
-the discovery procedure by [`shared/references/internals.md`](../../shared/references/internals.md).
+the discovery procedure by the `job-search-runbook` skill.
 
 ## The onboarding flow
 
 The full playbook lives in
-[`skills/job-search/references/onboarding.md`](../../skills/job-search/references/onboarding.md).
+[`skills/job-search/SKILL.md`](../../skills/job-search/SKILL.md).
 This section names each step and points to the owning reference; it does not restate mechanics.
-Every ask follows the zero-context voice rules owned by
-[`shared/references/voice.md`](../../shared/references/voice.md) — one short line of plain-English
-context (what the thing is, why it's asked), then the question; internal vocabulary never reaches
-the user.
+Every ask assumes the user has zero context: one short line of plain English saying what the thing
+is and why it is being asked, then the question. Internal vocabulary never reaches the user. That is
+carried by the skill itself and graded by behavior rows B1 and B2 in
+[`../../evals/behaviors.md`](../../evals/behaviors.md), not pinned in a separate style reference.
 
 ### 1. Welcome
 
@@ -61,18 +61,17 @@ the install, that's a one-line handoff, not an error: the agent gives the exact 
 (`! npm install -g agent-data`) and resumes once it lands. Then — and starting here when the CLI was
 present but unauthenticated — the agent walks the user through generating an API key (with explicit
 steps), authenticates with the contract's `agent-data init --api-key <KEY> -y` line (the same on
-every host — see [`shared/references/agent-data-contract.md`](../../shared/references/agent-data-contract.md)
+every host — see the `agent-data-reference` skill
 → Auth), and verifies with `agent-data whoami` before continuing. The API key is requested only at
-this connect step, never before the install. The internal codes for
-this state (`E-NO-AGENT-DATA`, `E-NO-AUTH`, owned by
-[`shared/references/errors.md`](../../shared/references/errors.md)) are never shown to the user. The
-**headless runner** (`job-search-run`) can't prompt, so it still halts on these with a blocked digest.
+this connect step, never before the install. The **headless runner** (`job-search-run`) can't prompt,
+so when it meets either state it stops and closes `blocked` with a digest naming the missing CLI or
+the missing key and the command that fixes it.
 
 ### 3. Workspace creation or adoption
 
 The skill runs the workspace-discovery procedure to find the workspace path and first-run status. The
 discovery order, never-clobber adoption rule, and registry write rules are owned by
-[`shared/references/internals.md`](../../shared/references/internals.md).
+the `job-search-runbook` skill.
 
 - **Adopt** an existing workspace: record it in the registry; additively create only missing
   subdirectories; never overwrite existing `config.yaml`, `preferences.md`, or `jobs.jsonl`.
@@ -94,9 +93,9 @@ chooses one path:
   rubric to prose (this system is qualitative only), enriches thin sections, and writes
   `preferences.md`.
 
-Either path ends with `preferences.md` present at the workspace path. If a run is attempted
-without a usable brief, the error is `E-NO-PREFERENCES` (see
-[`shared/references/errors.md`](../../shared/references/errors.md)).
+Either path ends with `preferences.md` present at the workspace path. A run attempted without a
+usable brief has nothing to judge postings against, so it stops and closes `blocked`, naming the
+missing brief and pointing at `job-preference-interview`.
 
 ### 5. Searches and frequency (derived from the brief)
 
@@ -105,23 +104,22 @@ keywords — and writes them as `queries[]` entries into `config.yaml` (editing 
 comments and structure), then **acknowledges** what it saved and notes the searches are editable
 anytime. The user picks a run frequency in plain human terms — no credit math, no cost reasoning.
 Config schema and the derive/edit recipes are owned by
-[`shared/references/internals.md`](../../shared/references/internals.md) and
-[`shared/references/conventions.md`](../../shared/references/conventions.md).
+the `job-search-runbook` skill and
+the `job-search-runbook` skill.
 
 ### 6. First live search — the magical moment
 
 The skill invokes `job-search-run` against the new workspace (the run loop itself — search,
 dedup, judge, detail-read, digest — is owned by
-[`skills/job-search/references/onboarding.md`](../../skills/job-search/references/onboarding.md)).
+[`skills/job-search-run/SKILL.md`](../../skills/job-search-run/SKILL.md)).
 What the user sees at this step is the payoff: the agent presents strong and moderate matches as
 a discovery, with each role's title, company, location, plain-language reasoning, and link.
 
-If the run is blocked instead, the user meets a named error in the digest and the home view; how
-that surfacing works is owned by
+If the run is blocked instead, the digest and the home view both say what stopped it and what fixes
+it; how that surfacing works is owned by
 [`../RELIABILITY.md`](../RELIABILITY.md#4-run-health--blocked-surfacing--visible-without-the-exit-code).
-Onboarding-specific note: the likeliest blocks here are `E-QUOTA` (the only point where API
-limits surface, reactively) and `E-SERVICE-DOWN`, both catalogued in
-[`shared/references/errors.md`](../../shared/references/errors.md).
+Onboarding-specific note: the two likeliest blocks here are a spent monthly allowance — the only
+point where API limits surface, and only reactively — and an unreachable service.
 
 ### 7. Schedule offer
 
@@ -133,7 +131,7 @@ user's explicit yes — and the scheduling marker is recorded as running **only 
 canary** proves the real invocation works; a failed canary records nothing and stays honest that it
 is not scheduled. The agent composes the schedule and the run recipe for its own host (there is no
 per-host recipe to look up). The scheduling protocol, eligibility gates, and canary are owned by
-[`shared/references/internals.md`](../../shared/references/internals.md) (Scheduling setup).
+the `job-search-runbook` skill (Scheduling setup).
 
 ## What the user sees / success criteria
 
@@ -144,7 +142,7 @@ At the end of onboarding all of the following are true:
   `preferences.md`, and `jobs.jsonl` — all created or adopted without hand-editing.
 - An **optional recurring schedule** is running and recorded in the OS registry if the user consented
   and its config-time canary passed (the agent resolves the mechanism for its own host; see
-  [`shared/references/internals.md`](../../shared/references/internals.md) → Scheduling setup).
+  the `job-search-runbook` skill → Scheduling setup).
 
 On a **returning session**, discovery reports `first_run: false` because
 `config.yaml` exists in the workspace, and the skill routes to the home view (latest digest,
@@ -152,19 +150,18 @@ pipeline, quick actions) instead of restarting onboarding.
 
 ## Edge cases
 
-All failure paths are named internally with an `E-*` code and reach the user as a plain cause + fix,
-never the raw code. Wording and fixes are owned by
-[`shared/references/errors.md`](../../shared/references/errors.md); they are not restated here.
+Every failure path reaches the user as a plain cause and fix, written where the step hits it. There
+is no error-code catalogue and no code to leak; the wording lives in the skill, and what a stopped
+run writes is in the `job-search-runbook` skill.
 
 - **Missing prerequisites** — `agent-data` missing or unauthenticated. Interactive onboarding
   **remediates** (immediate install — no user input — then guided key + auth) rather than halting;
-  the headless runner halts with `E-NO-AGENT-DATA` / `E-NO-AUTH` before any workspace is touched.
-  Codes stay internal — never shown to the user.
-- **No preferences yet** — `E-NO-PREFERENCES`; the first run halts and directs the user to
+  the headless runner stops before any workspace is touched, naming the missing CLI or key.
+- **No preferences yet** — the first run stops and directs the user to
   `/job-preference-interview`.
 - **Sparse market** — not a named error; zero search results prompt the agent to offer keyword
   broadening conversationally (see
-  [`skills/job-search/references/onboarding.md`](../../skills/job-search/references/onboarding.md)).
+  [`skills/job-search/SKILL.md`](../../skills/job-search/SKILL.md)).
 
 ## Related
 

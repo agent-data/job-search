@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Doc lint: validate the in-repo knowledge base (AGENTS.md + docs/**) is structured,
-cross-linked, fresh, and does not duplicate the shared/references single source of truth.
+cross-linked, fresh, and does not duplicate the reference skills' single source of truth.
 
 Mirrors scripts/philosophy_guard.py in shape: scan(root) -> (hits, warnings); main() prints
 hits and returns 1 on failure, else prints "Doc lint: clean." and returns 0. Stdlib only.
@@ -101,7 +101,8 @@ REQUIRED_AGENTS_LINKS = (
     "docs/SECURITY.md",
     "docs/INTERFACE.md",
     "docs/PLANS.md",
-    "shared/references",
+    "skills/job-search-runbook/SKILL.md",
+    "skills/agent-data-reference/SKILL.md",
 )
 
 
@@ -242,35 +243,50 @@ def scan_code_refs(root):
     return hits
 
 
-# Distinctive literals OWNED by shared/references/*. A live KB doc reproducing one of these
+# Distinctive literals OWNED by a reference skill. A live KB doc reproducing one of these
 # (without linking the source on the same line) is duplicating a contract that will drift.
 #
-# Each entry is (regex, label, owner). `owner` is the repo-relative single canonical home for the
-# facts that were deliberately SINGLE-HOMED (P2/T2.1 + the source-enum reconciliation) and so are
-# also enforced ACROSS the reference layer (owner-aware): any non-owner reference file that restates
-# an owned literal without a resolving pointer is flagged. `owner=None` = guarded in KB docs only
-# (display / config enums the runbooks and config-write recipes legitimately restate — e.g. the
-# frequency/status/digest-counts enums — are intentionally NOT reference-layer-enforced). Of the
-# T2.1 config tables, the `freshness` enum IS owner-enforced (single-homed at conventions.md:29,
-# every other mention points, zero KB-doc hits — latent like run-health); `detail_model` and the
-# `limit` default are deliberately NOT signatured — the `fast | balanced | high | inherit` token
-# appears in live design docs, and the limit default's API-20-vs-template-25 tokens are shared with
-# agent-data-contract.md, so signaturing either would false-positive rather than catch drift.
+# Each entry is (regex, label, owner). `owner` is the repo-relative single canonical home for a fact
+# that a reference skill owns, and such an entry is also enforced ACROSS the reference layer
+# (owner-aware): any non-owner reference file that restates an owned literal without a resolving
+# pointer is flagged. `owner=None` = guarded in KB docs only.
+#
+# Every signature below has at least one live holder — a file that really writes the token today —
+# so each one guards a fact that can drift. The holders, measured with the regexes themselves over
+# `git ls-files` (the same `re` module this file uses; `git grep -E` mishandles `\s`/`\d` around the
+# multibyte `·`):
+#
+#   frequency enum      skills/job-search/templates/config.example.yaml,
+#                       skills/job-search/scripts/schedule-line.sh
+#   freshness enum      skills/job-search/templates/config.example.yaml (+ the three eval seeds
+#                       copied from it)
+#   job source enum     skills/job-search/templates/config.example.yaml (+ the three eval seeds)
+#   digest counts line  skills/job-search-run/SKILL.md (the digest template), examples/sample-digest.md
+#   config field        skills/job-search/templates/config.example.yaml (+ the three eval seeds)
+#
+# Only the job source enum has an OWNER, because only it is a fact a reference skill owns:
+# skills/agent-data-reference/SKILL.md, which names the four sources in prose rather than in this pipe
+# form — so another reference skill that writes the pipe form is restating a fact it does not own. The
+# other four are written by the config template, the schedule-line script and the digest template,
+# none of which is a reference skill, so there is nothing for the reference-layer arm to compare.
+#
+# Four signatures were dropped on 2026-07-31 with the corpus that defined their tokens, each
+# measured to have zero live holders first: `run_id format` (YYYY-MM-DDTHH-MM-SSZ — validate-
+# workspace.sh writes the anchored regex, never this placeholder), `job status enum`,
+# `run-health states` (run_health is one word now: healthy or degraded, with no parenthetical),
+# and `E-QUOTA verbatim` (the E-* catalog is gone from every shipped file). A signature with no
+# holder guards nothing and would only mislead the next reader into thinking the fact still exists.
 DUP_SIGNATURES = [
     (re.compile(r"every-2-hours"), "frequency enum", None),
-    (re.compile(r"any \| past-week \| past-2-weeks \| past-month"), "freshness enum",
-     "shared/references/conventions.md"),
-    (re.compile(r"YYYY-MM-DDTHH-MM-SSZ"), "run_id format", None),
-    (re.compile(r"interested\W+applied\W+rejected"), "job status enum", None),
-    (re.compile(r"degraded \(job sources flaky\)"), "run-health states",
-     "shared/references/conventions.md"),
+    (re.compile(r"any \| past-week \| past-2-weeks \| past-month"), "freshness enum", None),
     (re.compile(r"linkedin \| ashby \| greenhouse \| lever"), "job source enum",
-     "shared/references/agent-data-contract.md"),
+     "skills/agent-data-reference/SKILL.md"),
     (re.compile(r"strong\s*·\s*\d+\s*moderate"), "digest counts line", None),
     (re.compile(r"desktop_notify_on_block"), "config field", None),
-    (re.compile(r"API limit for this period has been reached"), "E-QUOTA verbatim", None),
 ]
-DUP_ALLOW = re.compile(r"shared/references")  # a line that points to the source is fine
+# A line that points to the source is fine: the reference skill's path, or its bare name.
+DUP_ALLOW = re.compile(r"skills/(?:agent-data-reference|job-search-runbook)/|"
+                       r"\b(?:agent-data-reference|job-search-runbook)\b")
 
 
 def _is_live_kb_doc(path, root):
@@ -285,27 +301,23 @@ def _is_live_kb_doc(path, root):
     return True
 
 
+REFERENCE_SKILLS = ("job-search-runbook", "agent-data-reference")
+
+
 def _shared_ref_files(root):
-    """Yield abs paths of every top-level shared/references/*.md (the single-home source of truth)."""
-    base = os.path.join(root, "shared", "references")
-    if not os.path.isdir(base):
-        return
-    for fn in sorted(os.listdir(base)):
-        p = os.path.join(base, fn)
-        if fn.endswith(".md") and os.path.isfile(p):
+    """Yield abs paths of the reference skills' SKILL.md files (the single-home source of truth)."""
+    for name in REFERENCE_SKILLS:
+        p = os.path.join(root, "skills", name, "SKILL.md")
+        if os.path.isfile(p):
             yield p
 
 
 def _skill_local_ref_files(root):
-    """Yield abs paths of hand-authored, skill-LOCAL references: a top-level skills/*/references/*.md
-    whose basename does NOT also exist under shared/references/. Those with a shared/references twin
-    are build-FANNED byte-copies of the source (flagging them would flag the source's own literal in
-    every skill), so they are excluded. SKILL.md runbooks live outside references/ and are never
-    scanned here."""
-    shared = set()
-    base = os.path.join(root, "shared", "references")
-    if os.path.isdir(base):
-        shared = {fn for fn in os.listdir(base) if fn.endswith(".md")}
+    """Yield abs paths of hand-authored, skill-LOCAL references: every top-level
+    skills/*/references/*.md. The build that fanned byte-copies of the shared references into those
+    directories is gone, and tests/test_reference_resolution.py asserts nothing is left under
+    skills/*/references/, so anything found there is a hand-authored original and is scanned. A
+    SKILL.md sits outside references/ and is never picked up here."""
     skills = os.path.join(root, "skills")
     if not os.path.isdir(skills):
         return
@@ -315,15 +327,15 @@ def _skill_local_ref_files(root):
             continue
         for fn in sorted(os.listdir(refs)):
             p = os.path.join(refs, fn)
-            if fn.endswith(".md") and fn not in shared and os.path.isfile(p):
+            if fn.endswith(".md") and os.path.isfile(p):
                 yield p
 
 
 def scan_shared_dup(root):
-    """No file may restate a shared/references contract; link the source instead.
+    """No file may restate a reference skill's contract; link the source instead.
 
     Two scopes: (1) live KB docs (docs/ + root) must not restate ANY owned literal; (2) within the
-    reference layer itself — shared/references/*.md plus hand-authored skill-local references — a
+    reference layer itself — the reference skills plus hand-authored skill-local references — a
     NON-owner file must not reproduce another reference's OWNED literal (owner-aware). The owner file
     holding its own literal, a line that points to the owner, and build-fanned copies are all exempt."""
     hits = []
@@ -339,7 +351,7 @@ def scan_shared_dup(root):
                 for rx, label, _owner in DUP_SIGNATURES:
                     if rx.search(line):
                         hits.append(f"{rel}:{i}: no-shared-reference-duplication: "
-                                    f"{label} restated without linking shared/references")
+                                    f"{label} restated without linking the reference skill")
     # (2) Reference layer: a non-owner ref reproducing an owned literal without a resolving pointer.
     owned = [(rx, label, owner) for rx, label, owner in DUP_SIGNATURES if owner]
     if owned:
@@ -352,8 +364,9 @@ def scan_shared_dup(root):
                             continue  # the owner may hold its own literal
                         if not rx.search(line):
                             continue
-                        if DUP_ALLOW.search(line) or os.path.basename(owner) in line:
-                            continue  # a resolving pointer (shared/references/… or the owner's name)
+                        owner_skill = os.path.basename(os.path.dirname(owner))
+                        if DUP_ALLOW.search(line) or owner_skill in line:
+                            continue  # a resolving pointer (the owner's path or its skill name)
                         hits.append(f"{rel}:{i}: no-shared-reference-duplication: "
                                     f"{label} restated without linking its owner ({owner})")
     return hits

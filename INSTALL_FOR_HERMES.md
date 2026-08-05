@@ -9,12 +9,14 @@ command below behaves differently on this machine, say so in your report
 instead of improvising around it.
 
 What this installs: the complete Job Search repository as the Hermes plugin
-`job-search`, with its five skills available by their normal names —
-`job-search`, `job-search-run`, `job-search-agent`, `job-preference-interview`,
-`evaluate-job-fit`. The skills read `shared/references/`,
-`shared/scripts/mechanics/`, and `templates/` from the installed repository, so
-the repository must stay intact: install it whole through the plugin manager,
-never as five separate skills.
+`job-search`, with its seven skills available by their normal names — the five
+a user reaches, `job-search`, `job-search-run`, `job-search-agent`,
+`job-preference-interview` and `evaluate-job-fit`, and the two that hold the
+mechanics those five draw on, `job-search-runbook` and
+`agent-data-reference`. The skills read each other and their own `templates/`
+and `scripts/` directories from the installed repository, so the repository
+must stay intact: install it whole through the plugin manager, never as seven
+separate skills.
 
 ## Step 1 — Confirm the environment
 
@@ -51,9 +53,13 @@ test -d "$HERMES_HOME/plugins/job-search" && echo present || echo absent
   ```
 
   - Output empty, and the directory contains `plugin.yaml`, `__init__.py`, all
-    five `skills/<name>/SKILL.md` files, `shared/references/`,
-    `shared/scripts/mechanics/`, and `templates/` → healthy install; go to
-    Step 3 and use the update command.
+    seven `skills/<name>/SKILL.md` files, `skills/job-search/templates/`,
+    `skills/job-search/scripts/`, `skills/job-search-run/templates/`,
+    `skills/job-search-run/scripts/`,
+    `skills/job-preference-interview/templates/`, and
+    `skills/job-search-runbook/scripts/` → healthy install; go to
+    Step 3 and use the update command. That is the same list `__init__.py`
+    checks on load, so a tree that passes here is a tree the plugin loads.
   - Output empty but any of those files or directories is missing → the
     install is incomplete. Tell the user, then reinstall fresh:
 
@@ -163,15 +169,18 @@ Run every check. The final report states which checks ran and their results.
    ls plugin.yaml __init__.py after-install.md INSTALL_FOR_HERMES.md
    ls skills/job-search/SKILL.md skills/job-search-run/SKILL.md \
       skills/job-search-agent/SKILL.md skills/job-preference-interview/SKILL.md \
-      skills/evaluate-job-fit/SKILL.md
-   ls -d shared/references shared/scripts/mechanics templates
+      skills/evaluate-job-fit/SKILL.md skills/job-search-runbook/SKILL.md \
+      skills/agent-data-reference/SKILL.md
+   ls -d skills/job-search/templates skills/job-search/scripts \
+      skills/job-search-run/templates skills/job-search-run/scripts \
+      skills/job-preference-interview/templates skills/job-search-runbook/scripts
    ```
 
    Every listed path must exist.
 3. **Config verified.** The two Step 4 checks passed and the entry appears
    exactly once.
 4. **Bare-name discovery.** `hermes skills list` (a fresh Hermes process)
-   lists all five skills by their bare names. This check proves the
+   lists all seven skills by their bare names. This check proves the
    normal-name goal.
 5. **Plugin loads.** Trigger a real plugin load in a fresh process and look
    for a load error:
@@ -190,11 +199,11 @@ Run every check. The final report states which checks ran and their results.
    On `LOAD-ERROR`, show the user the matching log lines — the plugin's own
    error text names what is missing and the reinstall command. The user can
    also see per-plugin load state by typing `/plugins` in their next session.
-6. **References resolve in place.**
+6. **References and scripts are in place.**
 
    ```bash
-   test -f "$HERMES_HOME/plugins/job-search/skills/job-search/../../shared/references/internals.md" && echo refs-ok
-   test -x "$HERMES_HOME/plugins/job-search/shared/scripts/mechanics/workspace-discovery.sh" && echo scripts-ok
+   test -f "$HERMES_HOME/plugins/job-search/skills/job-search-runbook/SKILL.md" && echo refs-ok
+   test -x "$HERMES_HOME/plugins/job-search/skills/job-search-runbook/scripts/workspace-discovery.sh" && echo scripts-ok
    ```
 
 Git having cloned the files is not the success condition — checks 4 and 5
@@ -234,7 +243,7 @@ Report to the user:
 - the plugin install path (`$HERMES_HOME/plugins/job-search`);
 - the config file you changed (`$CONFIG`) and what changed in it;
 - whether the plugin loaded (check 5) and which verification checks ran;
-- whether all five bare skill names were found (check 4);
+- whether all seven bare skill names were found (check 4);
 - any collision from Step 6;
 - that a new session (`/new`) is needed before the skills appear.
 

@@ -3,14 +3,33 @@ type: design-doc
 title: "Cost-aware decisions, explicit models, and canary-verified recurring jobs"
 status: current
 verified: partial
-last_reviewed: 2026-07-16
-code_refs: [shared/references/agent-data-contract.md, shared/references/internals.md, shared/references/conventions.md, shared/references/parallelism.md, shared/references/errors.md, skills/job-search/SKILL.md, skills/job-search/references/onboarding.md, skills/job-search/references/home.md, skills/job-search-agent/SKILL.md, skills/job-search-agent/references/customization.md, skills/job-search-agent/references/scheduling-and-consent.md, skills/job-search-run/SKILL.md, templates/config.example.yaml, tests/fake-agent-data]
-claimed_paths: [skills, shared/references, templates, tests, docs/design-docs]
+last_reviewed: 2026-07-31
+code_refs: [skills/job-search/SKILL.md, skills/job-search-agent/SKILL.md, skills/job-search-run/SKILL.md, skills/job-search/templates/config.example.yaml, tests/fake-agent-data]
+claimed_paths: [skills, tests, docs/design-docs]
 owner_area: Skills & references
 repos: [job-search-os]
 ---
 
 # Cost-aware decisions, explicit models, and canary-verified recurring jobs
+
+> **Read this first (added 2026-07-31).** This design shipped in parts, and the 2026-07-30 skill
+> overhaul then deleted several of them. Of the three failures it set out to fix, only the first is
+> still answered the way this doc describes:
+>
+> - **The canary is live and unchanged.** A recurring schedule is recorded only after the real
+>   scheduled command has run once and left a run record with `trigger: scheduled` and a healthy
+>   close. That is in [`../../skills/job-search/SKILL.md`](../../skills/job-search/SKILL.md) and is
+>   graded by behavior row B11.
+> - **The explicit-model binding is gone.** `search.detail_model`, `runs/detail-model-binding.json`,
+>   and the setup-time model question were removed: every run, scheduled or not, uses the model of
+>   the session it runs in, which answers the original "older hardcoded model" failure more simply
+>   than pinning one did.
+> - **The local-metrics file is gone.** Nothing writes or specifies `{workspace}/metrics.json`. The
+>   timings it was to supply now come from the live evals: `evals/run_eval.py` stamps every
+>   transcript line with elapsed seconds, and `evals/baseline/` holds the committed aggregates.
+>
+> The "Files affected" matrix below has been rewritten to name files that exist. Everything else is
+> left as written, including the reasoning that led to the removed parts.
 
 This design responds to three failures observed during a Job Search plugin dogfood:
 
@@ -19,7 +38,7 @@ This design responds to three failures observed during a Job Search plugin dogfo
 3. cost context appeared for pagination but not for other choices that can increase agent-data calls.
 
 The design is approved. Implementation is pending. Until implementation lands, the runtime contracts in
-`shared/references/` remain the executable source of truth; this document owns the approved delta and
+the two reference skills remain the executable source of truth; this document owns the approved delta and
 supersedes the design intent in
 [`2026-07-11-verify-dont-encode-design.md`](2026-07-11-verify-dont-encode-design.md).
 
@@ -305,9 +324,9 @@ The canonical cadence windows remain:
 | weekly | 4 weeks | 4 |
 
 Label the period result as a comparison, not a billing forecast. Search-page, full-posting, failed-attempt,
-retry, and quota-rejection metering follow the dated producer contract in
-`shared/references/agent-data-contract.md`; no consuming surface copies those volatile facts
-(AAS-BOUND-03; AAS-FORM-06).
+retry, and quota-rejection metering follow the dated producer contract, which the
+`agent-data-reference` skill holds at `skills/agent-data-reference/SKILL.md`; no consuming surface
+copies those volatile facts (AAS-BOUND-03; AAS-FORM-06).
 
 Every schedule preview adds one immediate canary run to the setup impact. A canary is not "free testing":
 it follows the same agent-data metering contract as an ordinary run. If the first canary consumed metered
@@ -590,23 +609,18 @@ commit. The matrix is normative, not illustrative.
 
 | Surface | Change | Primary anchors |
 |---|---|---|
-| `shared/references/agent-data-contract.md` | own the dated 100-calls/month free tier, metering, pricing, and future live-account precedence | AAS-BOUND-03; AAS-FORM-06; PSG-COMM-20 |
-| `shared/references/internals.md` | canonical cost decision table, math, scheduler eligibility, selection, canary, and registry schema | AAS-AUTO-01/02/04/05; AAS-FORM-07/09; AAS-PORT-03/04/05/10; PSG-F-09/10 |
-| `shared/references/conventions.md` | version-2 exact detail model, legacy compatibility, registry/run-record fields | AAS-AUTO-07/11; AAS-FORM-06/14; AAS-LANG-04 |
-| `shared/references/parallelism.md` | configuration-time detail-model selection; direct config use at dispatch; sequential same-model fallback | AAS-AUTO-07/11; AAS-LANG-01/03; PSG-SUB-03/06 |
-| `shared/references/run-lifecycle.md` | ordered run phases, append-only ledger, completion predicate, interruption recovery, activation, and local milestone ownership | AAS-PROC-03/04; AAS-FORM-08/09/14; PSG-INJ-03/04/05/11/14 |
-| `shared/references/errors.md` | unavailable-model and failed-canary outcomes | AAS-FORM-03/10; PSG-COMM-09/20 |
-| `shared/references/voice.md` | concise usage previews, incremental-result labels, and cause/fix user rendering without raw internal codes | PSG-COMM-01/04/09/10/11/18/20 |
+| the `agent-data-reference` skill | own the dated free-tier allowance, metering, pricing, retries, and the per-source quirks | AAS-BOUND-03; AAS-FORM-06; PSG-COMM-20 |
+| the `job-search-runbook` skill | workspace discovery, what each file holds, one run start to close, the registry and its scheduling marker, running it unattended, scratch | AAS-AUTO-01/02/04/05; AAS-FORM-07/09; AAS-PROC-03/04; AAS-PORT-03/04/05/10; PSG-F-09/10 |
+| `skills/job-search/templates/` (`config.example.yaml`, `workspace.gitignore`), `skills/job-search-run/templates/` (`run-record.example.json`, `jobs-event.example.json`), `skills/job-preference-interview/templates/preferences.example.md` | the exact fields of every workspace file, as copyable examples rather than prose | AAS-FORM-06/14; AAS-LANG-04 |
+| `skills/job-search-runbook/scripts/validate-workspace.sh` | decide mechanically whether a workspace obeys the file rules, including that a closed run left no marker and no scratch | AAS-FORM-08/09/14; PSG-INJ-03/04/05/11/14 |
+| *(deleted 2026-07-30 — `agent-data-contract.md`, `internals.md`, `conventions.md`, `parallelism.md`, `run-lifecycle.md`, `errors.md`, `voice.md`)* | their surviving content moved into the two references and the skills' `templates/` directories above; the exact-model binding, the lifecycle ledger, the local-metrics file, and the `E-*` catalogue were dropped outright | — |
 | `skills/job-search/SKILL.md` | front-door stance: all cost levers use the canonical preview; verified schedule semantics | AAS-BOUND-03; PSG-COMM-09/20 |
-| `skills/job-search/references/onboarding.md` | free-tier install framing, first-run preview, exact detail-model choice, eligible scheduler setup | AAS-AUTO-02/04/07/11; PSG-F-09/10; PSG-COMM-10/18/20 |
-| `skills/job-search/references/home.md` | verified/unverified/loop/drift states; config and schedule migration actions | AAS-LANG-08; AAS-TEST-15; PSG-COMM-09/20 |
+| *(folded into `skills/job-search/SKILL.md` on 2026-07-30 — was `references/onboarding.md` and `references/home.md`)* | free-tier install framing, first-run preview, eligible scheduler setup, and the home view's schedule states; the setup-time model question went with them, and the schedule states collapsed to `installed` + `verified` | AAS-AUTO-02/04/11; AAS-LANG-08; AAS-TEST-15; PSG-F-09/10; PSG-COMM-09/10/18/20 |
 | `skills/job-search-agent/SKILL.md` | operator explanation for cost levers, exact model ownership, and eligible recurring jobs | AAS-BOUND-03; AAS-LANG-01/03; PSG-COMM-05/20 |
-| `skills/job-search-agent/references/customization.md` | cost-aware query/source/cadence/depth edits; version-2 exact model changes | AAS-AUTO-02/04/07; AAS-FORM-07; PSG-F-09/10 |
-| `skills/job-search-agent/references/scheduling-and-consent.md` | capability gate, native-first selection, costed canary, cleanup, and migration | AAS-AUTO-01/02/05; AAS-FORM-09/10; AAS-PORT-03/04/05/10; PSG-SUB-06 |
-| `skills/job-search-run/SKILL.md` | version-aware preflight, exact `search.detail_model`, no substitution, model provenance | AAS-AUTO-07/11; AAS-TEST-04/12; PSG-COMM-09 |
-| `templates/config.example.yaml` | version 2 without a hardcoded model; setup-owned exact-value insertion | AAS-FORM-03/06; AAS-LANG-02/04; PSG-ANTI-03 |
-| `shared/scripts/mechanics/lifecycle-append.sh`, `shared/scripts/mechanics/lifecycle-fold.sh` | deterministic lifecycle append, validation, fold, and completion checks with a prose fallback | AAS-FORM-08/09/14; AAS-PORT-01 |
-| `shared/scripts/mechanics/support-summary.sh` | optional whitelist-only local diagnostics with no upload side effect | PSG-SAFE-13/14/17; AAS-DIST-03/06 |
+| *(folded into `skills/job-search-agent/SKILL.md` on 2026-07-30 — was `references/customization.md` and `references/scheduling-and-consent.md`)* | cost-aware query/source/cadence/depth edits, and the schedule's consent gate, canary, and cleanup; the schedule setup itself moved to the front door | AAS-AUTO-01/02/04/05; AAS-FORM-07/09/10; AAS-PORT-03/04/05/10; PSG-F-09/10; PSG-SUB-06 |
+| `skills/job-search-run/SKILL.md` | preflight gates, the search and judgment loop, and the run's close | AAS-TEST-04/12; PSG-COMM-09 |
+| `skills/job-search/templates/config.example.yaml` | version 2, human terms only, no model key at all | AAS-FORM-03/06; AAS-LANG-02/04; PSG-ANTI-03 |
+| *(deleted 2026-07-30 — `lifecycle-append.sh`, `lifecycle-fold.sh`, `support-summary.sh`)* | the ledger they wrote and folded no longer exists; a run's own state is its marker plus its record | AAS-FORM-08/09/14; AAS-PORT-01; PSG-SAFE-13/14/17 |
 | affected skill evals, `tests/fake-scheduler`, and developer eval helpers | observable lifecycle, activation, cost, model, scheduler, canary, liveness, migration, and privacy effects | AAS-TEST-03/04/07/08/09/10/13/15 |
 | `README.md`, onboarding/product/doctrine docs, `TESTING.md`, and `docs/QUALITY_SCORE.md` | natural-language Quickstart and cookbook, dated support matrix, lifecycle/model/scheduler/cost/error truth, and labeled evidence | PSG-F-10; PSG-COMM-04/05/06/07/09/20; AAS-BOUND-03 |
 | `docs/design-docs/core-beliefs.md`, `docs/PRODUCT_SENSE.md`, `docs/INTERFACE.md`, `docs/RELIABILITY.md`, `docs/SECURITY.md` | broaden usage-context doctrine; narrow installed-schedule meaning; document exact model ownership and private support boundaries | PSG-F-10; PSG-COMM-09/20; PSG-SAFE-13/14/17; AAS-BOUND-03 |

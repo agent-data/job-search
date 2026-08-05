@@ -18,6 +18,8 @@ SKILLS = (
     "job-search-agent",
     "job-preference-interview",
     "evaluate-job-fit",
+    "job-search-runbook",
+    "agent-data-reference",
 )
 
 
@@ -71,21 +73,36 @@ def _load_adapter(path):
 
 
 def _synthetic_tree(tmp_path):
-    """A minimal complete install: the real adapter + empty SKILL.mds + required dirs."""
+    """A minimal complete install: the real adapter + empty SKILL.mds + required dirs.
+
+    The directories come from the adapter's own REQUIRED_DIRS, so a tree built here stays complete
+    when that list changes — otherwise a later test would raise for a reason it never named."""
     root = tmp_path / "job-search"
     for name in SKILLS:
         (root / "skills" / name).mkdir(parents=True)
         (root / "skills" / name / "SKILL.md").write_text("---\nname: x\n---\n", encoding="utf-8")
-    for rel in ("shared/references", "shared/scripts/mechanics", "templates"):
-        (root / rel).mkdir(parents=True)
+    for rel in _load_adapter(ADAPTER).REQUIRED_DIRS:
+        (root / rel).mkdir(parents=True, exist_ok=True)
     shutil.copy2(ADAPTER, root / "__init__.py")
     return root
 
 
-def test_register_registers_exactly_the_five_skills():
+def test_synthetic_tree_is_a_complete_install(tmp_path):
+    """The fixture below really does satisfy the adapter: register() succeeds on it untouched, so
+    each removal test that follows fails for the one directory it removed."""
+    root = _synthetic_tree(tmp_path)
+    ctx = StubCtx()
+    _load_adapter(root / "__init__.py").register(ctx)
+    assert [name for name, _ in ctx.skills] == list(SKILLS)
+
+
+def test_register_registers_exactly_the_shipped_skills():
+    """Every skill directory in the tree is registered, and nothing else. The adapter's SKILLS tuple
+    is hand-maintained, so a new skill that nobody added to it would never reach a Hermes session."""
     ctx = StubCtx()
     _load_adapter(ADAPTER).register(ctx)
     assert [name for name, _ in ctx.skills] == list(SKILLS)
+    assert sorted(SKILLS) == sorted(p.name for p in (ROOT / "skills").iterdir() if p.is_dir())
     for name, path in ctx.skills:
         assert path == ROOT / "skills" / name / "SKILL.md"
         assert path.is_file()
@@ -98,15 +115,17 @@ def test_missing_skill_dir_fails_naming_it(tmp_path):
         _load_adapter(root / "__init__.py").register(StubCtx())
 
 
-def test_missing_shared_references_fails_naming_it(tmp_path):
+def test_missing_runbook_scripts_fails_naming_it(tmp_path):
+    """The mechanics scripts moved into the runbook skill on 2026-07-31; an install missing that
+    directory must still fail by name, the way a missing shared/scripts/mechanics/ used to."""
     root = _synthetic_tree(tmp_path)
-    shutil.rmtree(root / "shared" / "references")
-    with pytest.raises(RuntimeError, match=r"shared/references"):
+    shutil.rmtree(root / "skills" / "job-search-runbook" / "scripts")
+    with pytest.raises(RuntimeError, match=r"skills/job-search-runbook/scripts"):
         _load_adapter(root / "__init__.py").register(StubCtx())
 
 
 def test_error_names_the_force_reinstall_recovery(tmp_path):
     root = _synthetic_tree(tmp_path)
-    shutil.rmtree(root / "templates")
+    shutil.rmtree(root / "skills" / "job-search" / "templates")
     with pytest.raises(RuntimeError, match=r"hermes plugins install agent-data/job-search --force"):
         _load_adapter(root / "__init__.py").register(StubCtx())

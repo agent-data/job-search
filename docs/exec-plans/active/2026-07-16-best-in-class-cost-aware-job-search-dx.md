@@ -6,6 +6,29 @@ created: 2026-07-16
 
 # Best-in-class cost-aware job-search DX — Implementation Plan
 
+> **Read this first (added 2026-07-31).** Parts of this plan shipped and were then deleted by the
+> 2026-07-30 skill overhaul, so several file paths below no longer exist. Do not use it as a map of
+> the current tree. What went:
+>
+> - **P1, the durable lifecycle ledger and local milestones.** `shared/references/run-lifecycle.md`,
+>   `shared/scripts/mechanics/lifecycle-append.sh`, `lifecycle-fold.sh`, `tests/fake-run-lifecycle`,
+>   and `tests/test_run_lifecycle_pressure.py` are all gone, and no workspace holds a
+>   `runs/.lifecycle-<run_id>.jsonl` or a `metrics.json`. A run now opens with the empty marker
+>   `runs/.started-<run_id>` and closes by writing `runs/<run_id>.json`; a leftover marker is how the
+>   next run learns the last one died. That contract is now the `job-search-runbook` skill, at
+>   [skills/job-search-runbook/SKILL.md](../../../skills/job-search-runbook/SKILL.md).
+> - **The exact-model binding.** `search.detail_model`, `runs/detail-model-binding.json`, and
+>   `tests/test_exact_model_repair.py` are gone; every detail read runs on the host's own model.
+> - **The `E-*` error catalogue** referenced by T7.2, along with `shared/references/errors.md`. A run
+>   that stops says what stopped it in plain words, in its digest and its record.
+> - **`tests/test_schedule_health.py` and `tests/test_scheduling_eligibility.py`**, with the
+>   eight-state schedule health they encoded. The registry now carries two booleans, `installed` and
+>   `verified`, and a canary is what sets them.
+>
+> The rest of the plan — the pagination and usage-context work, the verified recurring schedule, the
+> deeper-coverage consent flow — is still live and still describes the shipped product. Its progress
+> log below is a historical record and is left as written.
+
 > **Execution choice:** the user explicitly authorized superpowers:subagent-driven-development on
 > 2026-07-16. Execute task-by-task with a fresh implementer and task reviewer, then a whole-branch review.
 > Work only on the existing codex/job-postings-pagination branch and checkout; do not create a branch or

@@ -3,10 +3,24 @@ title: Multi-Harness Portability — Research Dossier (Codex · Cursor · openco
 status: aspirational
 verified: partial
 last_reviewed: 2026-07-22
-code_refs: [shared/references/internals.md, shared/references/conventions.md, shared/references/voice.md, shared/references/parallelism.md, shared/references/errors.md, shared/references/agent-data-contract.md, skills/job-search/references/onboarding.md, skills/job-search/references/home.md, skills/job-search-agent/references/scheduling-and-consent.md, skills/job-search-agent/references/customization.md, skills/job-search-run/SKILL.md, scripts/build.sh, .claude-plugin/plugin.json, .opencode/plugins/job-search.js, docs/design-docs/codex-portability.md]
+code_refs: [skills/job-search/SKILL.md, skills/job-search-agent/SKILL.md, skills/job-search-run/SKILL.md, .claude-plugin/plugin.json, .opencode/plugins/job-search.js, docs/design-docs/codex-portability.md]
 ---
 # Multi-Harness Portability — Research Dossier
 
+> **Read this first (added 2026-07-31).** The per-file portability verdicts in §2 grade a reference
+> corpus that no longer exists. The 2026-07-30 skill overhaul deleted `internals.md`,
+> `conventions.md`, `voice.md`, `parallelism.md`, `errors.md`, `agent-data-contract.md`,
+> `run-lifecycle.md`, `update.md`, `build-stamp.md`, and all four hand-authored per-skill reference
+> files, and deleted `scripts/build.sh` with them — there is no build step and nothing is fanned
+> anywhere. What remains is two references read in place from every skill:
+> `../../shared/references/runbook.md` and
+> `../../shared/references/agent-data.md`. Both were written
+> host-neutrally, so the Claude-coupling this dossier found is not a live finding; the portability
+> question it raised is now settled by each host resolving its own tools and scheduler at run time.
+> The dossier is kept for its per-harness research — the install paths, headless invocations, and
+> scheduler capabilities in §3–§6, which the shipped adapters are built on and which is still
+> accurate.
+>
 > **Raw research material, not a commitment.** This dossier consolidates seven adversarially-verified
 > single-harness portability studies into one reference so the lead can synthesize a house-style
 > exec-plan. It maps the work; it builds nothing. The product today targets Claude Code only —
@@ -45,7 +59,7 @@ work's importance. Adapter cells name the *mechanism*; the literal recipe string
 **Cross-platform invariant (all seven):** the agent-data CLI is harness-independent — every skill
 shells out to it identically (it lives on PATH, unauthenticated-by-machine until `agent-data init`
 sets the key). The only universal sandbox caveat: the binary + its network egress must be permitted
-inside each host's sandbox/approval mode. See [agent-data-contract.md](../../shared/references/agent-data-contract.md).
+inside each host's sandbox/approval mode. See `agent-data-contract.md`.
 
 **Distribution pattern shared by all seven:** ONE `skills/` tree, read in place by each host's native
 plugin/skill manager, plus a thin hand-committed per-platform manifest — **no per-platform bundle
@@ -64,7 +78,7 @@ kind + severity. **Kinds:** `slash-recipe`, `loop-scheduling`, `headless-invocat
 `agent-data-init`, `plugin-distribution`, `claude-naming-framing`.
 
 > **THE FOUR HAND-AUTHORED PER-SKILL REFERENCES — the prior doc's blind spot.**
-> [`scripts/build.sh`](../../scripts/build.sh) fans `shared/references/*.md` into each skill's
+> `scripts/build.sh` fans `shared/references/*.md` into each skill's
 > `references/`, but the four files below live **inside a skill** and are **NOT synced** — they must
 > each be neutralized **in place**, by hand: **`skills/job-search/references/onboarding.md`**,
 > **`skills/job-search-agent/references/scheduling-and-consent.md`**,
@@ -290,7 +304,7 @@ consent-based scheduler exists (Claude `/loop`; Codex Automations): use it, inst
 fallback** (explicit yes, exact line shown before writing, never silent, never auto-installed,
 user-removable). The blanket "never install crontab/launchd" prohibition is lifted **only at Tier 2**.
 A cloud scheduler that can't see `~/.job-search` or the local agent-data auth does **not** qualify as
-Tier 1 (per [scheduling-and-consent.md](../../skills/job-search-agent/references/scheduling-and-consent.md),
+Tier 1 (per scheduling-and-consent.md, the operator-manual playbook of the time,
 which rejects cloud `/schedule` for exactly that reason). Belief #7 keeps its INTENT (consent-gated;
 no SILENT/auto privileged write) while the mechanism generalizes.
 **Before** (scheduling-and-consent.md): "## Mechanism: native `/loop` (the only one the agent sets
@@ -428,7 +442,7 @@ The **relaxed rule:** schedule with a host's NATIVE LOCAL consent-based schedule
 sanctioned fallback** — explicit user consent, the exact line shown to the user, never silent, never
 auto-installed. A **CLOUD** scheduler that cannot see the local `~/.job-search` workspace or the local
 agent-data auth does **NOT** count (the repo rejects cloud `/schedule` for exactly that reason —
-[scheduling-and-consent.md](../../skills/job-search-agent/references/scheduling-and-consent.md) L12-13).
+scheduling-and-consent.md L12-13, as that playbook read then).
 
 | Platform | Tier | Native local scheduler? | Recommended mechanism | Registry `scheduling.mechanism` | Evidence (local vs cloud determination) |
 |---|---|---|---|---|---|

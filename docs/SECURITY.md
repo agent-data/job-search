@@ -22,13 +22,14 @@ sections below walk the enforcement, layer by layer.
 ## How the workspace stays out of git
 
 The workspace lives outside this repo — by default at `~/.job-search/` on your machine. At
-first-run, the setup copies [`../templates/workspace.gitignore`](../templates/workspace.gitignore)
+first-run, the setup copies
+[`workspace.gitignore`](../skills/job-search/templates/workspace.gitignore)
 into the workspace root. That file is a genuine deny-all: its only rules are `*` (block
 everything) and `!.gitignore` (keep the gitignore itself). Accidentally running `git add` from
 inside the workspace cannot commit personal data; the gitignore blocks it at the source.
 
 For the full workspace layout (which files live where and what each contains), see
-[`../shared/references/conventions.md`](../shared/references/conventions.md). Do not reproduce
+the `job-search-runbook` skill. Do not reproduce
 field lists from that file here — it is the single source of truth.
 
 ## How the public repo stays free of personal data
@@ -36,7 +37,8 @@ field lists from that file here — it is the single source of truth.
 This repository contains no personal data. All shipped examples (`examples/`) use synthetic,
 fictional postings and preferences. The [`../CONTRIBUTING.md`](../CONTRIBUTING.md) project
 philosophy section states the "private and local" rule and names the mechanism that backs it: the
-`scripts/philosophy_guard.py` script scans shipped output (`examples/`, `templates/`) and fails
+`scripts/philosophy_guard.py` script scans shipped output (`examples/` plus every
+`skills/*/templates/` directory there is) and fails
 CI if it finds numeric scores, budget fields, or other artifacts that would indicate real personal
 data had leaked into a generated example.
 
@@ -59,21 +61,23 @@ schedule the agent also runs a one-time **config-time canary** — a real run th
 invocation — to confirm the job will genuinely work, so a misconfigured schedule fails at setup in front of
 you rather than silently the next day.
 
-This is an **instruction-level design rule**, carried by every skill's pinned references — there is no
+This is an **instruction-level design rule**, carried by the `job-search` skill — the only one that installs
+a schedule — and by the `job-search-runbook` skill it reads for the unattended invocation. There is no
 runtime hook enforcing it (the former PreToolUse guard was removed: it required Python on your machine and
 gated something you're entitled to do). If you explicitly ask for cron or launchd, it's your machine and your
 call: the agent shows you the exact line first, then writes it on your yes. You also remain free to run cron
 or launchd by hand in your own shell, as always. The scheduling flow is documented in
-[`../shared/references/internals.md`](../shared/references/internals.md) (see the scheduling section).
+the `job-search-runbook` skill (see the scheduling section).
 
 ## Auth and secrets
 
 The agent-data API key is the only credential the system uses. It is provided via the environment
 (`AGENT_DATA_API_KEY`) or the agent-data CLI's own config file (`~/.agent-data/config.json`); it
-is never stored in this repository. If the key is absent or invalid at run time, the agent halts
-immediately with a named error and writes a blocked run record. The full named-error catalogue —
-including the auth failure error, its cause, and its fix — is in
-[`../shared/references/errors.md`](../shared/references/errors.md).
+is never stored in this repository. If the key is absent or invalid at run time, the run stops
+before it spends anything: it writes `runs/<run_id>.json` with `close_state: blocked` and
+`run_health: degraded`, and a digest naming the missing key and the exact command that sets one. The
+record is what the next front-door visit reads, so the failure cannot go unnoticed. How a run closes
+is owned by the `job-search-runbook` skill.
 
 ## Credit-free, side-effect-free testing
 
@@ -91,7 +95,7 @@ agent-data must go through the shim in evals, not the live CLI.
 ## No application-URL scraping
 
 The job-data source deliberately does not expose an `application_url` field.
-[`../shared/references/agent-data-contract.md`](../shared/references/agent-data-contract.md) states
+the `agent-data-reference` skill states
 this explicitly in the `get-posting` route definition. The system therefore never scrapes or
 follows application endpoints — the omission is intentional, not a gap.
 
@@ -101,7 +105,7 @@ The deny-all workspace gitignore template is the primary guard against accidenta
 Beyond that template, **there is no automated CI scan that checks whether workspace content was
 committed to the public repo**. The guarantee rests on two things: the deny-all template (which
 must have been copied in by first-run setup), and human review of any PR that touches
-`examples/` or `templates/`.
+`examples/` or a skill's `templates/`.
 
 This honest limit is acknowledged in [`design-docs/core-beliefs.md`](design-docs/core-beliefs.md)
 under "Private & local" (Belief 3): "Beyond the template this is **cultural** — there is no CI
