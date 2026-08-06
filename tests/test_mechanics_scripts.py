@@ -2731,7 +2731,7 @@ def test_a_relevant_row_with_no_band_is_not_listed(tmp_path):
     under a band nobody wrote, so no digest can name a strong match the log never called strong.
 
     The row count is asserted against `postings_reviewed` less the unbanded rows, which is the
-    relation `run-matches.sh`:21-27 states.
+    relation `run-matches.sh`:21-28 states.
     """
     jobs = seeded_jobs(tmp_path, "search.linkedin.json")
     row = first_surfaced(jobs)
@@ -2754,7 +2754,7 @@ def test_a_relevant_row_carrying_the_filtered_band_is_not_listed(tmp_path):
     Listing it would put a posting under a heading whose count is one lower.
 
     The row count is asserted against `postings_reviewed` less the unbanded rows, which is the
-    relation `run-matches.sh`:21-27 states.
+    relation `run-matches.sh`:21-28 states.
 
     `record-judgment.sh`:84-88 takes only strong, moderate or weak on a relevant row, so the event
     is appended to the log here directly.

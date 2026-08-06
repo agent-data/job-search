@@ -14,7 +14,7 @@
 # `|`, so joining on one would let two postings share a key: record-judgment.sh:70-75 refuses only
 # a control character and a backslash, and measured, source `s` with source_id `x|y` and source
 # `s|x` with source_id `y` were both recorded at exit 0 and both join to `s|x|y`. With the key
-# joined on `|`, the listing printed one row for those two postings instead of two.
+# joined on `|`, this script printed one row for those two postings instead of two.
 #
 # run-counts.awk builds the same key, which keeps the two readable side by side, but the scripts
 # never exchange keys, so that is a maintainability point rather than a correctness one.
