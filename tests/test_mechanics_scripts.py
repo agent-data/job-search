@@ -970,10 +970,19 @@ def live_values(doc, scrub):
 
 def test_the_fixture_glob_finds_something_to_guard():
     """The two guards below are parametrized over a glob of the fixture directory. pytest reports
-    an empty parameter list as one skipped test and exits 0, so if that directory were emptied,
-    renamed, or moved while `FIXTURES` still pointed here, the leak guard and the fixed-point pin
-    would both go quiet and the suite would stay green. The hand-written list they replaced would
-    have raised FileNotFoundError. This is what keeps an empty glob a failure."""
+    an empty parameter list as a skip — `got empty parameter set for (path)` — and nothing in that
+    line says the privacy guard stopped guarding. The hand-written list they replaced would have
+    raised FileNotFoundError.
+
+    The rest of the file does go red, but for its own reasons rather than for theirs. With
+    `FIXTURES` on an empty directory the module gives 18 failed, 89 passed, 4 skipped; seventeen of
+    those failures are `record_api` tests missing a file they name as `FIXTURES / <name>`, and the
+    eighteenth is this test. Neither guard is among them (measured 2026-08-06, `python3 -m pytest
+    tests/test_mechanics_scripts.py -q` with FIXTURES pointed at an empty temp dir).
+
+    So this is the only check that reports the guards themselves going quiet, and the only one left
+    if those seventeen ever stop reading from `FIXTURES`. The first assertion covers the likelier
+    accident, a directory renamed rather than emptied."""
     assert FIXTURES.is_dir(), "the fixture directory is gone: %s" % FIXTURES
     assert sorted(FIXTURES.glob("*.json")), "no fixtures to guard in %s" % FIXTURES
 
