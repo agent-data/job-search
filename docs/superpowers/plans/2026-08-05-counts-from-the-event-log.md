@@ -2899,7 +2899,8 @@ def test_the_record_matches_the_template_field_set(tmp_workspace):
 
 - [ ] **Step 2: Run the tests and watch them fail**
 
-Run: `python3 -m pytest tests/test_mechanics_scripts.py -k "close_run or clear" -v`
+Run: `python3 -m pytest tests/test_mechanics_scripts.py -k "counts_from_the_log or run_health_for_the_digest or completed_at_is_later or complete_close_over_unreviewed or closes_interrupted or does_not_degrade_a_finished_run or degrades_the_run_without_blocking or clearing_removes_the_marker or clearing_a_run_with_no_record or matches_the_template_field_set" -v`, then the whole module.
+Expected: **10 collected** — confirm with `--collect-only -q` before trusting the run. `-k "close_run or clear"` was measured on 2026-08-06 to collect **2 of 303**, both of them the unrelated `test_the_scrub_clears_a_live_shaped_posting_body`: `close_run` matches none of the ten names below and `clear` matches two of them. The selector above was measured to collect 0 of 303 today, so anything it picks up after Step 1 is one of the ten.
 Expected: FAIL — neither script exists.
 
 - [ ] **Step 3: Update the template**
@@ -2941,6 +2942,10 @@ Check the arithmetic: `3 + 6 + 2 + 39 = 50` reviewed; `50 + 0 = 50` surfaced; `2
 Every value this script writes is an identifier — `trigger`, `scheduler_id`, `brief_revision`, `run_id`, and the entries in `--sources` and `--queries`. None of them is free text. So it takes the same two-part rule the three event writers settled on in Task 5: `esc` escapes, and the entry refuses. Refuse a control character or a backslash in any of them, naming the flag, before anything is written — `record-api-response.sh`, `queue-detail-read.sh` and `record-judgment.sh` each carry that check and are the model. An identifier stored escaped is one no `grep -F` lookup will ever match again, which is why refusing beats escaping for this half.
 
 Add it as its own test alongside the others in Step 1.
+
+**Resolve one thing the sketch below decides silently.** It reads the counts with `counts=$(… run-counts.sh …) || die`, so a `run-counts.sh` that exits non-zero stops the close. That is right for a real failure — a partial key set can reach stdout with a non-zero status, and reading keys off it would put invented numbers in the record. But `run-counts.sh` also exits 1 for a finding, not a failure: a relevant row carrying no band makes it print `INVALID relevant-row-without-a-band=<n>` **alongside every normal count**, and exit 1. With `|| die`, such a run cannot close at all — no record written, the marker left on disk — which is the state this plan exists to remove, and the opposite of what Task 8 settled for a broken workspace ("a workspace with broken files still opens a run: the failure then closes as a blocked run with a record, rather than leaving nothing behind").
+
+Tell the two apart and say in the header which is which. Measure `run-counts.sh`'s behaviour on both — a log it cannot read, and a log with one relevant row carrying no band — before you decide, and write what you measured. A run whose counts are complete but carry a finding should end up with a record; a run whose counts could not be worked out should not.
 
 ```sh
 #!/bin/sh
@@ -3147,7 +3152,8 @@ Both runbook scripts reach `../../job-search-run/scripts/` for `run-counts.sh`. 
 
 - [ ] **Step 6: Run the tests to verify they pass**
 
-Run: `python3 -m pytest tests/test_mechanics_scripts.py -k "close_run or clear" -v`
+Run: `python3 -m pytest tests/test_mechanics_scripts.py -k "counts_from_the_log or run_health_for_the_digest or completed_at_is_later or complete_close_over_unreviewed or closes_interrupted or does_not_degrade_a_finished_run or degrades_the_run_without_blocking or clearing_removes_the_marker or clearing_a_run_with_no_record or matches_the_template_field_set" -v`, then the whole module.
+Expected: **10 collected** — confirm with `--collect-only -q` before trusting the run. `-k "close_run or clear"` was measured on 2026-08-06 to collect **2 of 303**, both of them the unrelated `test_the_scrub_clears_a_live_shaped_posting_body`: `close_run` matches none of the ten names below and `clear` matches two of them. The selector above was measured to collect 0 of 303 today, so anything it picks up after Step 1 is one of the ten.
 Expected: all ten PASS.
 
 - [ ] **Step 7: Commit**
