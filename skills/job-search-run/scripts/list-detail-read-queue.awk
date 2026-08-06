@@ -5,12 +5,17 @@
 # measured with a title carrying two backslashes and a URL carrying %3D%3D, which both awks print
 # as six fields and neither reinterprets.
 #
-# The evaluated check is scoped to this run, matching run-counts.sh. It changes nothing today:
-# record-api-response.sh skips a posting any run has judged, so a posting judged earlier is never
-# surfaced for this run and can never be queued for it. Measured — removing `&& rid == want` from
-# that branch alone fails no test in tests/test_mechanics_scripts.py, while removing it from the
-# surfaced or the queued branch fails test_the_queue_is_scoped_to_the_run_it_is_asked_for. It is
-# here so the three scripts keep saying the same thing if the dedup rule ever moves.
+# The evaluated check is scoped to this run. It changes nothing today: dedup-surfaced.awk puts an
+# `evaluated` event of ANY run into the set of postings to skip, so a posting judged in an earlier
+# run is never surfaced for this one and can never be queued for it. Measured — removing
+# `&& rid == want` from that branch alone fails no test in tests/test_mechanics_scripts.py, while
+# removing it from the surfaced or the queued branch fails
+# test_the_queue_is_scoped_to_the_run_it_is_asked_for.
+#
+# Keep it anyway, because scoped is the answer this script wants if that rule ever changes. Were a
+# posting judged in an earlier run surfaced again, this run has not judged it, so it belongs on this
+# run's queue until this run does. run-counts.sh, which a later task adds, reads these same events
+# and has to reach the same answer, so the two are written the same way.
 
 {
   ev = jval($0, "event")

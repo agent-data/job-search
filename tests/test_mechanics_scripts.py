@@ -21,6 +21,7 @@ import re
 import shutil
 import subprocess
 import tempfile
+import time
 
 import pytest
 
@@ -1173,6 +1174,18 @@ def test_a_missing_flag_is_named_rather_than_read_as_a_posting_nothing_surfaced(
     assert [e for e in lines(jobs) if e["event"] == "queued"] == []
 
 
+def test_queueing_against_a_missing_log_names_the_path(tmp_path):
+    """The whole stderr line, for the same reason the missing-flag cases assert it. Without the
+    guard the path reaches the grep chain, which prints its own `grep: …: No such file or directory`
+    and then the operator is told `no surfaced posting for ashby:a in run …` — the run's search
+    results, when the fault is on the command line. Exit 1 either way."""
+    jobs = tmp_path / "nope.jsonl"
+    r = run_script(QUEUE, jobs, "--run-id", RID, "--source", "ashby", "--source-id", "a")
+    assert r.returncode == 1, r.stdout + r.stderr
+    assert r.stderr == "queue-detail-read: no such file: %s\n" % jobs
+    assert not jobs.exists()
+
+
 def test_queueing_twice_is_reported_and_appends_nothing(tmp_path):
     """Exit 0, because the posting the caller asked for is on the queue when the script returns.
     The line count is what says the second invocation wrote nothing — a second `queued` event would
@@ -1196,6 +1209,28 @@ def test_a_given_timestamp_is_what_the_queued_event_carries(tmp_path):
                    "--source-id", row["source_id"], "--ts", "2026-08-06T12:00:00Z")
     assert r.returncode == 0, r.stderr
     assert [e for e in lines(jobs) if e["event"] == "queued"][0]["ts"] == "2026-08-06T12:00:00Z"
+
+
+def test_a_queued_event_with_no_ts_flag_carries_the_time_it_was_written(tmp_path):
+    """With no `--ts` the script reads the clock, and this is what says so. The key-set assertion
+    above checks that `ts` is present, not that it holds anything, so dropping the `date` call and
+    leaving `ts` empty ships `"ts":""` and passes there. `ts` is one of the five fields on the
+    event, and Task 5 counts a run from these timestamps.
+
+    Both bounds are read from Python's own UTC clock around the call, so nothing here is a literal
+    date. The format is asserted as well as the value, because `date -u +%Y-%m-%dT%H:%M:%SZ` is
+    what every other event in the log is stamped with."""
+    jobs = seeded_jobs(tmp_path, "search.linkedin.json")
+    row = first_surfaced(jobs)
+    fmt = "%Y-%m-%dT%H:%M:%SZ"
+    before = time.strftime(fmt, time.gmtime())
+    r = run_script(QUEUE, jobs, "--run-id", RID, "--source", row["source"],
+                   "--source-id", row["source_id"])
+    after = time.strftime(fmt, time.gmtime())
+    assert r.returncode == 0, r.stderr
+    ts = [e for e in lines(jobs) if e["event"] == "queued"][0]["ts"]
+    assert re.fullmatch(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z", ts), ts
+    assert before <= ts <= after, (before, ts, after)
 
 
 def test_the_queue_carries_what_a_reader_needs_and_nothing_that_prejudges(tmp_path):
@@ -1227,6 +1262,24 @@ def test_a_title_with_an_escaped_quote_reaches_the_reader_intact(tmp_path):
         '{"event":"queued","run_id":"%s","source":"ashby","source_id":"a","ts":"x"}\n' % (RID, RID))
     r = run_script(LIST_QUEUE, jobs, RID)
     assert r.stdout.rstrip("\n").split("\t")[4] == 'Manager "Finance" role'
+
+
+def test_a_posting_queued_twice_in_the_log_is_listed_once(tmp_path):
+    """`queue-detail-read.sh` checks for an existing `queued` event and then appends, and those two
+    steps are not one operation: two invocations racing each other can both pass the check and both
+    write. Readers run in parallel on a host with subagents, so the log really can hold the pair.
+
+    The `!(k in queued)` guard in the awk is the only thing that keeps that from putting the posting
+    on the list twice, and this is the only test that drives it — the script refuses to produce the
+    input, so the duplicate is written here by hand."""
+    jobs = seeded_jobs(tmp_path, "search.linkedin.json")
+    row = first_surfaced(jobs)
+    dup = ('{"event":"queued","run_id":"%s","source":"%s","source_id":"%s","ts":"x"}\n'
+           % (RID, row["source"], row["source_id"]))
+    jobs.write_text(jobs.read_text() + dup + dup)
+    out = run_script(LIST_QUEUE, jobs, RID).stdout.strip().splitlines()
+    assert len(out) == 1, out
+    assert out[0].split("\t")[1] == row["source_id"]
 
 
 def test_the_queue_drains_as_judgments_land(tmp_path):
