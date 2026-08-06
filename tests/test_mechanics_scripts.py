@@ -144,6 +144,21 @@ def test_a_judged_posting_is_still_filtered_out(tmp_path):
     assert r.stdout.split() == ["xyz-999"]
 
 
+def test_dedup_reads_a_judgment_whose_event_key_carries_a_space(tmp_path):
+    """dedup.sh's event-type filter tolerates the whitespace event-log-append.sh tolerates. A
+    hand-written `"event": "evaluated"` is a judgment, and a posting whose judgment the filter
+    misses is offered to the next run as new. Without this case, swapping the filter for
+    `grep -F '"event":"evaluated"'` passes the whole suite.
+    """
+    jobs = tmp_path / "jobs.jsonl"
+    jobs.write_text('{"event": "evaluated","run_id":"R","source": "ashby","source_id": "abc-123",'
+                    '"relevant":true,"match":"strong"}\n')
+    r = subprocess.run(["sh", str(DEDUP), str(jobs), "ashby"],
+                       input="abc-123\nxyz-999\n", capture_output=True, text=True)
+    assert r.returncode == 0, r.stderr
+    assert r.stdout.split() == ["xyz-999"], r.stdout
+
+
 # ------------------------------------------------------------------- event-log append
 
 def _count_source_id(path, source_id):
