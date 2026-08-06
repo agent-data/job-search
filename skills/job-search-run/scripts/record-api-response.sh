@@ -133,20 +133,29 @@ if [ "$route" = get-posting ]; then
     exit 2
   }
 
-  # Absent, JSON null, and JSON empty string are all unusable, and all three have to be named — the
-  # same three the row builder checks on the search half, for the same reason. Read raw, so a
-  # posting whose source_id is the string "null" stays a real value: quoted it is six characters,
-  # the JSON null is four. Without this a null reaches the surfaced check and the operator is told
-  # the run never surfaced the posting, sending them to the search results when the fault is in the
-  # body.
-  unusable=''
-  case $(rawfield data.source) in ''|null|'""') unusable='data.source' ;; esac
-  case $(rawfield data.source_id) in
-    ''|null|'""') unusable="${unusable:+$unusable and }data.source_id" ;;
-  esac
-  [ -z "$unusable" ] || {
+  # The same four checks the row builder makes on the search half, for the same reasons: absent,
+  # JSON null, JSON empty string, and a value that is not a string at all. Read raw, so a posting
+  # whose source_id is the string "null" stays a real value — quoted it is six characters, the JSON
+  # null is four. Without these a null or a number reaches the surfaced check and the operator is
+  # told the run never surfaced the posting, sending them to the search results when the fault is
+  # in the body. A JSON object or array never gets this far: the shape gate above wants
+  # data.source_id as a scalar path.
+  missing='' notstring=''
+  for dfield in data.source data.source_id; do
+    case $(rawfield "$dfield") in
+      ''|null|'""') missing="${missing:+$missing and }$dfield" ;;
+      '"'*) ;;
+      *) notstring="${notstring:+$notstring and }$dfield" ;;
+    esac
+  done
+  [ -z "$missing" ] || {
     printf 'record-api-response.sh: %s has no usable %s — absent, null, or an empty string\n' \
-      "$resp" "$unusable" >&2
+      "$resp" "$missing" >&2
+    exit 2
+  }
+  [ -z "$notstring" ] || {
+    printf 'record-api-response.sh: %s has a non-string %s — every script that finds a posting matches the quoted form, so this posting would be stored and then unreachable\n' \
+      "$resp" "$notstring" >&2
     exit 2
   }
 

@@ -15,8 +15,11 @@ and a filled field stays filled.
 `location_display` is deliberately left alone, and so is a `salary_display` holding free text. Both
 are genuine parser inputs: `skills/agent-data-reference/SKILL.md` records that `salary_display` is
 free text that arrives as raw HTML on some rows, and a synthesised band would stop testing that.
-The one `salary_display` this scrub does replace is a value that parses as a JSON object or array,
-which is not a band at all — see `SCRUBBED_JOB_LD` below.
+
+What this scrub does replace in either field is a value that parses as a JSON object or array —
+not a band or a location, but a record the source page embedded. That replacement is keyed on the
+shape of the value and applies to every field at every depth, so it is not tied to the field the
+record first turned up in. See `SCRUBBED_JOB_LD` and `replace_embedded_json` below.
 
 A fractional-seconds part is dropped from `posted_at` and `published_at`. Microsecond precision is
 a live value with nothing to test in it, and dropping it leaves the shape that tells the two
@@ -58,8 +61,9 @@ BODY = HOSTILE + ("Responsibilities and requirements. " * 120)
 SCRUBBED_CURSOR = base64.urlsafe_b64encode(
     json.dumps({"scrubbed": True}).encode()).decode().rstrip("=")
 
-# What a `salary_display` holding a JSON document becomes. On a LinkedIn get-posting body the field
-# does not hold a salary band at all: it holds the source page's own schema.org JobPosting record.
+# What a string holding a JSON document becomes, in whatever field it turns up in. On a LinkedIn
+# get-posting body `salary_display` does not hold a salary band at all: it holds the source page's
+# own schema.org JobPosting record.
 # In the capture this fixture came from that record was 8,833 characters and carried the whole
 # description, the employer name, the employer's LinkedIn page and logo URLs, the job title and an
 # internal posting id — the largest block of live text in the response, in the one field this
@@ -142,11 +146,34 @@ def scrub_row(row, i):
     for key in ("description_markdown", "description_plain"):
         if row.get(key):
             row[key] = BODY[:len(row[key])] or BODY
-    if row.get("salary_display") and is_structured_json(row["salary_display"]):
-        row["salary_display"] = SCRUBBED_JOB_LD
     if row.get("apply_url"):
         row["apply_url"] = "https://example.invalid/apply/%s" % row["id"]
     return row
+
+
+def replace_embedded_json(node):
+    """Replace every string holding a JSON document, anywhere in `node`, with `SCRUBBED_JOB_LD`.
+
+    Keyed on the shape of the value, not on the name of the field. A schema.org JobPosting record
+    is live text wherever the API parks it, and only one of its own keys — `title` — is a name the
+    fixture guard recognises; `description`, `name`, `sameAs`, `logo` and `datePosted` are not. So
+    a record found by its field name is a record found only in the field it first turned up in.
+
+    Run over the whole document rather than over each row, so it reaches exactly what the guard
+    reaches. A string the guard can flag but this cannot replace would leave whoever hits it with a
+    fixture that is permanently red and no way to scrub it.
+    """
+    if isinstance(node, dict):
+        items = node.items()
+    elif isinstance(node, list):
+        items = enumerate(node)
+    else:
+        return
+    for key, value in list(items):
+        if isinstance(value, str) and is_structured_json(value):
+            node[key] = SCRUBBED_JOB_LD
+        else:
+            replace_embedded_json(value)
 
 
 def main(src, dst):
@@ -164,6 +191,7 @@ def main(src, dst):
             page["next_cursor"] = SCRUBBED_CURSOR
     elif isinstance(data, dict):
         scrub_row(data, 0)
+    replace_embedded_json(doc)
     text = json.dumps(doc, indent=2, ensure_ascii=False) + "\n"
     # Case-insensitive: 13 of the 25 live Ashby URLs in one capture carry a capitalised company
     # segment (`jobs.ashbyhq.com/OpenAI/…`), which a case-sensitive `[a-z]` does not catch.

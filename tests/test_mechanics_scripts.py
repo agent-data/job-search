@@ -1013,6 +1013,32 @@ def test_a_posting_body_without_a_usable_source_and_source_id_is_refused(tmp_pat
     assert [e for e in lines(jobs) if e["event"] == "call"] == before
 
 
+@pytest.mark.parametrize("row,names", [
+    ({"source": "ashby", "source_id": 4449006488}, "data.source_id"),
+    ({"source": "ashby", "source_id": True}, "data.source_id"),
+    ({"source": 7, "source_id": "ashby-0000"}, "data.source"),
+    ({"source": 7, "source_id": 8}, "data.source and data.source_id"),
+])
+def test_a_non_string_source_or_source_id_in_a_posting_body_is_refused(tmp_path, row, names):
+    """The fourth check the row builder makes, brought across. Every script that finds a posting
+    matches the quoted form, so a numeric `source_id` would be stored and then never found again —
+    the same reason the search half refuses it where it arrives.
+
+    Without it the body reached the surfaced check and the operator was told `no surfaced posting
+    for ashby:123`, which sends them to the run's search results when the fault is in the body. An
+    object or an array never gets this far: the shape gate wants `data.source_id` as a scalar."""
+    body = tmp_path / "body.json"
+    body.write_text(json.dumps({"data": dict(row, description_markdown="A role."),
+                                "meta": {"request_id": "req_1"}}))
+    jobs = seeded_jobs(tmp_path, "search.ashby.json")
+    before = [e for e in lines(jobs) if e["event"] == "call"]
+    r = run_script(RECORD_API, RID, jobs, body, "--route", "get-posting")
+    assert r.returncode == 2, r.stdout + r.stderr
+    assert "has a non-string %s —" % names in r.stderr, r.stderr
+    assert [e for e in lines(jobs) if e["event"] == "detail"] == []
+    assert [e for e in lines(jobs) if e["event"] == "call"] == before
+
+
 def test_a_source_id_that_is_the_string_null_is_still_a_real_value(tmp_path):
     """`field` strips the quotes, so a JSON null and the four-character string `null` come out of
     it identical. The check above reads the raw scan value instead, where the two are six
@@ -1144,10 +1170,18 @@ def live_values(doc, scrub):
     field is itself a parser input — but a key present with a value from outside the scrub's
     vocabulary is live text.
 
-    `location_display` is deliberately absent from this list, and so is a `salary_display` holding
-    free text: `scrub.py` leaves both alone because they are real parser inputs. The one
-    `salary_display` that is checked is a value parsing as a JSON object, which on a LinkedIn
-    get-posting body is the source page's whole schema.org JobPosting record rather than a band.
+    `location_display` and a free-text `salary_display` are both absent from the field list below:
+    `scrub.py` leaves them alone because they are real parser inputs. Their *contents* are still
+    checked, by the shape rule after the loop — free text stays free text, and a JSON document
+    parked in either one is caught.
+
+    Two checks run over every object, and they fail differently on purpose. The field list matches
+    on the name and knows what a scrubbed value of that field looks like. The shape rule matches on
+    the value and ignores the name, because a schema.org JobPosting record is live text wherever it
+    is parked, and only one of its own keys — `title` — is a name this guard would recognise.
+    `description`, `name`, `sameAs`, `logo` and `datePosted` are not, so a record with a
+    vocabulary title in an unlisted field passed both halves until the shape rule moved off the
+    name.
     """
     looks_scrubbed = {
         "company_name": lambda v: v in scrub.COMPANIES,
@@ -1160,11 +1194,6 @@ def live_values(doc, scrub):
         "apply_url": lambda v: str(v).startswith("https://example.invalid/apply/"),
         "description_markdown": lambda v: isinstance(v, str) and scrub.BODY.startswith(v),
         "description_plain": lambda v: isinstance(v, str) and scrub.BODY.startswith(v),
-        # A band is free text and stays; a JSON document in this field is the source page's own
-        # JobPosting record, which in the capture behind detail.linkedin.json ran to 8,833
-        # characters and held the description, the employer and the title. What counts as a
-        # document is asked of `scrub.py` itself, so the guard and the scrub cannot disagree.
-        "salary_display": lambda v: (not scrub.is_structured_json(v)) or v == scrub.SCRUBBED_JOB_LD,
         "keywords": lambda v: v == "scrubbed",
         "location": lambda v: v == "scrubbed",
         "next_cursor": lambda v: _decodes_to_the_scrubbed_cursor(v),
@@ -1178,6 +1207,15 @@ def live_values(doc, scrub):
             value = obj.get(key)
             if value is not None and not ok(value):
                 found.append((key, value))
+        # The shape rule: any field, any depth. A string that parses as a JSON document is a
+        # record the source page embedded, not a value this API returns — the LinkedIn
+        # get-posting body behind detail.linkedin.json carried 8,833 characters of one in
+        # `salary_display`. `scrub.py` replaces every such string with SCRUBBED_JOB_LD, and is
+        # asked here what counts as one, so the guard and the scrub cannot disagree.
+        for key, value in obj.items():
+            if (isinstance(value, str) and scrub.is_structured_json(value)
+                    and value != scrub.SCRUBBED_JOB_LD):
+                found.append((key, value))
     return found
 
 
@@ -1188,15 +1226,15 @@ def test_the_fixture_glob_finds_something_to_guard():
     raised FileNotFoundError.
 
     The rest of the file does go red, but for its own reasons rather than for theirs. With
-    `FIXTURES` on an empty directory the module gives 34 failed, 94 passed, 4 skipped. Thirty-three
+    `FIXTURES` on an empty directory the module gives 38 failed, 97 passed, 4 skipped. Thirty-seven
     of those failures are the tests that drive `record-api-response.sh` from a fixture, each missing
-    a file it names as `FIXTURES / <name>`, and the thirty-fourth is this test. Neither guard is
+    a file it names as `FIXTURES / <name>`, and the thirty-eighth is this test. Neither guard is
     among them: both land in the 4 skipped, reported as `got empty parameter set for (path)`
     (measured 2026-08-06, `python3 -m pytest tests/test_mechanics_scripts.py -q` with FIXTURES
     pointed at an empty temp dir).
 
     So this is the only check that reports the guards themselves going quiet, and the only one left
-    if those thirty-three ever stop reading from `FIXTURES`. The first assertion covers the likelier
+    if those thirty-seven ever stop reading from `FIXTURES`. The first assertion covers the likelier
     accident, a directory renamed rather than emptied."""
     assert FIXTURES.is_dir(), "the fixture directory is gone: %s" % FIXTURES
     assert sorted(FIXTURES.glob("*.json")), "no fixtures to guard in %s" % FIXTURES
@@ -1265,6 +1303,53 @@ def test_the_fixture_guard_catches_a_live_value(key, doc):
     each one is driven with a value taken from the shape the live API actually returns."""
     found = live_values(doc, _scrub_module())
     assert key in [k for k, _ in found], found
+
+
+def _embedded_record(scrub):
+    """A schema.org JobPosting record whose own `title` comes from the fixture vocabulary.
+
+    That is what makes it the hard case. `title` is the only key of such a record that this guard
+    knows by name, so a record whose title already looks scrubbed is invisible to every name-keyed
+    check and can be caught only on its shape. Everything else in it is live: the employer, its
+    LinkedIn company page, its logo, and a microsecond timestamp of the kind `posted_at` would have
+    been caught on under its own name.
+    """
+    return json.dumps({
+        "@context": "http://schema.org", "@type": "JobPosting",
+        "title": scrub.TITLES[0],
+        "datePosted": "2026-07-25T13:50:43.000Z",
+        "description": "Live job text that must never be committed.",
+        "hiringOrganization": {"@type": "Organization", "name": "A Real Employer Inc",
+                               "sameAs": "https://www.linkedin.com/company/openai",
+                               "logo": "https://media.licdn.com/dms/image/v2/xyz"}})
+
+
+@pytest.mark.parametrize("place", [
+    lambda rec: {"data": {"location_display": rec}},
+    lambda rec: {"data": {"workplace_type": rec}},
+    lambda rec: {"data": {"address_structured": {"raw_page": rec}}},
+], ids=["location_display", "workplace_type", "nested"])
+def test_an_embedded_record_is_caught_in_any_field_and_can_be_scrubbed(tmp_path, place):
+    """The guard reaches the record wherever the API parks it, and the scrub can then fix it.
+
+    Both halves have to hold. A guard that flags a value no scrub path replaces leaves whoever
+    hits it with a fixture that is permanently red and nothing to do about it, so each placement
+    is driven through `scrub.main` and checked again afterwards.
+
+    `salary_display` was closed one round earlier by a rule keyed on that field name. These three
+    placements are the ones that rule never reached.
+    """
+    scrub = _scrub_module()
+    doc = place(_embedded_record(scrub))
+    assert live_values(doc, scrub), "the guard does not see the record in this position"
+    live = tmp_path / "raw.json"
+    live.write_text(json.dumps(doc), encoding="utf-8")
+    out = tmp_path / "clean.json"
+    scrub.main(str(live), str(out))
+    text = out.read_text(encoding="utf-8")
+    assert "A Real Employer Inc" not in text
+    assert "media.licdn.com" not in text
+    assert live_values(json.loads(text), scrub) == []
 
 
 @pytest.mark.parametrize("path", sorted(FIXTURES.glob("*.json")), ids=lambda p: p.name)
