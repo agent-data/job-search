@@ -1978,6 +1978,49 @@ def test_a_different_judgment_for_the_same_posting_is_refused_with_both_lines(tm
     assert len(lines(jobs)) == before
 
 
+def test_a_judgment_written_with_spaces_after_its_colons_still_blocks_a_second_one(tmp_path):
+    """event-log-append.sh accepts a judgment written by hand with a space after any colon, so such
+    a line is in the log by design. The already-judged lookup reads its fields with jval rather than
+    grepping for their quoted text, which a space defeats.
+
+    Measured on 2026-08-06 before find-judgment.awk existed: with the recorded judgment written this
+    way, the conflicting one was accepted — exit 0, a second evaluated event appended, and
+    `run-matches.sh` then reported the later verdict. The same workspace with that judgment written
+    compact exited 1 and wrote nothing, so whitespace alone decided whether a conflict was refused.
+    """
+    jobs = seeded_jobs(tmp_path, "search.ashby.json")
+    row = first_surfaced(jobs)
+    prior = ('{"event": "evaluated","run_id": "%s","source": "%s","source_id": "%s",'
+             '"relevant":true,"match":"strong","ts":"2026-08-05T00:00:00Z"}'
+             % (RID, row["source"], row["source_id"]))
+    a = run_sh(APPEND, [str(jobs)], input_text=prior)
+    assert a.returncode == 0, a.stderr
+    before = len(lines(jobs))
+    r = run_script(JUDGE, *judge_args(jobs, row, detail_read="true", relevant="true",
+                                      match="weak", reasoning="Changed my mind."))
+    assert r.returncode == 1, r.stdout + r.stderr
+    assert "recorded:" in r.stderr and "offered:" in r.stderr, r.stderr
+    assert len(lines(jobs)) == before, jobs.read_text()
+
+
+def test_an_awk_that_fails_reading_the_recorded_judgments_writes_no_second_verdict(tmp_path):
+    """That lookup prints nothing for a posting no one has judged yet, and an awk that died before
+    printing prints nothing either, so the output alone cannot tell the two apart. With only the
+    output checked, the conflict below it is skipped and a second verdict for a posting that already
+    has one lands in the log. The status is checked for the same reason the builder's is."""
+    jobs = seeded_jobs(tmp_path, "search.ashby.json")
+    row = first_surfaced(jobs)
+    run_script(JUDGE, *judge_args(jobs, row, detail_read="true", relevant="true",
+                                  match="strong", reasoning="First."))
+    before = jobs.read_text()
+    r = run_script(JUDGE, *judge_args(jobs, row, detail_read="true", relevant="true",
+                                      match="weak", reasoning="Changed my mind."),
+                   env=awk_shim(tmp_path, "find-judgment.awk"))
+    assert r.returncode == 1, r.stdout + r.stderr
+    assert "reading the judgments already recorded failed" in r.stderr, r.stderr
+    assert jobs.read_text() == before
+
+
 def test_concurrent_judgments_all_land_as_valid_json(tmp_path):
     """Readers run in parallel where the host has subagents; appends must not interleave."""
     jobs = seeded_jobs(tmp_path, "search.linkedin.json")

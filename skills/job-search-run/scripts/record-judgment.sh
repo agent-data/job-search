@@ -94,10 +94,11 @@ fi
 #
 # grep -F matches a substring, so a source_id that is a prefix of another posting's matches the
 # wrong posting. The hazard, the measurement showing it cannot fire on tests/fixtures/api-responses,
-# and the reason not to change one script on its own are written out at queue-detail-read.sh:39-52.
-# This is the third script to match postings this way, and like the other two it matches twice —
-# here and in the already-judged check below — so hardening the match means changing six greps
-# across three files.
+# and the reason not to change one script on its own are written out at queue-detail-read.sh:59-68.
+# This is the third script to match postings this way. The already-judged check below no longer
+# greps — it reads the fields with jval, in find-judgment.awk, which ends this hazard and the
+# whitespace one together — so five lookups still match this way: this one, and both lookups in each
+# of queue-detail-read.sh and record-api-response.sh.
 #
 # Two things for whoever does that. What rules the hazard out on the api-response fixtures is that
 # every id of one source is the same width, and numeric ids elsewhere in this repo are not:
@@ -146,10 +147,20 @@ fi
 
 # A judgment already recorded for this posting in this run. The same one again is a retry and
 # changes nothing; a different one is a conflict the caller has to settle, so write neither.
-prev=$(grep -F '"event":"evaluated"' "$jobs" \
-       | grep -F "\"run_id\":\"$run_id\"" \
-       | grep -F "\"source\":\"$source\"" \
-       | grep -F "\"source_id\":\"$source_id\"" | tail -1)
+#
+# This lookup reads the fields with jval instead of grepping for their quoted text.
+# event-log-append.sh accepts a judgment written by hand with a space after any colon, so such a
+# line is in the log by design, and a chain of greps matching the quoted text finds none of it. The
+# conflict below was then never reached and the second verdict went into the log. The measurement,
+# and why the surfaced lookup above still greps, are in find-judgment.awk.
+prev=$(awk -f "$here/event-field.awk" -f "$here/find-judgment.awk" \
+           -v run_id="$run_id" -v source="$source" -v source_id="$source_id" "$jobs")
+prevstatus=$?
+
+# The status is checked for the reason the builder's is checked above: an awk that died before
+# printing anything looks exactly like a posting no one has judged yet, and this script would then
+# append a second verdict for a posting that already has one.
+[ "$prevstatus" -eq 0 ] || die 'reading the judgments already recorded failed — nothing written'
 
 if [ -n "$prev" ]; then
   # The timestamp is dropped from both sides before they are compared: a retry a minute later is
