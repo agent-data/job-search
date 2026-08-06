@@ -21,6 +21,21 @@ set -u
 ws=${1:?usage: clear-run.sh <workspace> <run_id>}
 run_id=${2:?usage: clear-run.sh <workspace> <run_id>}
 
+# run_id is checked for its whole shape before any path is composed from it, because both paths
+# below reach rm and one of them reaches `rm -rf`. Measured on 2026-08-06 before this check, with a
+# file at ws/runs/../../victim.json to satisfy the record check: `clear-run.sh . ../../victim`
+# printed its normal cleared message, exited 0, and deleted ws/victim/ with its contents.
+#
+# The same expression is at validate-workspace.sh:50 and in close-run.sh; the three have to agree.
+# validate-workspace.sh:186 reads a file in runs/ as a run record only when its whole name matches
+# it, so a run id of any other shape names a record no check in the workspace ever looks at.
+RUN_ID_RE='^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}-[0-9]{2}-[0-9]{2}Z$'
+printf '%s\n' "$run_id" | grep -qE "$RUN_ID_RE" || {
+  printf 'clear-run: <run_id> must be a UTC timestamp with dashes for the colons, like 2026-07-30T15-04-02Z, and got: %s\n' \
+    "$run_id" >&2
+  exit 1
+}
+
 [ -d "$ws" ] || { printf 'clear-run: no such workspace: %s\n' "$ws" >&2; exit 1; }
 [ -f "$ws/runs/$run_id.json" ] || {
   printf 'clear-run: no record at runs/%s.json — close the run before clearing it\n' "$run_id" >&2

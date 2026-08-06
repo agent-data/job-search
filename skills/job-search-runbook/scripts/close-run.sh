@@ -10,9 +10,18 @@
 #
 # Every count comes from run-counts.sh and completed_at from a clock read here, so no number in the
 # record is anyone's account of the run. run_health is worked out the same way: healthy means the
-# run closed complete, left no posting unjudged, and every search it attempted answered at least
-# once. A single failed attempt inside a retry sequence that then succeeded is not a lost search,
-# and a failed detail read is not a search — that posting gets judged from its summary row.
+# run closed complete, left no posting unjudged, had every search it attempted answer at least once,
+# and had no relevant row carrying a missing band. A single failed attempt inside a retry sequence
+# that then succeeded is not a lost search, and a failed detail read is not a search — that posting
+# gets judged from its summary row.
+#
+# The fourth term is what carries the unbanded row into the record. Such a row is counted in
+# postings_reviewed and in neither matches nor filtered_out, so a record that called the run healthy
+# would assert an arithmetic it does not satisfy: measured, one unbanded row among two reviewed
+# postings gives match_strong + match_moderate + match_weak + filtered_out = 1 against
+# postings_reviewed = 2, and validate-workspace.sh passes that workspace clean. run_health is the
+# only field that can hold it — the digest reads run_health off this script's stdout, by which point
+# the stderr line below is gone.
 #
 # A close_state of complete over unjudged postings is refused and nothing is written: a run that
 # did not finish must not read as one that did. A lost search does not block the close; the run
@@ -24,7 +33,7 @@
 #     block prints that line after every count line (run-counts.awk:88-104 then :105-108), so
 #     seeing it last means the whole count set reached stdout. Measured on 2026-08-06 against a
 #     two-line log of that shape: seventeen count lines, then the INVALID line, status 1. The
-#     record is written and the finding goes to stderr.
+#     record is written, the finding goes to stderr, and the run closes degraded.
 #   a failure — any other non-zero status. Status 2 is no log at that path, and run-counts.sh runs
 #     its awk with `exec`, so an awk that stops partway hands back its own status having already
 #     written part of the key set to stdout. Reading keys off that would put numbers in the record
@@ -76,13 +85,26 @@ case $close_state in
   *) die '--close-state must be complete, blocked or interrupted' ;;
 esac
 
-# Every value this script writes is an identifier — there is no free text among them — so each is
-# refused rather than escaped, and refused here, before anything is written. An identifier stored
-# escaped is one no `grep -F` lookup will ever match again, and a run_id carrying a newline names a
-# file no later run can find. record-api-response.sh, queue-detail-read.sh and record-judgment.sh
-# each carry the same check for the same reason: awk takes a literal newline in a -v assignment
-# under mawk and refuses it under BSD awk, and awk resolves a backslash escape in a -v assignment
-# before the program runs.
+# run_id is checked for its whole shape rather than for the two characters below, because it is the
+# only value here that becomes a path: the record is written to runs/<run_id>.json, so `..` in it
+# writes outside runs/. Measured on 2026-08-06 before this check: `close-run.sh . ../elsewhere/pwned
+# --trigger manual --close-state complete` printed run_health=healthy, exited 0 and left the record
+# at ws/elsewhere/pwned.json with runs/ empty.
+#
+# A run id that traverses nothing is refused too, and for a second reason: validate-workspace.sh:186
+# reads a file in runs/ as a run record only when its whole name matches this same expression, so a
+# record under any other name is skipped by every check the workspace has. The same expression is at
+# validate-workspace.sh:50 and in clear-run.sh; the three have to agree.
+RUN_ID_RE='^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}-[0-9]{2}-[0-9]{2}Z$'
+printf '%s\n' "$run_id" | grep -qE "$RUN_ID_RE" || \
+  die "<run_id> must be a UTC timestamp with dashes for the colons, like 2026-07-30T15-04-02Z, and got: $run_id"
+
+# The other four values this script writes are identifiers too — there is no free text among them —
+# so each is refused rather than escaped, and refused here, before anything is written. An
+# identifier stored escaped is one no `grep -F` lookup will ever match again.
+# record-api-response.sh, queue-detail-read.sh and record-judgment.sh each carry the same check for
+# the same reason: awk takes a literal newline in a -v assignment under mawk and refuses it under
+# BSD awk, and awk resolves a backslash escape in a -v assignment before the program runs.
 #
 # --trigger and --close-state take no check here. The two case statements above already hold them
 # to two and three words, which is stricter than this.
@@ -92,7 +114,6 @@ reject_id() {
     *\\*)          die "$1 may hold no backslash: $2" ;;
   esac
 }
-reject_id '<run_id>' "$run_id"
 reject_id --scheduler-id "$scheduler_id"
 reject_id --brief-revision "$brief_rev"
 reject_id --sources "$sources"
@@ -111,11 +132,17 @@ jobs=$ws/jobs.jsonl
 counts=$(sh "$runscripts/run-counts.sh" "$jobs" "$run_id")
 counts_status=$?
 
+unbanded=no
 if [ "$counts_status" -ne 0 ]; then
-  case $counts_status:$(printf '%s\n' "$counts" | tail -n 1) in
+  last=$(printf '%s\n' "$counts" | tail -n 1)
+  case $counts_status:$last in
     1:INVALID\ relevant-row-without-a-band=*)
-      printf 'close-run: run-counts.sh reported: %s\n' \
-        "$(printf '%s\n' "$counts" | tail -n 1)" >&2 ;;
+      # The flag is whether the finding fired, not how many rows it names. run-counts.awk prints
+      # that line only when the number is above zero, so the line is the fact and the number on it
+      # is for the operator.
+      unbanded=yes
+      printf 'close-run: run-counts.sh reported: %s\n' "$last" >&2
+      printf 'close-run:   a relevant row with no band is counted in postings_reviewed and in neither matches nor filtered_out, so the record would not add up — this run closes degraded\n' >&2 ;;
     *)
       die "run-counts.sh exited $counts_status, so this run's numbers are not known — nothing written, the marker and the scratch are untouched" ;;
   esac
@@ -150,12 +177,14 @@ if [ "$close_state" = complete ] && [ "$unreviewed" -ne 0 ]; then
   die "close_state complete, but $unreviewed postings were never judged — close interrupted, or judge them"
 fi
 
-# The rule as it is written down: complete, nothing left unjudged, and every search that was
-# attempted answered at least once. The middle term decides nothing on its own — the refusal above
-# has already stopped a complete close over unjudged postings, so reaching here with close_state
-# complete means unreviewed is 0 — and it is spelled out anyway so the line reads as the rule.
+# The rule as it is written down: complete, nothing left unjudged, every search that was attempted
+# answered at least once, and no relevant row carrying a missing band. The second term decides
+# nothing on its own — the refusal above has already stopped a complete close over unjudged
+# postings, so reaching here with close_state complete means unreviewed is 0 — and it is spelled out
+# anyway so the line reads as the rule.
 run_health=degraded
-if [ "$close_state" = complete ] && [ "$unreviewed" -eq 0 ] && [ "$lost" -eq 0 ]; then
+if [ "$close_state" = complete ] && [ "$unreviewed" -eq 0 ] && [ "$lost" -eq 0 ] \
+   && [ "$unbanded" = no ]; then
   run_health=healthy
 fi
 [ "$lost" -eq 0 ] || \

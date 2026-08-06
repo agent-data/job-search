@@ -3443,40 +3443,70 @@ RECORD_FIELDS = {
     "started_at", "completed_at",
 }
 
-# 25 rows in each search fixture, counted by hand off the committed files:
-#   python3 -c "import json;print([len(json.load(open('tests/fixtures/api-responses/'+n))
-#     ['data']['results']) for n in ('search.linkedin.json','search.ashby.json')])"
-# gives [25, 25]. `api_rows` reads the same files below, and this pins what it should answer.
-FIXTURE_ROWS = 25
-
-# One count set, every field a different number, in the order and spelling `run-counts.sh` prints.
+# One count set the tests below hand to the reader, in the order and spelling `run-counts.sh`
+# prints. Every numeric value is different from every other, so a field that reads the wrong key
+# lands on a number that cannot be the right one. The 17 numbers are 1, 2, 3, 4, 5, 6, 7, 8, 9, 11,
+# 12, 14, 19, 21, 23, 26, 30 — the distinctness is asserted below rather than left to be read off.
+#
+# Every relation the record asserts holds: 2 + 4 + 5 + 12 = 23 reviewed, 23 + 7 = 30 surfaced,
+# 19 + 11 = 30 by source, 6 + 14 + 1 = 21 metered. `rows_new_total` is the one number deliberately
+# off what a real log would carry — a real log holds it equal to `postings_surfaced`, and that is
+# exactly why nothing could separate the two if it were written that way here.
 WHOLE_COUNT_SET = (
-    "postings_surfaced=11\n"
-    "postings_reviewed=11\n"
-    "postings_unreviewed=0\n"
-    "postings_detail_read=7\n"
-    "match_strong=1\n"
-    "match_moderate=2\n"
-    "match_weak=3\n"
-    "filtered_out=5\n"
-    "by_source_linkedin=6\n"
-    "by_source_ashby=5\n"
-    "calls_searches=4\n"
-    "calls_detail_reads=8\n"
+    "postings_surfaced=30\n"
+    "postings_reviewed=23\n"
+    "postings_unreviewed=7\n"
+    "postings_detail_read=9\n"
+    "match_strong=2\n"
+    "match_moderate=4\n"
+    "match_weak=5\n"
+    "filtered_out=12\n"
+    "by_source_linkedin=19\n"
+    "by_source_ashby=11\n"
+    "calls_searches=6\n"
+    "calls_detail_reads=14\n"
     "calls_other=1\n"
-    "calls_total_metered=13\n"
-    "calls_failed=0\n"
-    "searches_never_succeeded=0\n"
-    "searches_never_succeeded_ids=\n"
-    "rows_new_total=11\n"
+    "calls_total_metered=21\n"
+    "calls_failed=3\n"
+    "searches_never_succeeded=8\n"
+    "searches_never_succeeded_ids=ashby:q1,ashby:q2,ashby:q3,ashby:q4,"
+    "linkedin:q1,linkedin:q2,linkedin:q3,linkedin:q4\n"
+    "rows_new_total=26\n"
 )
+
+
+def test_the_hand_written_count_set_gives_every_key_a_different_number():
+    """`WHOLE_COUNT_SET` is what separates one count from another in the cases below, and it does
+    that only while no two keys carry the same number. It has been wrong once: `postings_surfaced`
+    and `postings_reviewed` were both 11 and `match_strong` and `calls_other` were both 1, so a
+    record reading `calls_other` into `matches.strong` passed all 352 tests. This is the assertion
+    that would have failed then.
+    """
+    values = [l.split("=", 1) for l in WHOLE_COUNT_SET.splitlines()]
+    numbers = [v for _, v in values if v.isdigit()]
+    assert len(numbers) == 17, values
+    assert len(set(numbers)) == 17, sorted(numbers)
+    c = dict(values)
+    n = {k: int(v) for k, v in c.items() if v.isdigit()}
+    assert n["match_strong"] + n["match_moderate"] + n["match_weak"] + n["filtered_out"] \
+        == n["postings_reviewed"]
+    assert n["postings_reviewed"] + n["postings_unreviewed"] == n["postings_surfaced"]
+    assert n["by_source_linkedin"] + n["by_source_ashby"] == n["postings_surfaced"]
+    assert n["calls_searches"] + n["calls_detail_reads"] + n["calls_other"] \
+        == n["calls_total_metered"]
+    assert len(c["searches_never_succeeded_ids"].split(",")) == n["searches_never_succeeded"]
 
 
 def test_the_record_carries_the_counts_from_the_log(tmp_workspace):
     """Every number in the record comes off `jobs.jsonl` rather than from whoever is closing the
-    run. One search of 25 rows, all 25 judged not relevant, is a count set with no two fields alike:
-    surfaced and reviewed are 25, unreviewed and all three bands are 0, filtered_out is 25 and the
+    run. One search, every row judged not relevant, so surfaced, reviewed and filtered_out are all
+    the fixture's row count while unreviewed, the three bands and the detail read are all 0 and the
     metered total is the one search.
+
+    Three of the record's fields carry the same number here and four more carry 0, so this case
+    cannot tell one count from another — `test_the_record_reads_each_count_into_the_field_that_
+    names_it` is the one that does. The row count is read off the fixture rather than written as a
+    literal, so a re-captured fixture with a different number of rows moves the expectation with it.
     """
     o = opened(tmp_workspace)
     jobs = tmp_workspace / "jobs.jsonl"
@@ -3484,9 +3514,8 @@ def test_the_record_carries_the_counts_from_the_log(tmp_workspace):
     run_script(RECORD_API, o["run_id"], jobs, FIXTURES / "search.linkedin.json",
                "--route", "search-jobs", "--query-id", "q")
     n = len(api_rows("search.linkedin.json"))
-    assert n == FIXTURE_ROWS
     surfaced = [e for e in lines(jobs) if e["event"] == "surfaced"]
-    assert len(surfaced) == FIXTURE_ROWS      # the log really holds them, before anything is closed
+    assert len(surfaced) == n      # the log really holds them, before anything is closed
     for row in surfaced:
         run_script(JUDGE, jobs, "--run-id", o["run_id"], "--source", row["source"],
                    "--source-id", row["source_id"], "--detail-read", "false",
@@ -3494,13 +3523,13 @@ def test_the_record_carries_the_counts_from_the_log(tmp_workspace):
     r = close(tmp_workspace, o["run_id"])
     assert r.returncode == 0, r.stderr
     rec = record_of(tmp_workspace, o["run_id"])
-    assert rec["postings_surfaced"] == 25
-    assert rec["postings_reviewed"] == 25
+    assert rec["postings_surfaced"] == n
+    assert rec["postings_reviewed"] == n
     assert rec["postings_unreviewed"] == 0
     assert rec["postings_detail_read"] == 0
-    assert rec["filtered_out"] == 25
+    assert rec["filtered_out"] == n
     assert rec["matches"] == {"strong": 0, "moderate": 0, "weak": 0}
-    assert rec["by_source"] == {"linkedin": 25}
+    assert rec["by_source"] == {"linkedin": n}
     assert rec["agent_data_usage"] == {"searches": 1, "detail_reads": 0, "other": 0,
                                        "total_metered": 1}
     assert rec["close_state"] == "complete"
@@ -3508,32 +3537,31 @@ def test_the_record_carries_the_counts_from_the_log(tmp_workspace):
 
 
 def test_the_record_reads_each_count_into_the_field_that_names_it(tmp_workspace, tmp_path):
-    """The case above cannot separate one count from another: with 25 rows all judged the same way,
-    surfaced, reviewed and filtered_out are all 25, and four other fields are all 0, so a record
-    that read `postings_reviewed` into `postings_surfaced` would pass it. This one hands the reader
-    a count set in which every field carries a different number, so each has exactly one field it
-    can legitimately land in.
+    """The case above cannot separate one count from another: with every row judged the same way,
+    surfaced, reviewed and filtered_out all carry the fixture's row count and four other fields
+    carry 0, so a record that read `postings_reviewed` into `postings_surfaced` would pass it. This
+    one hands the reader `WHOLE_COUNT_SET`, in which no two keys carry the same number, so each has
+    exactly one field it can legitimately land in.
 
-    The numbers come from the shim, so they are the test's own and not `run-counts.sh`'s. The
-    arithmetic is consistent the way a real log's is — 1 + 2 + 3 + 5 = 11 reviewed, 11 + 0 = 11
-    surfaced, 6 + 5 = 11 by source, 4 + 8 + 1 = 13 metered — so nothing here rests on an impossible
-    log.
+    The numbers come from the shim, so they are the test's own and not `run-counts.sh`'s. The close
+    is `interrupted` rather than `complete`, so `postings_unreviewed` can carry a number of its own
+    instead of the 0 a complete close requires.
     """
     o = opened(tmp_workspace)
     (tmp_workspace / "jobs.jsonl").write_text("")
-    r = close(tmp_workspace, o["run_id"],
+    r = close(tmp_workspace, o["run_id"], "interrupted",
               env=awk_shim(tmp_path, "run-counts.awk", WHOLE_COUNT_SET, status=0, stderr=""))
     assert r.returncode == 0, r.stdout + r.stderr
     rec = record_of(tmp_workspace, o["run_id"])
-    assert rec["postings_surfaced"] == 11
-    assert rec["postings_reviewed"] == 11
-    assert rec["postings_unreviewed"] == 0
-    assert rec["postings_detail_read"] == 7
-    assert rec["matches"] == {"strong": 1, "moderate": 2, "weak": 3}
-    assert rec["filtered_out"] == 5
-    assert rec["by_source"] == {"linkedin": 6, "ashby": 5}
-    assert rec["agent_data_usage"] == {"searches": 4, "detail_reads": 8, "other": 1,
-                                       "total_metered": 13}
+    assert rec["postings_surfaced"] == 30
+    assert rec["postings_reviewed"] == 23
+    assert rec["postings_unreviewed"] == 7
+    assert rec["postings_detail_read"] == 9
+    assert rec["matches"] == {"strong": 2, "moderate": 4, "weak": 5}
+    assert rec["filtered_out"] == 12
+    assert rec["by_source"] == {"linkedin": 19, "ashby": 11}
+    assert rec["agent_data_usage"] == {"searches": 6, "detail_reads": 14, "other": 1,
+                                       "total_metered": 21}
 
 
 @pytest.mark.parametrize("absent", ["postings_unreviewed", "searches_never_succeeded",
@@ -3546,13 +3574,18 @@ def test_a_count_the_record_needs_but_never_arrived_stops_the_close(tmp_workspac
     was never taken — which is the failure `searches_never_succeeded` was added to catch.
 
     Four keys rather than one: two the shell branches on and two only the record reads.
+
+    The close is `interrupted` here and in the two cases below it, so the only thing in the script
+    that can produce exit 1 is the check under test. `WHOLE_COUNT_SET` carries a non-zero
+    `postings_unreviewed`, and over a `complete` close the refusal for that fires too — which passed
+    these cases for the wrong reason and let two mutations through.
     """
     o = opened(tmp_workspace)
     (tmp_workspace / "jobs.jsonl").write_text("")
     without = "".join(l + "\n" for l in WHOLE_COUNT_SET.splitlines()
                       if not l.startswith(absent + "="))
     assert len(without.splitlines()) == len(WHOLE_COUNT_SET.splitlines()) - 1
-    r = close(tmp_workspace, o["run_id"],
+    r = close(tmp_workspace, o["run_id"], "interrupted",
               env=awk_shim(tmp_path, "run-counts.awk", without, status=0, stderr=""))
     assert r.returncode == 1, r.stdout + r.stderr
     assert absent in r.stderr, r.stderr
@@ -3575,7 +3608,7 @@ def test_a_count_the_close_branches_on_that_is_not_a_number_stops_the_close(tmp_
     broken = "".join((key + "=many\n") if l.startswith(key + "=") else l + "\n"
                      for l in WHOLE_COUNT_SET.splitlines())
     assert broken.count("=many") == 1
-    r = close(tmp_workspace, o["run_id"],
+    r = close(tmp_workspace, o["run_id"], "interrupted",
               env=awk_shim(tmp_path, "run-counts.awk", broken, status=0, stderr=""))
     assert r.returncode == 1, r.stdout + r.stderr
     assert key in r.stderr, r.stderr
@@ -3583,7 +3616,9 @@ def test_a_count_the_close_branches_on_that_is_not_a_number_stops_the_close(tmp_
     assert (tmp_workspace / "runs" / (".started-" + o["run_id"])).exists()
 
 
-HALF_A_COUNT_SET = "postings_surfaced=25\npostings_reviewed=25\n"
+# The first two lines of WHOLE_COUNT_SET and nothing after them, which is what an awk that stopped
+# partway through its END block leaves on stdout.
+HALF_A_COUNT_SET = "".join(l + "\n" for l in WHOLE_COUNT_SET.splitlines()[:2])
 THE_FINDING = "INVALID relevant-row-without-a-band=1\n"
 
 
@@ -3607,10 +3642,15 @@ def test_counts_that_could_not_be_worked_out_stop_the_close(tmp_workspace, tmp_p
     it had printed everything — accepting every status 1 takes it. A whole count set at status 2 is
     the same thing one status over — accepting every non-zero status takes it. And the finding's own
     text at status 2 is the content being trusted rather than the status.
+
+    `interrupted`, so the status check is the only thing here that can produce exit 1. Over a
+    `complete` close the refusal for `WHOLE_COUNT_SET`'s non-zero `postings_unreviewed` fires as
+    well, and the two whole-set cases then passed against a script that accepted every status 1 —
+    measured, and the reason this line says `interrupted` rather than taking the default.
     """
     o = opened(tmp_workspace)
     (tmp_workspace / "jobs.jsonl").write_text("")
-    r = close(tmp_workspace, o["run_id"],
+    r = close(tmp_workspace, o["run_id"], "interrupted",
               env=awk_shim(tmp_path, "run-counts.awk", spill, status=status))
     assert r.returncode == 1, r.stdout + r.stderr
     assert r.stdout == "", r.stdout
@@ -3672,33 +3712,66 @@ def test_a_lost_search_is_named_whole(tmp_workspace):
     assert "ashby:role=staff" in r.stderr, r.stderr
 
 
-def test_a_relevant_row_with_no_band_still_closes_the_run(tmp_workspace):
+def test_a_relevant_row_with_no_band_closes_the_run_and_degrades_it(tmp_workspace):
     """`run-counts.sh` exits 1 for a finding as well as for a failure: a relevant row carrying no
     band makes it print `INVALID relevant-row-without-a-band=1` after every normal count. Measured
-    on 2026-08-06 against a two-line log of exactly this shape — seventeen count lines on stdout,
-    then the INVALID line, status 1.
+    on 2026-08-06 against the four-line log this case writes — seventeen count lines on stdout,
+    then the INVALID line, status 1, with `postings_reviewed=2` and `match_strong=1` among them.
 
     Treating that as a failure would leave the run unclosable: no record, the marker still on disk,
-    which is the state this work exists to remove. The counts are all there, so the record is
-    written and the finding goes to stderr where the operator sees it.
+    which is the state this work exists to remove. So the record is written — and the run is
+    degraded, because such a row is counted in `postings_reviewed` and in neither `matches` nor
+    `filtered_out`, so a healthy record would assert an arithmetic it does not satisfy. This case
+    checks that arithmetic directly: the two hand-written rows give
+    `strong + moderate + weak + filtered_out = 1` against `postings_reviewed = 2`, and `run_health`
+    is the only field of the record that can say so. stderr would not do — the digest reads
+    `run_health` off stdout and never sees stderr at all.
     """
     o = opened(tmp_workspace)
     jobs = tmp_workspace / "jobs.jsonl"
-    jobs.write_text(
-        '{"event":"surfaced","run_id":"%s","source":"linkedin","source_id":"a"}\n'
-        '{"event":"evaluated","run_id":"%s","source":"linkedin","source_id":"a",'
-        '"relevant":true,"match":null}\n' % (o["run_id"], o["run_id"]))
+    jobs.write_text("".join(
+        '{"event":"surfaced","run_id":"%s","source":"linkedin","source_id":"%s"}\n'
+        '{"event":"evaluated","run_id":"%s","source":"linkedin","source_id":"%s",'
+        '"relevant":true,"match":%s}\n' % (o["run_id"], sid, o["run_id"], sid, band)
+        for sid, band in (("a", "null"), ("b", '"strong"'))))
     r = close(tmp_workspace, o["run_id"])
     assert r.returncode == 0, r.stdout + r.stderr
     assert "relevant-row-without-a-band" in r.stderr, r.stderr
+    assert "run_health=degraded" in r.stdout.splitlines(), r.stdout
     rec = record_of(tmp_workspace, o["run_id"])
-    # The counts printed alongside the finding, pinned by hand: one posting, judged, relevant, and
-    # in no band, so it is in neither `matches` nor `filtered_out`.
-    assert rec["postings_surfaced"] == 1
-    assert rec["postings_reviewed"] == 1
+    assert rec["run_health"] == "degraded"
+    assert rec["close_state"] == "complete"     # the finding does not block the close
+    # The counts printed alongside the finding, pinned by hand: two postings, both judged, both
+    # relevant, one of them in no band and so in neither `matches` nor `filtered_out`.
+    assert rec["postings_surfaced"] == 2
+    assert rec["postings_reviewed"] == 2
     assert rec["postings_unreviewed"] == 0
-    assert rec["matches"] == {"strong": 0, "moderate": 0, "weak": 0}
+    assert rec["matches"] == {"strong": 1, "moderate": 0, "weak": 0}
     assert rec["filtered_out"] == 0
+    m = rec["matches"]
+    assert m["strong"] + m["moderate"] + m["weak"] + rec["filtered_out"] < rec["postings_reviewed"]
+
+
+def test_every_row_banded_over_the_same_shape_of_log_is_healthy(tmp_workspace):
+    """The contrast the case above needs. The same two hand-written postings, both relevant, both
+    banded: `run-counts.sh` exits 0, nothing is reported, and the run is healthy. Without this, a
+    `run_health` that degraded every run would pass the case above.
+    """
+    o = opened(tmp_workspace)
+    jobs = tmp_workspace / "jobs.jsonl"
+    jobs.write_text("".join(
+        '{"event":"surfaced","run_id":"%s","source":"linkedin","source_id":"%s"}\n'
+        '{"event":"evaluated","run_id":"%s","source":"linkedin","source_id":"%s",'
+        '"relevant":true,"match":%s}\n' % (o["run_id"], sid, o["run_id"], sid, band)
+        for sid, band in (("a", '"weak"'), ("b", '"strong"'))))
+    r = close(tmp_workspace, o["run_id"])
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert "relevant-row-without-a-band" not in r.stderr, r.stderr
+    rec = record_of(tmp_workspace, o["run_id"])
+    assert rec["run_health"] == "healthy"
+    assert rec["matches"] == {"strong": 1, "moderate": 0, "weak": 1}
+    m = rec["matches"]
+    assert m["strong"] + m["moderate"] + m["weak"] + rec["filtered_out"] == rec["postings_reviewed"]
 
 
 def test_close_prints_run_health_for_the_digest(tmp_workspace):
@@ -3720,6 +3793,9 @@ def test_close_prints_run_health_for_the_digest(tmp_workspace):
     assert record_of(tmp_workspace, o["run_id"])["run_health"] == "healthy"
     assert "never returned" not in r.stderr, r.stderr
     assert "INVALID" not in r.stderr, r.stderr
+    # The record is moved into place, not copied: a leftover `.tmp` beside it is a second file with
+    # a run record in it, and `validate-workspace.sh` would read neither as the other.
+    assert [p.name for p in (tmp_workspace / "runs").glob("*.tmp")] == []
 
 
 @pytest.mark.parametrize("state", ["blocked", "interrupted"])
@@ -3786,9 +3862,11 @@ def test_a_complete_close_over_unreviewed_postings_is_refused(tmp_workspace):
     jobs.write_text("")
     run_script(RECORD_API, o["run_id"], jobs, FIXTURES / "search.linkedin.json",
                "--route", "search-jobs", "--query-id", "q")
+    unjudged = len([e for e in lines(jobs) if e["event"] == "surfaced"])
+    assert unjudged > 0, "the search has to have surfaced something for this case to mean anything"
     r = close(tmp_workspace, o["run_id"])
     assert r.returncode == 1
-    assert "25" in r.stderr, r.stderr           # the number of postings, named
+    assert str(unjudged) in r.stderr, r.stderr  # the number of postings, named
     assert r.stdout == "", r.stdout             # no run_health line for a digest to carry
     assert not (tmp_workspace / "runs" / (o["run_id"] + ".json")).exists()
     assert (tmp_workspace / "runs" / (".started-" + o["run_id"])).exists()
@@ -3803,12 +3881,14 @@ def test_the_same_run_closes_interrupted_and_records_run_health_degraded(tmp_wor
     jobs.write_text("")
     run_script(RECORD_API, o["run_id"], jobs, FIXTURES / "search.linkedin.json",
                "--route", "search-jobs", "--query-id", "q")
+    unjudged = len([e for e in lines(jobs) if e["event"] == "surfaced"])
+    assert unjudged == len(api_rows("search.linkedin.json"))
     r = close(tmp_workspace, o["run_id"], "interrupted")
     assert r.returncode == 0, r.stderr
     rec = record_of(tmp_workspace, o["run_id"])
     assert rec["close_state"] == "interrupted"
     assert rec["run_health"] == "degraded"
-    assert rec["postings_unreviewed"] == 25
+    assert rec["postings_unreviewed"] == unjudged
     assert rec["postings_reviewed"] == 0
     assert "run_health=degraded" in r.stdout.splitlines(), r.stdout
 
@@ -3830,7 +3910,9 @@ def test_a_failed_detail_read_does_not_degrade_a_finished_run(tmp_workspace):
                "--route", "get-posting")
     failed = [e for e in lines(jobs) if e["event"] == "call" and e["ok"] is False]
     assert len(failed) == 1 and failed[0]["route"] == "get-posting", failed
-    for row in [e for e in lines(jobs) if e["event"] == "surfaced"]:
+    surfaced = [e for e in lines(jobs) if e["event"] == "surfaced"]
+    assert len(surfaced) == len(api_rows("search.ashby.json"))
+    for row in surfaced:
         run_script(JUDGE, jobs, "--run-id", o["run_id"], "--source", row["source"],
                    "--source-id", row["source_id"], "--detail-read", "false",
                    "--relevant", "false", "--reasoning", "Judged from the row.")
@@ -3839,7 +3921,7 @@ def test_a_failed_detail_read_does_not_degrade_a_finished_run(tmp_workspace):
     rec = record_of(tmp_workspace, o["run_id"])
     assert rec["run_health"] == "healthy"
     assert rec["agent_data_usage"]["detail_reads"] == 1
-    assert rec["postings_surfaced"] == 25
+    assert rec["postings_surfaced"] == len(surfaced)
     assert rec["postings_unreviewed"] == 0
     assert rec["postings_detail_read"] == 0      # the read failed, so no posting was stored in full
 
@@ -3951,28 +4033,113 @@ def test_a_run_with_no_log_and_no_flags_closes_with_zeroes_and_nulls(tmp_workspa
     ("a\nb", "control character"),
     ("a\\tb", "backslash"),
 ], ids=["vertical-tab", "newline", "backslash"])
-@pytest.mark.parametrize("flag", ["<run_id>", "--scheduler-id", "--brief-revision",
-                                  "--sources", "--queries"])
+@pytest.mark.parametrize("flag", ["--scheduler-id", "--brief-revision", "--sources", "--queries"])
 def test_an_identifier_the_close_writes_is_refused(tmp_workspace, flag, bad, says):
     """Every value this script writes is an identifier — no free text among them — so each is
     refused rather than escaped, and refused before anything is written. `--trigger` and
-    `--close-state` take no check of their own: they are already held to two and three words.
+    `--close-state` take no check of their own: they are already held to two and three words, and
+    `<run_id>` is held to its whole shape by the case below, which is stricter than this.
 
-    An identifier stored escaped is one no `grep -F` lookup will ever match again, and a `run_id`
-    carrying a newline names a file no later run can find. The message names the flag, because five
-    of this script's values are checked this way and the caller has to know which one to fix.
+    An identifier stored escaped is one no `grep -F` lookup will ever match again. The message names
+    the flag, because four of this script's values are checked this way and the caller has to know
+    which one to fix.
     """
     o = opened(tmp_workspace)
     (tmp_workspace / "jobs.jsonl").write_text("")
-    if flag == "<run_id>":
-        r = close(tmp_workspace, bad)
-    else:
-        r = close(tmp_workspace, o["run_id"], **{flag[2:].replace("-", "_"): bad})
+    r = close(tmp_workspace, o["run_id"], **{flag[2:].replace("-", "_"): bad})
     assert r.returncode == 1, r.stdout + r.stderr
     assert says in r.stderr, r.stderr
     assert flag in r.stderr, r.stderr
     assert sorted(p.name for p in (tmp_workspace / "runs").glob("*.json")) == []
     assert (tmp_workspace / "runs" / (".started-" + o["run_id"])).exists()
+
+
+# Each is a run id no `open-run.sh` can mint. The first two walk out of `runs/`; the next two are
+# the shapes `reject_id` used to be the only guard against; the rest are near-misses that traverse
+# nothing and still name a record no check in the workspace would ever read.
+BAD_RUN_IDS = [
+    "../elsewhere/pwned",
+    "../../victim",
+    "a\vb",
+    "a\\tb",
+    "not-a-run-id",
+    "2026-07-30T15:04:02Z",          # the colons of a timestamp, not the dashes of a filename
+    "2026-07-30T15-04-02",           # no trailing Z
+    "26-07-30T15-04-02Z",            # two-digit year
+    "2026-07-30T15-04-02Z.json",     # the suffix already on it
+    "",
+]
+
+
+@pytest.mark.parametrize("bad", BAD_RUN_IDS, ids=lambda s: (s or "empty")[:24])
+def test_a_run_id_that_is_not_a_run_id_is_refused_by_the_close(tmp_workspace, bad):
+    """`run_id` is the one value here that becomes a path — the record goes to
+    `runs/<run_id>.json` — so it is checked for its whole shape rather than for two characters.
+
+    Measured on 2026-08-06 before this check: `close-run.sh . ../elsewhere/pwned --trigger manual
+    --close-state complete` printed `run_health=healthy`, exited 0, and left the record at
+    `ws/elsewhere/pwned.json` with `runs/` empty. A run that reports itself complete and healthy
+    while its record is somewhere no reader looks is worse than one that fails.
+
+    The near-misses are here for a second reason, and it is not traversal:
+    `validate-workspace.sh:186` reads a file in `runs/` as a run record only when its whole name
+    matches this same expression, so a record under any other name is skipped by every check the
+    workspace has — and `started_at` would carry the run id in a field the system compares as a
+    timestamp.
+    """
+    o = opened(tmp_workspace)
+    (tmp_workspace / "jobs.jsonl").write_text("")
+    before = sorted(p.name for p in tmp_workspace.rglob("*") if p.is_file())
+    r = close(tmp_workspace, bad)
+    assert r.returncode == 1, r.stdout + r.stderr
+    assert r.stdout == "", r.stdout
+    assert "run_id" in r.stderr, r.stderr
+    assert sorted(p.name for p in tmp_workspace.rglob("*") if p.is_file()) == before
+    assert not (tmp_workspace.parent / "elsewhere").exists()
+    assert (tmp_workspace / "runs" / (".started-" + o["run_id"])).exists()
+
+
+@pytest.mark.parametrize("bad", BAD_RUN_IDS, ids=lambda s: (s or "empty")[:24])
+def test_a_run_id_that_is_not_a_run_id_is_refused_by_the_clear(tmp_workspace, bad):
+    """The same value reaches `rm -f` and `rm -rf` here, so this is the half where a bad run id
+    costs data rather than putting a file in the wrong place.
+
+    Measured on 2026-08-06 before this check, with a file at `ws/runs/../../victim.json` to satisfy
+    the record check: `clear-run.sh . ../../victim` printed its normal cleared message, exited 0,
+    and deleted `ws/victim/` with its contents. The check runs before any path is composed, so the
+    record check never gets the chance to be satisfied by a file outside `runs/`.
+    """
+    victim = tmp_workspace.parent / "victim"
+    victim.mkdir(exist_ok=True)
+    (victim / "keepme.txt").write_text("keep")
+    (tmp_workspace.parent / "victim.json").write_text("{}")
+    (tmp_workspace / "runs" / "elsewhere").mkdir(exist_ok=True)
+    r = run_script(CLEAR_RUN, tmp_workspace, bad)
+    assert r.returncode == 1, r.stdout + r.stderr
+    assert "run_id" in r.stderr, r.stderr
+    assert (victim / "keepme.txt").read_text() == "keep"
+    assert victim.exists()
+
+
+def test_the_three_shell_copies_of_the_run_id_pattern_agree():
+    """`close-run.sh` and `clear-run.sh` refuse a run id that does not match, and
+    `validate-workspace.sh` skips a file in `runs/` whose name does not match. A copy that drifted
+    wider would let a record be written under a name the validator then skips; one that drifted
+    narrower would refuse an id `open-run.sh` had already minted and written a marker for. The
+    behaviour on either side is covered by its own cases; this is the one assertion that catches the
+    three going out of step in a direction no case happens to drive.
+    """
+    found = {}
+    for name in ("close-run.sh", "clear-run.sh", "validate-workspace.sh"):
+        text = (RUNBOOK_SCRIPTS / name).read_text(encoding="utf-8")
+        matches = re.findall(r"^RUN_ID_RE=(.+)$", text, re.M)
+        assert len(matches) == 1, (name, matches)
+        found[name] = matches[0]
+    assert len(set(found.values())) == 1, found
+    # And the pattern the tests match against is the same rule, so a case that builds a run id by
+    # hand cannot pass here and be refused by the scripts.
+    pattern = next(iter(found.values())).strip("'")
+    assert RUN_ID_RE.pattern == pattern.replace("[0-9]{4}", r"\d{4}").replace("[0-9]{2}", r"\d{2}")
 
 
 def test_the_record_matches_the_template_field_set(tmp_workspace):
@@ -4080,12 +4247,14 @@ def test_closing_and_clearing_a_run_run_under_dash(tmp_workspace):
     jobs.write_text("")
     run_script(RECORD_API, o["run_id"], jobs, FIXTURES / "search.ashby.json",
                "--route", "search-jobs", "--query-id", "q", shell="dash")
+    n = len([e for e in lines(jobs) if e["event"] == "surfaced"])
+    assert n == len(api_rows("search.ashby.json"))
     r = close(tmp_workspace, o["run_id"], "interrupted", shell="dash",
               sources="ashby", queries="q")
     assert r.returncode == 0, r.stdout + r.stderr
     rec = record_of(tmp_workspace, o["run_id"])
-    assert rec["postings_surfaced"] == 25
-    assert rec["postings_unreviewed"] == 25
+    assert rec["postings_surfaced"] == n
+    assert rec["postings_unreviewed"] == n
     assert rec["sources"] == ["ashby"]
     c = run_script(CLEAR_RUN, tmp_workspace, o["run_id"], shell="dash")
     assert c.returncode == 0, c.stderr
