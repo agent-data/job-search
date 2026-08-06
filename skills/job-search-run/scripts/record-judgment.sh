@@ -11,10 +11,12 @@
 # location, URL and date come off that surfaced event rather than from the caller.
 #
 # A semicolon separates one dealbreaker or unknown from the next, so a dealbreaker that contains a
-# semicolon has to be reworded.
+# semicolon has to be reworded. Spaces around the semicolon are trimmed, so `pay; then equity` and
+# `pay;then equity` give the same two entries.
 #
 # Exit 0: recorded, or this posting already carries exactly this judgment.
 # Exit 1: nothing written; stderr names the problem.
+# Exit 2: no temporary file could be made, so nothing was attempted.
 set -u
 
 here=$(dirname "$0")
@@ -80,11 +82,14 @@ fi
 # every id of one source is the same width, and numeric ids elsewhere in this repo are not:
 #   grep -rhoE '"source_id"[[:space:]]*:[[:space:]]*"[0-9]+"' docs evals skills tests \
 #     | grep -oE '[0-9]+' | awk '{ print length }' | sort -n | uniq -c
-# gives 3 ids of 1 digit, 10 of 3, 21 of 4, 2 of 7 and 13 of 10: tests/fixtures/happy/
-# search-jobs.json carries "1001" and "1002", and docs/exec-plans/completed/
-# 2026-06-05-foundation-core.md carries "111" and "222". No committed file holds a numeric pair
-# where one id is a prefix of the other, so nothing in the repo can fire this today — but nothing
-# keeps a live numeric id one width either, and a run that surfaced "100" and "1001" would match
+# gives 3 ids of 1 digit, 10 of 3, 21 of 4, 2 of 7 and 13 of 10.
+#
+# No committed fixture or log holds a numeric pair where one id is a prefix of the other: grouping
+# the numeric ids under tests/fixtures and every .jsonl by file gives 20 distinct ids and no such
+# pair, in one file or across all of them. So nothing a test reads can fire this today. Prose and
+# hand-written events do hold such pairs — "1" and "123" are both in
+# tests/test_mechanics_scripts.py, and 19 more span files ("2"/"2001", "444"/"4449006488") — and
+# nothing keeps a live numeric id one width, so a run that surfaced "100" and "1001" would match
 # the wrong one.
 #
 # Anchoring on the following comma is the fix: every event that carries source_id writes another
@@ -106,10 +111,17 @@ awk -f "$here/event-field.awk" -f "$here/record-judgment.awk" \
     -v detail_read="$detail_read" -v relevant="$relevant" -v band="$band" \
     -v nhc="$nhc" -v same_role="$same_role" \
     -v posted_extracted="$posted_extracted" -v ts="$ts" > "$line"
+judgestatus=$?
 
-# The whole event is built in awk and printed by one statement at the end of BEGIN, so an awk that
-# died leaves this file empty rather than leaving part of an event in it.
-[ -s "$line" ] || die 'built an empty event line'
+# Both the status and the file, the way record-api-response.sh checks both at :220. An awk that
+# died before printing leaves this file empty; one that failed partway through the line leaves part
+# of an event in it. Appending that part is worse than appending nothing: it ends without a newline,
+# so the next event written to the log is joined onto it and the log loses two events rather than
+# one. Measured against a shimmed awk that prints half an event and exits 2 — with only the file
+# checked, the script exits 0 and the truncated line lands.
+if [ "$judgestatus" -ne 0 ] || [ ! -s "$line" ]; then
+  die 'building the event failed — nothing written'
+fi
 
 # A judgment already recorded for this posting in this run. The same one again is a retry and
 # changes nothing; a different one is a conflict the caller has to settle, so write neither.

@@ -1404,13 +1404,19 @@ def test_a_copied_title_with_an_escaped_quote_is_byte_exact(tmp_path):
     jobs = tmp_path / "jobs.jsonl"
     jobs.write_text(
         '{"event":"surfaced","run_id":"%s","source":"ashby","source_id":"a",'
-        '"source_url":"https://example.invalid/1","title":"Manager \\"Finance\\" role",'
+        '"source_url":"https:\\/\\/example.invalid\\/1","title":"Manager \\"Finance\\" role",'
         '"company_name":"Globex","location_display":"Remote","posted_at":null}\n' % RID)
     run_script(JUDGE, jobs, "--run-id", RID, "--source", "ashby", "--source-id", "a",
                "--detail-read", "false", "--relevant", "false", "--reasoning", "No.")
     ev = [e for e in lines(jobs) if e["event"] == "evaluated"][0]
     assert ev["title"] == 'Manager "Finance" role'
     assert ev["posted_at"] is None
+    # The escaped slashes say the copy is byte-for-byte rather than merely equivalent. `\/` and `/`
+    # decode to the same string, so a reader that unescaped each value and escaped it again would
+    # pass every assertion above and still rewrite the URL. The raw line is what tells them apart.
+    raw = [l for l in jobs.read_text().splitlines() if '"event":"evaluated"' in l][0]
+    assert '"source_url":"https:\\/\\/example.invalid\\/1"' in raw
+    assert ev["source_url"] == "https://example.invalid/1"
 
 
 def test_the_dropped_fields_are_gone_on_purpose(tmp_path):
@@ -1429,15 +1435,20 @@ def test_every_field_a_script_decides_on_comes_before_the_free_text(tmp_path):
     """The readers take a key's first occurrence, so reasoning holding the literal "status":
     must not be found before the real one.
 
-    The assertions compare positions in the raw line, so moving any of the four named fields after
+    The assertions compare positions in the raw line, so moving any of the named fields after
     `reasoning` fails here (measured: moving the `status` field alone below `reasoning` fails this
-    test and no other in the module)."""
+    test and no other in the module; the same holds for `needs_human_check`).
+
+    All six machine-read fields are listed, not the four the plan names. With `detail_read` and
+    `ts` left out, moving either one below `reasoning` gave a fully green module — and Task 5
+    derives a run's start and end from `ts`."""
     jobs = seeded_jobs(tmp_path, "search.linkedin.json")
     row = first_surfaced(jobs)
     run_script(JUDGE, *judge_args(jobs, row, detail_read="true", relevant="true", match="strong",
                                   reasoning='It says "status": "closed" halfway down.'))
     raw = [l for l in jobs.read_text().splitlines() if '"event":"evaluated"' in l][0]
-    for key in ('"status":', '"needs_human_check":', '"match":', '"relevant":'):
+    for key in ('"status":', '"needs_human_check":', '"match":', '"relevant":',
+                '"detail_read":', '"ts":'):
         assert raw.index(key) < raw.index('"reasoning":'), key
     ev = json.loads(raw)
     assert ev["status"] == "new"
@@ -1480,6 +1491,25 @@ def test_the_optional_flags_reach_the_event(tmp_path):
     assert "same_role_as" not in control and "posted_at_extracted" not in control
 
 
+def test_a_list_entry_is_trimmed_around_the_separator(tmp_path):
+    """A caller writing the list the way it reads — `pay; then equity` — must not put a leading
+    space into the digest, so each entry is trimmed and an entry that is only whitespace is
+    dropped. Untrimmed, the second entry arrives as `" then equity"` with exit 0 and no warning.
+
+    A dealbreaker that itself contains a semicolon still splits in two. That is why the script
+    header says such a dealbreaker has to be reworded, and the second entry here shows what the
+    caller gets if it is not."""
+    jobs = seeded_jobs(tmp_path, "search.linkedin.json")
+    row = first_surfaced(jobs)
+    r = run_script(JUDGE, *judge_args(jobs, row, detail_read="true", relevant="false",
+                                      dealbreakers="pay below the floor; then equity ;  ;",
+                                      unknowns="  start date  "))
+    assert r.returncode == 0, r.stderr
+    ev = [e for e in lines(jobs) if e["event"] == "evaluated"][0]
+    assert ev["dealbreakers_hit"] == ["pay below the floor", "then equity"]
+    assert ev["unknowns"] == ["start date"]
+
+
 def test_a_posting_outside_the_brief_lands_with_relevant_false_and_no_band(tmp_path):
     """`relevant` is the field the digest filters on, and this is the only case that reads it in
     its false state. Every other case either judges the posting relevant or does not read the
@@ -1498,19 +1528,27 @@ def test_a_posting_outside_the_brief_lands_with_relevant_false_and_no_band(tmp_p
 
 
 def test_an_awk_that_fails_keeps_the_judgment_out_of_the_log(tmp_path):
-    """The whole event is built in awk and printed by one statement at the end of BEGIN, so an awk
-    that died leaves an empty file rather than part of an event. Without the `-s` check the script
-    appends nothing, exits 0, and the caller is told the judgment was recorded when the log holds
-    no such event."""
+    """The script checks the awk's exit status as well as the file, because an awk that died
+    partway through writing the line leaves part of an event behind. The shim supplies that part.
+
+    Appending it is worse than appending nothing: the fragment ends without a newline, so the next
+    event written to the log is joined onto it and two events are lost rather than one. Measured
+    against the file check alone: exit 0, and `jobs.jsonl` ends with
+    `…"source_id":"linkedin-0000","title":"Fin` that `json.loads` refuses.
+
+    The whole file is compared rather than the line count, because a fragment with no newline
+    lands on the end of the last line instead of adding one."""
     jobs = seeded_jobs(tmp_path, "search.linkedin.json")
     row = first_surfaced(jobs)
-    before = len(lines(jobs))
+    before = jobs.read_text()
+    half = ('{"event":"evaluated","run_id":%s,"source":"linkedin","source_id":%s,"title":"Fin'
+            % (json.dumps(RID), json.dumps(row["source_id"])))
     r = run_script(JUDGE, *judge_args(jobs, row, detail_read="true", relevant="true",
                                       match="strong"),
-                   env=awk_shim(tmp_path, "record-judgment.awk"))
+                   env=awk_shim(tmp_path, "record-judgment.awk", half))
     assert r.returncode == 1, r.stdout + r.stderr
-    assert "empty event line" in r.stderr
-    assert len(lines(jobs)) == before
+    assert "building the event failed" in r.stderr
+    assert jobs.read_text() == before
 
 
 def test_a_judgment_carries_the_timestamp_given_or_the_time_it_was_written(tmp_path):
@@ -1616,6 +1654,7 @@ def test_an_invented_band_is_refused(tmp_path):
     r = run_script(JUDGE, *judge_args(jobs, row, detail_read="true", relevant="true",
                                       match="excellent"))
     assert r.returncode == 1
+    assert [e for e in lines(jobs) if e["event"] == "evaluated"] == []
 
 
 def test_a_judgment_about_a_posting_no_search_surfaced_is_refused(tmp_path):

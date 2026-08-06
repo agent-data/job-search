@@ -15,14 +15,18 @@ function esc(s) {
   return s
 }
 function jstr(s) { return "\"" esc(s) "\"" }
-function jlist(s,   n, parts, i, out) {
+# Each entry is trimmed, so a caller writing the list the way it reads — `pay; then equity` — does
+# not put a leading space into the digest. An entry that is only whitespace is dropped.
+function jlist(s,   n, parts, i, v, out) {
   if (s == "") return "[]"
   n = split(s, parts, ";")
   out = "["
   for (i = 1; i <= n; i++) {
-    if (parts[i] == "") continue
+    v = parts[i]
+    sub(/^[ \t]+/, "", v); sub(/[ \t]+$/, "", v)
+    if (v == "") continue
     if (out != "[") out = out ","
-    out = out jstr(parts[i])
+    out = out jstr(v)
   }
   return out "]"
 }
