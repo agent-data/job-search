@@ -2,16 +2,23 @@
 # event-log-append.sh — validate a jobs.jsonl event line, then append it idempotently.
 #
 # Appends one jobs.jsonl event line, in the shape this skill's templates/jobs-event.example.json
-# shows:
-#   - one event per line (single-line JSON, never pretty-printed);
-#   - every event carries a non-empty "source_id"; the literal key "source_id" appears exactly once;
-#   - every `evaluated` event carries a non-empty "source"; the literal key "source" appears at most
-#     once (the per-source grep depends on it, exactly as the source_id-once rule protects extraction);
-#   - "same_role_as", when present, is a FLAT string — never a nested object.
+# shows.
+#
+# This is the append path for a `status_changed` event, and for an `evaluated` event on a host that
+# is writing one by hand. The events a run's own scripts write never come through here, because each
+# of those scripts builds its event and appends it: record-api-response.sh writes `call`, `surfaced`
+# and `detail`, queue-detail-read.sh writes `queued`, and record-judgment.sh writes the run's
+# `evaluated` events. A `call` event is about a request rather than a posting and carries no
+# "source_id" at all. What this script checks is therefore what a hand-written posting event must
+# satisfy: one event per line; a non-empty "source_id", with the literal key appearing exactly once;
+# for an `evaluated` event a non-empty "source", with that key appearing at most once, because the
+# per-source grep depends on it; and "same_role_as", when present, a flat string rather than a
+# nested object.
+#
 # Validate before appending; append is the sanctioned jobs.jsonl `>>` exception. Idempotent: an
-# `evaluated` event for a (source, source_id) already recorded is a no-op — "never write a duplicate
-# evaluated event for a known (source, source_id) pair". This is the scripted form of the model-run
-# prose contract; that prose remains the no-runtime fallback.
+# `evaluated` event for a (source, source_id) that already carries one is a no-op — "never write a
+# duplicate evaluated event for a known (source, source_id) pair". This is the scripted form of the
+# model-run prose contract; that prose remains the no-runtime fallback.
 #
 # Usage: event-log-append.sh <jobs.jsonl>        # the single-line event JSON on stdin
 set -u
@@ -50,8 +57,16 @@ if [ "$evtype" = evaluated ]; then
   src=$(printf '%s\n' "$ev" | grep -o '"source"[[:space:]]*:[[:space:]]*"[^"]*"' | cut -d'"' -f4)
   [ -n "$src" ] || { echo 'event-log-append: evaluated event needs a non-empty "source"' >&2; exit 1; }
 
-  # Idempotency: skip if this (source, source_id) is already recorded (the composite dedup key).
-  if [ -f "$jobs" ] && grep -E '"source"[[:space:]]*:[[:space:]]*"'"$src"'"' "$jobs" 2>/dev/null \
+  # Idempotency: skip if this (source, source_id) already has an `evaluated` event. The filter on
+  # event type matters — a posting is recorded as `surfaced` before it is judged, and without it
+  # that first event would make the judgment look like a duplicate and drop it.
+  #
+  # The event-type match tolerates whitespace around the colon, like every other check in this
+  # script, because this is the path a host writing an event by hand comes through and a hand-written
+  # event may carry `"event": "evaluated"`. A plain `grep -F '"event":"evaluated"'` would not find
+  # that line, and the second copy of it would be appended.
+  if [ -f "$jobs" ] && grep -E '"event"[[:space:]]*:[[:space:]]*"evaluated"' "$jobs" 2>/dev/null \
+       | grep -E '"source"[[:space:]]*:[[:space:]]*"'"$src"'"' \
        | grep -o '"source_id"[[:space:]]*:[[:space:]]*"[^"]*"' | cut -d'"' -f4 \
        | grep -qxF "$sid"; then
     exit 0

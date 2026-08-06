@@ -2,13 +2,18 @@
 # dedup.sh — emit the NEW candidate source_ids for a source.
 #
 # Given the workspace event log <jobs.jsonl> and a <source>, read candidate source_ids on stdin
-# (one per line) and print only those NOT already recorded as an event for that source.
+# (one per line) and print only those NOT already judged for that source.
 #
-# The "known ids" dedup step the run skill calls:
-# grep the `"source":"S"` events, extract `"source_id"`, take the value, unique-sort — that is the
-# known set; the NEW set is the candidates minus it. Missing jobs file = empty known set (every
-# candidate is new). Blank candidate lines (a null source_id can't be deduped) are skipped. This is
-# the scripted form of the model-run prose contract; that prose remains the no-runtime fallback.
+# The "known ids" dedup step:
+# grep the `evaluated` events for source S, extract `"source_id"`, take the value, unique-sort —
+# that is the known set; the NEW set is the candidates minus it. A posting a run surfaced but never
+# judged is not in the known set, so the next run offers it again. Missing jobs file = empty known
+# set (every candidate is new). Blank candidate lines (a null source_id can't be deduped) are
+# skipped. record-api-response.sh now makes this same judged-posting check as it appends, so the
+# two-argument mode is redundant for a run that records its responses through that script, and is
+# kept for a host that runs it standalone. The --near mode below is separate and keeps its caller.
+# This is the scripted form of the model-run prose contract; that prose remains the no-runtime
+# fallback.
 #
 # The --near mode answers a different question about one run's own rows: which of them are the
 # same opening seen twice? A company that posts one opening in several locations returns several
@@ -55,8 +60,14 @@ src=${2:?usage: dedup.sh <jobs.jsonl> <source>   (candidate source_ids on stdin)
 known=$(mktemp) || exit 2
 trap 'rm -f "$known"' EXIT INT HUP TERM
 
-# Known-ids set for this source — the pinned pipeline, verbatim.
-grep -E '"source"[[:space:]]*:[[:space:]]*"'"$src"'"' "$jobs" 2>/dev/null \
+# Known-ids set for this source: the postings that already carry a judgment. A posting a stopped
+# run surfaced and never judged is NOT known — the next run has to offer it again.
+#
+# The event-type match tolerates whitespace around the colon for the same reason the one in
+# event-log-append.sh does: a hand-written `"event": "evaluated"` is a judgment, and a posting whose
+# judgment this misses is offered to the next run as new.
+grep -E '"event"[[:space:]]*:[[:space:]]*"evaluated"' "$jobs" 2>/dev/null \
+  | grep -E '"source"[[:space:]]*:[[:space:]]*"'"$src"'"' \
   | grep -o '"source_id"[[:space:]]*:[[:space:]]*"[^"]*"' \
   | cut -d'"' -f4 \
   | sort -u > "$known"

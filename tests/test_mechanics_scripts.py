@@ -126,6 +126,24 @@ def test_dedup_skips_blank_candidate_lines(tmp_path):
     assert r.stdout.split() == ["c"], r.stdout
 
 
+def test_a_surfaced_but_never_judged_posting_is_still_a_candidate(tmp_path):
+    """A run that stopped leaves surfaced rows with no judgment; the next run must re-offer them."""
+    jobs = tmp_path / "jobs.jsonl"
+    jobs.write_text('{"event":"surfaced","run_id":"R","source":"ashby","source_id":"abc-123"}\n')
+    r = subprocess.run(["sh", str(DEDUP), str(jobs), "ashby"],
+                       input="abc-123\nxyz-999\n", capture_output=True, text=True)
+    assert sorted(r.stdout.split()) == ["abc-123", "xyz-999"]
+
+
+def test_a_judged_posting_is_still_filtered_out(tmp_path):
+    jobs = tmp_path / "jobs.jsonl"
+    jobs.write_text('{"event":"evaluated","run_id":"R","source":"ashby","source_id":"abc-123",'
+                    '"relevant":false,"match":null}\n')
+    r = subprocess.run(["sh", str(DEDUP), str(jobs), "ashby"],
+                       input="abc-123\nxyz-999\n", capture_output=True, text=True)
+    assert r.stdout.split() == ["xyz-999"]
+
+
 # ------------------------------------------------------------------- event-log append
 
 def _count_source_id(path, source_id):
@@ -214,6 +232,31 @@ def test_event_log_append_accepts_flat_same_role_as(tmp_path):
     r = run_sh(APPEND, [str(jobs)], input_text=good)
     assert r.returncode == 0, r.stderr
     assert _count_source_id(jobs, "acme:1") == 1
+
+
+def test_an_evaluated_event_after_a_surfaced_event_is_not_dropped(tmp_path):
+    """The idempotency key is (source, source_id); without an event-type filter a surfaced
+    event makes the judgment that follows it look like a duplicate."""
+    jobs = tmp_path / "jobs.jsonl"
+    jobs.write_text('{"event":"surfaced","run_id":"R","source":"ashby",'
+                    '"source_id":"abc-123","title":"Strategic Finance"}\n')
+    ev = ('{"event":"evaluated","run_id":"R","source":"ashby","source_id":"abc-123",'
+          '"relevant":true,"match":"strong"}')
+    r = subprocess.run(["sh", str(APPEND), str(jobs)], input=ev, capture_output=True, text=True)
+    assert r.returncode == 0, r.stderr
+    assert len(lines(jobs)) == 2
+
+
+def test_a_hand_written_evaluated_event_with_spaces_is_still_deduped(tmp_path):
+    """The event-type filter must tolerate the whitespace the rest of this script tolerates;
+    a host writing an event by hand may put a space after the colon."""
+    jobs = tmp_path / "jobs.jsonl"
+    ev = ('{"event": "evaluated","run_id":"R","source": "ashby","source_id": "abc-123",'
+          '"relevant":true,"match":"strong"}')
+    for _ in range(2):
+        r = subprocess.run(["sh", str(APPEND), str(jobs)], input=ev, capture_output=True, text=True)
+        assert r.returncode == 0, r.stderr
+    assert len(lines(jobs)) == 1
 
 
 # ----------------------------------------------------------------- schedule-line
