@@ -40,8 +40,10 @@ FIELD = RUN_SCRIPTS / "event-field.awk"
 RECORD_API = RUN_SCRIPTS / "record-api-response.sh"
 QUEUE = RUN_SCRIPTS / "queue-detail-read.sh"
 LIST_QUEUE = RUN_SCRIPTS / "list-detail-read-queue.sh"
+JUDGE = RUN_SCRIPTS / "record-judgment.sh"
 
-ALL_SCRIPTS = [DEDUP, APPEND, SCHEDULE, DISCOVERY, VALIDATE, RECORD_API, QUEUE, LIST_QUEUE]
+ALL_SCRIPTS = [DEDUP, APPEND, SCHEDULE, DISCOVERY, VALIDATE, RECORD_API, QUEUE, LIST_QUEUE,
+               JUDGE]
 
 
 # A contract-valid single-line `evaluated` event, in the shape
@@ -1353,6 +1355,337 @@ def test_the_queue_scripts_run_under_dash(tmp_path):
     r = run_script(LIST_QUEUE, jobs, RID, shell="dash")
     assert r.returncode == 0, r.stderr
     assert r.stdout.rstrip("\n").split("\t")[:2] == [row["source"], row["source_id"]]
+
+
+# ------------------------------------------------------------------------ record-judgment.sh
+
+HOSTILE = 'He said "it\'s a \\"strong\\" fit" — path C:\\temp\ttab\nand a newline.'
+
+
+def judge_args(jobs, row, **kw):
+    args = [jobs, "--run-id", RID, "--source", row["source"], "--source-id", row["source_id"]]
+    for k, v in kw.items():
+        args += ["--" + k.replace("_", "-"), v]
+    return args
+
+
+def test_a_judgment_lands_as_one_evaluated_event(tmp_path):
+    """One invocation, one event. The caller writes no JSON: it hands over flags, and the script
+    turns them into the `evaluated` event Task 5 counts a run from."""
+    jobs = seeded_jobs(tmp_path, "search.linkedin.json")
+    row = first_surfaced(jobs)
+    r = run_script(JUDGE, *judge_args(jobs, row, detail_read="true", relevant="true",
+                                      match="strong", reasoning="Clears every must-have."))
+    assert r.returncode == 0, r.stderr
+    ev = [e for e in lines(jobs) if e["event"] == "evaluated"]
+    assert len(ev) == 1
+    assert ev[0]["match"] == "strong" and ev[0]["relevant"] is True
+    assert ev[0]["dealbreakers_hit"] == [] and ev[0]["unknowns"] == []
+    assert ev[0]["status"] == "new"
+
+
+def test_the_display_fields_are_copied_off_the_surfaced_event(tmp_path):
+    """The caller passes no title, company, location, URL or date. The script reads the surfaced
+    event anyway to prove the posting belongs to this run, and takes all five off that line, so the
+    digest can list a posting by title and company without reading the whole log."""
+    jobs = seeded_jobs(tmp_path, "search.linkedin.json")
+    row = first_surfaced(jobs)
+    run_script(JUDGE, *judge_args(jobs, row, detail_read="true", relevant="true", match="strong"))
+    ev = [e for e in lines(jobs) if e["event"] == "evaluated"][0]
+    for key in ("title", "company_name", "location_display", "source_url", "posted_at"):
+        assert ev[key] == row[key], key
+
+
+def test_a_copied_title_with_an_escaped_quote_is_byte_exact(tmp_path):
+    """The five copied values are spliced in as the raw JSON the surfaced event already holds.
+    Reading one out and escaping it again turns `Manager \\"Finance\\" role` into a string whose
+    own quotes are part of the text; reading it out and putting the quotes back turns the JSON
+    null in `posted_at` into the four-character string "null". This catches both."""
+    jobs = tmp_path / "jobs.jsonl"
+    jobs.write_text(
+        '{"event":"surfaced","run_id":"%s","source":"ashby","source_id":"a",'
+        '"source_url":"https://example.invalid/1","title":"Manager \\"Finance\\" role",'
+        '"company_name":"Globex","location_display":"Remote","posted_at":null}\n' % RID)
+    run_script(JUDGE, jobs, "--run-id", RID, "--source", "ashby", "--source-id", "a",
+               "--detail-read", "false", "--relevant", "false", "--reasoning", "No.")
+    ev = [e for e in lines(jobs) if e["event"] == "evaluated"][0]
+    assert ev["title"] == 'Manager "Finance" role'
+    assert ev["posted_at"] is None
+
+
+def test_the_dropped_fields_are_gone_on_purpose(tmp_path):
+    """Three fields the hand-written event shape carried and this one does not. `first_seen` and
+    `query_id` belong to the surfaced event, and `salary_display` is display text no count and no
+    view reads off a judgment."""
+    jobs = seeded_jobs(tmp_path, "search.linkedin.json")
+    row = first_surfaced(jobs)
+    run_script(JUDGE, *judge_args(jobs, row, detail_read="true", relevant="true", match="weak"))
+    ev = [e for e in lines(jobs) if e["event"] == "evaluated"][0]
+    for gone in ("first_seen", "salary_display", "query_id"):
+        assert gone not in ev
+
+
+def test_every_field_a_script_decides_on_comes_before_the_free_text(tmp_path):
+    """The readers take a key's first occurrence, so reasoning holding the literal "status":
+    must not be found before the real one.
+
+    The assertions compare positions in the raw line, so moving any of the four named fields after
+    `reasoning` fails here (measured: moving the `status` field alone below `reasoning` fails this
+    test and no other in the module)."""
+    jobs = seeded_jobs(tmp_path, "search.linkedin.json")
+    row = first_surfaced(jobs)
+    run_script(JUDGE, *judge_args(jobs, row, detail_read="true", relevant="true", match="strong",
+                                  reasoning='It says "status": "closed" halfway down.'))
+    raw = [l for l in jobs.read_text().splitlines() if '"event":"evaluated"' in l][0]
+    for key in ('"status":', '"needs_human_check":', '"match":', '"relevant":'):
+        assert raw.index(key) < raw.index('"reasoning":'), key
+    ev = json.loads(raw)
+    assert ev["status"] == "new"
+
+
+def test_free_text_with_quotes_backslashes_tabs_and_newlines_round_trips(tmp_path):
+    """Nothing the judgment says is escaped by the caller, so every hostile character has to
+    survive the script writing the JSON. The tab and the newline also say the value reached awk
+    through the environment: `awk -v` cannot carry a literal newline."""
+    jobs = seeded_jobs(tmp_path, "search.linkedin.json")
+    row = first_surfaced(jobs)
+    run_script(JUDGE, *judge_args(jobs, row, detail_read="true", relevant="true",
+                                  match="strong", reasoning=HOSTILE,
+                                  unknowns="equity;start date"))
+    ev = [e for e in lines(jobs) if e["event"] == "evaluated"][0]
+    assert ev["reasoning"] == HOSTILE
+    assert ev["unknowns"] == ["equity", "start date"]
+
+
+def test_the_optional_flags_reach_the_event(tmp_path):
+    """The four flags no other case passes: `--needs-human-check` is written as a JSON boolean and
+    defaults to false, `--dealbreakers` splits on the semicolon the script header names, and
+    `--same-role-as` and `--posted-at-extracted` put a key on the event only when supplied. The
+    second judgment is the control: it passes none of them."""
+    jobs = seeded_jobs(tmp_path, "search.linkedin.json")
+    rows = [e for e in lines(jobs) if e["event"] == "surfaced"][:2]
+    run_script(JUDGE, *judge_args(jobs, rows[0], detail_read="true", relevant="false",
+                                  needs_human_check="true",
+                                  dealbreakers="on-site five days;pay below the floor",
+                                  same_role_as="ashby:abc123",
+                                  posted_at_extracted="2026-07-30"))
+    run_script(JUDGE, *judge_args(jobs, rows[1], detail_read="true", relevant="false"))
+    supplied, control = [e for e in lines(jobs) if e["event"] == "evaluated"]
+    assert supplied["needs_human_check"] is True
+    assert supplied["dealbreakers_hit"] == ["on-site five days", "pay below the floor"]
+    assert supplied["same_role_as"] == "ashby:abc123"
+    assert supplied["posted_at_extracted"] == "2026-07-30"
+    assert control["needs_human_check"] is False
+    assert control["reasoning"] is None
+    assert "same_role_as" not in control and "posted_at_extracted" not in control
+
+
+def test_a_posting_outside_the_brief_lands_with_relevant_false_and_no_band(tmp_path):
+    """`relevant` is the field the digest filters on, and this is the only case that reads it in
+    its false state. Every other case either judges the posting relevant or does not read the
+    field, so writing `"relevant":true` into the event unconditionally passes all of them
+    (measured before this case was written: with the value hardcoded, every test in this module
+    still passed)."""
+    jobs = seeded_jobs(tmp_path, "search.linkedin.json")
+    row = first_surfaced(jobs)
+    r = run_script(JUDGE, *judge_args(jobs, row, detail_read="false", relevant="false",
+                                      reasoning="Outside the brief."))
+    assert r.returncode == 0, r.stderr
+    ev = [e for e in lines(jobs) if e["event"] == "evaluated"][0]
+    assert ev["relevant"] is False
+    assert ev["detail_read"] is False
+    assert ev["match"] is None
+
+
+def test_an_awk_that_fails_keeps_the_judgment_out_of_the_log(tmp_path):
+    """The whole event is built in awk and printed by one statement at the end of BEGIN, so an awk
+    that died leaves an empty file rather than part of an event. Without the `-s` check the script
+    appends nothing, exits 0, and the caller is told the judgment was recorded when the log holds
+    no such event."""
+    jobs = seeded_jobs(tmp_path, "search.linkedin.json")
+    row = first_surfaced(jobs)
+    before = len(lines(jobs))
+    r = run_script(JUDGE, *judge_args(jobs, row, detail_read="true", relevant="true",
+                                      match="strong"),
+                   env=awk_shim(tmp_path, "record-judgment.awk"))
+    assert r.returncode == 1, r.stdout + r.stderr
+    assert "empty event line" in r.stderr
+    assert len(lines(jobs)) == before
+
+
+def test_a_judgment_carries_the_timestamp_given_or_the_time_it_was_written(tmp_path):
+    """Task 5 works out when a run started and ended from these timestamps, and nothing else here
+    asserts the field: the retry case passes `--ts` twice but compares the two lines with the
+    timestamp cut out, so it still passes with `ts` dropped from the event altogether.
+
+    The second judgment reads the clock. Both bounds come from Python's own UTC clock around the
+    call, so nothing here is a literal date, and the format is asserted as well as the value,
+    because `date -u +%Y-%m-%dT%H:%M:%SZ` is what every other event in the log is stamped with."""
+    jobs = seeded_jobs(tmp_path, "search.linkedin.json")
+    rows = [e for e in lines(jobs) if e["event"] == "surfaced"][:2]
+    given = "2026-08-06T12:00:00Z"
+    run_script(JUDGE, *judge_args(jobs, rows[0], detail_read="true", relevant="false", ts=given))
+    fmt = "%Y-%m-%dT%H:%M:%SZ"
+    before = time.strftime(fmt, time.gmtime())
+    r = run_script(JUDGE, *judge_args(jobs, rows[1], detail_read="true", relevant="false"))
+    after = time.strftime(fmt, time.gmtime())
+    assert r.returncode == 0, r.stderr
+    stamped, clocked = [e["ts"] for e in lines(jobs) if e["event"] == "evaluated"]
+    assert stamped == given
+    assert re.fullmatch(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z", clocked), clocked
+    assert before <= clocked <= after, (before, clocked, after)
+
+
+@pytest.mark.parametrize("flag", ["detail_read", "relevant", "needs_human_check"])
+def test_a_boolean_flag_that_is_not_true_or_false_is_refused(tmp_path, flag):
+    """All three go onto the event unquoted, so a value that is not `true` or `false` writes a line
+    no JSON parser can read. Measured with the `--detail-read` check removed: the script exits 0,
+    says nothing, and appends a line carrying `"detail_read":yes` that `json.loads` refuses. The
+    stderr is asserted whole so each case shows its own flag was the one named."""
+    jobs = seeded_jobs(tmp_path, "search.linkedin.json")
+    row = first_surfaced(jobs)
+    kw = dict(detail_read="true", relevant="false")
+    kw[flag] = "yes"
+    r = run_script(JUDGE, *judge_args(jobs, row, **kw))
+    assert r.returncode == 1
+    assert r.stderr == "record-judgment: --%s must be true or false\n" % flag.replace("_", "-")
+    assert [e for e in lines(jobs) if e["event"] == "evaluated"] == []
+
+
+@pytest.mark.parametrize("drop", ["--run-id", "--source", "--source-id"])
+def test_a_judgment_missing_a_flag_names_it_rather_than_the_posting(tmp_path, drop):
+    """Each case asserts the whole stderr line, not only the exit code, because both paths exit 1.
+    Measured with the `--run-id` guard removed: the empty value reaches the grep chain, matches
+    nothing, and the caller is told `record-judgment: no surfaced posting for
+    linkedin:linkedin-0000 in run` — which sends it to the run's search results when the fault is
+    on the command line.
+
+    The name differs from the queue script's case of the same shape on purpose: two test functions
+    with one name in a module leaves only the second, and pytest reports no clash."""
+    jobs = seeded_jobs(tmp_path, "search.linkedin.json")
+    row = first_surfaced(jobs)
+    flags = {"--run-id": RID, "--source": row["source"], "--source-id": row["source_id"]}
+    del flags[drop]
+    r = run_script(JUDGE, jobs, *[x for pair in flags.items() for x in pair],
+                   "--detail-read", "true", "--relevant", "false")
+    assert r.returncode == 1, r.stdout + r.stderr
+    assert r.stderr == "record-judgment: missing %s\n" % drop
+    assert [e for e in lines(jobs) if e["event"] == "evaluated"] == []
+
+
+def test_recording_against_a_missing_log_names_the_path(tmp_path):
+    """The whole stderr line, for the same reason the missing-flag cases assert it. Without the
+    guard the path reaches the grep chain, which prints its own `grep: …: No such file or
+    directory` and then the caller is told `no surfaced posting for ashby:a in run …`. Exit 1
+    either way, and no log is created."""
+    jobs = tmp_path / "nope.jsonl"
+    r = run_script(JUDGE, jobs, "--run-id", RID, "--source", "ashby", "--source-id", "a",
+                   "--detail-read", "true", "--relevant", "false")
+    assert r.returncode == 1, r.stdout + r.stderr
+    assert r.stderr == "record-judgment: no such file: %s\n" % jobs
+    assert not jobs.exists()
+
+
+def test_relevant_true_without_a_band_is_refused(tmp_path):
+    """A relevant posting carries a band, because the digest groups by it. The stderr names the
+    three values, so the caller does not have to open the script to find them."""
+    jobs = seeded_jobs(tmp_path, "search.linkedin.json")
+    row = first_surfaced(jobs)
+    r = run_script(JUDGE, *judge_args(jobs, row, detail_read="true", relevant="true"))
+    assert r.returncode == 1
+    assert "strong|moderate|weak" in r.stderr
+    assert [e for e in lines(jobs) if e["event"] == "evaluated"] == []
+
+
+def test_relevant_false_carrying_a_band_is_refused(tmp_path):
+    """The other half of the same rule. A posting outside the brief has no match band, so a band
+    on it is a judgment the caller has half-changed and not finished changing."""
+    jobs = seeded_jobs(tmp_path, "search.linkedin.json")
+    row = first_surfaced(jobs)
+    r = run_script(JUDGE, *judge_args(jobs, row, detail_read="true", relevant="false",
+                                      match="weak"))
+    assert r.returncode == 1
+    assert [e for e in lines(jobs) if e["event"] == "evaluated"] == []
+
+
+def test_an_invented_band_is_refused(tmp_path):
+    """Three bands and no fourth. A band the digest does not group by would put the posting in no
+    section of the digest at all."""
+    jobs = seeded_jobs(tmp_path, "search.linkedin.json")
+    row = first_surfaced(jobs)
+    r = run_script(JUDGE, *judge_args(jobs, row, detail_read="true", relevant="true",
+                                      match="excellent"))
+    assert r.returncode == 1
+
+
+def test_a_judgment_about_a_posting_no_search_surfaced_is_refused(tmp_path):
+    """The same rule the queue enforces, for the same reason: a judgment names a posting this run
+    surfaced, or nothing later can resolve its id to a title, a company or a URL."""
+    jobs = seeded_jobs(tmp_path, "search.linkedin.json")
+    r = run_script(JUDGE, jobs, "--run-id", RID, "--source", "linkedin",
+                   "--source-id", "jp_INVENTED", "--detail-read", "true",
+                   "--relevant", "true", "--match", "strong")
+    assert r.returncode == 1
+    assert "no surfaced posting" in r.stderr
+
+
+def test_the_same_judgment_twice_is_reported_and_skipped(tmp_path):
+    """A retry. The two invocations differ only in `--ts`, and the timestamp is not part of the
+    verdict, so the second one writes nothing and exits 0. A second event would count the posting
+    twice in every band total Task 5 reads off the log."""
+    jobs = seeded_jobs(tmp_path, "search.linkedin.json")
+    row = first_surfaced(jobs)
+    base = dict(detail_read="true", relevant="true", match="strong", reasoning="Same.")
+    run_script(JUDGE, *judge_args(jobs, row, ts="2026-08-05T00:00:00Z", **base))
+    before = len(lines(jobs))
+    r = run_script(JUDGE, *judge_args(jobs, row, ts="2026-08-05T09:30:30Z", **base))
+    assert r.returncode == 0 and "already carries this verdict" in r.stderr
+    assert len(lines(jobs)) == before
+
+
+def test_a_different_judgment_for_the_same_posting_is_refused_with_both_lines(tmp_path):
+    """Two verdicts for one posting is a conflict only the caller can settle, so the script writes
+    neither and prints both. Without both lines the caller is told the verdicts differ and has to
+    open the log to see how."""
+    jobs = seeded_jobs(tmp_path, "search.linkedin.json")
+    row = first_surfaced(jobs)
+    run_script(JUDGE, *judge_args(jobs, row, detail_read="true", relevant="true",
+                                  match="strong", reasoning="First."))
+    before = len(lines(jobs))
+    r = run_script(JUDGE, *judge_args(jobs, row, detail_read="true", relevant="true",
+                                      match="weak", reasoning="Changed my mind."))
+    assert r.returncode == 1
+    assert "recorded:" in r.stderr and "offered:" in r.stderr
+    assert len(lines(jobs)) == before
+
+
+def test_concurrent_judgments_all_land_as_valid_json(tmp_path):
+    """Readers run in parallel where the host has subagents; appends must not interleave."""
+    jobs = seeded_jobs(tmp_path, "search.linkedin.json")
+    rows = [e for e in lines(jobs) if e["event"] == "surfaced"]
+    procs = [subprocess.Popen(
+        ["sh", str(JUDGE), str(jobs), "--run-id", RID, "--source", row["source"],
+         "--source-id", row["source_id"], "--detail-read", "true", "--relevant", "false",
+         "--reasoning", "Outside the brief."],
+        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL) for row in rows]
+    for p in procs:
+        p.wait()
+    parsed = lines(jobs)   # raises on any interleaved or truncated line
+    assert len([e for e in parsed if e["event"] == "evaluated"]) == len(rows)
+
+
+@pytest.mark.skipif(not shutil.which("dash"), reason="dash is not installed here")
+def test_recording_a_judgment_runs_under_dash(tmp_path):
+    """`sh -n` and `dash -n` check syntax only, so the script is also run end to end under strict
+    dash: it uses `${1:?}`, `${2?}`, `mktemp`, a trap, and a prefixed environment assignment in
+    front of `awk`, and none of those is exercised by a syntax check."""
+    jobs = seeded_jobs(tmp_path, "search.linkedin.json")
+    row = first_surfaced(jobs)
+    r = run_script(JUDGE, *judge_args(jobs, row, detail_read="true", relevant="true",
+                                      match="moderate", reasoning=HOSTILE), shell="dash")
+    assert r.returncode == 0, r.stderr
+    ev = [e for e in lines(jobs) if e["event"] == "evaluated"][0]
+    assert ev["reasoning"] == HOSTILE and ev["title"] == row["title"]
 
 
 def _scrub_module():
