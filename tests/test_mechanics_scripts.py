@@ -3050,6 +3050,52 @@ def test_opening_creates_the_marker(tmp_workspace):
     assert (tmp_workspace / "runs" / (".started-" + out["run_id"])).exists()
 
 
+def frozen_date(tmp_path, stamp="2026-07-30T15:04:02Z"):
+    """A PATH whose `date` always answers the same second, so two runs are handed one `run_id`.
+
+    Two consecutive calls land in the same second most of the time but not reliably, and the case
+    below is about what happens when they do.
+    """
+    d = tmp_path / "frozen-date"
+    d.mkdir(exist_ok=True)
+    shim = d / "date"
+    shim.write_text("#!/bin/sh\nprintf '%s\\n'\n" % stamp, encoding="utf-8")
+    shim.chmod(0o755)
+    return {"PATH": "%s:%s" % (d, os.environ["PATH"])}
+
+
+def test_a_run_opening_in_the_same_second_as_another_is_refused(tmp_workspace, tmp_path):
+    """`run_id` is the clock read to the second, so two runs that open inside one second are handed
+    the same id — one path for both run records, so the second close overwrites the first, and one
+    set of events, which `run-counts.sh` folds into a single set of counts because it filters
+    events by `run_id`. Nothing downstream can separate them afterwards, and the marker write is a
+    truncate, so it does not fail: only this refusal tells the two apart. It is reachable without a
+    person: back-to-back scripted calls, a scheduled run firing alongside a manual one, or a re-run
+    straight after a crash."""
+    env = frozen_date(tmp_path)
+    first = run_script(OPEN_RUN, tmp_workspace, env=env)
+    assert first.returncode == 0, first.stdout + first.stderr
+    run_id = parsed_output(first)["run_id"]
+
+    second = run_script(OPEN_RUN, tmp_workspace, env=env)
+    assert second.returncode == 2, second.stdout + second.stderr
+    assert second.stdout == ""
+    assert run_id in second.stderr
+    assert [p.name for p in (tmp_workspace / "runs").glob(".started-*")] == [".started-" + run_id]
+
+
+def test_a_leftover_marker_from_an_earlier_run_does_not_refuse_this_one(tmp_workspace, tmp_path):
+    """The refusal above must not catch the marker a run that died left behind. That one carries
+    the earlier run's id, so its name differs from the one being minted now, and deciding what to
+    say about it belongs to the run contract's step 1, not here."""
+    (tmp_workspace / "runs" / ".started-2020-01-01T00-00-00Z").write_text("")
+    r = run_script(OPEN_RUN, tmp_workspace, env=frozen_date(tmp_path))
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert (tmp_workspace / "runs" / ".started-2020-01-01T00-00-00Z").exists()
+    assert (tmp_workspace / "runs"
+            / (".started-" + parsed_output(r)["run_id"])).exists()
+
+
 def test_a_marker_that_cannot_be_written_stops_the_run_before_it_prints(tmp_workspace):
     """A run_id is what the close is given, so printing one for a run with no marker on disk would
     hand the close a run that nothing on disk records as started. The marker is written before the
@@ -3072,7 +3118,7 @@ def test_a_marker_that_cannot_be_written_is_reported_in_this_scripts_own_words(t
     Measured with `runs/` at mode 500: `: > runs/.started-x || { …; exit 9; }` is caught by the
     `||` under bash, but dash aborts on the redirection before the `||` runs, so this script's
     message never prints and the caller gets dash's instead. The status is 2 either way —
-    `open-run.sh:58` exits 2 there too — so the message is the whole difference, and the message is
+    `open-run.sh:75` exits 2 there too — so the message is the whole difference, and the message is
     what this case asserts. `shell="dash"` is named rather than left at `sh` because `/bin/sh` is
     bash on the machine where this was measured and dash on the CI runner: under bash it would pass
     whichever of the two wrote the marker."""
@@ -3145,9 +3191,16 @@ def path_without_a_digest_command(tmp_path):
     The twelve were measured by dropping one at a time and comparing the whole run against the full
     list: each of these changes what the run prints or its status, and `wc` and `cat` change
     nothing. Three of them need a workspace of the right shape before they run at all — `head` and
-    `cut` read a run record's fields (`validate-workspace.sh:71`), and `sort` prints the findings,
-    so a clean workspace with no run record reaches none of them. That is why the case below writes
-    a record and a broken one, rather than reusing `tmp_workspace` as it comes.
+    `cut` read a run record's fields (`validate-workspace.sh:71`), and `sort` prints the findings —
+    so on a clean workspace with no run record neither script runs any of the three. That is why
+    the case below writes a record, and a broken one, rather than reusing `tmp_workspace` as it
+    comes.
+
+    `sh` is on the list but no case here proves it. Dropping it raises `FileNotFoundError` from
+    `run_script` instead, because `subprocess.run(["sh", …], env=e)` resolves the interpreter
+    through this same PATH, so the harness goes before the script does. Run with an absolute
+    interpreter and no `sh` on PATH, the script reports `line 109: sh: command not found` — that is
+    `open-run.sh:109`, the `validate-workspace.sh` call — which is what puts `sh` on the list.
     """
     d = tmp_path / "no-digest-bin"
     d.mkdir(exist_ok=True)

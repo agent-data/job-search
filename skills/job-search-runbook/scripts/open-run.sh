@@ -54,6 +54,22 @@ run_id=$(printf '%s\n' "$now" | tr ':' '-')
 # names bash and dash rather than `sh` because `/bin/sh` is bash on the machine where it was
 # measured and dash on the CI runner. The same line written with printf is caught under both.
 mkdir -p "$ws/runs" || exit 2
+
+# A marker already under this name means another run opened during this same second. run_id is the
+# clock read to the second, so the two runs would share it: one path for both run records, so the
+# second close overwrites the first, and one set of events, which run-counts.sh folds into a single
+# set of counts because it filters events by run_id. Nothing downstream can separate them
+# afterwards. The write below truncates rather than fails, so this check is what tells the two
+# apart. Refuse, and the caller opens a run a second later.
+#
+# This is not the leftover marker the run contract's step 1 handles. That one carries an earlier
+# run's id, so its filename differs from the one minted here and this check does not see it.
+if [ -e "$ws/runs/.started-$run_id" ]; then
+  printf 'open-run.sh: a run opened this same second and %s is already taken. Open a run a second later.\n' \
+    "$run_id" >&2
+  exit 2
+fi
+
 printf '' > "$ws/runs/.started-$run_id" || {
   printf 'open-run.sh: cannot write the started-marker in %s/runs\n' "$ws" >&2
   exit 2
