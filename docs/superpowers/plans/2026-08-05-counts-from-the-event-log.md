@@ -16,11 +16,12 @@
 
 - **Branch:** `feat/counts-from-the-event-log`. Never commit to `main`.
 - **Shipped scripts are POSIX `sh` + `awk`.** No `jq`, no Python, no `bash` constructs. Tests invoke every script through `sh`, and through `dash` where present.
-- **An `awk` program that needs the shared field readers is its own `.awk` file**, invoked as `awk -f event-field.awk -f <program>.awk`. POSIX `awk` forbids mixing `-f` with inline program text, so those scripts are thin shell wrappers that check arguments and hand off. Seven `.awk` files ship: `json-scan.awk`, `event-field.awk`, `record-judgment.awk`, `list-detail-read-queue.awk`, `run-counts.awk`, `run-matches.awk`, `pipeline-counts.awk`. A skill's prose names only the `.sh` in front of each; the wrapper resolves its own `.awk` from `$(dirname "$0")`.
+- **An `awk` program that needs the shared field readers is its own `.awk` file**, invoked as `awk -f event-field.awk -f <program>.awk`. POSIX `awk` forbids mixing `-f` with inline program text, so those scripts are thin shell wrappers that check arguments and hand off. Eight `.awk` files ship: `json-scan.awk`, `event-field.awk`, `dedup-surfaced.awk`, `record-judgment.awk`, `list-detail-read-queue.awk`, `run-counts.awk`, `run-matches.awk`, `pipeline-counts.awk`. A skill's prose names only the `.sh` in front of each; the wrapper resolves its own `.awk` from `$(dirname "$0")`.
 - **`match` is an `awk` built-in.** Never use it as an `awk` variable name — use `band`. This cost a debugging cycle during design.
 - **`awk -v` cannot carry a literal newline.** Free text (reasoning, dealbreakers, unknowns) and any whole event line passed into a program go through the environment and are read with `ENVIRON[...]`.
 - **Nothing is appended unless the whole response checks out.** A response with one bad row appends none of its rows. Every rejection exits non-zero and names the file, the row, and the field on stderr. The one exception is the `call` event, which is written for every attempt — a failed one, and a duplicate one, included.
 - **Never assert on a skill's prose.** No test may grep a `SKILL.md` for a phrase, a sentence, or a regex standing in for a documented rule. Script behavior is tested with pytest against real artifacts; anything a skill's prose governs is graded by the live behavior evals in `evals/`. `tests/test_mechanics_scripts.py`'s own docstring already states this: "Nothing here asserts how the reference documents word the same rules."
+- **A `-k` selector that matches nothing reports success.** Every verification step below names one, and `-k record_api` was measured on 2026-08-06 to select zero of the thirteen tests it was written for — a green run that tested nothing. Before trusting any step that uses `-k`, run it with `--collect-only -q` and confirm the count is what you expect; when it is not, run the whole module instead, which takes under a second. Say the number you collected in the report.
 - **No test hardcodes a number that came from a capture.** A count that depends on what a fixture holds is read from the fixture (`len(api_rows("search.linkedin.json"))`), never written as a literal. A live capture that returns 24 rows instead of 25 must not turn into a red suite.
 - **Fixtures carry no real posting.** `.gitignore` already states the rule for eval output — "they carry machine paths and live posting text; only the aggregate numbers in `evals/baseline/` are committed." `tests/fixtures/` is not gitignored, so every captured response is scrubbed to fictional companies, titles, URLs and description text before it is committed, by `tests/fixtures/scrub.py` so a re-capture is reproducible. `evals/cases/fault-503.yaml` states the same convention: "The companies are fictional, as in every other fixture here."
 - **Word budget:** `AGENTS.md:29` sets 10,000 words across the seven `SKILL.md` files. `wc -w skills/*/SKILL.md` reports 9,092 at the start of this plan. Exceeding 10,000 at the end is a blocking defect.
@@ -120,7 +121,7 @@ band  source  source_id  title  company_name  location_display  source_url  need
 |---|---|
 | `skills/job-search-run/scripts/json-scan.awk` | scan one JSON document, print every scalar as `path<TAB>raw value` |
 | `skills/job-search-run/scripts/event-field.awk` | read one field out of a single-line event: `jraw` raw, `jval` as text |
-| `skills/job-search-run/scripts/record-api-response.sh` | one agent-data response → the events it implies |
+| `skills/job-search-run/scripts/record-api-response.sh` + `dedup-surfaced.awk` | one agent-data response → the events it implies |
 | `skills/job-search-run/scripts/queue-detail-read.sh` | mark one posting as one to read in full |
 | `skills/job-search-run/scripts/list-detail-read-queue.sh` + `.awk` | print the queued, not-yet-judged postings |
 | `skills/job-search-run/scripts/record-judgment.sh` + `record-judgment.awk` | record one posting's judgment |
@@ -789,7 +790,7 @@ def test_a_posting_already_judged_in_an_earlier_run_is_not_surfaced_again(tmp_pa
 
 - [ ] **Step 3: Run the tests and watch them fail**
 
-Run: `python3 -m pytest tests/test_mechanics_scripts.py -k record_api -v`
+Run: `python3 -m pytest tests/test_mechanics_scripts.py -v` (no `-k`: the tests this task adds share no name fragment, and `-k record_api` selects none of them)
 Expected: every test errors — `record-api-response.sh` does not exist.
 
 - [ ] **Step 4: Write the script**
@@ -1027,7 +1028,7 @@ Two notes for whoever implements this. `awk -f event-field.awk -f -` reads the s
 
 - [ ] **Step 5: Run the tests to verify they pass**
 
-Run: `python3 -m pytest tests/test_mechanics_scripts.py -k record_api -v`
+Run: `python3 -m pytest tests/test_mechanics_scripts.py -v` (no `-k`: the tests this task adds share no name fragment, and `-k record_api` selects none of them)
 Expected: all thirteen PASS, except the two `get-posting` ones Task 2 finishes — name them if they are still red.
 
 - [ ] **Step 6: Verify it runs under `sh` and `dash`**
@@ -1250,7 +1251,7 @@ fi
 
 - [ ] **Step 5: Run the tests to verify they pass**
 
-Run: `python3 -m pytest tests/test_mechanics_scripts.py -k "record_api or detail" -v`
+Run: `python3 -m pytest tests/test_mechanics_scripts.py -v` (the whole module, so Task 1's tests are included — `record_api` matches nothing)
 Expected: all PASS, Task 1's tests included.
 
 - [ ] **Step 6: Commit**
