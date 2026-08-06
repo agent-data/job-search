@@ -3050,6 +3050,39 @@ def test_opening_creates_the_marker(tmp_workspace):
     assert (tmp_workspace / "runs" / (".started-" + out["run_id"])).exists()
 
 
+def test_a_marker_that_cannot_be_written_stops_the_run_before_it_prints(tmp_workspace):
+    """A run_id is what the close is given, so printing one for a run with no marker on disk would
+    hand the close a run that nothing on disk records as started. The marker is written before the
+    three lines for that reason, and with `runs/` at mode 500 the write is the only thing that
+    fails: the workspace is otherwise whole."""
+    runs = tmp_workspace / "runs"
+    runs.chmod(0o500)
+    try:
+        r = run_script(OPEN_RUN, tmp_workspace)
+    finally:
+        runs.chmod(0o700)
+    assert r.returncode == 2, r.stdout + r.stderr
+    assert r.stdout == ""
+    assert not list(runs.glob(".started-*"))
+
+
+@pytest.mark.skipif(not shutil.which("dash"), reason="dash is not installed here")
+def test_a_marker_that_cannot_be_written_is_reported_in_this_scripts_own_words(tmp_workspace):
+    """The marker is written with `printf '' >`, not `: >`, and the two differ only under dash.
+    Measured with `runs/` at mode 500: `: > runs/.started-x || { …; exit 9; }` is caught by the
+    `||` under sh and bash, but dash aborts on the redirection before the `||` runs, so the caller
+    gets dash's message and dash's exit 2 rather than the ones this script chose. This case is run
+    under dash for that reason; under sh it would pass either way."""
+    runs = tmp_workspace / "runs"
+    runs.chmod(0o500)
+    try:
+        r = run_script(OPEN_RUN, tmp_workspace, shell="dash")
+    finally:
+        runs.chmod(0o700)
+    assert r.returncode == 2, r.stdout + r.stderr
+    assert "open-run.sh: cannot write the started-marker" in r.stderr
+
+
 def test_brief_revision_is_the_first_twelve_of_the_digest(tmp_workspace):
     import hashlib
     out = parsed_output(run_script(OPEN_RUN, tmp_workspace))
@@ -3099,6 +3132,35 @@ def test_a_workspace_with_no_brief_reports_the_missing_brief_once(tmp_workspace)
     r = run_script(OPEN_RUN, tmp_workspace)
     named = [l for l in r.stdout.splitlines() if "INVALID preferences.md" in l]
     assert named == ["INVALID preferences.md missing-file"], r.stdout
+
+
+def path_without_a_digest_command(tmp_path):
+    """A PATH holding what `open-run.sh` and `validate-workspace.sh` run, minus the two commands
+    that can take a SHA-256. A host that ships neither is the case where the revision comes back
+    empty for a `preferences.md` that is present and readable."""
+    d = tmp_path / "no-digest-bin"
+    d.mkdir(exist_ok=True)
+    for name in ("dirname", "date", "tr", "cut", "mkdir", "sh", "mktemp", "awk", "grep", "sort",
+                 "rm", "wc", "cat"):
+        found = shutil.which(name)
+        if found and not (d / name).exists():
+            (d / name).symlink_to(found)
+    return {"PATH": str(d)}
+
+
+def test_a_present_brief_with_no_way_to_digest_it_is_not_called_missing(tmp_workspace, tmp_path):
+    """An empty revision has two causes and they are different problems. Here `preferences.md` is on
+    disk and readable and the workspace passes every rule, so `INVALID preferences.md missing-file`
+    would name a file that is there as absent — which is what printing that line off an empty
+    revision, rather than off the file check, would do. The failure is this script's, so it goes to
+    stderr and the run still opens."""
+    r = run_script(OPEN_RUN, tmp_workspace, env=path_without_a_digest_command(tmp_path))
+    assert r.returncode == 1, r.stdout + r.stderr
+    out = parsed_output(r)
+    assert out["brief_revision"] == ""
+    assert (tmp_workspace / "preferences.md").exists()
+    assert "INVALID" not in r.stdout
+    assert "could not take the revision" in r.stderr
 
 
 @pytest.mark.skipif(not shutil.which("dash"), reason="dash is not installed here")

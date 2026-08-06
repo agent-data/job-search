@@ -21,7 +21,10 @@
 # lines above.
 #
 # Exit 0: opened, workspace clean.
-# Exit 1: opened, and the workspace findings follow the three lines on stdout — close blocked.
+# Exit 1: opened — the marker is on disk and the three lines printed — and something is wrong that
+#         this run cannot fix, so close it blocked. Where the detail is depends on whose problem it
+#         is: findings about the workspace print on stdout after the three lines, and a failure of
+#         this script's own, such as no way to take the brief revision, prints on stderr.
 # Exit 2: the run did not open and nothing was written — no such workspace, no config.yaml, or the
 #         started-marker could not be created.
 #
@@ -43,11 +46,11 @@ now=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 run_id=$(printf '%s\n' "$now" | tr ':' '-')
 
 # The marker is written before the three lines are printed, so a run_id never reaches a caller for a
-# run that has no marker on disk. printf writes it rather than `:`, because a failed redirection on
-# `:` does not return here to be reported. Running `: > /nonexistent-root/xyz/.started-1` under each
-# shell measures three different outcomes: sh aborts with exit 1, dash aborts with exit 2, and bash
-# carries on to the next line and exits 0 — which would print a run_id for a run with no marker.
-# printf returns non-zero in all three, so the check below is the same everywhere.
+# run that has no marker on disk. printf writes it rather than `:`, because the two differ under
+# dash. Measured with `runs/` at mode 500, so only the write fails: `: > runs/.started-x || { …;
+# exit 9; }` is caught by the `||` under sh and bash and exits 9, but dash aborts on the failed
+# redirection before the `||` runs, so the message below never prints and the caller gets dash's
+# own message and its exit 2. The same line written with printf is caught in all three.
 mkdir -p "$ws/runs" || exit 2
 printf '' > "$ws/runs/.started-$run_id" || {
   printf 'open-run.sh: cannot write the started-marker in %s/runs\n' "$ws" >&2
