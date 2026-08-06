@@ -46,11 +46,13 @@ now=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 run_id=$(printf '%s\n' "$now" | tr ':' '-')
 
 # The marker is written before the three lines are printed, so a run_id never reaches a caller for a
-# run that has no marker on disk. printf writes it rather than `:`, because the two differ under
-# dash. Measured with `runs/` at mode 500, so only the write fails: `: > runs/.started-x || { …;
-# exit 9; }` is caught by the `||` under sh and bash and exits 9, but dash aborts on the failed
-# redirection before the `||` runs, so the message below never prints and the caller gets dash's
-# own message and its exit 2. The same line written with printf is caught in all three.
+# run that has no marker on disk. printf writes it rather than `:`, and the two differ by shell.
+# Measured with `runs/` at mode 500, so only the write fails: `: > runs/.started-x || { …; exit 9; }`
+# is caught by the `||` under bash and exits 9, while dash aborts on the failed redirection before
+# the `||` runs, so the message below never prints and the caller gets dash's. The status is 2 in
+# both, since that is what this script exits here too, so the message is the whole difference. This
+# names bash and dash rather than `sh` because `/bin/sh` is bash on the machine where it was
+# measured and dash on the CI runner. The same line written with printf is caught under both.
 mkdir -p "$ws/runs" || exit 2
 printf '' > "$ws/runs/.started-$run_id" || {
   printf 'open-run.sh: cannot write the started-marker in %s/runs\n' "$ws" >&2

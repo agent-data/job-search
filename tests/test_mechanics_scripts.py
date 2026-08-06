@@ -3070,9 +3070,12 @@ def test_a_marker_that_cannot_be_written_stops_the_run_before_it_prints(tmp_work
 def test_a_marker_that_cannot_be_written_is_reported_in_this_scripts_own_words(tmp_workspace):
     """The marker is written with `printf '' >`, not `: >`, and the two differ only under dash.
     Measured with `runs/` at mode 500: `: > runs/.started-x || { …; exit 9; }` is caught by the
-    `||` under sh and bash, but dash aborts on the redirection before the `||` runs, so the caller
-    gets dash's message and dash's exit 2 rather than the ones this script chose. This case is run
-    under dash for that reason; under sh it would pass either way."""
+    `||` under bash, but dash aborts on the redirection before the `||` runs, so this script's
+    message never prints and the caller gets dash's instead. The status is 2 either way —
+    `open-run.sh:58` exits 2 there too — so the message is the whole difference, and the message is
+    what this case asserts. `shell="dash"` is named rather than left at `sh` because `/bin/sh` is
+    bash on the machine where this was measured and dash on the CI runner: under bash it would pass
+    whichever of the two wrote the marker."""
     runs = tmp_workspace / "runs"
     runs.chmod(0o500)
     try:
@@ -3135,17 +3138,53 @@ def test_a_workspace_with_no_brief_reports_the_missing_brief_once(tmp_workspace)
 
 
 def path_without_a_digest_command(tmp_path):
-    """A PATH holding what `open-run.sh` and `validate-workspace.sh` run, minus the two commands
-    that can take a SHA-256. A host that ships neither is the case where the revision comes back
-    empty for a `preferences.md` that is present and readable."""
+    """A PATH holding every command `open-run.sh` and `validate-workspace.sh` run, minus the two
+    that can take a SHA-256. A host carrying neither is the case where the revision comes back empty
+    for a `preferences.md` that is present and readable.
+
+    The twelve were measured by dropping one at a time and comparing the whole run against the full
+    list: each of these changes what the run prints or its status, and `wc` and `cat` change
+    nothing. Three of them need a workspace of the right shape before they run at all — `head` and
+    `cut` read a run record's fields (`validate-workspace.sh:71`), and `sort` prints the findings,
+    so a clean workspace with no run record reaches none of them. That is why the case below writes
+    a record and a broken one, rather than reusing `tmp_workspace` as it comes.
+    """
     d = tmp_path / "no-digest-bin"
     d.mkdir(exist_ok=True)
-    for name in ("dirname", "date", "tr", "cut", "mkdir", "sh", "mktemp", "awk", "grep", "sort",
-                 "rm", "wc", "cat"):
+    for name in ("awk", "cut", "date", "dirname", "grep", "head", "mkdir", "mktemp", "rm", "sh",
+                 "sort", "tr"):
         found = shutil.which(name)
         if found and not (d / name).exists():
             (d / name).symlink_to(found)
     return {"PATH": str(d)}
+
+
+def test_the_restricted_path_reads_a_run_record_the_way_the_full_path_does(tmp_workspace, tmp_path):
+    """`path_without_a_digest_command` is sound only if a way to take a digest is the one thing
+    missing from it. The case below runs on `tmp_workspace`, which deliberately holds no run
+    record, so it never reaches the `grep | head | cut` that reads one — a PATH with no `head`
+    would pass it and then hand the next caller invented `missing-key` findings for every record in
+    the workspace. So: same workspace, one record on it, and the validator must print exactly what
+    it prints on the full PATH and exit the same way, whatever its rules are that day. The second
+    record is missing `close_state`, and the finding naming it is what shows the record is being
+    read at all rather than skipped by both."""
+    record = tmp_workspace / "runs" / (RID + ".json")
+    whole = {"run_id": RID, "trigger": "manual", "close_state": "complete",
+             "started_at": "2026-08-05T16:47:00Z", "completed_at": "2026-08-05T16:49:00Z"}
+    broken = {k: v for k, v in whole.items() if k != "close_state"}
+    restricted = path_without_a_digest_command(tmp_path)
+    for body in (whole, broken):
+        record.write_text(json.dumps(body), encoding="utf-8")
+        full = run_script(VALIDATE, tmp_workspace)
+        cut_down = run_script(VALIDATE, tmp_workspace, env=restricted)
+        # stderr is compared too, and it is what catches the commands whose absence changes no
+        # finding: with no `awk` the config and the brief are never read, and the findings that go
+        # missing are the ones a valid workspace would not have printed anyway.
+        assert (cut_down.returncode, cut_down.stdout, cut_down.stderr) == \
+               (full.returncode, full.stdout, full.stderr), \
+            "restricted PATH: %r %r\nfull PATH: %r %r" % (cut_down.stdout, cut_down.stderr,
+                                                          full.stdout, full.stderr)
+    assert "runs/%s.json missing-key close_state" % RID in full.stdout
 
 
 def test_a_present_brief_with_no_way_to_digest_it_is_not_called_missing(tmp_workspace, tmp_path):
@@ -3158,8 +3197,12 @@ def test_a_present_brief_with_no_way_to_digest_it_is_not_called_missing(tmp_work
     assert r.returncode == 1, r.stdout + r.stderr
     out = parsed_output(r)
     assert out["brief_revision"] == ""
+    assert RUN_ID_RE.match(out["run_id"])
     assert (tmp_workspace / "preferences.md").exists()
     assert "INVALID" not in r.stdout
+    # One line, and it is this one. A second line would be a `command not found` from something
+    # the restricted PATH is missing, which would otherwise read as a run that did what it says.
+    assert len(r.stderr.splitlines()) == 1, r.stderr
     assert "could not take the revision" in r.stderr
 
 
