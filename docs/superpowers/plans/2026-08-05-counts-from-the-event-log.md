@@ -2976,7 +2976,16 @@ CR_COUNTS=$counts CR_SOURCES=$sources CR_QUERIES=$queries \
 awk -v run_id="$run_id" -v trigger="$trigger" -v sched="$scheduler_id" \
     -v close_state="$close_state" -v run_health="$run_health" -v brief_rev="$brief_rev" \
     -v started_at="$started_at" -v completed_at="$completed_at" '
-  function esc(s) { gsub(/\\/, "\\\\", s); gsub(/"/, "\\\"", s); return s }
+  # The same body every other event builder carries. A one-line esc that handles only the
+  # backslash and the quote let a tab or a carriage return in a model-supplied value write an
+  # unparseable log at exit 0 — measured in Task 5, 26 lines and none of them parsing. Every
+  # value below is an identifier rather than free text, so Step 4a refuses a control character
+  # at entry as well; this is what keeps the record parseable if one ever reaches here.
+  function esc(s) {
+    gsub(/\\/, "\\\\", s); gsub(/"/, "\\\"", s)
+    gsub(/\t/, "\\t", s); gsub(/\r/, "\\r", s); gsub(/\n/, "\\n", s)
+    return s
+  }
   function jstr(s) { return "\"" esc(s) "\"" }
   function jarr(s,   n, p, i, out) {
     if (s == "") return "[]"
