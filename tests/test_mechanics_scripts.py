@@ -41,9 +41,10 @@ RECORD_API = RUN_SCRIPTS / "record-api-response.sh"
 QUEUE = RUN_SCRIPTS / "queue-detail-read.sh"
 LIST_QUEUE = RUN_SCRIPTS / "list-detail-read-queue.sh"
 JUDGE = RUN_SCRIPTS / "record-judgment.sh"
+COUNTS = RUN_SCRIPTS / "run-counts.sh"
 
 ALL_SCRIPTS = [DEDUP, APPEND, SCHEDULE, DISCOVERY, VALIDATE, RECORD_API, QUEUE, LIST_QUEUE,
-               JUDGE]
+               JUDGE, COUNTS]
 
 
 # A contract-valid single-line `evaluated` event, in the shape
@@ -2022,6 +2023,273 @@ def test_the_whole_path_runs_under_dash(tmp_path):
     assert len([e for e in lines(jobs) if e["event"] == "surfaced"]) == n
     calls = [e for e in lines(jobs) if e["event"] == "call"]
     assert [c["rows_new"] for c in calls] == [n, 0]
+
+
+# ----------------------------------------------------------------------------- run-counts.sh
+
+def counts(jobs, run_id=RID):
+    """Run `run-counts.sh` and return its result and its key/value lines as a dict.
+
+    The split takes the first `=` only, because `searches_never_succeeded_ids` carries a list whose
+    entries hold no `=` but whose value must survive whatever it does hold.
+    """
+    r = run_script(COUNTS, jobs, run_id)
+    return r, dict(l.split("=", 1) for l in r.stdout.splitlines() if "=" in l)
+
+
+def judge_all(jobs, rows, **kw):
+    """Record the same judgment for every row.
+
+    Each call is asserted here rather than in the callers, for the reason `seeded_jobs` asserts its
+    search: a judgment that failed leaves the counts short, and the test would then report a wrong
+    count rather than the judgment that never landed.
+    """
+    for row in rows:
+        r = run_script(JUDGE, *judge_args(jobs, row, **kw))
+        assert r.returncode == 0, r.stderr
+
+
+def test_a_run_killed_after_the_search_reports_everything_unreviewed(tmp_path):
+    """A run that surfaced postings and judged none of them: every posting is unreviewed, and the
+    numbers say so rather than reporting an empty run."""
+    jobs = seeded_jobs(tmp_path, "search.linkedin.json")
+    n = len(api_rows("search.linkedin.json"))
+    r, c = counts(jobs)
+    assert r.returncode == 0, r.stderr
+    assert c["postings_surfaced"] == str(n)
+    assert c["postings_reviewed"] == "0"
+    assert c["postings_unreviewed"] == str(n)
+
+
+def test_the_bands_and_filtered_out_sum_to_reviewed(tmp_path):
+    """The two sums the output contract holds to: the three bands plus filtered_out equal reviewed,
+    and reviewed plus unreviewed equal surfaced."""
+    jobs = seeded_jobs(tmp_path, "search.linkedin.json")
+    rows = [e for e in lines(jobs) if e["event"] == "surfaced"]
+    a, b = 2, 7                                    # slice points, not row counts
+    judge_all(jobs, rows[:a], detail_read="true", relevant="true", match="strong",
+              reasoning="Fits.")
+    judge_all(jobs, rows[a:b], detail_read="true", relevant="true", match="moderate",
+              reasoning="Partly fits.")
+    judge_all(jobs, rows[b:], detail_read="false", relevant="false", reasoning="Outside the brief.")
+    _, c = counts(jobs)
+    reviewed = int(c["postings_reviewed"])
+    assert (int(c["match_strong"]) + int(c["match_moderate"]) + int(c["match_weak"])
+            + int(c["filtered_out"])) == reviewed
+    assert reviewed + int(c["postings_unreviewed"]) == int(c["postings_surfaced"])
+    assert int(c["match_strong"]) == a
+    assert int(c["match_moderate"]) == b - a
+    assert int(c["match_weak"]) == 0
+    assert int(c["filtered_out"]) == len(rows) - b
+    assert c["postings_detail_read"] == "0"        # no detail events recorded
+
+
+def test_by_source_sums_to_surfaced(tmp_path):
+    """One `by_source_<name>` line per source that surfaced a posting, and nothing else."""
+    jobs = tmp_path / "jobs.jsonl"
+    jobs.write_text("")
+    for name in ("search.linkedin.json", "search.ashby.json"):
+        record_search(jobs, name)
+    _, c = counts(jobs)
+    per = {k: int(v) for k, v in c.items() if k.startswith("by_source_")}
+    assert sum(per.values()) == int(c["postings_surfaced"])
+    assert per == {"by_source_linkedin": len(api_rows("search.linkedin.json")),
+                   "by_source_ashby": len(api_rows("search.ashby.json"))}
+
+
+def test_rows_new_total_equals_surfaced(tmp_path):
+    """Two queries reaching the same postings. The second search returns the same rows and appends
+    none of them, so it adds nothing to either number."""
+    jobs = tmp_path / "jobs.jsonl"
+    jobs.write_text("")
+    for qid in ("a", "b"):
+        record_search(jobs, "search.linkedin.json", qid)
+    _, c = counts(jobs)
+    assert c["rows_new_total"] == c["postings_surfaced"] == str(len(api_rows("search.linkedin.json")))
+
+
+def test_a_stored_posting_body_does_not_add_to_the_new_row_count(tmp_path):
+    """`rows_new_total` counts the rows the searches appended, which is what keeps it equal to
+    `postings_surfaced` — the output contract prints the two as the same number.
+
+    A stored posting body writes a `call` event carrying `rows_new` 1: `record-api-response.sh:227`
+    passes 1 as the new-row count for a detail read that stored something. Adding `rows_new` from
+    every route would therefore put `rows_new_total` one above `postings_surfaced` for each posting
+    read in full, on every run that read one.
+    """
+    jobs = seeded_jobs(tmp_path, "search.ashby.json")
+    record_detail(jobs, "detail.ashby.json")
+    _, c = counts(jobs)
+    assert c["calls_detail_reads"] == "1"          # the detail read happened
+    assert c["rows_new_total"] == c["postings_surfaced"]
+
+
+def test_a_call_on_a_third_route_is_metered_as_other(tmp_path):
+    """Every metered call is in the total, whatever route it was made against — `status` bills one
+    and is neither a search nor a detail read (`agent-data-reference:51`). A route with no bucket of
+    its own is counted rather than dropped, so the record cannot report fewer calls than the run
+    made."""
+    jobs = tmp_path / "jobs.jsonl"
+    jobs.write_text(
+        '{"event":"call","run_id":"%s","route":"status","source":null,"query_id":null,'
+        '"ok":true,"rows_returned":0,"rows_new":0}\n' % RID)
+    _, c = counts(jobs)
+    assert c["calls_other"] == "1"
+    assert c["calls_searches"] == "0" and c["calls_detail_reads"] == "0"
+    assert c["calls_total_metered"] == "1"
+
+
+def test_one_posting_surfaced_twice_in_a_run_counts_once(tmp_path):
+    """`postings_surfaced` counts postings, not surfaced events. Counting the second line would also
+    put that posting into the reviewed or the unreviewed total twice, and the two would stop summing
+    to surfaced for a reason no key in the output names."""
+    jobs = seeded_jobs(tmp_path, "search.linkedin.json")
+    jobs.write_text(jobs.read_text() + json.dumps(first_surfaced(jobs)) + "\n")
+    _, c = counts(jobs)
+    assert c["postings_surfaced"] == str(len(api_rows("search.linkedin.json")))
+    assert int(c["postings_reviewed"]) + int(c["postings_unreviewed"]) == int(c["postings_surfaced"])
+
+
+def test_a_weak_judgment_lands_in_the_weak_band(tmp_path):
+    """A digest reported a weak match with no weak row behind it, which is one of the wrong numbers
+    this script exists to remove. A weak judgment is counted as weak and in no other band."""
+    jobs = seeded_jobs(tmp_path, "search.linkedin.json")
+    judge_all(jobs, [first_surfaced(jobs)], detail_read="true", relevant="true", match="weak",
+              reasoning="Adjacent to the brief, not in it.")
+    _, c = counts(jobs)
+    assert c["match_weak"] == "1"
+    assert c["match_strong"] == "0" and c["match_moderate"] == "0" and c["filtered_out"] == "0"
+    assert c["postings_reviewed"] == "1"
+
+
+def test_metered_calls_are_counted_including_a_failed_one(tmp_path):
+    """Every `call` event is metered, a failed one included, and each is filed under the route it
+    was made against rather than the route its body looks like."""
+    jobs = seeded_jobs(tmp_path, "search.linkedin.json")
+    run_script(RECORD_API, RID, jobs, FIXTURES / "detail.error.json", "--route", "get-posting")
+    _, c = counts(jobs)
+    assert c["calls_searches"] == "1"          # the failed call was a get-posting, and is filed so
+    assert c["calls_detail_reads"] == "1"
+    assert c["calls_failed"] == "1"
+    assert int(c["calls_total_metered"]) == (int(c["calls_searches"])
+                                             + int(c["calls_detail_reads"])
+                                             + int(c["calls_other"]))
+
+
+def test_postings_detail_read_counts_postings_not_calls(tmp_path):
+    """How many postings this run has the full text of, which is not how many detail reads it
+    paid for."""
+    jobs = seeded_jobs(tmp_path, "search.ashby.json")
+    record_detail(jobs, "detail.ashby.json")
+    record_detail(jobs, "detail.ashby.json")       # a repeat: one more call, no more coverage
+    _, c = counts(jobs)
+    assert c["postings_detail_read"] == "1"
+    assert c["calls_detail_reads"] == "2"
+
+
+def test_a_search_that_failed_then_succeeded_is_not_a_lost_search(tmp_path):
+    """A transient 503 that the retry cleared. The failed attempt is counted as a failed call, and
+    the search still returned, so nothing about it degrades the run."""
+    jobs = tmp_path / "jobs.jsonl"
+    jobs.write_text(
+        '{"event":"call","run_id":"%s","route":"search-jobs","source":"ashby","query_id":"q1",'
+        '"ok":false,"rows_returned":0,"rows_new":0,"retryable":true}\n'
+        '{"event":"call","run_id":"%s","route":"search-jobs","source":"ashby","query_id":"q1",'
+        '"ok":true,"rows_returned":0,"rows_new":0,"retryable":null}\n' % (RID, RID))
+    _, c = counts(jobs)
+    assert c["calls_failed"] == "1"
+    assert c["searches_never_succeeded"] == "0"
+    assert c["searches_never_succeeded_ids"] == ""
+
+
+def test_a_search_that_never_returned_is_named(tmp_path):
+    """Three attempts against one source and query, none of which returned. That is one search
+    whose postings were never surfaced, and it is named so the digest can say which one."""
+    jobs = tmp_path / "jobs.jsonl"
+    jobs.write_text("".join(
+        '{"event":"call","run_id":"%s","route":"search-jobs","source":"ashby","query_id":"q2",'
+        '"ok":false,"rows_returned":0,"rows_new":0,"retryable":true}\n' % RID for _ in range(3)))
+    _, c = counts(jobs)
+    assert c["searches_never_succeeded"] == "1"
+    assert c["searches_never_succeeded_ids"] == "ashby:q2"
+
+
+def test_a_failed_detail_read_is_not_a_lost_search(tmp_path):
+    """A posting whose detail read failed gets judged from its summary row, so the run stays
+    healthy. Only a search that never returned takes postings out of reach."""
+    jobs = seeded_jobs(tmp_path, "search.ashby.json")
+    run_script(RECORD_API, RID, jobs, FIXTURES / "detail.error.json", "--route", "get-posting")
+    _, c = counts(jobs)
+    assert c["calls_failed"] == "1"
+    assert c["searches_never_succeeded"] == "0"
+
+
+def test_a_relevant_row_with_no_band_is_reported_as_invalid(tmp_path):
+    """A relevant posting carries a band. One without a band would be counted as reviewed and land
+    in no band, so the bands would stop summing to reviewed with nothing saying why."""
+    jobs = seeded_jobs(tmp_path, "search.linkedin.json")
+    row = first_surfaced(jobs)
+    jobs.write_text(jobs.read_text() +
+        '{"event":"evaluated","run_id":"%s","source":"%s","source_id":"%s",'
+        '"detail_read":true,"relevant":true,"match":null}\n'
+        % (RID, row["source"], row["source_id"]))
+    r, _ = counts(jobs)
+    assert r.returncode == 1
+    assert "relevant-row-without-a-band=1" in r.stdout
+
+
+def test_another_runs_events_do_not_enter_these_counts(tmp_path):
+    """The same postings surfaced by two runs in one log. Each run counts its own events.
+
+    The call count is asserted alongside the posting count because the second run surfaced the same
+    ids: with the run filter removed, its surfaced events land on keys this run already has and
+    `postings_surfaced` does not move (measured — that mutation passes on the posting count alone).
+    Its search call has no such key, so `calls_searches` is what the filter is visible in.
+    """
+    jobs = seeded_jobs(tmp_path, "search.linkedin.json")
+    other = jobs.read_text().replace(RID, "2026-01-01T00-00-00Z")
+    jobs.write_text(jobs.read_text() + other)
+    _, c = counts(jobs)
+    assert c["postings_surfaced"] == str(len(api_rows("search.linkedin.json")))
+    assert c["calls_searches"] == "1"
+
+
+def test_a_later_run_judging_an_earlier_runs_posting_does_not_move_its_counts(tmp_path):
+    """Invariant 4 has to hold a year later, not only at close."""
+    jobs = seeded_jobs(tmp_path, "search.linkedin.json")
+    _, before = counts(jobs)
+    row = first_surfaced(jobs)
+    later = "2026-09-01T00-00-00Z"
+    jobs.write_text(jobs.read_text() +
+        '{"event":"surfaced","run_id":"%s","source":"%s","source_id":"%s","title":"T",'
+        '"company_name":"C"}\n'
+        '{"event":"evaluated","run_id":"%s","source":"%s","source_id":"%s",'
+        '"detail_read":true,"relevant":true,"match":"strong"}\n'
+        % (later, row["source"], row["source_id"], later, row["source"], row["source_id"]))
+    _, after = counts(jobs)
+    assert after["postings_unreviewed"] == before["postings_unreviewed"]
+    assert after["postings_reviewed"] == before["postings_reviewed"]
+
+
+def test_an_awk_that_died_partway_is_not_reported_as_counts(tmp_path):
+    """The counts go to stdout, so a caller cannot tell a complete key set from a partial one by
+    reading it — an awk that died after printing four lines leaves four real-looking counts there.
+    The exit status is what tells them apart, and it is awk's own status: with awk shimmed to print
+    one count line and then fail, this must not exit 0."""
+    jobs = seeded_jobs(tmp_path, "search.linkedin.json")
+    r = run_script(COUNTS, jobs, RID,
+                   env=awk_shim(tmp_path, "run-counts.awk", "postings_surfaced=999"))
+    assert r.returncode != 0, r.stdout
+    assert "postings_surfaced=999" in r.stdout     # the count a caller would have used
+
+
+def test_counts_for_a_log_that_is_not_there_exit_two_and_print_nothing(tmp_path):
+    """A run whose log is missing is not a run that surfaced nothing. Printing zeros would let a
+    record be written from a path typed wrong."""
+    r, c = counts(tmp_path / "absent.jsonl")
+    assert r.returncode == 2
+    assert c == {}
+    assert "no such file" in r.stderr
 
 
 # ------------------------------------------------------------------- POSIX portability
