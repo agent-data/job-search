@@ -8,13 +8,17 @@ against a temp fixture and asserts what the script does: dedup, the jobs.jsonl e
 schedule-line composition, and workspace discovery.
 
 Scripts are invoked through `sh` (and, where present, strict `dash`) — never `bash` — so a bash-only
-construct fails the suite. Nothing here asserts how the reference documents word the same rules.
+construct fails the suite. The two `.awk` programs are driven the same way, one `awk` subprocess per
+case, asserting what the program prints. Nothing here asserts how the reference documents word the
+same rules.
 """
+import json
 import os
 import pathlib
 import re
 import shutil
 import subprocess
+import tempfile
 
 import pytest
 
@@ -22,11 +26,14 @@ ROOT = pathlib.Path(__file__).resolve().parents[1]
 RUNBOOK_SCRIPTS = ROOT / "skills" / "job-search-runbook" / "scripts"
 RUN_SCRIPTS = ROOT / "skills" / "job-search-run" / "scripts"
 SEARCH_SCRIPTS = ROOT / "skills" / "job-search" / "scripts"
+FIXTURES = ROOT / "tests" / "fixtures" / "api-responses"
 DEDUP = RUN_SCRIPTS / "dedup.sh"
 APPEND = RUN_SCRIPTS / "event-log-append.sh"
 SCHEDULE = SEARCH_SCRIPTS / "schedule-line.sh"
 DISCOVERY = RUNBOOK_SCRIPTS / "workspace-discovery.sh"
 VALIDATE = RUNBOOK_SCRIPTS / "validate-workspace.sh"
+SCAN = RUN_SCRIPTS / "json-scan.awk"
+FIELD = RUN_SCRIPTS / "event-field.awk"
 
 ALL_SCRIPTS = [DEDUP, APPEND, SCHEDULE, DISCOVERY, VALIDATE]
 
@@ -299,6 +306,125 @@ def test_workspace_discovery_registry_wins_unconditionally(tmp_path):
     assert d["workspace"] == str(custom)
     assert d["source"] == "registry"
     assert d["first_run"] == "true"  # its config.yaml does not exist yet
+
+
+# ------------------------------------------------------------------------------- json-scan.awk
+
+def scan(text):
+    r = subprocess.run(["awk", "-f", str(SCAN)], input=text, capture_output=True, text=True)
+    return r, [l.split("\t", 1) for l in r.stdout.splitlines()]
+
+
+def test_a_scalar_is_printed_with_its_path_and_its_raw_value():
+    r, out = scan('{"data": {"results": [{"title": "Strategic Finance", "source_id": "4417545222"}]}}')
+    assert r.returncode == 0, r.stderr
+    assert ["data.results.0.title", '"Strategic Finance"'] in out
+    assert ["data.results.0.source_id", '"4417545222"'] in out
+
+
+@pytest.mark.skipif(
+    not (FIXTURES / "search.linkedin.json").exists(), reason="fixture arrives in Task 1"
+)
+def test_the_same_document_compacted_scans_identically():
+    pretty = (FIXTURES / "search.linkedin.json").read_text()
+    compact = json.dumps(json.loads(pretty), separators=(",", ":"), ensure_ascii=False)
+    assert scan(pretty)[1] == scan(compact)[1]
+
+
+def test_a_row_closing_on_the_same_line_as_its_last_field_keeps_that_field():
+    _, out = scan('{"data":{"results":[\n  {"a": 1,\n   "b": "last" }\n]}}')
+    assert ["data.results.0.b", '"last"'] in out
+
+
+def test_a_nested_object_inside_a_row_does_not_leak_into_the_row():
+    _, out = scan('{"data":{"results":[{"source_id":"x","co":{"source_id":"LEAK"},"t":[1,2]}]}}')
+    row = [p for p, _ in out if p.startswith("data.results.0.") and p.count(".") == 3]
+    assert row == ["data.results.0.source_id"]
+    assert ["data.results.0.co.source_id", '"LEAK"'] in out
+
+
+def test_braces_and_quotes_inside_a_string_are_not_structure():
+    hostile = 'He said \\"{done}\\" — path C:\\\\temp\\tand\\na newline.'
+    _, out = scan('{"data": {"description_markdown": "%s"}}' % hostile)
+    assert dict(out)["data.description_markdown"] == '"%s"' % hostile
+
+
+def test_an_empty_results_array_prints_no_row_and_succeeds():
+    r, out = scan('{"data": {"results": [], "query": {"source": "ashby"}}}')
+    assert r.returncode == 0
+    assert [p for p, _ in out if p.startswith("data.results.")] == []
+    assert ["data.query.source", '"ashby"'] in out
+
+
+def test_malformed_json_exits_two_and_names_the_offset():
+    r, _ = scan('{"data": {"results": [')
+    assert r.returncode == 2
+    assert "json-scan" in r.stderr
+    # Without the byte offset, awk's own "can't open file .../json-scan.awk" also exits 2 and
+    # also contains "json-scan", so a missing scanner would pass this test.
+    assert re.search(r"at byte \d+", r.stderr), r.stderr
+
+
+@pytest.mark.skipif(
+    not (FIXTURES / "detail.error.json").exists(), reason="fixture arrives in Task 1"
+)
+def test_the_real_error_body_scans_to_its_fields():
+    r, out = scan((FIXTURES / "detail.error.json").read_text())
+    d = dict(out)
+    assert d["error.code"] == '"validation_error"'
+    assert d["error.retryable"] == "false"
+    assert d["error.request_id"].startswith('"req_')
+
+
+# ----------------------------------------------------------------------------- event-field.awk
+
+PROBE = "{ printf \"%s\\n%s\\n\", jraw($0, k), jval($0, k) }"
+
+
+def field(line, key):
+    """Read one field with the library, driven by a one-line probe program.
+
+    POSIX awk forbids mixing `-f` with inline program text, so the probe goes in a file of its own
+    and the library is chained ahead of it with a second `-f` — the way every caller runs it.
+    """
+    with tempfile.TemporaryDirectory() as tmpdir:
+        probe = pathlib.Path(tmpdir) / "probe.awk"
+        probe.write_text(PROBE + "\n", encoding="utf-8")
+        r = subprocess.run(
+            ["awk", "-v", "k=" + key, "-f", str(FIELD), "-f", str(probe)],
+            input=line + "\n",
+            capture_output=True,
+            text=True,
+        )
+    assert r.returncode == 0, r.stderr
+    raw, val = r.stdout.split("\n")[:2]
+    return raw, val
+
+
+def test_source_never_matches_source_id_or_source_url():
+    line = '{"source":"linkedin","source_id":"123","source_url":"https://x/y"}'
+    assert field(line, "source") == ('"linkedin"', "linkedin")
+    assert field(line, "source_id") == ('"123"', "123")
+
+
+def test_an_escaped_quote_inside_a_value_does_not_end_it():
+    line = '{"title":"Manager \\"Finance\\" role","company_name":"Acme"}'
+    assert field(line, "title")[0] == '"Manager \\"Finance\\" role"'
+    assert field(line, "title")[1] == 'Manager "Finance" role'
+    assert field(line, "company_name")[1] == "Acme"
+
+
+def test_a_number_a_boolean_and_a_null_come_back_as_written():
+    line = '{"n":25,"ok":true,"m":null}'
+    assert field(line, "n")[0] == "25"
+    assert field(line, "ok")[0] == "true"
+    assert field(line, "m")[0] == "null"
+
+
+def test_an_absent_key_is_empty():
+    assert field('{"a":1}', "b") == ("", "")
+
+
 # ------------------------------------------------------------------- POSIX portability
 
 def test_scripts_pass_posix_syntax_check():

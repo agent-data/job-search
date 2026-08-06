@@ -113,17 +113,6 @@ def write_run(workspace, record):
     return path
 
 
-@pytest.fixture
-def tmp_workspace(tmp_path):
-    """A workspace with nothing wrong with it: valid config, valid brief, one valid run record."""
-    workspace = tmp_path / "workspace"
-    (workspace / "runs").mkdir(parents=True)
-    (workspace / "config.yaml").write_text(config_text(), encoding="utf-8")
-    (workspace / "preferences.md").write_text(VALID_PREFERENCES, encoding="utf-8")
-    write_run(workspace, run_record())
-    return workspace
-
-
 def run_validator(workspace, *args, shell="sh"):
     return subprocess.run(
         [shell, str(VALIDATOR), str(workspace), *args],
