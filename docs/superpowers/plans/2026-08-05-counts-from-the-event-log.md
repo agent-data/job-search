@@ -2454,8 +2454,8 @@ def test_a_judged_posting_is_still_filtered_out(tmp_path):
 
 - [ ] **Step 2: Run the tests and watch them fail**
 
-Run: `python3 -m pytest tests/test_mechanics_scripts.py -k "not_dropped or never_judged or still_filtered" -v`
-Expected: the first two FAIL (1 line instead of 2; `abc-123` missing from the output); the third already passes.
+Run: `python3 -m pytest tests/test_mechanics_scripts.py -k "not_dropped or never_judged or still_filtered or still_deduped" -v`
+Expected: **4 collected** — confirm that number with `--collect-only -q` before trusting the run. Measured on 2026-08-06 against the module as it stands: this selector collects 0 of 277, which is right, because none of the four tests exists yet. The first two FAIL (1 line instead of 2; `abc-123` missing from the output); `still_filtered` and `still_deduped` already pass, and `still_deduped` is there to keep passing — it pins a behavior Step 3 must not break.
 
 - [ ] **Step 3: Fix `event-log-append.sh`**
 
@@ -2465,12 +2465,43 @@ Replace the idempotency block (currently lines 53-58):
   # Idempotency: skip if this (source, source_id) already has an `evaluated` event. The filter on
   # event type matters — a posting is recorded as `surfaced` before it is judged, and without it
   # that first event would make the judgment look like a duplicate and drop it.
-  if [ -f "$jobs" ] && grep -F '"event":"evaluated"' "$jobs" 2>/dev/null \
+  #
+  # The event-type match tolerates whitespace around the colon, like every other check in this
+  # script, because this is the path a host writing an event by hand comes through and a hand-written
+  # event may carry `"event": "evaluated"`. A plain `grep -F '"event":"evaluated"'` would not find
+  # that line, and the second copy of it would be appended.
+  if [ -f "$jobs" ] && grep -E '"event"[[:space:]]*:[[:space:]]*"evaluated"' "$jobs" 2>/dev/null \
        | grep -E '"source"[[:space:]]*:[[:space:]]*"'"$src"'"' \
        | grep -o '"source_id"[[:space:]]*:[[:space:]]*"[^"]*"' | cut -d'"' -f4 \
        | grep -qxF "$sid"; then
     exit 0
   fi
+```
+
+The whitespace tolerance is not a precaution. Measured on the shipped script on 2026-08-06, before this task:
+
+```sh
+EV='{"event": "evaluated","run_id":"R","source": "ashby","source_id": "abc-123","relevant":true,"match":"strong"}'
+printf '%s' "$EV" | sh event-log-append.sh jobs.jsonl   # exit 0
+printf '%s' "$EV" | sh event-log-append.sh jobs.jsonl   # exit 0
+wc -l < jobs.jsonl                                      # 1 — deduped today
+grep -cF '"event":"evaluated"' jobs.jsonl               # 0 — a -F filter would not see it
+grep -cE '"event"[[:space:]]*:[[:space:]]*"evaluated"' jobs.jsonl   # 1
+```
+
+So a `grep -F` filter here would turn a case that works today into a duplicate append. Add a test for it alongside the three above:
+
+```python
+def test_a_hand_written_evaluated_event_with_spaces_is_still_deduped(tmp_path):
+    """The event-type filter must tolerate the whitespace the rest of this script tolerates;
+    a host writing an event by hand may put a space after the colon."""
+    jobs = tmp_path / "jobs.jsonl"
+    ev = ('{"event": "evaluated","run_id":"R","source": "ashby","source_id": "abc-123",'
+          '"relevant":true,"match":"strong"}')
+    for _ in range(2):
+        r = subprocess.run(["sh", str(APPEND), str(jobs)], input=ev, capture_output=True, text=True)
+        assert r.returncode == 0, r.stderr
+    assert len(lines(jobs)) == 1
 ```
 
 - [ ] **Step 4: Reconcile `event-log-append.sh`'s header with the five event types**
@@ -2486,7 +2517,11 @@ Replace the known-ids pipeline (currently lines 58-62):
 ```sh
 # Known-ids set for this source: the postings that already carry a judgment. A posting a stopped
 # run surfaced and never judged is NOT known — the next run has to offer it again.
-grep -F '"event":"evaluated"' "$jobs" 2>/dev/null \
+#
+# The event-type match tolerates whitespace around the colon for the same reason the one in
+# event-log-append.sh does: a hand-written `"event": "evaluated"` is a judgment, and a posting whose
+# judgment this misses is offered to the next run as new.
+grep -E '"event"[[:space:]]*:[[:space:]]*"evaluated"' "$jobs" 2>/dev/null \
   | grep -E '"source"[[:space:]]*:[[:space:]]*"'"$src"'"' \
   | grep -o '"source_id"[[:space:]]*:[[:space:]]*"[^"]*"' \
   | cut -d'"' -f4 \
