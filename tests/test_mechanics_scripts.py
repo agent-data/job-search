@@ -414,6 +414,13 @@ def test_an_escaped_quote_inside_a_value_does_not_end_it():
     assert field(line, "company_name")[1] == "Acme"
 
 
+def test_a_doubled_backslash_is_one_backslash_and_does_not_eat_the_next_character():
+    line = r'{"t":"C:\\temp and \\nope","company_name":"Globex"}'
+    assert field(line, "t")[0] == r'"C:\\temp and \\nope"'      # jraw: byte-exact
+    assert field(line, "t")[1] == "C:\\temp and \\nope"         # jval: two literal backslashes
+    assert field(line, "company_name")[1] == "Globex"           # the field after it still reads
+
+
 def test_a_number_a_boolean_and_a_null_come_back_as_written():
     line = '{"n":25,"ok":true,"m":null}'
     assert field(line, "n")[0] == "25"

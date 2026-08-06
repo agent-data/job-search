@@ -39,15 +39,20 @@ function jraw(line, key,   p, i, c, len) {
   return ""
 }
 
+# A doubled backslash is resolved first and held aside as \001, so the character after it cannot be
+# read as part of an escape: "C:\\temp" is C:\temp, not C:\ + a tab. \001 is safe to borrow because
+# a JSON string cannot carry a raw control character — it has to be written \u0001, which arrives
+# here as those six characters and is left alone. The held backslash goes back last.
 function jval(line, key,   v) {
   v = jraw(line, key)
   if (substr(v, 1, 1) != "\"") return v
   v = substr(v, 2, length(v) - 2)
+  gsub(/\\\\/, "\001", v)
   gsub(/\\n/, " ", v)
   gsub(/\\r/, " ", v)
   gsub(/\\t/, " ", v)
   gsub(/\\"/, "\"", v)
   gsub(/\\\//, "/", v)
-  gsub(/\\\\/, "\\", v)
+  gsub(/\001/, "\\", v)
   return v
 }
