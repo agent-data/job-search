@@ -1,9 +1,15 @@
 # run-counts.awk — see run-counts.sh.
 #
-# Two ordered lists carry what the END block prints: `keys` holds the postings this run surfaced and
-# `grouporder` holds the search groups, both in the order they first appear in the log. awk walks an
-# array in no defined order, so the by_source lines and the searches_never_succeeded_ids list are
-# built from these lists — the same log then gives the same output every time it is read.
+# Two ordered lists fix the order of the lines this prints, because awk walks an array in no defined
+# order. `srcorder` holds the sources in the order they first surfaced a posting and orders the
+# by_source_* lines; `grouporder` holds the search groups in the order they first appear in the log
+# and orders searches_never_succeeded_ids. Replacing either with a `for (x in array)` walk moves the
+# output: measured on a log with four lost searches, BSD awk and mawk each gave a different order
+# and neither matched the log, so the same log read on two machines would print two different lines.
+#
+# `keys` orders nothing that is printed. It is how the END block reaches each posting this run
+# surfaced exactly once, and every counter in that loop is a sum the order does not change —
+# replacing that walk with `for (k in mine)` gives byte-identical output.
 #
 # A posting is keyed by its source and its source_id joined with SUBSEP, the 0x1c byte. That byte
 # cannot reach a value: json-scan.awk refuses a raw control character inside a string, and jval
