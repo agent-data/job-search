@@ -23,7 +23,22 @@
 - **Never assert on a skill's prose.** No test may grep a `SKILL.md` for a phrase, a sentence, or a regex standing in for a documented rule. Script behavior is tested with pytest against real artifacts; anything a skill's prose governs is graded by the live behavior evals in `evals/`. `tests/test_mechanics_scripts.py`'s own docstring already states this: "Nothing here asserts how the reference documents word the same rules."
 - **A `-k` selector that matches nothing reports success.** Every verification step below names one, and `-k record_api` was measured on 2026-08-06 to select zero of the thirteen tests it was written for — a green run that tested nothing. Before trusting any step that uses `-k`, run it with `--collect-only -q` and confirm the count is what you expect; when it is not, run the whole module instead, which takes under a second. Say the number you collected in the report.
 - **No test hardcodes a number that came from a capture.** A count that depends on what a fixture holds is read from the fixture (`len(api_rows("search.linkedin.json"))`), never written as a literal. A live capture that returns 24 rows instead of 25 must not turn into a red suite.
-- **Fixtures carry no real posting.** `.gitignore` already states the rule for eval output — "they carry machine paths and live posting text; only the aggregate numbers in `evals/baseline/` are committed." `tests/fixtures/` is not gitignored, so every captured response is scrubbed to fictional companies, titles, URLs and description text before it is committed, by `tests/fixtures/scrub.py` so a re-capture is reproducible. `evals/cases/fault-503.yaml` states the same convention: "The companies are fictional, as in every other fixture here."
+- **Tests read live agent-data responses, and no response is committed.** Superseded the scrub-and-commit rule on 2026-08-06 at the repo owner's direction: "whenever we add a new feature (script, change to a skill, etc.), we should test using live data since live data can vary significantly — not to mention we're building for the live data, not our assumption of what that might look like", and "if it's easier to rely exclusively on live data rather than trying to create hypothetical, 'real-looking' fixtures, let's do that." Metered calls are free to the owner; never shrink, cap or price a test run to save them.
+
+  The scrub broke its own contract, which is what settled this. It promised to keep "every key, every type, every null, the row count" and replace only identity, but its `source_id` replacement changed both width and character class. Measured against live agent-data on 2026-08-06:
+
+  | | live | committed fixture |
+  |---|---|---|
+  | linkedin `source_id` | width 10, all digits | width 13, `linkedin-0000`, alnum+dash |
+  | ashby `source_id` | width 36, UUID-shaped | width 10, `ashby-0000` |
+  | greenhouse `source_id` | 9 distinct widths, 13-25, contains `:` | no fixture exists |
+  | lever `source_id` | widths 41-48, contains `-` and `:` | no fixture exists |
+
+  Two of the four sources the API serves had no fixture at all. The row key set (20 keys) and the `get-posting` key set (25 keys) are identical across all four sources and did match the fixtures, so the schemas were right and only the values were wrong.
+
+  Three live properties no fixture carried: LinkedIn's `get-posting` embeds a whole schema.org record in `salary_display` (8,833 characters on 2026-08-06); greenhouse descriptions carry emoji and non-breaking spaces; and LinkedIn's 6,871-character description holds no newline at all while the other three sources' do. None of the 92 live ids sampled held `/`, `|`, `"`, `\`, a space, `=` or a control character, and none was a prefix of another.
+
+  CI cannot reach agent-data — `.github/workflows/ci.yml` carries no key and no network step — and that is accepted rather than worked around: the owner's own development loop is what these tests serve.
 - **Word budget:** `AGENTS.md:29` sets 10,000 words across the seven `SKILL.md` files. `wc -w skills/*/SKILL.md` reports 9,092 at the start of this plan. Exceeding 10,000 at the end is a blocking defect.
 - **Public repo, MIT, © Aptiq Labs, Inc.** No tracked file — not a doc, not a commit message — mentions a hosted or commercial product. This is a counting and timestamp fix.
 - **Prose voice.** The `SKILL.md` files are continuous prose read by a model at runtime. Do not restructure them into checklists or add headings that were not there.
