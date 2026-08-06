@@ -2618,8 +2618,8 @@ def test_a_workspace_with_no_brief_does_not_open_a_run_with_an_empty_revision(tm
 
 - [ ] **Step 2: Run the tests and watch them fail**
 
-Run: `python3 -m pytest tests/test_mechanics_scripts.py -k open_run -v`
-Expected: FAIL — the script does not exist.
+Run: `python3 -m pytest tests/test_mechanics_scripts.py -k "same_instant or creates_the_marker or first_twelve or reports_the_findings or no_run_at_all or empty_revision" -v`
+Expected: **6 collected**, all failing — the script does not exist. Confirm the 6 with `--collect-only -q` first. `-k open_run` selects **0 of 287**, measured on 2026-08-06: none of the six names below contains that substring, and the selector above was measured to collect 0 of 287 today, so anything it picks up after Step 1 is one of these six.
 
 - [ ] **Step 3: Write the script**
 
@@ -2676,18 +2676,31 @@ printf 'run_id=%s\n' "$run_id"
 printf 'started_at=%s\n' "$now"
 printf 'brief_revision=%s\n' "$rev"
 
-# An empty revision would ride into the record as a null nobody notices, so say it here. The
-# validator reports the missing brief too; this makes the run's own output carry it.
+# An empty revision would ride into the record as a null nobody notices, so say it here.
 [ -n "$rev" ] || printf 'INVALID preferences.md missing-file\n'
 
 sh "$here/validate-workspace.sh" "$ws" || exit 1
 [ -n "$rev" ] || exit 1
 ```
 
+**Resolve the duplicate finding before you commit this.** `validate-workspace.sh` already prints `INVALID preferences.md missing-file` for a workspace with no brief — measured on 2026-08-06:
+
+```sh
+mkdir -p /tmp/vw/runs && printf 'version: 2\n' > /tmp/vw/config.yaml
+sh skills/job-search-runbook/scripts/validate-workspace.sh /tmp/vw
+# stdout, exit 1:
+#   INVALID config.yaml missing-key queries
+#   INVALID config.yaml missing-key schedule
+#   INVALID config.yaml missing-key search.sources
+#   INVALID preferences.md missing-file
+```
+
+So the sketch above prints that identical line twice, and anything counting `INVALID` lines double-counts one finding. Pick one owner for it and say why in the comment: either drop the `printf` here and let the validator be the only reporter, or keep it and make the two lines distinguishable. Both are defensible; two identical lines are not. Whichever you pick, add a test that pins the count — a workspace with no brief must produce exactly one `INVALID preferences.md` line.
+
 - [ ] **Step 4: Run the tests to verify they pass**
 
-Run: `python3 -m pytest tests/test_mechanics_scripts.py -k open_run -v`
-Expected: all six PASS.
+Run the same selector as Step 2, then the whole module.
+Expected: all six PASS, and the module green.
 
 - [ ] **Step 5: Commit**
 
