@@ -371,6 +371,7 @@ def test_malformed_json_exits_two_and_names_the_offset():
         ('"just a string"', "a JSON document starts with { or ["),
         ('{"a":1} junk', "trailing text after the document"),
         ('{"a":"no end', "unterminated string"),
+        ('{"a":}', "expected a value"),
         ('{1:2}', "expected a key"),
         ('{"a" 1}', "expected : after a key"),
         ('{"a":1 "b":2}', "expected , or } in an object"),
@@ -395,11 +396,26 @@ def test_a_raw_control_character_inside_a_string_exits_two(raw):
 
 
 def test_a_raw_control_character_after_a_backslash_also_exits_two():
-    """The escape branch skips two characters, so the character after a backslash needs the same
-    check — otherwise a raw newline reaches the value by riding behind one."""
+    """The input is a backslash immediately followed by a raw newline. The escape branch skips two
+    characters at once, so without a check on the second one that newline would reach the value."""
     r, _ = scan('{"a":"one\\\ntwo","b":2}')
     assert r.returncode == 2, r.stdout
     assert "control character" in r.stderr, r.stderr
+
+
+def test_a_raw_control_character_inside_a_bare_token_exits_two():
+    """A tab, newline or CR ends a number legitimately, so only the other control characters are
+    wrong here. `{"a":1\\0012}` used to print the control character as part of the value."""
+    r, _ = scan('{"a":1\0012}')
+    assert r.returncode == 2, r.stdout
+    assert "control character" in r.stderr, r.stderr
+
+
+@pytest.mark.parametrize("ends_the_token", [" ", "\t", "\n", "\r"])
+def test_whitespace_still_ends_a_bare_token_rather_than_failing(ends_the_token):
+    r, out = scan('{"a":1%s,"b":2}' % ends_the_token)
+    assert r.returncode == 0, r.stderr
+    assert ["a", "1"] in out
 
 
 def test_the_scanner_reads_a_file_named_as_an_operand(tmp_path):
@@ -497,11 +513,13 @@ def test_whitespace_around_the_colon_does_not_hide_a_field(line):
 
 
 def test_a_value_that_reads_like_the_key_is_skipped_for_the_real_key():
-    """`"title"` here is a value with a comma after it, not a key with a colon, so the search goes
-    on to the next occurrence. This is the one shape that exercises that retry: an escaped quote in
-    free text is written `\\"title\\"` and never forms the bare `"title"` the search looks for."""
-    assert field('{"a":"title","title":"Real Title"}', "title") == ('"Real Title"', "Real Title")
-    line = '{"reasoning":"they call it \\"title\\" over there","title":"Real Title"}'
+    """The input holds `"title"` twice: first as the value of `a`, with a space and a comma after
+    it, then as the real key, with a space before its colon. Both halves are needed to reach the
+    retry. Without the bare-value occurrence there is nothing to skip; without the space before the
+    real key's colon, a search for the glued `"title":` would already land on the right one and
+    never retry. An escaped quote in free text is written `\\"title\\"`, which never forms the bare
+    `"title"` the search looks for, so free text alone does not reach this path either."""
+    line = '{"a":"title" ,"title" :"Real Title"}'
     assert field(line, "title") == ('"Real Title"', "Real Title")
 
 

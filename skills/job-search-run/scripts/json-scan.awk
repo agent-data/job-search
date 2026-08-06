@@ -90,12 +90,15 @@ function ctlbail(at) {
   bail("a raw control character inside a string")
 }
 
-# A number, true, false or null: everything up to the next structural character or space.
+# A number, true, false or null: everything up to the next structural character or space. The
+# control-character check comes after the break, because a tab, newline or CR ends the token here
+# rather than being wrong; any other control character is inside the token and is not valid JSON.
 function readbare(   start, c) {
   start = i
   while (i <= n) {
     c = substr(doc, i, 1)
     if (c == "," || c == "}" || c == "]" || c == " " || c == "\t" || c == "\n" || c == "\r") break
+    if (index(ctl, c) > 0) bail("a raw control character in a value")
     i++
   }
   if (i == start) bail("expected a value")
