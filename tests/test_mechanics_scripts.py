@@ -365,6 +365,52 @@ def test_malformed_json_exits_two_and_names_the_offset():
     assert re.search(r"at byte \d+", r.stderr), r.stderr
 
 
+@pytest.mark.parametrize(
+    "document,reason",
+    [
+        ('"just a string"', "a JSON document starts with { or ["),
+        ('{"a":1} junk', "trailing text after the document"),
+        ('{"a":"no end', "unterminated string"),
+        ('{1:2}', "expected a key"),
+        ('{"a" 1}', "expected : after a key"),
+        ('{"a":1 "b":2}', "expected , or } in an object"),
+        ('{"a":[1 2]}', "expected , or ] in an array"),
+    ],
+)
+def test_every_malformed_shape_exits_two_and_says_what_was_wrong(document, reason):
+    r, _ = scan(document)
+    assert r.returncode == 2
+    assert reason in r.stderr, r.stderr
+    assert re.search(r"at byte \d+", r.stderr), r.stderr
+
+
+@pytest.mark.parametrize("raw", ["\n", "\t", "\r", "\001"])
+def test_a_raw_control_character_inside_a_string_exits_two(raw):
+    """RFC 8259 forbids a raw control character in a string, and a raw newline or tab would put a
+    line break or a second tab inside a value — breaking the one-line-one-field framing that every
+    `awk -F'\\t'` consumer reads by. It must not pass through as a row."""
+    r, _ = scan('{"a":"one%stwo","b":2}' % raw)
+    assert r.returncode == 2, r.stdout
+    assert "control character" in r.stderr, r.stderr
+
+
+def test_a_raw_control_character_after_a_backslash_also_exits_two():
+    """The escape branch skips two characters, so the character after a backslash needs the same
+    check — otherwise a raw newline reaches the value by riding behind one."""
+    r, _ = scan('{"a":"one\\\ntwo","b":2}')
+    assert r.returncode == 2, r.stdout
+    assert "control character" in r.stderr, r.stderr
+
+
+def test_the_scanner_reads_a_file_named_as_an_operand(tmp_path):
+    """The documented form is `awk -f json-scan.awk <file.json>`; every other test pipes stdin."""
+    path = tmp_path / "response.json"
+    path.write_text('{"data": {"query": {"source": "ashby"}}}', encoding="utf-8")
+    r = subprocess.run(["awk", "-f", str(SCAN), str(path)], capture_output=True, text=True)
+    assert r.returncode == 0, r.stderr
+    assert r.stdout == 'data.query.source\t"ashby"\n'
+
+
 @pytest.mark.skipif(
     not (FIXTURES / "detail.error.json").exists(), reason="fixture arrives in Task 1"
 )
@@ -430,6 +476,55 @@ def test_a_number_a_boolean_and_a_null_come_back_as_written():
 
 def test_an_absent_key_is_empty():
     assert field('{"a":1}', "b") == ("", "")
+
+
+@pytest.mark.parametrize(
+    "line",
+    [
+        '{"source":"linkedin","status":"applied","n":25}',
+        '{"source": "linkedin","status": "applied","n": 25}',
+        '{"source" :"linkedin","status" :"applied","n" :25}',
+        '{"source" : "linkedin" , "status" : "applied" , "n" : 25 }',
+    ],
+)
+def test_whitespace_around_the_colon_does_not_hide_a_field(line):
+    """`event-log-append.sh` accepts every one of these — its field checks all read
+    `"key"[[:space:]]*:[[:space:]]*` — so an event written by hand arrives in these shapes. A
+    `status_changed` read as `" \\"applied\\""` would land in the wrong pipeline bucket."""
+    assert field(line, "source") == ('"linkedin"', "linkedin")
+    assert field(line, "status") == ('"applied"', "applied")
+    assert field(line, "n") == ("25", "25")
+
+
+def test_a_value_that_reads_like_the_key_is_skipped_for_the_real_key():
+    """`"title"` here is a value with a comma after it, not a key with a colon, so the search goes
+    on to the next occurrence. This is the one shape that exercises that retry: an escaped quote in
+    free text is written `\\"title\\"` and never forms the bare `"title"` the search looks for."""
+    assert field('{"a":"title","title":"Real Title"}', "title") == ('"Real Title"', "Real Title")
+    line = '{"reasoning":"they call it \\"title\\" over there","title":"Real Title"}'
+    assert field(line, "title") == ('"Real Title"', "Real Title")
+
+
+def test_an_object_or_an_array_value_comes_back_empty_rather_than_as_a_fragment():
+    """Cut at the first `}` or `]`, a nested value would read like a real one. `json-scan.awk` is
+    what reads a nested value."""
+    line = '{"obj":{"b":1},"arr":[1,2],"after":"OK"}'
+    assert field(line, "obj") == ("", "")
+    assert field(line, "arr") == ("", "")
+    assert field(line, "after")[1] == "OK"
+
+
+def test_backspace_and_formfeed_resolve_and_a_unicode_escape_is_left_as_written():
+    """The escape set is a decision on the record: the API sends raw UTF-8, never `\\uXXXX`
+    (`grep -c '\\\\u[0-9a-fA-F]\\{4\\}'` answers 0 on a live search and a live get-posting response),
+    so a `\\uXXXX` escape stays as its six characters instead of being decoded."""
+    escape = "\\u00f6"                       # the six characters a JSON \uXXXX escape is written with
+    assert len(escape) == 6
+    line = '{"t":"a\\bb\\fc","u":"gr%sffnung","after":"OK"}' % escape
+    assert field(line, "t")[1] == "a b c"
+    assert json.loads(line)["u"] == "gröffnung"          # what the escape means
+    assert field(line, "u")[1] == "gr%sffnung" % escape       # what jval returns: left as written
+    assert field(line, "after")[1] == "OK"
 
 
 # ------------------------------------------------------------------- POSIX portability
