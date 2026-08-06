@@ -968,6 +968,16 @@ def live_values(doc, scrub):
     return found
 
 
+def test_the_fixture_glob_finds_something_to_guard():
+    """The two guards below are parametrized over a glob of the fixture directory. pytest reports
+    an empty parameter list as one skipped test and exits 0, so if that directory were emptied,
+    renamed, or moved while `FIXTURES` still pointed here, the leak guard and the fixed-point pin
+    would both go quiet and the suite would stay green. The hand-written list they replaced would
+    have raised FileNotFoundError. This is what keeps an empty glob a failure."""
+    assert FIXTURES.is_dir(), "the fixture directory is gone: %s" % FIXTURES
+    assert sorted(FIXTURES.glob("*.json")), "no fixtures to guard in %s" % FIXTURES
+
+
 @pytest.mark.parametrize("path", sorted(FIXTURES.glob("*.json")), ids=lambda p: p.name)
 def test_a_committed_fixture_carries_no_live_posting_text(path):
     """`.gitignore` gives the reason eval output is not committed — it "carries machine paths and
@@ -998,6 +1008,11 @@ def test_a_committed_fixture_carries_no_live_posting_text(path):
     # and where the largest amount of live text sits.
     ("description_markdown", {"data": {"source": "ashby", "id": "jp_000000000000",
                                        "description_markdown": "About the role\n\nWe are hiring."}}),
+    # A live get-posting body carries description_plain beside description_markdown. scrub.py does
+    # not replace it yet, so this case is the tripwire that makes Task 2 add it rather than commit
+    # a second copy of the same job text.
+    ("description_plain", {"data": {"source": "ashby", "id": "jp_000000000000",
+                                    "description_plain": "About the role\n\nWe are hiring."}}),
     ("apply_url", {"data": {"apply_url": "https://jobs.ashbyhq.com/OpenAI/x/application"}}),
 ])
 def test_the_fixture_guard_catches_a_live_value(key, doc):
