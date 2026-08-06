@@ -173,14 +173,21 @@ if [ -n "$prev" ]; then
     exit 0
   fi
   # Two lines compared byte for byte, so what this answers is whether the judgment already in the
-  # log is the line this call would write — not whether the two verdicts agree. A judgment written
-  # by hand reaches here whatever it says, because its field set, its field order and the space
-  # after its colons all differ from what record-judgment.awk builds, and the sed above keys on the
-  # compact `,"ts":"`, so such a line keeps its timestamp in what is printed below. Measured on
-  # 2026-08-06: the compact event this script writes, rewritten with a space after every colon,
-  # appended, and then offered again unchanged, arrives here — the same verdict on both sides. So
-  # the message says what was found and prints both lines for the caller to compare, rather than
-  # telling the caller the verdicts differ.
+  # log is the line this call would write — not whether the two verdicts agree. Any difference at
+  # all sends a judgment here: a different field set, a different field order, a space after a
+  # colon, or a genuinely different verdict. A judgment written by hand reaches here whatever it
+  # says, because record-judgment.awk builds one exact line and almost nothing written by hand
+  # matches it byte for byte. Measured on 2026-08-06: the compact event this script writes,
+  # rewritten with a space after every colon, appended, and then offered again unchanged, arrives
+  # here — the same verdict on both sides, and only the spacing different. So the message says what
+  # was found and prints both lines for the caller to compare, rather than telling the caller the
+  # verdicts differ.
+  #
+  # The sed keys on the compact `,"ts":"`, so what the recorded line shows below depends on how its
+  # own ts was written: a hand-written prior whose ts colon carries a space keeps its timestamp in
+  # what is printed, and one whose ts colon is compact loses it, whatever the rest of the line looks
+  # like. tests/test_mechanics_scripts.py:1993-1995 commits a prior of the second kind — every
+  # other colon spaced, the ts colon compact — and its recorded line prints with no ts.
   printf 'record-judgment: %s:%s already has a judgment in run %s, and it is not the line this call would write — nothing written\n' \
     "$source" "$source_id" "$run_id" >&2
   printf 'record-judgment:   recorded: %s\n' "$a" >&2
