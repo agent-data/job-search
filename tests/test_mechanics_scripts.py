@@ -42,9 +42,10 @@ QUEUE = RUN_SCRIPTS / "queue-detail-read.sh"
 LIST_QUEUE = RUN_SCRIPTS / "list-detail-read-queue.sh"
 JUDGE = RUN_SCRIPTS / "record-judgment.sh"
 COUNTS = RUN_SCRIPTS / "run-counts.sh"
+MATCHES = RUN_SCRIPTS / "run-matches.sh"
 
 ALL_SCRIPTS = [DEDUP, APPEND, SCHEDULE, DISCOVERY, VALIDATE, RECORD_API, QUEUE, LIST_QUEUE,
-               JUDGE, COUNTS]
+               JUDGE, COUNTS, MATCHES]
 
 
 # A contract-valid single-line `evaluated` event, in the shape
@@ -2569,6 +2570,217 @@ def test_counts_for_a_log_that_is_not_there_exit_two_and_print_nothing(tmp_path)
     r, c = counts(tmp_path / "absent.jsonl")
     assert r.returncode == 2
     assert c == {}
+    assert "no such file" in r.stderr
+
+
+# ---------------------------------------------------------------------------- run-matches.sh
+
+def matches(jobs, run_id=RID):
+    r = run_script(MATCHES, jobs, run_id)
+    rows = [l.split("\t") for l in r.stdout.splitlines()]
+    return r, rows
+
+
+def test_every_judged_posting_appears_once_with_its_band(tmp_path):
+    jobs = seeded_jobs(tmp_path, "search.linkedin.json")
+    rows = [e for e in lines(jobs) if e["event"] == "surfaced"]
+    judge_all(jobs, rows[:2], detail_read="true", relevant="true", match="strong", reasoning="Fits.")
+    judge_all(jobs, rows[2:4], detail_read="false", relevant="false", reasoning="On-site only.")
+    r, out = matches(jobs)
+    assert r.returncode == 0, r.stderr
+    assert len(out) == 4
+    assert [o[0] for o in out] == ["strong", "strong", "filtered", "filtered"]
+
+
+def test_the_bands_come_out_in_digest_order(tmp_path):
+    jobs = seeded_jobs(tmp_path, "search.linkedin.json")
+    rows = [e for e in lines(jobs) if e["event"] == "surfaced"]
+    judge_all(jobs, rows[0:1], detail_read="false", relevant="false", reasoning="No.")
+    judge_all(jobs, rows[1:2], detail_read="true", relevant="true", match="weak", reasoning="Thin.")
+    judge_all(jobs, rows[2:3], detail_read="true", relevant="true", match="strong", reasoning="Yes.")
+    judge_all(jobs, rows[3:4], detail_read="true", relevant="true", match="moderate", reasoning="Ok.")
+    _, out = matches(jobs)
+    assert [o[0] for o in out] == ["strong", "moderate", "weak", "filtered"]
+
+
+def test_a_row_carries_what_the_digest_prints(tmp_path):
+    jobs = seeded_jobs(tmp_path, "search.linkedin.json")
+    row = first_surfaced(jobs)
+    run_script(JUDGE, *judge_args(jobs, row, detail_read="true", relevant="true", match="strong",
+                                  needs_human_check="true",
+                                  reasoning="Remote within the US and the range clears the floor."))
+    _, out = matches(jobs)
+    band, source, sid, title, company, loc, url, nhc, posted, reasoning = out[0]
+    assert (band, source, sid) == ("strong", row["source"], row["source_id"])
+    assert (title, company, url) == (row["title"], row["company_name"], row["source_url"])
+    assert loc == row["location_display"]
+    assert nhc == "true"
+    assert reasoning.startswith("Remote within the US")
+
+
+def test_reasoning_with_a_newline_stays_on_one_line(tmp_path):
+    jobs = seeded_jobs(tmp_path, "search.linkedin.json")
+    row = first_surfaced(jobs)
+    run_script(JUDGE, *judge_args(jobs, row, detail_read="true", relevant="true", match="strong",
+                                  reasoning="First line.\nSecond line."))
+    r, out = matches(jobs)
+    assert len(r.stdout.splitlines()) == 1
+    assert len(out[0]) == 10
+    assert "First line." in out[0][9] and "Second line." in out[0][9]
+
+
+def test_a_surfaced_but_unjudged_posting_is_not_listed(tmp_path):
+    jobs = seeded_jobs(tmp_path, "search.linkedin.json")
+    r, out = matches(jobs)
+    assert r.returncode == 0 and out == []
+
+
+def test_another_runs_judgments_are_not_listed(tmp_path):
+    """The copied run judges the same posting weak, and the band is asserted alongside the row
+    count because the copy carries the same ids: with the run filter removed, its judgment lands on
+    the `source SUBSEP source_id` key this run already holds and the row count does not move
+    (measured — that mutation passes on the row count alone). The band is where the filter is
+    visible, because the later event of the two is the one the row is printed from.
+    """
+    jobs = seeded_jobs(tmp_path, "search.linkedin.json")
+    row = first_surfaced(jobs)
+    run_script(JUDGE, *judge_args(jobs, row, detail_read="true", relevant="true", match="strong"))
+    other = (jobs.read_text().replace(RID, "2026-01-01T00-00-00Z")
+             .replace('"match":"strong"', '"match":"weak"'))
+    jobs.write_text(jobs.read_text() + other)
+    _, out = matches(jobs)
+    assert [o[0] for o in out] == ["strong"]
+
+
+def test_the_listing_and_the_counts_agree(tmp_path):
+    """The assertion B8 will make against a live run, made here against a fixture."""
+    jobs = seeded_jobs(tmp_path, "search.linkedin.json")
+    rows = [e for e in lines(jobs) if e["event"] == "surfaced"]
+    judge_all(jobs, rows[:3], detail_read="true", relevant="true", match="moderate", reasoning="Ok.")
+    judge_all(jobs, rows[3:], detail_read="false", relevant="false", reasoning="No.")
+    _, c = counts(jobs)
+    _, out = matches(jobs)
+    tally = {}
+    for o in out:
+        tally[o[0]] = tally.get(o[0], 0) + 1
+    assert tally.get("strong", 0) == int(c["match_strong"])
+    assert tally.get("moderate", 0) == int(c["match_moderate"])
+    assert tally.get("weak", 0) == int(c["match_weak"])
+    assert tally.get("filtered", 0) == int(c["filtered_out"])
+    assert len(out) == int(c["postings_reviewed"])
+
+
+def test_one_bands_postings_come_out_in_the_order_they_were_judged(tmp_path):
+    """Within a band the order is the order the judgments landed, which is neither the order the
+    search surfaced them nor the order awk happens to walk an array in.
+
+    The five are judged in a scrambled order so a listing that kept the surfaced order fails, and
+    the ids are asserted rather than the bands, which are all the same here.
+    """
+    jobs = seeded_jobs(tmp_path, "search.linkedin.json")
+    rows = [e for e in lines(jobs) if e["event"] == "surfaced"]
+    judged = [rows[3], rows[0], rows[4], rows[2], rows[1]]
+    judge_all(jobs, judged, detail_read="true", relevant="true", match="strong", reasoning="Fits.")
+    _, out = matches(jobs)
+    assert [o[2] for o in out] == [e["source_id"] for e in judged]
+
+
+def test_a_judgment_for_a_posting_this_run_never_surfaced_is_not_listed(tmp_path):
+    """`run-counts.sh` counts only the postings this run surfaced, so a judgment carrying an id no
+    search of this run turned up is in none of its numbers. The listing leaves out the same row, so
+    the digest cannot name a posting its own counts do not count.
+
+    `record-judgment.sh` looks for the surfaced event before it writes, so its own output cannot
+    reach this state — except through the `grep -F` prefix match written up at
+    record-judgment.sh:97-118, where a judgment for source_id `100` matches a surfaced `1001`.
+    """
+    jobs = seeded_jobs(tmp_path, "search.linkedin.json")
+    row = first_surfaced(jobs)
+    run_script(JUDGE, *judge_args(jobs, row, detail_read="true", relevant="true", match="strong"))
+    jobs.write_text(jobs.read_text() +
+        '{"event":"evaluated","run_id":"%s","source":"%s","source_id":"never-surfaced",'
+        '"detail_read":true,"relevant":true,"match":"strong"}\n' % (RID, row["source"]))
+    _, c = counts(jobs)
+    _, out = matches(jobs)
+    assert len(out) == 1
+    assert c["postings_reviewed"] == "1"
+
+
+def test_one_posting_judged_twice_in_a_run_is_listed_once_with_the_later_verdict(tmp_path):
+    """One row per posting, carrying the last judgment this run recorded — the rule
+    `run-counts.awk`:57-60 counts by, which is what keeps the listing and the counts the same
+    length.
+
+    `record-judgment.sh` writes nothing for a posting this run has already judged, so both events
+    are written here directly.
+    """
+    jobs = seeded_jobs(tmp_path, "search.linkedin.json")
+    row = first_surfaced(jobs)
+    for band in ("weak", "strong"):
+        jobs.write_text(jobs.read_text() +
+            '{"event":"evaluated","run_id":"%s","source":"%s","source_id":"%s",'
+            '"detail_read":true,"relevant":true,"match":"%s"}\n'
+            % (RID, row["source"], row["source_id"], band))
+    _, out = matches(jobs)
+    assert [o[0] for o in out] == ["strong"]
+
+
+def test_a_relevant_row_with_no_band_is_not_listed(tmp_path):
+    """`run-counts.sh` is the script that reports this row: it counts it as reviewed, prints
+    `INVALID relevant-row-without-a-band` and exits 1. Here the row is left out rather than put
+    under a band nobody wrote, so no digest can name a strong match the log never called strong."""
+    jobs = seeded_jobs(tmp_path, "search.linkedin.json")
+    row = first_surfaced(jobs)
+    jobs.write_text(jobs.read_text() +
+        '{"event":"evaluated","run_id":"%s","source":"%s","source_id":"%s",'
+        '"detail_read":true,"relevant":true,"match":null}\n'
+        % (RID, row["source"], row["source_id"]))
+    r, out = matches(jobs)
+    assert r.returncode == 0, r.stderr
+    assert out == []
+
+
+def test_a_tab_in_the_reasoning_does_not_invent_a_column(tmp_path):
+    """A row is ten tab-separated columns, so a tab inside the free text would put an eleventh one
+    there and shift every column after it. `jval` maps a tab, a newline and a CR to a space;
+    resolving the escapes here instead of calling it is what would break this.
+
+    HOSTILE puts a real tab and a real newline on the event — see
+    `test_free_text_with_quotes_backslashes_tabs_and_newlines_round_trips`.
+    """
+    jobs = seeded_jobs(tmp_path, "search.linkedin.json")
+    row = first_surfaced(jobs)
+    run_script(JUDGE, *judge_args(jobs, row, detail_read="true", relevant="true", match="strong",
+                                  reasoning=HOSTILE))
+    r, out = matches(jobs)
+    assert len(r.stdout.splitlines()) == 1
+    assert len(out[0]) == 10
+    assert "\t" not in out[0][9]
+    assert "C:\\temp tab and a newline." in out[0][9]     # the tab and the newline, each a space
+
+
+def test_an_awk_that_died_partway_is_not_reported_as_a_listing(tmp_path):
+    """The rows go to stdout, so a caller cannot tell a complete listing from a partial one by
+    reading it — an awk that died after printing two postings leaves two real-looking rows there.
+    The exit status is what tells them apart, and it is awk's own status: with awk shimmed to print
+    one row and then fail, this must not exit 0."""
+    jobs = seeded_jobs(tmp_path, "search.linkedin.json")
+    row = first_surfaced(jobs)
+    run_script(JUDGE, *judge_args(jobs, row, detail_read="true", relevant="true", match="strong"))
+    partial = "strong\t%s\t%s\tT\tC\tRemote\thttps://example/x\tfalse\t2026-07-25\tFits.\n" % (
+        row["source"], row["source_id"])
+    r = run_script(MATCHES, jobs, RID, env=awk_shim(tmp_path, "run-matches.awk", partial))
+    assert r.returncode != 0, r.stdout
+    assert r.stdout == partial            # the row a caller would have put in the digest
+
+
+def test_a_listing_for_a_log_that_is_not_there_exits_two_and_prints_nothing(tmp_path):
+    """A missing log is not a run that judged nothing. Both print no rows, and the status is what
+    separates them: printing nothing at exit 0 would put an empty digest behind a path typed
+    wrong."""
+    r, out = matches(tmp_path / "absent.jsonl")
+    assert r.returncode == 2
+    assert out == []
     assert "no such file" in r.stderr
 
 
