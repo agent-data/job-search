@@ -27,7 +27,8 @@
 # fallback, and on a host with no shell the run says in its summary that the counts were worked
 # out by hand.
 #
-# Exit 0: the rows were appended, or the search legitimately returned none.
+# Exit 0: the rows were appended, or the search legitimately returned none, or the posting was
+#         already stored for this run and only its call was recorded.
 # Exit 1: no rows appended; stderr names the problem. The call event is still recorded.
 # Exit 2: bad arguments, a missing file, or a body that is not what --route says it is.
 set -u
@@ -98,6 +99,11 @@ if ! awk -f "$here/json-scan.awk" "$resp" > "$scan" 2>/dev/null; then
 fi
 
 field() { awk -F'\t' -v p="$1" '$1 == p { print $2; exit }' "$scan" | sed 's/^"//; s/"$//'; }
+# The same value with its quotes still on. `field` strips them, and that makes three different
+# things look alike: a JSON null arrives as the four characters null, which is what a posting whose
+# source_id is the string "null" also gives, and a JSON empty string arrives as nothing at all.
+# Only the raw form tells them apart.
+rawfield() { awk -F'\t' -v p="$1" '$1 == p { print $2; exit }' "$scan"; }
 # The pattern is written with [.] rather than \. because awk resolves escape sequences in a -v
 # assignment before the string is ever used as a pattern: `-v p='^data\.query\.'` arrives as
 # `^data.query.`, where each dot matches any character (measured — `dataXqueryYz` matches it).
@@ -127,12 +133,25 @@ if [ "$route" = get-posting ]; then
     exit 2
   }
 
-  dsrc=$(field data.source)
-  dsid=$(field data.source_id)
-  [ -n "$dsrc" ] && [ -n "$dsid" ] || {
-    printf 'record-api-response.sh: %s is missing data.source or data.source_id\n' "$resp" >&2
+  # Absent, JSON null, and JSON empty string are all unusable, and all three have to be named — the
+  # same three the row builder checks on the search half, for the same reason. Read raw, so a
+  # posting whose source_id is the string "null" stays a real value: quoted it is six characters,
+  # the JSON null is four. Without this a null reaches the surfaced check and the operator is told
+  # the run never surfaced the posting, sending them to the search results when the fault is in the
+  # body.
+  unusable=''
+  case $(rawfield data.source) in ''|null|'""') unusable='data.source' ;; esac
+  case $(rawfield data.source_id) in
+    ''|null|'""') unusable="${unusable:+$unusable and }data.source_id" ;;
+  esac
+  [ -z "$unusable" ] || {
+    printf 'record-api-response.sh: %s has no usable %s — absent, null, or an empty string\n' \
+      "$resp" "$unusable" >&2
     exit 2
   }
+
+  dsrc=$(field data.source)
+  dsid=$(field data.source_id)
 
   # Every posting this run stores must be one a search surfaced for it. Scoped to this run, unlike
   # the judged check the search path uses: the text is stored against the summary row this run

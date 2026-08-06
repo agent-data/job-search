@@ -15,8 +15,8 @@ and a filled field stays filled.
 `location_display` is deliberately left alone, and so is a `salary_display` holding free text. Both
 are genuine parser inputs: `skills/agent-data-reference/SKILL.md` records that `salary_display` is
 free text that arrives as raw HTML on some rows, and a synthesised band would stop testing that.
-The one `salary_display` this scrub does replace is a value that parses as a JSON object, which is
-not a band at all — see `SCRUBBED_JOB_LD` below.
+The one `salary_display` this scrub does replace is a value that parses as a JSON object or array,
+which is not a band at all — see `SCRUBBED_JOB_LD` below.
 
 A fractional-seconds part is dropped from `posted_at` and `published_at`. Microsecond precision is
 a live value with nothing to test in it, and dropping it leaves the shape that tells the two
@@ -58,21 +58,25 @@ BODY = HOSTILE + ("Responsibilities and requirements. " * 120)
 SCRUBBED_CURSOR = base64.urlsafe_b64encode(
     json.dumps({"scrubbed": True}).encode()).decode().rstrip("=")
 
-# What a `salary_display` holding a JSON object becomes. On a LinkedIn get-posting body the field
+# What a `salary_display` holding a JSON document becomes. On a LinkedIn get-posting body the field
 # does not hold a salary band at all: it holds the source page's own schema.org JobPosting record.
 # In the capture this fixture came from that record was 8,833 characters and carried the whole
 # description, the employer name, the employer's LinkedIn page and logo URLs, the job title and an
 # internal posting id — the largest block of live text in the response, in the one field this
 # scrub otherwise leaves alone.
 #
-# A salary band is free text and never parses as a JSON object, so keying on that leaves every band
-# untouched. Measured on the committed fixtures — `search.linkedin.json` carries no band at all, and
-# `search.ashby.json` prints `20 bands, 0 parsing as a JSON object`:
+# An array counts too. A page that embeds `<script type="application/ld+json">[{…}]</script>` puts
+# the same record in a one-element list, and a check that accepted only an object would pass it
+# straight through.
+#
+# A salary band is free text and parses as neither, so keying on this leaves every band untouched.
+# Measured on the committed fixtures — `search.linkedin.json` carries no band at all, and
+# `search.ashby.json` prints `20 bands, 0 parsing as a JSON document`:
 #
 #   python3 -c "import sys; sys.path.insert(0,'tests/fixtures'); import json, scrub; \
 #     rows = json.load(open('tests/fixtures/api-responses/search.ashby.json'))['data']['results']; \
 #     b = [r['salary_display'] for r in rows if isinstance(r.get('salary_display'), str)]; \
-#     print(len(b), 'bands,', sum(scrub.is_json_object(v) for v in b), 'parsing as a JSON object')"
+#     print(len(b), 'bands,', sum(scrub.is_structured_json(v) for v in b), 'parsing as a JSON document')"
 #
 # The replacement is still a JSON-LD JobPosting, so a fixture keeps the shape a LinkedIn posting
 # body actually has — `salary_display` can arrive as a whole document rather than a band — while
@@ -90,10 +94,15 @@ SCRUBBED_JOB_LD = json.dumps({
 }, ensure_ascii=False)
 
 
-def is_json_object(value):
-    """True when the string is a JSON object. A salary band is free text and is not."""
+def is_structured_json(value):
+    """True when the string is a JSON object or array — a document rather than free text.
+
+    Both shapes carry a page's own JobPosting record: an object when the page embeds one, a
+    one-element array when it embeds a list of them. A salary band is neither. A bare number or
+    quoted string is JSON too, and is not accepted: `150000` is a plausible band.
+    """
     try:
-        return isinstance(json.loads(value), dict)
+        return isinstance(json.loads(value), (dict, list))
     except (TypeError, ValueError):
         return False
 
@@ -133,7 +142,7 @@ def scrub_row(row, i):
     for key in ("description_markdown", "description_plain"):
         if row.get(key):
             row[key] = BODY[:len(row[key])] or BODY
-    if row.get("salary_display") and is_json_object(row["salary_display"]):
+    if row.get("salary_display") and is_structured_json(row["salary_display"]):
         row["salary_display"] = SCRUBBED_JOB_LD
     if row.get("apply_url"):
         row["apply_url"] = "https://example.invalid/apply/%s" % row["id"]

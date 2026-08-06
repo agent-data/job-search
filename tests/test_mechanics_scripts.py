@@ -901,10 +901,16 @@ def test_a_posting_already_judged_in_an_earlier_run_is_not_surfaced_again(tmp_pa
 
 def seeded_jobs(tmp_path, search_fixture):
     """A log holding the surfaced events of one search, which is what a detail read needs to exist
-    against: a posting is only stored for a run that surfaced it."""
+    against: a posting is only stored for a run that surfaced it.
+
+    The search is asserted here rather than in each caller. Without it a seeding search that failed
+    — a missing fixture, a broken script — leaves an empty log, and every test that seeds then runs
+    against something other than what it says it does.
+    """
     jobs = tmp_path / "jobs.jsonl"
     jobs.write_text("")
-    record_search(jobs, search_fixture)
+    r = record_search(jobs, search_fixture)
+    assert r.returncode == 0, r.stderr
     return jobs
 
 
@@ -948,9 +954,14 @@ def test_linkedin_detail_stores_byte_exact_too(tmp_path):
 def test_a_nested_object_in_a_posting_body_does_not_reach_the_detail_event(tmp_path):
     """A live posting body nests — `address_structured` and `compensation_structured` are objects —
     so the event is built from the fields directly under `data` and nothing deeper. The nested keys
-    here are named after fields the event does carry, which is the only way this is observable: a
-    builder reading the last path segment instead of the second would take `Basement` and
-    `nested-0001` from inside `address_structured`.
+    here are named after fields the event does carry, which is the only way this is observable at
+    all.
+
+    Two things hold the rule up, and only losing both leaks: the `^data\\.[^.]+$` pattern, which a
+    three-segment path never matches, and taking the second path segment rather than the last.
+    Measured — switching to the last segment on its own changes no output, because the pattern has
+    already rejected the line. Relaxing the pattern as well is what puts `Basement` and
+    `nested-0001` on the event, and that is the mutation this fails against.
     """
     assert any(isinstance(v, dict) and v for v in
                json.loads((FIXTURES / "detail.ashby.json").read_text())["data"].values()), \
@@ -968,18 +979,24 @@ def test_a_nested_object_in_a_posting_body_does_not_reach_the_detail_event(tmp_p
     stored = [e for e in lines(jobs) if e["event"] == "detail"][0]
     assert stored["workplace_type"] == "Hybrid"
     assert stored["source_id"] == "ashby-0000"
-    assert "locality" not in stored
 
 
-@pytest.mark.parametrize("row", [
-    {"source_id": "ashby-0000"},                # no source key at all
-    {"source": "", "source_id": "ashby-0000"},  # source present and empty
-    {"source": "ashby", "source_id": ""},       # source_id present and empty
+@pytest.mark.parametrize("row,names", [
+    ({"source_id": "ashby-0000"}, "data.source"),                    # no source key at all
+    ({"source": "", "source_id": "ashby-0000"}, "data.source"),      # source is an empty string
+    ({"source": None, "source_id": "ashby-0000"}, "data.source"),    # source is a JSON null
+    ({"source": "ashby", "source_id": ""}, "data.source_id"),        # source_id is an empty string
+    ({"source": "ashby", "source_id": None}, "data.source_id"),      # source_id is a JSON null
+    ({"source": None, "source_id": None}, "data.source and data.source_id"),
 ])
-def test_a_posting_body_without_a_usable_source_and_source_id_is_refused(tmp_path, row):
-    """Both values are what a posting is filed under, and both have to hold text. A JSON empty
-    string reaches the shell as the empty string, so `data.source_id: ""` satisfies the path check
-    the branch opens with and is caught only here.
+def test_a_posting_body_without_a_usable_source_and_source_id_is_refused(tmp_path, row, names):
+    """Both values are what a posting is filed under, and both have to hold text. Absent, empty
+    string and null all satisfy the `data.source_id` path check the branch opens with, and all
+    three are caught only here.
+
+    The message names which field, because the operator has to know where to look. A null read
+    through `field` would say `no surfaced posting for ashby:null`, pointing at the run's search
+    results when the fault is in the response body.
 
     Exit 2, not 1, and no `call` event: an unusable body is the caller handing over the wrong file,
     which is what the search path does with the same shape. A call that happened is recorded by the
@@ -991,9 +1008,24 @@ def test_a_posting_body_without_a_usable_source_and_source_id_is_refused(tmp_pat
     before = [e for e in lines(jobs) if e["event"] == "call"]
     r = run_script(RECORD_API, RID, jobs, body, "--route", "get-posting")
     assert r.returncode == 2, r.stdout + r.stderr
-    assert "data.source" in r.stderr, r.stderr
+    assert "no usable %s —" % names in r.stderr, r.stderr
     assert [e for e in lines(jobs) if e["event"] == "detail"] == []
     assert [e for e in lines(jobs) if e["event"] == "call"] == before
+
+
+def test_a_source_id_that_is_the_string_null_is_still_a_real_value(tmp_path):
+    """`field` strips the quotes, so a JSON null and the four-character string `null` come out of
+    it identical. The check above reads the raw scan value instead, where the two are six
+    characters and four. This body therefore gets past it and is refused by the surfaced check —
+    exit 1 for a posting this run did not surface, not exit 2 for an unusable body."""
+    body = tmp_path / "body.json"
+    body.write_text(json.dumps({"data": {"source": "ashby", "source_id": "null",
+                                         "description_markdown": "A role."},
+                                "meta": {"request_id": "req_1"}}))
+    jobs = seeded_jobs(tmp_path, "search.ashby.json")
+    r = run_script(RECORD_API, RID, jobs, body, "--route", "get-posting")
+    assert r.returncode == 1, r.stdout + r.stderr
+    assert "no surfaced posting for ashby:null" in r.stderr, r.stderr
 
 
 def test_a_detail_for_a_posting_this_run_never_surfaced_is_refused(tmp_path):
@@ -1068,11 +1100,19 @@ def _scrub_module():
 
 
 def _every_object(node):
-    """Every JSON object in the document, at any depth.
+    """Every JSON object in the document, at any depth, including inside a string holding JSON.
 
     Walking beats indexing into a known shape: a search fixture keeps its fields under
     `data.results[]`, a get-posting fixture keeps the same fields directly under `data`, and the
     error fixture has none of them.
+
+    The string branch is what makes this catch a class rather than one shape. A LinkedIn
+    get-posting body puts the source page's whole schema.org JobPosting record inside
+    `salary_display` as text, and `salary_display` and `location_display` are both kept as free
+    text on purpose — so a walker that stopped at the string saw an exempt field holding an
+    employer name, a title and a full description, and reported nothing. Descending in means the
+    record is checked field by field wherever it is parked, in a field this guard checks or one it
+    does not.
     """
     if isinstance(node, dict):
         yield node
@@ -1081,6 +1121,12 @@ def _every_object(node):
     elif isinstance(node, list):
         for value in node:
             yield from _every_object(value)
+    elif isinstance(node, str) and node.lstrip()[:1] in ("{", "["):
+        try:
+            inner = json.loads(node)
+        except ValueError:
+            return
+        yield from _every_object(inner)
 
 
 def _decodes_to_the_scrubbed_cursor(value):
@@ -1114,11 +1160,11 @@ def live_values(doc, scrub):
         "apply_url": lambda v: str(v).startswith("https://example.invalid/apply/"),
         "description_markdown": lambda v: isinstance(v, str) and scrub.BODY.startswith(v),
         "description_plain": lambda v: isinstance(v, str) and scrub.BODY.startswith(v),
-        # A band is free text and stays; a JSON object in this field is the source page's own
+        # A band is free text and stays; a JSON document in this field is the source page's own
         # JobPosting record, which in the capture behind detail.linkedin.json ran to 8,833
-        # characters and held the description, the employer and the title. What counts as an
-        # object is asked of `scrub.py` itself, so the guard and the scrub cannot disagree.
-        "salary_display": lambda v: (not scrub.is_json_object(v)) or v == scrub.SCRUBBED_JOB_LD,
+        # characters and held the description, the employer and the title. What counts as a
+        # document is asked of `scrub.py` itself, so the guard and the scrub cannot disagree.
+        "salary_display": lambda v: (not scrub.is_structured_json(v)) or v == scrub.SCRUBBED_JOB_LD,
         "keywords": lambda v: v == "scrubbed",
         "location": lambda v: v == "scrubbed",
         "next_cursor": lambda v: _decodes_to_the_scrubbed_cursor(v),
@@ -1142,15 +1188,15 @@ def test_the_fixture_glob_finds_something_to_guard():
     raised FileNotFoundError.
 
     The rest of the file does go red, but for its own reasons rather than for theirs. With
-    `FIXTURES` on an empty directory the module gives 27 failed, 94 passed, 4 skipped. Twenty-six of
-    those failures are the tests that drive `record-api-response.sh` from a fixture, each missing a
-    file it names as `FIXTURES / <name>`, and the twenty-seventh is this test. Neither guard is
+    `FIXTURES` on an empty directory the module gives 34 failed, 94 passed, 4 skipped. Thirty-three
+    of those failures are the tests that drive `record-api-response.sh` from a fixture, each missing
+    a file it names as `FIXTURES / <name>`, and the thirty-fourth is this test. Neither guard is
     among them: both land in the 4 skipped, reported as `got empty parameter set for (path)`
     (measured 2026-08-06, `python3 -m pytest tests/test_mechanics_scripts.py -q` with FIXTURES
     pointed at an empty temp dir).
 
     So this is the only check that reports the guards themselves going quiet, and the only one left
-    if those twenty-six ever stop reading from `FIXTURES`. The first assertion covers the likelier
+    if those thirty-three ever stop reading from `FIXTURES`. The first assertion covers the likelier
     accident, a directory renamed rather than emptied."""
     assert FIXTURES.is_dir(), "the fixture directory is gone: %s" % FIXTURES
     assert sorted(FIXTURES.glob("*.json")), "no fixtures to guard in %s" % FIXTURES
@@ -1200,6 +1246,19 @@ def test_a_committed_fixture_carries_no_live_posting_text(path):
         {"@context": "http://schema.org", "@type": "JobPosting",
          "title": "Strategic Finance, International",
          "hiringOrganization": {"@type": "Organization", "name": "OpenAI"}})}}),
+    # The same record one JSON type over. A page embedding
+    # `<script type="application/ld+json">[{…}]</script>` puts it in a one-element array, and a
+    # check accepting only an object passes it straight through.
+    ("salary_display", {"data": {"salary_display": json.dumps(
+        [{"@type": "JobPosting", "title": "VP Finance, Payments",
+          "hiringOrganization": {"@type": "Organization", "name": "A Real Employer Inc"}}])}}),
+    # And parked in `location_display`, the other field kept as free text on purpose. There is no
+    # `location_display` rule above and there should not be one — only descending into the string
+    # reaches this, which is what makes the guard cover the class rather than the one field where
+    # it first turned up.
+    ("title", {"data": {"location_display": json.dumps(
+        {"@type": "JobPosting", "title": "VP Finance, Payments",
+         "hiringOrganization": {"@type": "Organization", "name": "A Real Employer Inc"}})}}),
 ])
 def test_the_fixture_guard_catches_a_live_value(key, doc):
     """The guard is only worth having if it reaches the fields that carry the most live text, so
@@ -1223,7 +1282,15 @@ def test_scrubbing_a_committed_fixture_reproduces_it(tmp_path, path):
     assert out.read_text(encoding="utf-8") == path.read_text(encoding="utf-8")
 
 
-def test_the_scrub_clears_a_live_shaped_posting_body(tmp_path):
+@pytest.mark.parametrize("embedded", [
+    # A page embedding one record, and a page embedding a list of them. Both forms turn up as
+    # `<script type="application/ld+json">` on a job page, and both reach `salary_display` as text.
+    {"@context": "http://schema.org", "@type": "JobPosting",
+     "title": "Strategic Finance, International", "hiringOrganization": {"name": "OpenAI"}},
+    [{"@type": "JobPosting", "title": "VP Finance, Payments",
+      "hiringOrganization": {"name": "A Real Employer Inc"}}],
+], ids=["one record", "a list of records"])
+def test_the_scrub_clears_a_live_shaped_posting_body(tmp_path, embedded):
     """The test above starts from an already-scrubbed file, so a replacement that stopped happening
     still reproduces it and it stays green. This one starts from the live shape instead: a posting
     body carrying both description fields, and a `salary_display` holding the source page's own
@@ -1239,9 +1306,7 @@ def test_the_scrub_clears_a_live_shaped_posting_body(tmp_path):
         "description_plain": "About the role\n\nWe are hiring.",
         "apply_url": "https://jobs.ashbyhq.com/OpenAI/x/application",
         "published_at": "2026-08-03T01:16:44.665000",
-        "salary_display": json.dumps({"@context": "http://schema.org", "@type": "JobPosting",
-                                      "title": "Strategic Finance, International",
-                                      "hiringOrganization": {"name": "OpenAI"}}),
+        "salary_display": json.dumps(embedded),
     }}), encoding="utf-8")
     out = tmp_path / "clean.json"
     scrub.main(str(live), str(out))
