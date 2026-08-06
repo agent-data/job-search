@@ -2728,7 +2728,11 @@ def test_one_posting_judged_twice_in_a_run_is_listed_once_with_the_later_verdict
 def test_a_relevant_row_with_no_band_is_not_listed(tmp_path):
     """`run-counts.sh` is the script that reports this row: it counts it as reviewed, prints
     `INVALID relevant-row-without-a-band` and exits 1. Here the row is left out rather than put
-    under a band nobody wrote, so no digest can name a strong match the log never called strong."""
+    under a band nobody wrote, so no digest can name a strong match the log never called strong.
+
+    The row count is asserted against `postings_reviewed` less the unbanded rows, which is the
+    relation `run-matches.sh`:21-27 states.
+    """
     jobs = seeded_jobs(tmp_path, "search.linkedin.json")
     row = first_surfaced(jobs)
     jobs.write_text(jobs.read_text() +
@@ -2738,6 +2742,36 @@ def test_a_relevant_row_with_no_band_is_not_listed(tmp_path):
     r, out = matches(jobs)
     assert r.returncode == 0, r.stderr
     assert out == []
+    _, c = counts(jobs)
+    unbanded = int(c["INVALID relevant-row-without-a-band"])
+    assert len(out) == int(c["postings_reviewed"]) - unbanded
+
+
+def test_a_relevant_row_carrying_the_filtered_band_is_not_listed(tmp_path):
+    """`filtered` is what a row judged not relevant gets, not a value a judgment carries, so a
+    relevant row holding the string is a row with no band — the same row
+    `run-counts.awk`:71-77 counts as relevant-row-without-a-band and leaves out of `filtered_out`.
+    Listing it would put a posting under a heading whose count is one lower.
+
+    The row count is asserted against `postings_reviewed` less the unbanded rows, which is the
+    relation `run-matches.sh`:21-27 states.
+
+    `record-judgment.sh`:84-88 takes only strong, moderate or weak on a relevant row, so the event
+    is appended to the log here directly.
+    """
+    jobs = seeded_jobs(tmp_path, "search.linkedin.json")
+    rows = [e for e in lines(jobs) if e["event"] == "surfaced"]
+    judge_all(jobs, rows[:1], detail_read="true", relevant="true", match="strong", reasoning="Ok.")
+    jobs.write_text(jobs.read_text() +
+        '{"event":"evaluated","run_id":"%s","source":"%s","source_id":"%s",'
+        '"detail_read":true,"relevant":true,"match":"filtered"}\n'
+        % (RID, rows[1]["source"], rows[1]["source_id"]))
+    r, c = counts(jobs)
+    _, out = matches(jobs)
+    assert [o[0] for o in out] == ["strong"]
+    assert c["filtered_out"] == "0"
+    unbanded = int(c["INVALID relevant-row-without-a-band"])
+    assert len(out) == int(c["postings_reviewed"]) - unbanded
 
 
 def test_a_tab_in_the_reasoning_does_not_add_an_eleventh_column(tmp_path):
@@ -2758,6 +2792,33 @@ def test_a_tab_in_the_reasoning_does_not_add_an_eleventh_column(tmp_path):
     assert len(r.stdout.splitlines()) == 1
     assert len(out[0]) == 10
     assert out[0][9] == HOSTILE.replace("\t", " ").replace("\n", " ")
+
+
+def test_two_postings_that_would_share_a_pipe_joined_key_are_both_listed(tmp_path):
+    """The posting key joins `source` and `source_id` with SUBSEP, the 0x1c byte, which cannot
+    reach a value. A `|` can: `record-judgment.sh`'s `reject_id` refuses only a control character
+    and a backslash, so source `s` with source_id `x|y` and source `s|x` with source_id `y` are
+    both recorded, and both join to `s|x|y`.
+
+    Measured with the key joined on `|` instead: those two postings collide and the listing prints
+    one row where it should print two.
+
+    The log is written here rather than seeded from a fixture, because no fixture carries a `|` in
+    an id and the collision needs one on each side of the join.
+    """
+    pair = (("s", "x|y", "strong"), ("s|x", "y", "moderate"))
+    jobs = tmp_path / "jobs.jsonl"
+    jobs.write_text("".join(
+        '{"event":"surfaced","run_id":"%s","source":"%s","source_id":"%s","title":"T",'
+        '"company_name":"C","location_display":"L","source_url":"U","posted_at":"2026-07-25"}\n'
+        % (RID, source, source_id) for source, source_id, _ in pair))
+    for source, source_id, band in pair:
+        r = run_script(JUDGE, jobs, "--run-id", RID, "--source", source, "--source-id", source_id,
+                       "--detail-read", "true", "--relevant", "true", "--match", band)
+        assert r.returncode == 0, r.stderr
+    _, out = matches(jobs)
+    assert [(o[0], o[1], o[2]) for o in out] == [(band, source, source_id)
+                                                 for source, source_id, band in pair]
 
 
 def test_an_awk_that_died_partway_is_not_reported_as_a_listing(tmp_path):

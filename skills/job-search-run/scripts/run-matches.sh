@@ -19,12 +19,18 @@
 # line. The full text stays on the event.
 #
 # One row per posting this run surfaced and this run judged, less any relevant row carrying no
-# band. run-counts.sh counts that row in postings_reviewed and this script leaves it out, so the
-# row count is postings_reviewed minus the number on run-counts.sh's INVALID
+# band. A relevant row's band is strong, moderate or weak, so all three of these are rows with no
+# band: an absent match, a null one, and the string `filtered`, which is what a row judged not
+# relevant gets rather than a value a judgment carries.
+#
+# run-counts.sh counts such a row in postings_reviewed and this script leaves it out, so the row
+# count is postings_reviewed minus the number on run-counts.sh's INVALID
 # relevant-row-without-a-band line. run-counts.sh prints that line only when it exits 1, so for
 # every log it exits 0 on, the row count equals postings_reviewed. Measured on a log holding three
-# surfaced postings, two judged strong and one relevant with match null: postings_reviewed=3,
-# INVALID relevant-row-without-a-band=1, exit 1, and two rows here.
+# surfaced postings and two judged strong, once with the third relevant and match null and again
+# with it relevant and match "filtered": both times run-counts.sh printed postings_reviewed=3,
+# filtered_out=0 and INVALID relevant-row-without-a-band=1 at exit 1, and this script printed two
+# rows at exit 0.
 #
 # The rows of one band count out to that band's key either way, because run-counts.sh puts an
 # unbanded row in none of the four. So a caller can check the digest against both.

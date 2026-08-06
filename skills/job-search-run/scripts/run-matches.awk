@@ -10,19 +10,24 @@
 # judged in.
 #
 # A posting is keyed by its source and its source_id joined with SUBSEP, the 0x1c byte, which
-# cannot reach a value — the reason written out at run-counts.awk:14-16. A literal `|` carries no
-# such guarantee for a free-text source_id. run-counts.awk builds the same key, which keeps the two
-# readable side by side, but the scripts never exchange keys, so that is a maintainability point
-# rather than a correctness one.
+# cannot reach a value — the reason written out at run-counts.awk:14-16. A source_id may hold a
+# `|`, so joining on one would let two postings share a key: record-judgment.sh:70-75 refuses only
+# a control character and a backslash, and measured, source `s` with source_id `x|y` and source
+# `s|x` with source_id `y` were both recorded at exit 0 and both join to `s|x|y`. With the key
+# joined on `|`, the listing printed one row for those two postings instead of two.
+#
+# run-counts.awk builds the same key, which keeps the two readable side by side, but the scripts
+# never exchange keys, so that is a maintainability point rather than a correctness one.
 #
 # The row set is the one run-counts.awk counts as reviewed — a posting this run surfaced and this
 # run judged — less the relevant rows carrying no band, which the paragraph below covers. A
 # judgment carrying an id no search of this run turned up is in neither.
 #
 # A relevant row carrying no band is left out here and reported by run-counts.sh, which is the
-# script that owns that finding and exits 1 on it. An absent `match` key reads as an empty string
-# and a JSON null reads as the four characters `null`; `rank` has an entry for neither, so the one
-# check leaves both out.
+# script that owns that finding and exits 1 on it. A relevant row's band is one of strong, moderate
+# and weak, so all three of these are rows with no band: an absent `match` key, which reads as an
+# empty string; a JSON null, which reads as the four characters `null`; and the string `filtered`,
+# which is what a row judged not relevant gets rather than a value a judgment carries.
 
 BEGIN {
   rank["strong"] = 1; rank["moderate"] = 2; rank["weak"] = 3; rank["filtered"] = 4
@@ -47,8 +52,15 @@ END {
       k = order[i]
       if (!(k in mine)) continue
       l = judgment[k]
-      band = (jval(l, "relevant") == "true") ? jval(l, "match") : "filtered"
-      if (!(band in rank) || rank[band] != b) continue
+      if (jval(l, "relevant") == "true") {
+        band = jval(l, "match")
+        # The three bands a judgment carries, tested one by one the way run-counts.awk:71-77 tests
+        # them, so the two scripts call the same rows unbanded. `filtered` is not among them: it is
+        # what a row judged not relevant gets, so a relevant row carrying the string `filtered` is
+        # a row with no band, not a filtered-out posting.
+        if (band != "strong" && band != "moderate" && band != "weak") continue
+      } else band = "filtered"
+      if (rank[band] != b) continue
       printf "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n",
         band,
         jval(l, "source"), jval(l, "source_id"),
