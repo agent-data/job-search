@@ -2890,6 +2890,10 @@ Check the arithmetic: `3 + 6 + 2 + 39 = 50` reviewed; `50 + 0 = 50` surfaced; `2
 
 - [ ] **Step 4: Write `close-run.sh`**
 
+Every value this script writes is an identifier — `trigger`, `scheduler_id`, `brief_revision`, `run_id`, and the entries in `--sources` and `--queries`. None of them is free text. So it takes the same two-part rule the three event writers settled on in Task 5: `esc` escapes, and the entry refuses. Refuse a control character or a backslash in any of them, naming the flag, before anything is written — `record-api-response.sh`, `queue-detail-read.sh` and `record-judgment.sh` each carry that check and are the model. An identifier stored escaped is one no `grep -F` lookup will ever match again, which is why refusing beats escaping for this half.
+
+Add it as its own test alongside the others in Step 1.
+
 ```sh
 #!/bin/sh
 # close-run.sh — write one run's record. Deleting what the run was using is clear-run.sh's job,
@@ -2976,14 +2980,20 @@ CR_COUNTS=$counts CR_SOURCES=$sources CR_QUERIES=$queries \
 awk -v run_id="$run_id" -v trigger="$trigger" -v sched="$scheduler_id" \
     -v close_state="$close_state" -v run_health="$run_health" -v brief_rev="$brief_rev" \
     -v started_at="$started_at" -v completed_at="$completed_at" '
-  # The same body every other event builder carries. A one-line esc that handles only the
-  # backslash and the quote let a tab or a carriage return in a model-supplied value write an
-  # unparseable log at exit 0 — measured in Task 5, 26 lines and none of them parsing. Every
-  # value below is an identifier rather than free text, so Step 4a refuses a control character
-  # at entry as well; this is what keeps the record parseable if one ever reaches here.
-  function esc(s) {
+  # Byte-identical to the five in skills/job-search-run/scripts/ — compare them before you ship,
+  # because a copy that drifts is how this defect got in. A one-line esc handling only the
+  # backslash and the quote let a tab in a model-supplied value write 26 log lines with none of
+  # them parsing, at exit 0; three escapes still left 29 of the 32 characters JSON forbids raw
+  # inside a string doing the same. Both measured in Task 5.
+  function esc(s,   i, c) {
     gsub(/\\/, "\\\\", s); gsub(/"/, "\\\"", s)
     gsub(/\t/, "\\t", s); gsub(/\r/, "\\r", s); gsub(/\n/, "\\n", s)
+    # Every other control character JSON forbids raw inside a string, written as \u00xx. index()
+    # first, so a long value is scanned 31 times rather than rewritten 31 times.
+    for (i = 1; i < 32; i++) {
+      c = sprintf("%c", i)
+      if (index(s, c)) gsub(c, sprintf("\\u%04x", i), s)
+    }
     return s
   }
   function jstr(s) { return "\"" esc(s) "\"" }
