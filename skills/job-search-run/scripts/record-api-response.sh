@@ -8,6 +8,10 @@
 # copied as the raw JSON it arrived as. A posting already judged in any run, and a posting this run
 # already surfaced, are both skipped: one opening reached by two queries is one posting.
 #
+# A get-posting response appends one `call` event and one `detail` event carrying the posting's
+# full text. The posting must be one this run surfaced, and storing it twice in a run stores one
+# `detail` event and reports the second read.
+#
 # The route is given, never guessed from the body. An error body carries no results and no
 # description, so nothing in it identifies the route that produced it, and guessing files every
 # failed detail read under searches.
@@ -114,8 +118,88 @@ fi
 req=$(field meta.request_id)
 
 if [ "$route" = get-posting ]; then
-  printf 'record-api-response.sh: --route get-posting is not handled yet\n' >&2
-  exit 2
+  # A posting body carries the posting's own fields under data, with no results array. The pattern
+  # uses [.] rather than \. for the reason given at haspath above: awk resolves the escape in a -v
+  # assignment, and the dot would then match any character.
+  haspath '^data[.]source_id$' || {
+    printf 'record-api-response.sh: %s carries no data.source_id — it is not a get-posting response\n' \
+      "$resp" >&2
+    exit 2
+  }
+
+  dsrc=$(field data.source)
+  dsid=$(field data.source_id)
+  [ -n "$dsrc" ] && [ -n "$dsid" ] || {
+    printf 'record-api-response.sh: %s is missing data.source or data.source_id\n' "$resp" >&2
+    exit 2
+  }
+
+  # Every posting this run stores must be one a search surfaced for it. Scoped to this run, unlike
+  # the judged check the search path uses: the text is stored against the summary row this run
+  # surfaced, and a run that never surfaced the posting has no row to store it against.
+  if ! grep -F '"event":"surfaced"' "$jobs" \
+       | grep -F "\"run_id\":\"$run_id\"" \
+       | grep -F "\"source\":\"$dsrc\"" \
+       | grep -qF "\"source_id\":\"$dsid\""; then
+    emit_call "$dsrc" true 1 0
+    printf 'record-api-response.sh: no surfaced posting for %s:%s in run %s\n' \
+      "$dsrc" "$dsid" "$run_id" >&2
+    exit 1
+  fi
+
+  # Already stored: nothing new to write, but the call was still made and still billed.
+  if grep -F '"event":"detail"' "$jobs" \
+       | grep -F "\"run_id\":\"$run_id\"" \
+       | grep -F "\"source\":\"$dsrc\"" \
+       | grep -qF "\"source_id\":\"$dsid\""; then
+    emit_call "$dsrc" true 1 0
+    printf 'record-api-response.sh: %s:%s already stored for this run — the call is recorded, nothing else\n' \
+      "$dsrc" "$dsid" >&2
+    exit 0
+  fi
+
+  # data own fields only: two segments, so a nested object under data cannot reach the event. A
+  # live posting body nests — address_structured and compensation_structured are objects,
+  # secondary_locations and missing_fields are arrays.
+  #
+  # No apostrophe may appear anywhere in this awk program: it is inside a single-quoted shell
+  # string, so one would end that string and the rest would be read as shell.
+  awk -F'\t' -v run_id="$run_id" -v ts="$ts" '
+    function esc(s) { gsub(/\\/, "\\\\", s); gsub(/"/, "\\\"", s); return s }
+    function fld(k) { return (k in v && v[k] != "") ? v[k] : "null" }
+    $1 ~ /^data\.[^.]+$/ { split($1, p, "."); v[p[2]] = $2 }
+    END {
+      out = "{\"event\":\"detail\",\"run_id\":\"" esc(run_id) "\""
+      out = out ",\"source\":" fld("source")
+      out = out ",\"source_id\":" fld("source_id")
+      out = out ",\"description_markdown\":" fld("description_markdown")
+      out = out ",\"employment_type\":" fld("employment_type")
+      out = out ",\"apply_url\":" fld("apply_url")
+      out = out ",\"is_listed\":" fld("is_listed")
+      out = out ",\"is_remote\":" fld("is_remote")
+      out = out ",\"workplace_type\":" fld("workplace_type")
+      out = out ",\"staleness_status\":" fld("staleness_status")
+      out = out ",\"ts\":\"" esc(ts) "\""
+      out = out "}"
+      print out
+    }
+  ' "$scan" > "$new"
+  detailstatus=$?
+
+  # Both the status and the file, for the reason the row builder checks both: the line is printed
+  # in the END block, so an awk that died leaves no line, and one that failed after printing would
+  # leave a line built from part of the body and store it as the whole posting.
+  if [ "$detailstatus" -ne 0 ] || [ ! -s "$new" ]; then
+    emit_call "$dsrc" true 1 0
+    printf 'record-api-response.sh: building the detail event for %s:%s failed — the call is recorded, nothing else\n' \
+      "$dsrc" "$dsid" >&2
+    exit 1
+  fi
+
+  emit_call "$dsrc" true 1 1
+  cat "$new" >> "$jobs"
+  printf 'record-api-response.sh: stored %s:%s\n' "$dsrc" "$dsid" >&2
+  exit 0
 fi
 
 # A search body carries data.query, and data.results[] when the search returned rows. A get-posting

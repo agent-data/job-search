@@ -1,0 +1,40 @@
+{
+  "data": {
+    "missing_fields": [
+      "application_url"
+    ],
+    "secondary_locations": [],
+    "location_display": "San Francisco, CA",
+    "employment_type": "FULL_TIME",
+    "source_url": "https://example.invalid/jobs/jp_b2f7856a3ce9?position=1&pageNum=0&refId=AAAA%3D%3D",
+    "source": "linkedin",
+    "published_at": null,
+    "id": "jp_b2f7856a3ce9",
+    "salary_display": "{\"@context\": \"http://schema.org\", \"@type\": \"JobPosting\", \"title\": \"Strategic Finance Manager\", \"description\": \"A role at the company. He said \\\"it's a \\\\\\\"strong\\\\\\\" fit\\\" — path C:\\\\temp, a {braced} phrase, a tab\\there and a newline\\nafter it.\\n\\n\", \"employmentType\": \"FULL_TIME\", \"hiringOrganization\": {\"@type\": \"Organization\", \"name\": \"Globex\"}, \"baseSalary\": {\"@type\": \"MonetaryAmount\", \"currency\": \"USD\", \"value\": {\"@type\": \"QuantitativeValue\", \"minValue\": 100000, \"maxValue\": 150000, \"unitText\": \"YEAR\"}}}",
+    "description_markdown": "A role at the company. He said \"it's a \\\"strong\\\" fit\" — path C:\\temp, a {braced} phrase, a tab\there and a newline\nafter it.\n\nResponsibilities and requirements. Responsibilities and requirements. Responsibilities and requirements. Responsibilities and requirements. Responsibilities and requirements. Responsibilities and requirements. Responsibilities and requirements. Responsibilities and requirements. Responsibilities and requirements. Responsibilities and requirements. Responsibilities and requirements. Responsibilities and requirements. Responsibilities and requirements. Responsibilities and requirements. Responsibilities and requirements. Responsibilities and requirements. Responsibilities and requirements. Responsibilities and requirements. Responsibilities and requirements. Responsibilities and requirements. Responsibilities and requirements. Responsibilities and requirements. Responsibilities and requirements. Responsibilities and requirements. Responsibilities and requirements. Responsibilities and requirements. Responsibilities and requirements. Responsibilities and requirements. Responsibilities and requirements. Responsibilities and requirements. Responsibilities and requirements. Responsibilities and requirements. Responsibilities and requirements. Responsibilities and requirements. Responsibilities and requirements. Responsibilities and requirements. Responsibilities and requirements. Responsibilities and requirements. Responsibilities and requirements. Responsibilities and requirements. Responsibilities and requirements. Responsibilities and requirements. Responsibilities and requirements. Responsibilities and requirements. Responsibilities and requirements. Responsibilities and requirements. Responsibilities and requirements. Responsibilities and requirements. Responsibilities and requirements. Responsibilities and requirements. Responsibilities and requirements. Responsibilities and requirements. Responsibilities and requirements. Responsibilities and requirements. Responsibilities and requirements. Responsibilities and requirements. Responsibilities and requirements. Responsibilities and requirements. Responsibilities and requirements. Responsibilities and requirements. Responsibilities and requirements. Responsibilities and requirements. Responsibilities and requirements. Responsibilities and requirements. Responsibilities and requirements. Responsibilities and requirements. Responsibilities and requirements. Responsibilities and requirements. Responsibilities and requirements. Responsibilities and requirements. Responsibilities and requirements. Responsibilities and requirements. Responsibilities and requirements. Responsibilities and requirements. Responsibilities and requirements. Responsibilities and requirements. Responsibilities and requirements. Responsibilities and requirements. Responsibilities and requirements. Responsibilities and requirements. Responsibilities and requirements. Responsibilities and requirements. Responsibilities and requirements. Responsibilities and requirements. Responsibilities and requirements. Responsibilities and requirements. Responsibilities and requirements. Responsibilities and requirements. Responsibilities and requirements. Responsibilities and requirements. Responsibilities and requirements. Responsibilities and requirements. Responsibilities and requirements. Responsibilities and requirements. Responsibilities and requirements. Responsibilities and requirements. Responsibilities and requirements. Responsibilities and requirements. Responsibilities and requirements. Responsibilities and requirements. Responsibilities and requirements. Responsibilities and requirements. Responsibilities and requirements. Responsibilities and requirements. Responsibilities and requirements. Responsibilities and requirements. Responsibilities and requirements. Responsibilities and requirements. Responsibilities and requirements. Responsibilities and requirements. Responsibilities and requirements. Responsibilities and requirements. Responsibilities and requirements. Responsibilities and requirements. Responsibilities and requirements. Responsibilities and requirements. Responsibilities and requirements. Responsibilities and requirements. Responsibilities and requirements. Responsibilities and requirements. ",
+    "company_name": "Northwind Labs",
+    "posted_at": "2026-07-25T13:50:43Z",
+    "source_id": "linkedin-0000",
+    "address_structured": null,
+    "apply_url": null,
+    "staleness_status": "fresh",
+    "workplace_type": null,
+    "is_remote": null,
+    "description_plain": null,
+    "capture_method": "json_ld",
+    "compensation_structured": {
+      "salary_min": 234,
+      "salary_max": 260,
+      "currency": "USD",
+      "interval": null
+    },
+    "team_name": null,
+    "is_listed": null,
+    "department_name": null,
+    "title": "Finance Business Partner"
+  },
+  "meta": {
+    "request_id": "req_ecce5951fc97404b8231dc0c",
+    "mode": "live_detail"
+  }
+}
