@@ -679,6 +679,67 @@ def test_a_search_call_is_refused_without_a_query_id_that_names_one_search(tmp_p
     assert not jobs.exists()
 
 
+@pytest.mark.parametrize("raw,written", [("\t", "\\t"), ("\r", "\\r")],
+                         ids=["tab", "carriage-return"])
+def test_a_tab_or_a_carriage_return_in_a_query_id_is_written_as_an_escape(tmp_path, raw, written):
+    """A raw tab or carriage return inside a JSON string is not JSON, so `esc` has to write both as
+    escapes. Measured before it did: the call event carried the raw character, no line of the log
+    parsed, and the script exited 0 — a corrupt log reported as success.
+
+    The query id reaches `emit_call` through the environment and the row builder through `awk -v`,
+    so this covers both of those `esc` copies at once: the call event and all 25 surfaced events
+    have to parse and give the query id back unchanged.
+    """
+    jobs = tmp_path / "jobs.jsonl"
+    qid = "a" + raw + "b"
+    r = run_script(RECORD_API, RID, jobs, FIXTURES / "search.linkedin.json", "--route",
+                   "search-jobs", "--query-id", qid)
+    assert r.returncode == 0, r.stderr
+    assert written in jobs.read_text()                 # written as the two-character escape
+    events = lines(jobs)                               # every line through json.loads
+    assert [e for e in events if e["event"] == "call"][0]["query_id"] == qid
+    assert {e["query_id"] for e in events if e["event"] == "surfaced"} == {qid}
+
+
+@pytest.mark.parametrize("raw,written", [("\t", "\\t"), ("\r", "\\r")],
+                         ids=["tab", "carriage-return"])
+def test_a_tab_or_a_carriage_return_in_the_source_flag_is_written_as_an_escape(tmp_path, raw,
+                                                                               written):
+    """`--source` reaches `emit_call` through `awk -v` rather than the environment, which is the
+    other way a caller value gets into that event. A zero-row response is what makes the flag the
+    source of record: with rows, the source is read back off the first one."""
+    jobs = tmp_path / "jobs.jsonl"
+    src = "a" + raw + "b"
+    r = run_script(RECORD_API, RID, jobs, FIXTURES / "search.zero.json", "--route", "search-jobs",
+                   "--query-id", "q", "--source", src)
+    assert r.returncode == 0, r.stderr
+    assert written in jobs.read_text()
+    assert [e for e in lines(jobs) if e["event"] == "call"][0]["source"] == src
+
+
+@pytest.mark.parametrize("where", ["run_id", "--source", "--query-id"])
+def test_a_newline_is_refused_and_the_value_carrying_it_is_named(tmp_path, where):
+    """No escaping downstream survives a newline: `run_id` and `--source` reach the event builders
+    through `awk -v`, and a literal newline in a -v assignment is a syntax error awk reports as
+    `newline in string` before the program runs, so `esc` never sees the value.
+
+    Measured against the unguarded script: a newline in `--source` wrote no line at all and the
+    script still exited 0, leaving a metered call that happened out of the log with nothing saying
+    so; one in `--query-id` reached `emit_call` through the environment instead and wrote a call
+    event across two lines, neither of them parseable.
+    """
+    jobs = tmp_path / "jobs.jsonl"
+    args = {"run_id": RID, "--source": "linkedin", "--query-id": "q"}
+    args[where] = "a\nb"
+    r = run_script(RECORD_API, args["run_id"], jobs, FIXTURES / "search.zero.json",
+                   "--route", "search-jobs", "--source", args["--source"],
+                   "--query-id", args["--query-id"])
+    assert r.returncode == 2, r.stdout + r.stderr
+    assert "may hold no newline" in r.stderr, r.stderr
+    assert where in r.stderr, r.stderr                 # which of the three carries it
+    assert not jobs.exists()
+
+
 def test_a_missing_response_file_exits_two_and_appends_nothing(tmp_path):
     jobs = tmp_path / "jobs.jsonl"
     r = run_script(RECORD_API, RID, jobs, tmp_path / "nope.json", "--route", "search-jobs",
@@ -1180,6 +1241,25 @@ def test_queueing_records_only_that_the_posting_is_to_be_read(tmp_path):
     q = [e for e in lines(jobs) if e["event"] == "queued"]
     assert len(q) == 1
     assert set(q[0]) == {"event", "run_id", "source", "source_id", "ts"}
+
+
+@pytest.mark.parametrize("raw,written", [("\t", "\\t"), ("\r", "\\r")],
+                         ids=["tab", "carriage-return"])
+def test_a_tab_or_a_carriage_return_in_a_queued_timestamp_is_written_as_an_escape(tmp_path, raw,
+                                                                                  written):
+    """`--ts` is the one value this script writes with no lookup behind it — the run id, the source
+    and the source id all have to match a surfaced event first, so a control character in any of
+    them fails that match before it reaches the event. Measured before `esc` handled them: the
+    queued event carried the raw character, the log stopped parsing, and the script exited 0."""
+    jobs = seeded_jobs(tmp_path, "search.ashby.json")
+    row = first_surfaced(jobs)
+    ts = "2026-01-01T00:00:00Z" + raw + "x"
+    r = run_script(QUEUE, jobs, "--run-id", RID, "--source", row["source"],
+                   "--source-id", row["source_id"], "--ts", ts)
+    assert r.returncode == 0, r.stderr
+    assert written in jobs.read_text()
+    q = [e for e in lines(jobs) if e["event"] == "queued"]
+    assert len(q) == 1 and q[0]["ts"] == ts
 
 
 def test_queueing_a_posting_no_search_surfaced_is_refused(tmp_path):

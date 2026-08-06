@@ -72,7 +72,11 @@ fi
 # No apostrophe may appear anywhere in this awk program: it is inside a single-quoted shell string,
 # so one would end that string and the rest would be read as shell.
 awk -v run_id="$run_id" -v source="$source" -v source_id="$source_id" -v ts="$ts" '
-  function esc(s) { gsub(/\\/, "\\\\", s); gsub(/"/, "\\\"", s); return s }
+  function esc(s) {
+    gsub(/\\/, "\\\\", s); gsub(/"/, "\\\"", s)
+    gsub(/\t/, "\\t", s); gsub(/\r/, "\\r", s); gsub(/\n/, "\\n", s)
+    return s
+  }
   function jstr(s) { return "\"" esc(s) "\"" }
   BEGIN {
     print "{\"event\":\"queued\",\"run_id\":" jstr(run_id) ",\"source\":" jstr(source) \

@@ -58,6 +58,30 @@ case $route in
   *) printf 'record-api-response.sh: --route must be search-jobs or get-posting\n' >&2; exit 2 ;;
 esac
 
+# A newline is refused here because no escaping downstream survives it. run_id and --source reach
+# the event builders through `awk -v`, and a literal newline in a -v assignment is a syntax error
+# awk reports as `newline in string` before the program runs, so esc never sees the value. Measured
+# against the unguarded script: --source carrying a newline wrote no line at all and the script
+# still exited 0, leaving a metered call that happened out of the log with nothing saying so, and
+# --query-id carrying one reached emit_call through the environment instead and wrote a call event
+# across two lines, neither of them parseable.
+#
+# A tab and a carriage return are not refused. They reach the programs intact, and esc writes them
+# as \t and \r the way record-judgment.awk already does.
+nl='
+'
+no_newline() {
+  case $2 in
+    *"$nl"*)
+      printf 'record-api-response.sh: %s may hold no newline — awk cannot take one in a -v assignment, so the event is never built\n' \
+        "$1" >&2
+      exit 2 ;;
+  esac
+}
+no_newline run_id "$run_id"
+no_newline --source "$src_flag"
+no_newline --query-id "$query_id"
+
 # A search call needs a query id, because run-counts.sh groups the search calls by source and query
 # id and calls a group with no attempt that returned a search that never returned. Every search on
 # one source with no query id lands in one group, so a search that returned marks the group answered
@@ -101,7 +125,11 @@ emit_call() {
   RAR_QUERY=$query_id RAR_REQ=${req:-} RAR_CODE=${code:-} \
   awk -v run_id="$run_id" -v ts="$ts" -v route="$route" -v source="$1" \
       -v ok="$2" -v returned="$3" -v newrows="$4" -v retryable="${retryable:-}" '
-    function esc(s) { gsub(/\\/, "\\\\", s); gsub(/"/, "\\\"", s); return s }
+    function esc(s) {
+      gsub(/\\/, "\\\\", s); gsub(/"/, "\\\"", s)
+      gsub(/\t/, "\\t", s); gsub(/\r/, "\\r", s); gsub(/\n/, "\\n", s)
+      return s
+    }
     function jstr(s) { return "\"" esc(s) "\"" }
     function jopt(s) { return s == "" ? "null" : jstr(s) }
     BEGIN {
@@ -222,7 +250,11 @@ if [ "$route" = get-posting ]; then
   # No apostrophe may appear anywhere in this awk program: it is inside a single-quoted shell
   # string, so one would end that string and the rest would be read as shell.
   awk -F'\t' -v run_id="$run_id" -v ts="$ts" '
-    function esc(s) { gsub(/\\/, "\\\\", s); gsub(/"/, "\\\"", s); return s }
+    function esc(s) {
+      gsub(/\\/, "\\\\", s); gsub(/"/, "\\\"", s)
+      gsub(/\t/, "\\t", s); gsub(/\r/, "\\r", s); gsub(/\n/, "\\n", s)
+      return s
+    }
     function fld(k) { return (k in v && v[k] != "") ? v[k] : "null" }
     $1 ~ /^data\.[^.]+$/ { split($1, p, "."); v[p[2]] = $2 }
     END {
@@ -270,7 +302,11 @@ haspath '^data[.](query|results)[.]' || {
 }
 
 awk -F'\t' -v run_id="$run_id" -v query_id="$query_id" -v ts="$ts" -v badfile="$bad" '
-  function esc(s) { gsub(/\\/, "\\\\", s); gsub(/"/, "\\\"", s); return s }
+  function esc(s) {
+    gsub(/\\/, "\\\\", s); gsub(/"/, "\\\"", s)
+    gsub(/\t/, "\\t", s); gsub(/\r/, "\\r", s); gsub(/\n/, "\\n", s)
+    return s
+  }
   function fld(k) { return (k in v && v[k] != "") ? v[k] : "null" }
   function isstr(k) { return (k in v) && substr(v[k], 1, 1) == "\"" }
 
