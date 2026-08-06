@@ -37,8 +37,10 @@ VALIDATE = RUNBOOK_SCRIPTS / "validate-workspace.sh"
 SCAN = RUN_SCRIPTS / "json-scan.awk"
 FIELD = RUN_SCRIPTS / "event-field.awk"
 RECORD_API = RUN_SCRIPTS / "record-api-response.sh"
+QUEUE = RUN_SCRIPTS / "queue-detail-read.sh"
+LIST_QUEUE = RUN_SCRIPTS / "list-detail-read-queue.sh"
 
-ALL_SCRIPTS = [DEDUP, APPEND, SCHEDULE, DISCOVERY, VALIDATE, RECORD_API]
+ALL_SCRIPTS = [DEDUP, APPEND, SCHEDULE, DISCOVERY, VALIDATE, RECORD_API, QUEUE, LIST_QUEUE]
 
 
 # A contract-valid single-line `evaluated` event, in the shape
@@ -1115,6 +1117,189 @@ def test_the_detail_path_runs_under_dash(tmp_path):
     original = json.loads((FIXTURES / "detail.ashby.json").read_text())["data"]
     assert len(stored) == 1
     assert stored[0]["description_markdown"] == original["description_markdown"]
+
+
+# ------------------------------- queue-detail-read.sh / list-detail-read-queue.sh
+
+def first_surfaced(jobs):
+    return [e for e in lines(jobs) if e["event"] == "surfaced"][0]
+
+
+def test_queueing_records_only_that_the_posting_is_to_be_read(tmp_path):
+    """Five keys and no sixth. Nothing about the expected judgment goes on the event: a provisional
+    band would tell the reader what to conclude before it has read the posting, and a named question
+    would fix the scope of its answer. `evaluate-job-fit` derives the open question from the posting
+    itself, with the posting in front of it.
+
+    The key set is asserted whole rather than key by key, because a sixth key is the regression this
+    test exists to catch, and asserting the five present ones still passes with a sixth one there."""
+    jobs = seeded_jobs(tmp_path, "search.linkedin.json")
+    row = first_surfaced(jobs)
+    r = run_script(QUEUE, jobs, "--run-id", RID, "--source", row["source"],
+                   "--source-id", row["source_id"])
+    assert r.returncode == 0, r.stderr
+    q = [e for e in lines(jobs) if e["event"] == "queued"]
+    assert len(q) == 1
+    assert set(q[0]) == {"event", "run_id", "source", "source_id", "ts"}
+
+
+def test_queueing_a_posting_no_search_surfaced_is_refused(tmp_path):
+    """The queue is a list of postings this run can fetch and judge, so every entry has to name a
+    posting this run surfaced. Without the check a typo puts an id on the queue that no later script
+    can resolve to a title, a company or a URL."""
+    jobs = seeded_jobs(tmp_path, "search.linkedin.json")
+    r = run_script(QUEUE, jobs, "--run-id", RID, "--source", "linkedin",
+                   "--source-id", "not-a-real-id")
+    assert r.returncode == 1
+    assert "no surfaced posting" in r.stderr
+    assert [e for e in lines(jobs) if e["event"] == "queued"] == []
+
+
+@pytest.mark.parametrize("drop", ["--run-id", "--source", "--source-id"])
+def test_a_missing_flag_is_named_rather_than_read_as_a_posting_nothing_surfaced(tmp_path, drop):
+    """Each case asserts the whole stderr line, not only the exit code. Without the three guards an
+    absent flag reaches the grep chain as an empty string, matches nothing, and the operator is told
+    `no surfaced posting for :linkedin-0000 in run 2026-08-06T00-00-00Z` — which sends them to the
+    run's search results when the fault is on the command line. Both paths exit 1, so a test reading
+    the code alone would pass with the guards deleted (measured: with all three removed, the three
+    cases here are the only tests in this module that fail)."""
+    jobs = seeded_jobs(tmp_path, "search.linkedin.json")
+    row = first_surfaced(jobs)
+    flags = {"--run-id": RID, "--source": row["source"], "--source-id": row["source_id"]}
+    del flags[drop]
+    r = run_script(QUEUE, jobs, *[x for pair in flags.items() for x in pair])
+    assert r.returncode == 1, r.stdout + r.stderr
+    assert r.stderr == "queue-detail-read: missing %s\n" % drop
+    assert [e for e in lines(jobs) if e["event"] == "queued"] == []
+
+
+def test_queueing_twice_is_reported_and_appends_nothing(tmp_path):
+    """Exit 0, because the posting the caller asked for is on the queue when the script returns.
+    The line count is what says the second invocation wrote nothing — a second `queued` event would
+    make the posting appear twice in the list a reader works from."""
+    jobs = seeded_jobs(tmp_path, "search.linkedin.json")
+    row = first_surfaced(jobs)
+    args = (jobs, "--run-id", RID, "--source", row["source"], "--source-id", row["source_id"])
+    run_script(QUEUE, *args)
+    before = len(lines(jobs))
+    r = run_script(QUEUE, *args)
+    assert r.returncode == 0 and "already queued" in r.stderr
+    assert len(lines(jobs)) == before
+
+
+def test_a_given_timestamp_is_what_the_queued_event_carries(tmp_path):
+    """`--ts` is what lets a caller stamp every event of one run with the same time, and it is the
+    only way to assert the value of `ts` rather than its presence — the default reads the clock."""
+    jobs = seeded_jobs(tmp_path, "search.linkedin.json")
+    row = first_surfaced(jobs)
+    r = run_script(QUEUE, jobs, "--run-id", RID, "--source", row["source"],
+                   "--source-id", row["source_id"], "--ts", "2026-08-06T12:00:00Z")
+    assert r.returncode == 0, r.stderr
+    assert [e for e in lines(jobs) if e["event"] == "queued"][0]["ts"] == "2026-08-06T12:00:00Z"
+
+
+def test_the_queue_carries_what_a_reader_needs_and_nothing_that_prejudges(tmp_path):
+    """Six fields, in this order, taken from the surfaced event rather than from anything the test
+    knows: `source` and `source_id` file the posting, `posting_id_at_seen` and `source_url` fetch
+    it, `title` and `company_name` let a reader see which posting the line is. Comparing the whole
+    list is what rules out a seventh field holding a provisional band or a named question."""
+    jobs = seeded_jobs(tmp_path, "search.linkedin.json")
+    row = first_surfaced(jobs)
+    run_script(QUEUE, jobs, "--run-id", RID, "--source", row["source"],
+               "--source-id", row["source_id"])
+    r = run_script(LIST_QUEUE, jobs, RID)
+    assert r.returncode == 0, r.stderr
+    fields = r.stdout.rstrip("\n").split("\t")
+    assert fields == [row["source"], row["source_id"], row["posting_id_at_seen"],
+                      row["source_url"], row["title"], row["company_name"]]
+
+
+def test_a_title_with_an_escaped_quote_reaches_the_reader_intact(tmp_path):
+    """Titles and company names are free text, so the queue reads them through `jval`, which
+    resolves the escapes a real posting carries. Reading them with `jraw` instead hands the reader
+    `"Manager \\"Finance\\" role"` — the outer quotes and the escapes exactly as the event has
+    them (measured by running both readers over this line)."""
+    jobs = tmp_path / "jobs.jsonl"
+    jobs.write_text(
+        '{"event":"surfaced","run_id":"%s","source":"ashby","source_id":"a",'
+        '"posting_id_at_seen":"jp_1","source_url":"https://example.invalid/1",'
+        '"title":"Manager \\"Finance\\" role","company_name":"Globex"}\n'
+        '{"event":"queued","run_id":"%s","source":"ashby","source_id":"a","ts":"x"}\n' % (RID, RID))
+    r = run_script(LIST_QUEUE, jobs, RID)
+    assert r.stdout.rstrip("\n").split("\t")[4] == 'Manager "Finance" role'
+
+
+def test_the_queue_drains_as_judgments_land(tmp_path):
+    """What makes the queue usable across more than one context window: a reader that comes back
+    after judging one of the three postings is handed the two it has not judged."""
+    jobs = seeded_jobs(tmp_path, "search.linkedin.json")
+    rows = [e for e in lines(jobs) if e["event"] == "surfaced"][:3]
+    for row in rows:
+        run_script(QUEUE, jobs, "--run-id", RID, "--source", row["source"],
+                   "--source-id", row["source_id"])
+    assert len(run_script(LIST_QUEUE, jobs, RID).stdout.strip().splitlines()) == 3
+    jobs.write_text(jobs.read_text() +
+        '{"event":"evaluated","run_id":"%s","source":"%s","source_id":"%s",'
+        '"detail_read":true,"relevant":true,"match":"strong"}\n'
+        % (RID, rows[0]["source"], rows[0]["source_id"]))
+    assert len(run_script(LIST_QUEUE, jobs, RID).stdout.strip().splitlines()) == 2
+
+
+def test_the_queue_is_scoped_to_the_run_it_is_asked_for(tmp_path):
+    """jobs.jsonl holds every run the workspace has ever done, and this is what a run reads to find
+    its own remaining work. Without the scope each run is handed the other's queue.
+
+    The last event seeds the harder half. Both runs surface the same posting under different
+    titles, so the display fields have to be taken from the run being listed rather than from
+    whichever surfaced event landed last. Dropping `rid == want` from the three branches — which is
+    the same as ignoring the second operand — was caught by nothing before this test.
+    """
+    jobs = seeded_jobs(tmp_path, "search.linkedin.json")
+    rows = [e for e in lines(jobs) if e["event"] == "surfaced"][:2]
+    run_script(QUEUE, jobs, "--run-id", RID, "--source", rows[0]["source"],
+               "--source-id", rows[0]["source_id"])
+    older, stale = "2026-01-01T00-00-00Z", "Surfaced by the earlier run"
+    assert rows[0]["title"] != stale
+
+    def event(row, **over):
+        return json.dumps(dict(row, **over), separators=(",", ":")) + "\n"
+
+    jobs.write_text(
+        jobs.read_text()
+        + event(rows[1], run_id=older)
+        + '{"event":"queued","run_id":"%s","source":"%s","source_id":"%s","ts":"x"}\n'
+          % (older, rows[1]["source"], rows[1]["source_id"])
+        + event(rows[0], run_id=older, title=stale))
+    mine = run_script(LIST_QUEUE, jobs, RID).stdout.strip().splitlines()
+    theirs = run_script(LIST_QUEUE, jobs, older).stdout.strip().splitlines()
+    assert [l.split("\t")[1] for l in mine] == [rows[0]["source_id"]]
+    assert [l.split("\t")[1] for l in theirs] == [rows[1]["source_id"]]
+    assert mine[0].split("\t")[4] == rows[0]["title"]
+
+
+def test_an_empty_queue_prints_nothing_and_succeeds(tmp_path):
+    """A run that surfaced postings and queued none of them prints nothing and exits 0. An empty
+    stdout is how the caller learns there is nothing left to read, so a non-zero exit would tell it
+    the log is broken instead."""
+    jobs = seeded_jobs(tmp_path, "search.linkedin.json")
+    r = run_script(LIST_QUEUE, jobs, RID)
+    assert r.returncode == 0 and r.stdout == ""
+
+
+@pytest.mark.skipif(not shutil.which("dash"), reason="dash is not installed here")
+def test_the_queue_scripts_run_under_dash(tmp_path):
+    """Both scripts use constructs `record-api-response.sh` does not — it contains no `:?` and no
+    `exec` (`grep -c` answers 0 for each). These use `${1:?}` and `${2?}` to reject a missing
+    operand or option value, and `exec` to replace the shell with awk. Run them under strict dash as
+    well as the host `sh`, because `sh -n` and `dash -n` only check syntax."""
+    jobs = seeded_jobs(tmp_path, "search.linkedin.json")
+    row = first_surfaced(jobs)
+    q = run_script(QUEUE, jobs, "--run-id", RID, "--source", row["source"],
+                   "--source-id", row["source_id"], shell="dash")
+    assert q.returncode == 0, q.stderr
+    r = run_script(LIST_QUEUE, jobs, RID, shell="dash")
+    assert r.returncode == 0, r.stderr
+    assert r.stdout.rstrip("\n").split("\t")[:2] == [row["source"], row["source_id"]]
 
 
 def _scrub_module():
