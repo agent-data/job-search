@@ -163,8 +163,8 @@ prevstatus=$?
 [ "$prevstatus" -eq 0 ] || die 'reading the judgments already recorded failed — nothing written'
 
 if [ -n "$prev" ]; then
-  # The timestamp is dropped from both sides before they are compared: a retry a minute later is
-  # the same verdict, and comparing the lines whole would call it a conflict.
+  # The timestamp is dropped from both sides before they are compared: a retry a minute later writes
+  # the same line but for its `ts`, and comparing the lines whole would send it to the branch below.
   a=$(printf '%s\n' "$prev" | sed 's/,"ts":"[^"]*"//')
   b=$(sed 's/,"ts":"[^"]*"//' "$line")
   if [ "$a" = "$b" ]; then
@@ -172,7 +172,16 @@ if [ -n "$prev" ]; then
       "$source" "$source_id" >&2
     exit 0
   fi
-  printf 'record-judgment: %s:%s already has a DIFFERENT verdict in run %s — nothing written\n' \
+  # Two lines compared byte for byte, so what this answers is whether the judgment already in the
+  # log is the line this call would write — not whether the two verdicts agree. A judgment written
+  # by hand reaches here whatever it says, because its field set, its field order and the space
+  # after its colons all differ from what record-judgment.awk builds, and the sed above keys on the
+  # compact `,"ts":"`, so such a line keeps its timestamp in what is printed below. Measured on
+  # 2026-08-06: the compact event this script writes, rewritten with a space after every colon,
+  # appended, and then offered again unchanged, arrives here — the same verdict on both sides. So
+  # the message says what was found and prints both lines for the caller to compare, rather than
+  # telling the caller the verdicts differ.
+  printf 'record-judgment: %s:%s already has a judgment in run %s, and it is not the line this call would write — nothing written\n' \
     "$source" "$source_id" "$run_id" >&2
   printf 'record-judgment:   recorded: %s\n' "$a" >&2
   printf 'record-judgment:   offered:  %s\n' "$b" >&2

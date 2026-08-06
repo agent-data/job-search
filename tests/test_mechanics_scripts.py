@@ -2003,6 +2003,45 @@ def test_a_judgment_written_with_spaces_after_its_colons_still_blocks_a_second_o
     assert len(lines(jobs)) == before, jobs.read_text()
 
 
+def test_the_refusal_does_not_claim_two_verdicts_differ_when_they_are_the_same(tmp_path):
+    """The lookup above became whitespace-tolerant; the comparison under it did not. It is a byte
+    compare against the line this call would write, and the `sed` that drops the timestamp keys on
+    the compact `,"ts":"`, so a judgment written by hand is refused whatever it says.
+
+    Refusing is the safe answer and stays. What the script must not do is name a cause it has not
+    established: here the recorded verdict and the offered one are the same `relevant` and the same
+    `match`, and the message used to read `already has a DIFFERENT verdict`. The two lines are
+    printed and the caller compares them.
+
+    The prior is built by rewriting the event this script itself wrote, so the two differ in nothing
+    but their separators — asserted below, since a hand-typed prior could differ in a field too and
+    the point of the case would be gone.
+    """
+    jobs = seeded_jobs(tmp_path, "search.ashby.json")
+    row = first_surfaced(jobs)
+    verdict = dict(detail_read="true", relevant="true", match="strong", reasoning="Solid fit.",
+                   ts="2026-08-05T00:00:00Z")
+    assert run_script(JUDGE, *judge_args(jobs, row, **verdict)).returncode == 0
+
+    kept = jobs.read_text().splitlines()
+    compact = [l for l in kept if json.loads(l)["event"] == "evaluated"][0]
+    spaced = json.dumps(json.loads(compact), separators=(",", ": "), ensure_ascii=False)
+    assert json.loads(spaced) == json.loads(compact) and spaced != compact
+    jobs.write_text("\n".join([l for l in kept if l != compact] + [spaced]) + "\n")
+    before = jobs.read_text()
+
+    r = run_script(JUDGE, *judge_args(jobs, row, **verdict))
+    assert r.returncode == 1, r.stdout + r.stderr
+    assert jobs.read_text() == before
+
+    said, rec, off = r.stderr.splitlines()
+    assert "different" not in said.lower(), said
+    assert "not the line this call would write" in said, said
+    recorded = json.loads(rec.split("recorded: ", 1)[1])
+    offered = json.loads(off.split("offered:  ", 1)[1])
+    assert (recorded["relevant"], recorded["match"]) == (offered["relevant"], offered["match"])
+
+
 def test_an_awk_that_fails_reading_the_recorded_judgments_writes_no_second_verdict(tmp_path):
     """That lookup prints nothing for a posting no one has judged yet, and an awk that died before
     printing prints nothing either, so the output alone cannot tell the two apart. With only the

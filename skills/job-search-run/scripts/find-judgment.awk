@@ -32,8 +32,9 @@
 # jval also ends the substring match `grep -F` does, where `"source_id":"abc"` is found on a line
 # carrying `"source_id":"abcd"`. Five lookups still match by grep and still have it: the surfaced
 # lookup in record-judgment.sh, and both lookups in each of queue-detail-read.sh and
-# record-api-response.sh. record-judgment.sh:95-119 writes out that hazard, what rules it out on the
-# committed fixtures, and why those five were left to move together.
+# record-api-response.sh. record-judgment.sh:95-119 writes out that hazard and what rules it out on
+# the committed fixtures; the reason not to anchor one of the five on its own is at
+# queue-detail-read.sh:59-68.
 
 jval($0, "event") != "evaluated"   { next }
 jval($0, "run_id") != run_id       { next }
