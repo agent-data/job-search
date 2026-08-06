@@ -25,8 +25,9 @@
 #         this run cannot fix, so close it blocked. Where the detail is depends on whose problem it
 #         is: findings about the workspace print on stdout after the three lines, and a failure of
 #         this script's own, such as no way to take the brief revision, prints on stderr.
-# Exit 2: the run did not open and nothing was written — no such workspace, no config.yaml, or the
-#         started-marker could not be created.
+# Exit 2: the run did not open and nothing was written. Four causes, and the message on stderr says
+#         which one: no such workspace, no config.yaml, the run_id is already taken by a run that
+#         opened this same second, or the started-marker could not be written.
 #
 # A missing operand is the exception the caller sees a shell-picked code for, the way
 # run-counts.sh:28-29 records: measured at 1 under sh and bash and 2 under dash.
@@ -45,35 +46,51 @@ here=$(dirname "$0")
 now=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 run_id=$(printf '%s\n' "$now" | tr ':' '-')
 
-# The marker is written before the three lines are printed, so a run_id never reaches a caller for a
-# run that has no marker on disk. printf writes it rather than `:`, and the two differ by shell.
-# Measured with `runs/` at mode 500, so only the write fails: `: > runs/.started-x || { …; exit 9; }`
-# is caught by the `||` under bash and exits 9, while dash aborts on the failed redirection before
-# the `||` runs, so the message below never prints and the caller gets dash's. The status is 2 in
-# both, since that is what this script exits here too, so the message is the whole difference. This
-# names bash and dash rather than `sh` because `/bin/sh` is bash on the machine where it was
-# measured and dash on the CI runner. The same line written with printf is caught under both.
 mkdir -p "$ws/runs" || exit 2
 
-# A marker already under this name means another run opened during this same second. run_id is the
-# clock read to the second, so the two runs would share it: one path for both run records, so the
-# second close overwrites the first, and one set of events, which run-counts.sh folds into a single
-# set of counts because it filters events by run_id. Nothing downstream can separate them
-# afterwards. The write below truncates rather than fails, so this check is what tells the two
-# apart. Refuse, and the caller opens a run a second later.
+# The marker is written before the three lines are printed, so a run_id never reaches a caller for a
+# run that has no marker on disk.
 #
-# This is not the leftover marker the run contract's step 1 handles. That one carries an earlier
-# run's id, so its filename differs from the one minted here and this check does not see it.
-if [ -e "$ws/runs/.started-$run_id" ]; then
-  printf 'open-run.sh: a run opened this same second and %s is already taken. Open a run a second later.\n' \
-    "$run_id" >&2
-  exit 2
-fi
-
-printf '' > "$ws/runs/.started-$run_id" || {
-  printf 'open-run.sh: cannot write the started-marker in %s/runs\n' "$ws" >&2
+# `set -C` makes the redirection refuse a file that is already there, so writing the marker and
+# claiming run_id are one operation. Testing with `[ -e ]` first and writing afterwards leaves a gap
+# between the two, and a second process that starts in the same second can pass the test before the
+# first one writes: measured with a pinned clock and two processes forked from one shell, 261 of 300
+# rounds under sh and 267 of 300 under dash had both exit 0 with one marker on disk. The same
+# harness over the write below gives 0 of 300 under each.
+#
+# Why a shared run_id has to be refused: run_id is the clock read to the second, so two runs that
+# open inside one second are handed the same one. They write runs/<run_id>.json to a single path, so
+# the second close overwrites the first's record, and run-counts.sh selects events by run_id, so
+# both runs' events fold into one set of counts — searches, detail_reads and total_metered come out
+# as the sum of two runs presented as one.
+#
+# The marker a run that died left behind is a different thing, handled by the run contract's step 1.
+# It carries that run's id, so the name written here differs from it and the write succeeds.
+#
+# printf writes the marker rather than `:`, and the two differ by shell. Measured with `runs/` at
+# mode 500, so only the write fails: `: > runs/.started-x || { …; exit 9; }` is caught by the `||`
+# under bash and exits 9, while dash aborts on the failed redirection before the `||` runs, so the
+# message below never prints and the caller gets dash's. The status is 2 in both, since that is what
+# this script exits here too, so the message is the whole difference. This names bash and dash
+# rather than `sh` because `/bin/sh` is bash on the machine where it was measured and dash on the CI
+# runner. The same line written with printf is caught under both.
+#
+# stderr is dropped for this one command because the shell writes its own diagnostic there when
+# `set -C` refuses — "cannot overwrite existing file" under bash, "File exists" under dash — and it
+# is the wrong wording for either case. The `if` below tests whether the marker is on disk: if it
+# is, the name is taken; if it is not, the write failed for another reason, an unwritable `runs/`
+# among them.
+set -C
+{ printf '' > "$ws/runs/.started-$run_id"; } 2>/dev/null || {
+  if [ -e "$ws/runs/.started-$run_id" ]; then
+    printf 'open-run.sh: %s is already taken — another run opened this same second. Run open-run.sh again a second later; the marker under that name belongs to that run, not to an earlier one that stopped.\n' \
+      "$run_id" >&2
+  else
+    printf 'open-run.sh: cannot write the started-marker in %s/runs\n' "$ws" >&2
+  fi
   exit 2
 }
+set +C
 
 # The brief revision is the first 12 characters of the SHA-256 of preferences.md, taken now, before
 # anything in the run can edit the file. Hosts differ in which of the two commands they carry, and
