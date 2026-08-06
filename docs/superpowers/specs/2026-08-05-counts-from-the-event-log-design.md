@@ -214,9 +214,10 @@ still to read survives outside the coordinating agent's context.
 
 **Nothing about the expected judgment is carried into the queue**, and the `steer` this replaces —
 `job-search-run/SKILL.md:57-65,73`, a provisional band plus the open question a read must settle —
-is deleted rather than reworked, along with the two eval assertions that graded it
-(`job-search-run/evals/evals.json:193,194`). Two reasons, and the second is the one that decides
-it:
+is deleted rather than reworked. `job-search-run/evals/evals.json:194` grades the steer alone and
+goes with it; `:193` lists everything a reader is briefed with, so only its steer clause is
+removed — the rest still describes what `list-detail-read-queue.sh` emits. Two reasons, and the
+second is the one that decides it:
 
 - A provisional band anchors the reader on a verdict before it has read anything, which works
   directly against `evaluate-job-fit`'s own correction that "the strong/moderate line is the one
