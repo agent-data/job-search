@@ -3881,16 +3881,26 @@ An earlier draft of this plan gave `DUP_SIGNATURES`' digest-counts-line entry (`
 
 The first arm already guards the signature owner-agnostically, and it goes on doing so.
 
-- [ ] **Step 6: Run the gates**
+- [ ] **Step 6: Reconcile the three repo docs this plan leaves stale**
+
+This step was added on 2026-08-06, during Task 8. No task in the original plan updates these files for the scripts this plan adds, so at merge all three would describe a repo that no longer exists. You are already opening two of them for Step 1, which is why the work lands here.
+
+**`ARCHITECTURE.md`.** It describes the run pipeline by naming the scripts that carry each part of it, and this plan changes what two of those scripts do and adds ten more. Measured on 2026-08-06: `command grep -c 'scripts/' ARCHITECTURE.md` gives 11, of which `:45-46` and `:63` name `dedup.sh` and `event-log-append.sh` — both of which now key on an `evaluated` event rather than any event — and `:154` names `dedup.sh` as the known-ids operation. None of the new scripts appears anywhere in the file. Bring the pipeline description in line with what a run now does: the response recorder, the detail-read queue, the judgment recorder, and the two readers that produce the digest's numbers and its listing. Keep the file's existing shape and link style; do not turn it into an inventory.
+
+**`TESTING.md`.** Its scripted-mechanics bullet is stale in two measurable ways. It says `tests/test_mechanics_scripts.py` holds "28 tests" — `python3 -m pytest tests/test_mechanics_scripts.py --collect-only -q` gave 296 on 2026-08-06 — and that one case runs `sh -n` and `dash -n` over "all five bundled scripts", where `ls skills/*/scripts/*.sh | wc -l` gives 12 and `ls skills/*/scripts/*.awk | wc -l` gives 8. Both numbers move again in Task 11, so take them at the end rather than from this paragraph, and cite the command beside each.
+
+**`CHANGELOG.md`.** There is no entry for this change; the last is `[0.8.0] — 2026-07-31`. Write one in the file's existing Keep a Changelog shape, saying what changed for someone using the pack: a run's digest now counts from the event log it writes rather than from the agent's memory of the run, and the scripts that make that possible. Do not invent a version number or a date — leave the heading as `## [Unreleased]` unless the repo already carries one.
+
+- [ ] **Step 7: Run the gates**
 
 Run: `python3 scripts/doc_lint.py --root . && python3 scripts/philosophy_guard.py --root . && python3 -m pytest -q`
 
-- [ ] **Step 7: Commit**
+- [ ] **Step 8: Commit**
 
 ```bash
 git add skills/job-search/evals/evals.json skills/job-search-run/evals/evals.json \
         docs/RELIABILITY.md ARCHITECTURE.md TESTING.md INSTALL_FOR_HERMES.md \
-        docs/design-docs/multi-harness-portability.md
+        docs/design-docs/multi-harness-portability.md CHANGELOG.md
 git commit -m "docs: say what the code does instead of naming it by metaphor"
 ```
 
