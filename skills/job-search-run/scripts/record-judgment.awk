@@ -9,9 +9,15 @@
 # The five display fields are spliced in as the raw JSON they already are on the surfaced event,
 # so a title carrying \" moves across byte-exact instead of being unescaped and escaped again.
 
-function esc(s) {
+function esc(s,   i, c) {
   gsub(/\\/, "\\\\", s); gsub(/"/, "\\\"", s)
   gsub(/\t/, "\\t", s); gsub(/\r/, "\\r", s); gsub(/\n/, "\\n", s)
+  # Every other control character JSON forbids raw inside a string, written as \u00xx. index()
+  # first, so a long value is scanned 31 times rather than rewritten 31 times.
+  for (i = 1; i < 32; i++) {
+    c = sprintf("%c", i)
+    if (index(s, c)) gsub(c, sprintf("\\u%04x", i), s)
+  }
   return s
 }
 function jstr(s) { return "\"" esc(s) "\"" }

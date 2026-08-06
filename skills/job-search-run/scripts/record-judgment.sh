@@ -61,6 +61,25 @@ case $detail_read in true|false) ;; *) die '--detail-read must be true or false'
 case $relevant in true|false) ;; *) die '--relevant must be true or false' ;; esac
 case $nhc in true|false) ;; *) die '--needs-human-check must be true or false' ;; esac
 
+# The identifiers are refused rather than escaped; the three free-text values are not checked at
+# all, because esc writes them out whole and a reason legitimately holds a newline. The reasons are
+# written out at record-api-response.sh, which makes the same two checks: awk takes a literal
+# newline in a -v assignment under mawk and refuses it under BSD awk, and awk resolves a backslash
+# escape in a -v assignment before the program runs. Measured on --ts here, with a newline: BSD awk
+# wrote no evaluated event and exited 1, mawk wrote one and exited 0.
+reject_id() {
+  case $2 in
+    *[[:cntrl:]]*) die "$1 may hold no control character" ;;
+    *\\*)          die "$1 may hold no backslash: $2" ;;
+  esac
+}
+reject_id --run-id "$run_id"
+reject_id --source "$source"
+reject_id --source-id "$source_id"
+reject_id --ts "$ts"
+reject_id --same-role-as "$same_role"
+reject_id --posted-at-extracted "$posted_extracted"
+
 # A relevant posting carries a band; one that is not relevant carries none.
 if [ "$relevant" = true ]; then
   case $band in

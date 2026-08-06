@@ -58,29 +58,52 @@ case $route in
   *) printf 'record-api-response.sh: --route must be search-jobs or get-posting\n' >&2; exit 2 ;;
 esac
 
-# A newline is refused here because no escaping downstream survives it. run_id and --source reach
-# the event builders through `awk -v`, and a literal newline in a -v assignment is a syntax error
-# awk reports as `newline in string` before the program runs, so esc never sees the value. Measured
-# against the unguarded script: --source carrying a newline wrote no line at all and the script
-# still exited 0, leaving a metered call that happened out of the log with nothing saying so, and
-# --query-id carrying one reached emit_call through the environment instead and wrote a call event
-# across two lines, neither of them parseable.
+# An identifier is refused rather than escaped. Free text is the opposite case — esc writes a
+# judgment reason out whole, control characters included — but a run id, a source and a query id
+# name things other scripts look up, and neither of these two characters survives the trip:
 #
-# A tab and a carriage return are not refused. They reach the programs intact, and esc writes them
-# as \t and \r the way record-judgment.awk already does.
-nl='
-'
-no_newline() {
+#   A control character does not cross awk -v the same way twice. A literal newline in a -v
+#   assignment is a syntax error under BSD awk (`newline in string`) and an accepted value under
+#   mawk, which is the awk Ubuntu CI runs — measured, the same queue-detail-read.sh command wrote no
+#   queued event under one and one under the other. esc would make the value
+#   valid JSON wherever it did arrive, but it would then sit in the log escaped while every lookup
+#   greps for the raw form it was handed, so the posting could never be found again.
+#
+#   A backslash is resolved by awk before the program runs, so --query-id a\tb reaches the row
+#   builder as a real tab through -v and reaches emit_call as the four characters through the
+#   environment. Measured at that point: the call event carried a\tb and all 25 surfaced events
+#   carried a tab, and run-counts.sh groups on the call event, so the group and its rows disagreed.
+#
+# The same three checks, in the same order, are in queue-detail-read.sh and record-judgment.sh.
+reject_id() {
   case $2 in
-    *"$nl"*)
-      printf 'record-api-response.sh: %s may hold no newline — awk cannot take one in a -v assignment, so the event is never built\n' \
-        "$1" >&2
+    *[[:cntrl:]]*)
+      printf 'record-api-response.sh: %s may hold no control character\n' "$1" >&2
+      printf 'record-api-response.sh:   awk takes a newline in a -v assignment on one host and refuses it on the next, and an escaped value is one no later lookup can grep for\n' >&2
+      exit 2 ;;
+    *\\*)
+      printf 'record-api-response.sh: %s may hold no backslash: %s\n' "$1" "$2" >&2
+      printf 'record-api-response.sh:   awk resolves the escape in a -v assignment, so the value reaching the event is not the value passed in\n' >&2
       exit 2 ;;
   esac
 }
-no_newline run_id "$run_id"
-no_newline --source "$src_flag"
-no_newline --query-id "$query_id"
+reject_id run_id "$run_id"
+reject_id --source "$src_flag"
+reject_id --query-id "$query_id"
+
+# --source and --query-id are the two halves of the source:query_id pair run-counts.sh names a
+# search that never returned by, in a comma-separated list. A comma in either splits that list at
+# the wrong place and a colon splits the pair at the wrong place: measured, three failed attempts
+# with --source a,b reported searches_never_succeeded_ids=a,b:q1, which reads as two lost searches.
+for pair_half in "$src_flag" "$query_id"; do
+  case $pair_half in
+    *,*|*:*)
+      printf 'record-api-response.sh: --source and --query-id may hold neither a comma nor a colon: %s\n' \
+        "$pair_half" >&2
+      printf 'record-api-response.sh:   run-counts.sh names the searches that never returned as a comma-separated list of source:query_id pairs\n' >&2
+      exit 2 ;;
+  esac
+done
 
 # A search call needs a query id, because run-counts.sh groups the search calls by source and query
 # id and calls a group with no attempt that returned a search that never returned. Every search on
@@ -89,9 +112,6 @@ no_newline --query-id "$query_id"
 # that returned and one whose 3 attempts all failed, both written with no query id —
 # searches_never_succeeded is 0, so nothing in a run's numbers says a whole search never returned.
 #
-# A comma would split the searches_never_succeeded_ids list at the wrong place, and a colon would
-# split a source:query_id pair at the wrong place, so the value carries neither.
-#
 # A detail read is not grouped, so --route get-posting takes no query id.
 if [ "$route" = search-jobs ]; then
   [ -n "$query_id" ] || {
@@ -99,13 +119,6 @@ if [ "$route" = search-jobs ]; then
     printf 'record-api-response.sh:   a search call with no query id is grouped with every other one on its source, so a search that never returned stops being counted\n' >&2
     exit 2
   }
-  case $query_id in
-    *,*|*:*)
-      printf 'record-api-response.sh: --query-id may hold neither a comma nor a colon: %s\n' \
-        "$query_id" >&2
-      printf 'record-api-response.sh:   run-counts.sh names the searches that never returned as a comma-separated list of source:query_id pairs\n' >&2
-      exit 2 ;;
-  esac
 fi
 
 [ -f "$resp" ] || { printf 'record-api-response.sh: no such file: %s\n' "$resp" >&2; exit 2; }
@@ -125,9 +138,15 @@ emit_call() {
   RAR_QUERY=$query_id RAR_REQ=${req:-} RAR_CODE=${code:-} \
   awk -v run_id="$run_id" -v ts="$ts" -v route="$route" -v source="$1" \
       -v ok="$2" -v returned="$3" -v newrows="$4" -v retryable="${retryable:-}" '
-    function esc(s) {
+    function esc(s,   i, c) {
       gsub(/\\/, "\\\\", s); gsub(/"/, "\\\"", s)
       gsub(/\t/, "\\t", s); gsub(/\r/, "\\r", s); gsub(/\n/, "\\n", s)
+      # Every other control character JSON forbids raw inside a string, written as \u00xx. index()
+      # first, so a long value is scanned 31 times rather than rewritten 31 times.
+      for (i = 1; i < 32; i++) {
+        c = sprintf("%c", i)
+        if (index(s, c)) gsub(c, sprintf("\\u%04x", i), s)
+      }
       return s
     }
     function jstr(s) { return "\"" esc(s) "\"" }
@@ -250,9 +269,15 @@ if [ "$route" = get-posting ]; then
   # No apostrophe may appear anywhere in this awk program: it is inside a single-quoted shell
   # string, so one would end that string and the rest would be read as shell.
   awk -F'\t' -v run_id="$run_id" -v ts="$ts" '
-    function esc(s) {
+    function esc(s,   i, c) {
       gsub(/\\/, "\\\\", s); gsub(/"/, "\\\"", s)
       gsub(/\t/, "\\t", s); gsub(/\r/, "\\r", s); gsub(/\n/, "\\n", s)
+      # Every other control character JSON forbids raw inside a string, written as \u00xx. index()
+      # first, so a long value is scanned 31 times rather than rewritten 31 times.
+      for (i = 1; i < 32; i++) {
+        c = sprintf("%c", i)
+        if (index(s, c)) gsub(c, sprintf("\\u%04x", i), s)
+      }
       return s
     }
     function fld(k) { return (k in v && v[k] != "") ? v[k] : "null" }
@@ -302,9 +327,15 @@ haspath '^data[.](query|results)[.]' || {
 }
 
 awk -F'\t' -v run_id="$run_id" -v query_id="$query_id" -v ts="$ts" -v badfile="$bad" '
-  function esc(s) {
+  function esc(s,   i, c) {
     gsub(/\\/, "\\\\", s); gsub(/"/, "\\\"", s)
     gsub(/\t/, "\\t", s); gsub(/\r/, "\\r", s); gsub(/\n/, "\\n", s)
+    # Every other control character JSON forbids raw inside a string, written as \u00xx. index()
+    # first, so a long value is scanned 31 times rather than rewritten 31 times.
+    for (i = 1; i < 32; i++) {
+      c = sprintf("%c", i)
+      if (index(s, c)) gsub(c, sprintf("\\u%04x", i), s)
+    }
     return s
   }
   function fld(k) { return (k in v && v[k] != "") ? v[k] : "null" }

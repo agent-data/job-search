@@ -36,6 +36,22 @@ done
 [ -n "$source_id" ] || die 'missing --source-id'
 [ -f "$jobs" ]      || die "no such file: $jobs"
 
+# Every value this script writes is an identifier, so each is refused rather than escaped. The
+# reasons are written out at record-api-response.sh, which makes the same two checks: awk takes a
+# literal newline in a -v assignment under mawk and refuses it under BSD awk, and awk resolves a
+# backslash escape in a -v assignment before the program runs. Measured on --ts here, with a
+# newline: BSD awk wrote no queued event and exited 2, mawk wrote one and exited 0.
+reject_id() {
+  case $2 in
+    *[[:cntrl:]]*) die "$1 may hold no control character" ;;
+    *\\*)          die "$1 may hold no backslash: $2" ;;
+  esac
+}
+reject_id --run-id "$run_id"
+reject_id --source "$source"
+reject_id --source-id "$source_id"
+reject_id --ts "$ts"
+
 # The queue lists postings this run can fetch and judge, so every entry names one this run
 # surfaced. Same four-grep chain, matching the same quoted forms, as the surfaced check in
 # record-api-response.sh.
@@ -72,9 +88,15 @@ fi
 # No apostrophe may appear anywhere in this awk program: it is inside a single-quoted shell string,
 # so one would end that string and the rest would be read as shell.
 awk -v run_id="$run_id" -v source="$source" -v source_id="$source_id" -v ts="$ts" '
-  function esc(s) {
+  function esc(s,   i, c) {
     gsub(/\\/, "\\\\", s); gsub(/"/, "\\\"", s)
     gsub(/\t/, "\\t", s); gsub(/\r/, "\\r", s); gsub(/\n/, "\\n", s)
+    # Every other control character JSON forbids raw inside a string, written as \u00xx. index()
+    # first, so a long value is scanned 31 times rather than rewritten 31 times.
+    for (i = 1; i < 32; i++) {
+      c = sprintf("%c", i)
+      if (index(s, c)) gsub(c, sprintf("\\u%04x", i), s)
+    }
     return s
   }
   function jstr(s) { return "\"" esc(s) "\"" }

@@ -662,14 +662,18 @@ def test_bad_arguments_exit_two_and_append_nothing(tmp_path, tail, says):
     (["--query-id", ""], "needs --query-id"),              # an empty one says nothing either
     (["--query-id", "sf,remote"], "neither a comma nor a colon"),
     (["--query-id", "sf:remote"], "neither a comma nor a colon"),
-], ids=["absent", "empty", "comma", "colon"])
+    (["--query-id", "q", "--source", "a,b"], "neither a comma nor a colon"),
+    (["--query-id", "q", "--source", "a:b"], "neither a comma nor a colon"),
+], ids=["absent", "empty", "query-id comma", "query-id colon", "source comma", "source colon"])
 def test_a_search_call_is_refused_without_a_query_id_that_names_one_search(tmp_path, flag, says):
     """`run-counts.sh` groups the search calls by source and query id, so the query id is what tells
     one search on a source from another. Refusing it here rather than working around a null one in
     the counter is what keeps a retry sequence a single group.
 
-    A comma and a colon are refused because the lost searches are named as a comma-separated list of
-    `source:query_id` pairs: either character inside a query id splits that list at the wrong place.
+    A comma and a colon are refused in **both** halves of that pair, because the lost searches are
+    named as a comma-separated list of `source:query_id` entries. Measured with only the query id
+    checked: three failed attempts with `--source a,b --query-id q1` reported
+    `searches_never_succeeded_ids=a,b:q1`, which reads as two lost searches, at exit 0.
     """
     jobs = tmp_path / "jobs.jsonl"
     r = run_script(RECORD_API, RID, jobs, FIXTURES / "search.zero.json", "--route", "search-jobs",
@@ -679,63 +683,34 @@ def test_a_search_call_is_refused_without_a_query_id_that_names_one_search(tmp_p
     assert not jobs.exists()
 
 
-@pytest.mark.parametrize("raw,written", [("\t", "\\t"), ("\r", "\\r")],
-                         ids=["tab", "carriage-return"])
-def test_a_tab_or_a_carriage_return_in_a_query_id_is_written_as_an_escape(tmp_path, raw, written):
-    """A raw tab or carriage return inside a JSON string is not JSON, so `esc` has to write both as
-    escapes. Measured before it did: the call event carried the raw character, no line of the log
-    parsed, and the script exited 0 — a corrupt log reported as success.
-
-    The query id reaches `emit_call` through the environment and the row builder through `awk -v`,
-    so this covers both of those `esc` copies at once: the call event and all 25 surfaced events
-    have to parse and give the query id back unchanged.
-    """
-    jobs = tmp_path / "jobs.jsonl"
-    qid = "a" + raw + "b"
-    r = run_script(RECORD_API, RID, jobs, FIXTURES / "search.linkedin.json", "--route",
-                   "search-jobs", "--query-id", qid)
-    assert r.returncode == 0, r.stderr
-    assert written in jobs.read_text()                 # written as the two-character escape
-    events = lines(jobs)                               # every line through json.loads
-    assert [e for e in events if e["event"] == "call"][0]["query_id"] == qid
-    assert {e["query_id"] for e in events if e["event"] == "surfaced"} == {qid}
-
-
-@pytest.mark.parametrize("raw,written", [("\t", "\\t"), ("\r", "\\r")],
-                         ids=["tab", "carriage-return"])
-def test_a_tab_or_a_carriage_return_in_the_source_flag_is_written_as_an_escape(tmp_path, raw,
-                                                                               written):
-    """`--source` reaches `emit_call` through `awk -v` rather than the environment, which is the
-    other way a caller value gets into that event. A zero-row response is what makes the flag the
-    source of record: with rows, the source is read back off the first one."""
-    jobs = tmp_path / "jobs.jsonl"
-    src = "a" + raw + "b"
-    r = run_script(RECORD_API, RID, jobs, FIXTURES / "search.zero.json", "--route", "search-jobs",
-                   "--query-id", "q", "--source", src)
-    assert r.returncode == 0, r.stderr
-    assert written in jobs.read_text()
-    assert [e for e in lines(jobs) if e["event"] == "call"][0]["source"] == src
-
-
+@pytest.mark.parametrize("bad,says", [
+    ("a\vb", "control character"),      # a vertical tab: not whitespace, and JSON forbids it raw
+    ("a\nb", "control character"),      # the one awk itself disagrees about
+    ("a\\tb", "backslash"),
+], ids=["vertical-tab", "newline", "backslash"])
 @pytest.mark.parametrize("where", ["run_id", "--source", "--query-id"])
-def test_a_newline_is_refused_and_the_value_carrying_it_is_named(tmp_path, where):
-    """No escaping downstream survives a newline: `run_id` and `--source` reach the event builders
-    through `awk -v`, and a literal newline in a -v assignment is a syntax error awk reports as
-    `newline in string` before the program runs, so `esc` never sees the value.
+def test_an_identifier_the_search_writer_takes_is_refused(tmp_path, where, bad, says):
+    """A run id, a source and a query id name things other scripts look up, so neither of these
+    characters may be in one.
 
-    Measured against the unguarded script: a newline in `--source` wrote no line at all and the
-    script still exited 0, leaving a metered call that happened out of the log with nothing saying
-    so; one in `--query-id` reached `emit_call` through the environment instead and wrote a call
-    event across two lines, neither of them parseable.
+    A control character does not cross `awk -v` the same way twice: a literal newline in a -v
+    assignment is a syntax error under BSD awk and an accepted value under mawk, which is the awk
+    Ubuntu CI runs. `esc` would make it valid JSON wherever it did arrive, but it would then sit in
+    the log escaped while every lookup greps for the raw form, so the posting could never be found.
+
+    A backslash is resolved by awk before the program runs. Measured before this guard:
+    `--query-id a\\tb` put the four characters on the call event, through the environment, and a real
+    tab on all 25 surfaced events, through -v, and `run-counts.awk` groups on the call event — so
+    the group and its own rows disagreed, with every line parsing.
     """
     jobs = tmp_path / "jobs.jsonl"
     args = {"run_id": RID, "--source": "linkedin", "--query-id": "q"}
-    args[where] = "a\nb"
+    args[where] = bad
     r = run_script(RECORD_API, args["run_id"], jobs, FIXTURES / "search.zero.json",
                    "--route", "search-jobs", "--source", args["--source"],
                    "--query-id", args["--query-id"])
     assert r.returncode == 2, r.stdout + r.stderr
-    assert "may hold no newline" in r.stderr, r.stderr
+    assert says in r.stderr, r.stderr
     assert where in r.stderr, r.stderr                 # which of the three carries it
     assert not jobs.exists()
 
@@ -1243,23 +1218,33 @@ def test_queueing_records_only_that_the_posting_is_to_be_read(tmp_path):
     assert set(q[0]) == {"event", "run_id", "source", "source_id", "ts"}
 
 
-@pytest.mark.parametrize("raw,written", [("\t", "\\t"), ("\r", "\\r")],
-                         ids=["tab", "carriage-return"])
-def test_a_tab_or_a_carriage_return_in_a_queued_timestamp_is_written_as_an_escape(tmp_path, raw,
-                                                                                  written):
-    """`--ts` is the one value this script writes with no lookup behind it — the run id, the source
-    and the source id all have to match a surfaced event first, so a control character in any of
-    them fails that match before it reaches the event. Measured before `esc` handled them: the
-    queued event carried the raw character, the log stopped parsing, and the script exited 0."""
+@pytest.mark.parametrize("bad,says", [
+    ("a\vb", "control character"),
+    ("a\nb", "control character"),
+    ("a\\tb", "backslash"),
+], ids=["vertical-tab", "newline", "backslash"])
+@pytest.mark.parametrize("flag", ["--run-id", "--source", "--source-id", "--ts"])
+def test_an_identifier_the_queue_writer_takes_is_refused(tmp_path, flag, bad, says):
+    """Every value this script writes is an identifier, `--ts` included, and `--ts` is the one with
+    no lookup in front of it — the run id, the source and the source id have to match a surfaced
+    event first, so a bad one of those fails that match rather than reaching the event.
+
+    Measured before this guard, `--ts` carrying a newline: BSD awk wrote no queued event and exited
+    2, mawk wrote one and exited 0. The same command, two answers — and on the BSD awk side the
+    queued posting is absent from the list a reader works from, for a reason the operator sees only
+    as `awk: newline in string`.
+    """
     jobs = seeded_jobs(tmp_path, "search.ashby.json")
     row = first_surfaced(jobs)
-    ts = "2026-01-01T00:00:00Z" + raw + "x"
-    r = run_script(QUEUE, jobs, "--run-id", RID, "--source", row["source"],
-                   "--source-id", row["source_id"], "--ts", ts)
-    assert r.returncode == 0, r.stderr
-    assert written in jobs.read_text()
-    q = [e for e in lines(jobs) if e["event"] == "queued"]
-    assert len(q) == 1 and q[0]["ts"] == ts
+    args = {"--run-id": RID, "--source": row["source"], "--source-id": row["source_id"],
+            "--ts": "2026-01-01T00:00:00Z"}
+    args[flag] = bad
+    before = jobs.read_text()
+    r = run_script(QUEUE, jobs, *[x for kv in args.items() for x in kv])
+    assert r.returncode == 1, r.stdout + r.stderr
+    assert says in r.stderr, r.stderr
+    assert flag in r.stderr, r.stderr
+    assert jobs.read_text() == before                  # nothing written either way
 
 
 def test_queueing_a_posting_no_search_surfaced_is_refused(tmp_path):
@@ -1483,6 +1468,109 @@ def judge_args(jobs, row, **kw):
     for k, v in kw.items():
         args += ["--" + k.replace("_", "-"), v]
     return args
+
+
+@pytest.mark.parametrize("bad,says", [
+    ("a\vb", "control character"),
+    ("a\nb", "control character"),
+    ("a\\tb", "backslash"),
+], ids=["vertical-tab", "newline", "backslash"])
+@pytest.mark.parametrize("flag", ["--run-id", "--source", "--source-id", "--ts",
+                                  "--same-role-as", "--posted-at-extracted"])
+def test_an_identifier_the_judgment_writer_takes_is_refused(tmp_path, flag, bad, says):
+    """The identifiers, and only the identifiers. The three free-text values are the case below and
+    are never refused.
+
+    Measured before this guard, `--ts` carrying a newline: BSD awk wrote no evaluated event and
+    exited 1, mawk wrote one and exited 0 — the same judgment recorded on one host and lost on the
+    next.
+    """
+    jobs = seeded_jobs(tmp_path, "search.ashby.json")
+    row = first_surfaced(jobs)
+    args = {"--run-id": RID, "--source": row["source"], "--source-id": row["source_id"],
+            "--detail-read": "false", "--relevant": "false"}
+    args[flag] = bad
+    before = jobs.read_text()
+    r = run_script(JUDGE, jobs, *[x for kv in args.items() for x in kv])
+    assert r.returncode == 1, r.stdout + r.stderr
+    assert says in r.stderr, r.stderr
+    assert flag in r.stderr, r.stderr
+    assert jobs.read_text() == before
+
+
+# Every control character a JSON string may not carry raw, in one value. A vertical tab and a
+# form feed have no escape of their own in JSON and are written as a \u escape; NUL is left out
+# because a shell argument cannot carry one.
+EVERY_CONTROL = "".join(chr(i) for i in range(1, 32))
+
+
+def test_free_text_carrying_every_control_character_is_written_out_whole(tmp_path):
+    """Free text is escaped, never refused: a reason legitimately holds a newline, and a judgment
+    that cannot be recorded because of one is worse than one that reads oddly.
+
+    `esc` handled `\\t`, `\\r` and `\\n` and nothing else until this round, so a single vertical tab
+    in a value wrote a line no JSON parser would take. Measured then, on `--query-id` with one: 26
+    lines written, 0 parseable, exit 0. All 31 go through here at once, and the reason has to come
+    back out of the log exactly as it went in.
+    """
+    jobs = seeded_jobs(tmp_path, "search.ashby.json")
+    row = first_surfaced(jobs)
+    reason = "before" + EVERY_CONTROL + "after"
+    r = run_script(JUDGE, *judge_args(jobs, row, detail_read="false", relevant="false",
+                                      reasoning=reason))
+    assert r.returncode == 0, r.stderr
+    ev = [e for e in lines(jobs) if e["event"] == "evaluated"]   # every line through json.loads
+    assert len(ev) == 1
+    assert ev[0]["reasoning"] == reason
+    assert "\\u000b" in jobs.read_text()               # the \u fallback, not a raw byte
+
+
+def test_a_dealbreaker_carrying_a_control_character_is_written_out_whole(tmp_path):
+    """The list values reach `esc` through `jlist`, which is a second way into it."""
+    jobs = seeded_jobs(tmp_path, "search.ashby.json")
+    row = first_surfaced(jobs)
+    r = run_script(JUDGE, *judge_args(jobs, row, detail_read="false", relevant="false",
+                                      dealbreakers="on\vsite;pay\x01band"))
+    assert r.returncode == 0, r.stderr
+    ev = [e for e in lines(jobs) if e["event"] == "evaluated"]
+    assert ev[0]["dealbreakers_hit"] == ["on\vsite", "pay\x01band"]
+
+
+def _esc_bodies():
+    """The text of every `esc` in the run scripts, keyed by file and line, with indentation removed.
+
+    Read out of the files rather than listed here: a copy this misses is a copy that could drift,
+    which is the whole point of comparing them.
+    """
+    bodies = {}
+    for path in sorted((RUN_SCRIPTS).glob("*")):
+        if path.suffix not in (".sh", ".awk"):
+            continue
+        src = path.read_text(encoding="utf-8").split("\n")
+        for i, line in enumerate(src):
+            if line.lstrip().startswith("function esc("):
+                indent = line[:len(line) - len(line.lstrip())]
+                body = []
+                for follow in src[i:]:
+                    body.append(follow[len(indent):] if follow.startswith(indent) else follow)
+                    if follow == indent + "}":
+                        break
+                bodies["%s:%d" % (path.name, i + 1)] = "\n".join(body)
+    return bodies
+
+
+def test_every_event_builder_escapes_a_value_the_same_way():
+    """Five copies of one function, in three files. They disagreed twice: `record-judgment.awk`
+    escaped a tab, a carriage return and a newline while the other four escaped none of the three,
+    and every value that reached one of those four with one in it stopped the log being JSON.
+
+    Comparing the text is what catches the third divergence before it ships. A copy that has to
+    differ is a copy that should not be a copy.
+    """
+    bodies = _esc_bodies()
+    assert len(bodies) == 5, sorted(bodies)
+    assert len(set(bodies.values())) == 1, {k: v.splitlines()[0] for k, v in bodies.items()}
+    assert "sprintf(\"\\\\u%04x\", i)" in next(iter(bodies.values()))
 
 
 def test_a_judgment_lands_as_one_evaluated_event(tmp_path):
