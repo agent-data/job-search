@@ -2690,9 +2690,9 @@ def test_a_judgment_for_a_posting_this_run_never_surfaced_is_not_listed(tmp_path
     search of this run turned up is in none of its numbers. The listing leaves out the same row, so
     the digest cannot name a posting its own counts do not count.
 
-    `record-judgment.sh` looks for the surfaced event before it writes, so its own output cannot
-    reach this state — except through the `grep -F` prefix match written up at
-    record-judgment.sh:97-118, where a judgment for source_id `100` matches a surfaced `1001`.
+    `record-judgment.sh` looks for the surfaced event before it writes, so nothing it writes can
+    reach this state. The judgment is appended to the log here directly, which is the only way to
+    reach it.
     """
     jobs = seeded_jobs(tmp_path, "search.linkedin.json")
     row = first_surfaced(jobs)

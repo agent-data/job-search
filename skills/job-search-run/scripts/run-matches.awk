@@ -6,13 +6,17 @@
 # band, so the same log read on two machines prints two different digests. Measured on a log whose
 # five strong judgments landed in the order 0003, 0000, 0004, 0002, 0001: BSD awk 20200816 printed
 # them 0000, 0001, 0002, 0003, 0004 and mawk 1.3.4 printed them 0004, 0000, 0001, 0002, 0003 —
-# three orders, no two alike. With `order`, both awks print the order the judgments landed.
+# three orders, no two alike. With `order`, both awks print the order the postings were first
+# judged in.
 #
-# A posting is keyed by its source and its source_id joined with SUBSEP, the same key
-# run-counts.awk builds and for the reason written out there at :14-16.
+# A posting is keyed by its source and its source_id joined with SUBSEP, the 0x1c byte, which
+# cannot reach a value — the reason written out at run-counts.awk:14-16. A literal `|` carries no
+# such guarantee for a free-text source_id. run-counts.awk builds the same key, which keeps the two
+# readable side by side, but the scripts never exchange keys, so that is a maintainability point
+# rather than a correctness one.
 #
-# The row set is the same one run-counts.awk counts as reviewed: a posting this run surfaced and
-# this run judged. That is what keeps the digest's listing and its counts the same length. A
+# The row set is the one run-counts.awk counts as reviewed — a posting this run surfaced and this
+# run judged — less the relevant rows carrying no band, which the paragraph below covers. A
 # judgment carrying an id no search of this run turned up is in neither.
 #
 # A relevant row carrying no band is left out here and reported by run-counts.sh, which is the

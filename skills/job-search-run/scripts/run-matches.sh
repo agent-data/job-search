@@ -8,7 +8,8 @@
 #   needs_human_check  posted_at  reasoning
 #
 # band is strong, moderate, weak or filtered. Strong first, then moderate, weak, and the postings
-# the run judged not relevant; within a band, the order the judgments landed.
+# the run judged not relevant. Within a band, the order the first judgments landed: a posting
+# judged twice keeps the place its first judgment gave it, and the row carries its last judgment.
 #
 # The digest's numbers come from run-counts.sh and the postings it names come from here, so the
 # section headed "3 strong" holds three postings and they are the three the log says are strong.
@@ -17,9 +18,16 @@
 # reasoning is free text with its newlines and tabs turned into spaces, because one posting is one
 # line. The full text stays on the event.
 #
-# One row per posting this run surfaced and this run judged, which is the set run-counts.sh reports
-# as postings_reviewed. So the row count equals that number and the rows of one band count out to
-# that band's key, and a caller can check the digest against both.
+# One row per posting this run surfaced and this run judged, less any relevant row carrying no
+# band. run-counts.sh counts that row in postings_reviewed and this script leaves it out, so the
+# row count is postings_reviewed minus the number on run-counts.sh's INVALID
+# relevant-row-without-a-band line. run-counts.sh prints that line only when it exits 1, so for
+# every log it exits 0 on, the row count equals postings_reviewed. Measured on a log holding three
+# surfaced postings, two judged strong and one relevant with match null: postings_reviewed=3,
+# INVALID relevant-row-without-a-band=1, exit 1, and two rows here.
+#
+# The rows of one band count out to that band's key either way, because run-counts.sh puts an
+# unbanded row in none of the four. So a caller can check the digest against both.
 #
 # Exit 0: the listing printed. A run that judged nothing prints no rows and exits 0.
 # Exit 2: nothing printed — no log at that path.
