@@ -1536,14 +1536,21 @@ def test_a_dealbreaker_carrying_a_control_character_is_written_out_whole(tmp_pat
     assert ev[0]["dealbreakers_hit"] == ["on\vsite", "pay\x01band"]
 
 
-def _esc_bodies():
-    """The text of every `esc` in the run scripts, keyed by file and line, with indentation removed.
+ESC_COPIES_TODAY = 5      # a floor, not a count: see test_every_event_builder_escapes_a_value...
+ESC_SCAN_DIRS = sorted((ROOT / "skills").glob("*/scripts"))
 
-    Read out of the files rather than listed here: a copy this misses is a copy that could drift,
-    which is the whole point of comparing them.
+
+def _esc_bodies():
+    """The text of every `esc` under every skill's `scripts/`, keyed by repo path and line, with the
+    definition's own indentation taken off so copies at different depths compare equal.
+
+    Every skill's script directory is scanned rather than the one that holds the copies today. The
+    five are all in `job-search-run/scripts` now, but the next event builder the plan adds is
+    `close-run.sh` under `job-search-runbook/scripts`, and a guard that looked only where the copies
+    already are would still be green on the day a sixth one landed next door.
     """
     bodies = {}
-    for path in sorted((RUN_SCRIPTS).glob("*")):
+    for path in sorted(p for d in ESC_SCAN_DIRS for p in d.glob("*")):
         if path.suffix not in (".sh", ".awk"):
             continue
         src = path.read_text(encoding="utf-8").split("\n")
@@ -1555,20 +1562,30 @@ def _esc_bodies():
                     body.append(follow[len(indent):] if follow.startswith(indent) else follow)
                     if follow == indent + "}":
                         break
-                bodies["%s:%d" % (path.name, i + 1)] = "\n".join(body)
+                bodies["%s:%d" % (path.relative_to(ROOT), i + 1)] = "\n".join(body)
     return bodies
 
 
 def test_every_event_builder_escapes_a_value_the_same_way():
-    """Five copies of one function, in three files. They disagreed twice: `record-judgment.awk`
-    escaped a tab, a carriage return and a newline while the other four escaped none of the three,
-    and every value that reached one of those four with one in it stopped the log being JSON.
+    """One function, copied. The copies disagreed twice: `record-judgment.awk` escaped a tab, a
+    carriage return and a newline while the other four escaped none of the three, and any value that
+    reached one of those four carrying one stopped the log being JSON.
 
     Comparing the text is what catches the third divergence before it ships. A copy that has to
     differ is a copy that should not be a copy.
+
+    The count is a floor rather than a fixed number, so a matching copy added by a later task passes
+    and a drifting one fails. It is there at all because a glob that found nothing would otherwise
+    make this pass over an empty set.
+
+    The directory list is asserted too, because narrowing it back to the one directory that holds
+    the copies today would not move either of the other two assertions: measured with a drifted
+    sixth copy written to `job-search-runbook/scripts`, the narrow scan found 5 copies, 1 distinct,
+    and passed, while this one found 6, 2 distinct, and failed.
     """
     bodies = _esc_bodies()
-    assert len(bodies) == 5, sorted(bodies)
+    assert set(ESC_SCAN_DIRS) >= {RUN_SCRIPTS, RUNBOOK_SCRIPTS, SEARCH_SCRIPTS}, ESC_SCAN_DIRS
+    assert len(bodies) >= ESC_COPIES_TODAY, sorted(bodies)
     assert len(set(bodies.values())) == 1, {k: v.splitlines()[0] for k, v in bodies.items()}
     assert "sprintf(\"\\\\u%04x\", i)" in next(iter(bodies.values()))
 
