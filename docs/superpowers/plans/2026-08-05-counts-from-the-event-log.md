@@ -2730,8 +2730,11 @@ git commit -m "feat(runbook): open a run from one clock read, and check the work
 healthy  = close_state is complete
            AND postings_unreviewed == 0
            AND every search that was attempted returned at least once
+           AND no relevant row carries a missing band
 degraded = anything else
 ```
+
+The fourth term was added on 2026-08-06, during Task 9's review. Without it a run closes `complete` and `healthy` while its own record does not add up: measured, a run with one relevant row carrying no band records `match_strong + match_moderate + match_weak + filtered_out = 1` against `postings_reviewed = 2`, and `validate-workspace.sh` passes that workspace clean. `run-counts.sh` does report the row — it prints `INVALID relevant-row-without-a-band=<n>` and exits 1 — but nothing carries that forward: `close-run.sh` puts it on stderr, the digest reads `run_health` off close's stdout by which point the stderr line is gone, and no field of the record holds it. A record that asserts an arithmetic it does not satisfy is the defect class this plan exists to remove, so the run is degraded and the number reaches the record through `run_health`.
 
 A single failed attempt inside a retry sequence that later answered is not a lost search, and a failed detail read is not a search at all — a posting whose detail read failed permanently gets judged from its summary row, so it is reviewed and the run is healthy, with the failures visible in `agent_data_usage` and named in the digest's footnotes. That is what `evals/cases/fault-503.yaml` asks a run to do. A search that never returned after its retry budget is spent **is** a lost search and does degrade the run: its postings were never surfaced, so nothing else would notice their absence.
 
