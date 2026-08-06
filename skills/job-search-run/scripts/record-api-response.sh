@@ -2,7 +2,9 @@
 # record-api-response.sh — turn one agent-data response into the events it implies.
 #
 # Usage: record-api-response.sh <run_id> <jobs.jsonl> <response.json> \
-#          --route search-jobs|get-posting [--query-id ID] [--source S]
+#          --route search-jobs --query-id ID [--source S]
+#        record-api-response.sh <run_id> <jobs.jsonl> <response.json> \
+#          --route get-posting [--source S]
 #
 # A search-jobs response appends one `call` event and one `surfaced` event per new row, each value
 # copied as the raw JSON it arrived as. A posting already judged in any run, and a posting this run
@@ -36,7 +38,8 @@ set -u
 here=$(dirname "$0")
 
 usage() {
-  printf 'usage: record-api-response.sh <run_id> <jobs.jsonl> <response.json> --route search-jobs|get-posting [--query-id ID] [--source S]\n' >&2
+  printf 'usage: record-api-response.sh <run_id> <jobs.jsonl> <response.json> --route search-jobs --query-id ID [--source S]\n' >&2
+  printf '       record-api-response.sh <run_id> <jobs.jsonl> <response.json> --route get-posting [--source S]\n' >&2
 }
 
 [ $# -ge 3 ] || { usage; exit 2; }
@@ -54,6 +57,32 @@ case $route in
   search-jobs|get-posting) ;;
   *) printf 'record-api-response.sh: --route must be search-jobs or get-posting\n' >&2; exit 2 ;;
 esac
+
+# A search call needs a query id, because run-counts.sh groups the search calls by source and query
+# id and calls a group with no attempt that returned a search that never returned. Every search on
+# one source with no query id lands in one group, so a search that returned marks the group answered
+# and a search whose attempts all failed stops being counted: measured on two linkedin searches, one
+# that returned and one whose 3 attempts all failed, both written with no query id —
+# searches_never_succeeded is 0, so nothing in a run's numbers says a whole search never returned.
+#
+# A comma would split the searches_never_succeeded_ids list at the wrong place, and a colon would
+# split a source:query_id pair at the wrong place, so the value carries neither.
+#
+# A detail read is not grouped, so --route get-posting takes no query id.
+if [ "$route" = search-jobs ]; then
+  [ -n "$query_id" ] || {
+    printf 'record-api-response.sh: --route search-jobs needs --query-id\n' >&2
+    printf 'record-api-response.sh:   a search call with no query id is grouped with every other one on its source, so a search that never returned stops being counted\n' >&2
+    exit 2
+  }
+  case $query_id in
+    *,*|*:*)
+      printf 'record-api-response.sh: --query-id may hold neither a comma nor a colon: %s\n' \
+        "$query_id" >&2
+      printf 'record-api-response.sh:   run-counts.sh names the searches that never returned as a comma-separated list of source:query_id pairs\n' >&2
+      exit 2 ;;
+  esac
+fi
 
 [ -f "$resp" ] || { printf 'record-api-response.sh: no such file: %s\n' "$resp" >&2; exit 2; }
 dir=$(dirname "$jobs"); [ -d "$dir" ] || mkdir -p "$dir"

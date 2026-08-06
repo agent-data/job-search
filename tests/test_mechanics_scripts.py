@@ -615,7 +615,7 @@ def test_a_failure_reading_the_rows_appends_nothing_and_records_the_call(tmp_pat
     call returned nothing."""
     jobs = tmp_path / "jobs.jsonl"
     r = run_script(RECORD_API, RID, jobs, FIXTURES / "search.linkedin.json", "--route",
-                   "search-jobs", env=awk_shim(tmp_path, "badfile=", SPILL))
+                   "search-jobs", "--query-id", "q", env=awk_shim(tmp_path, "badfile=", SPILL))
     assert r.returncode == 1, r.stdout + r.stderr
     assert [e for e in lines(jobs) if e["event"] == "surfaced"] == []
     calls = [e for e in lines(jobs) if e["event"] == "call"]
@@ -628,7 +628,8 @@ def test_a_failure_skipping_seen_postings_appends_nothing_and_records_the_call(t
     all of it."""
     jobs = tmp_path / "jobs.jsonl"
     r = run_script(RECORD_API, RID, jobs, FIXTURES / "search.linkedin.json", "--route",
-                   "search-jobs", env=awk_shim(tmp_path, "dedup-surfaced.awk", SPILL))
+                   "search-jobs", "--query-id", "q",
+                   env=awk_shim(tmp_path, "dedup-surfaced.awk", SPILL))
     assert r.returncode == 1, r.stdout + r.stderr
     assert [e for e in lines(jobs) if e["event"] == "surfaced"] == []
     calls = [e for e in lines(jobs) if e["event"] == "call"]
@@ -656,9 +657,32 @@ def test_bad_arguments_exit_two_and_append_nothing(tmp_path, tail, says):
     assert not jobs.exists()
 
 
+@pytest.mark.parametrize("flag,says", [
+    ([], "needs --query-id"),                              # no --query-id at all
+    (["--query-id", ""], "needs --query-id"),              # an empty one says nothing either
+    (["--query-id", "sf,remote"], "neither a comma nor a colon"),
+    (["--query-id", "sf:remote"], "neither a comma nor a colon"),
+], ids=["absent", "empty", "comma", "colon"])
+def test_a_search_call_is_refused_without_a_query_id_that_names_one_search(tmp_path, flag, says):
+    """`run-counts.sh` groups the search calls by source and query id, so the query id is what tells
+    one search on a source from another. Refusing it here rather than working around a null one in
+    the counter is what keeps a retry sequence a single group.
+
+    A comma and a colon are refused because the lost searches are named as a comma-separated list of
+    `source:query_id` pairs: either character inside a query id splits that list at the wrong place.
+    """
+    jobs = tmp_path / "jobs.jsonl"
+    r = run_script(RECORD_API, RID, jobs, FIXTURES / "search.zero.json", "--route", "search-jobs",
+                   *flag)
+    assert r.returncode == 2, r.stdout + r.stderr
+    assert says in r.stderr, r.stderr
+    assert not jobs.exists()
+
+
 def test_a_missing_response_file_exits_two_and_appends_nothing(tmp_path):
     jobs = tmp_path / "jobs.jsonl"
-    r = run_script(RECORD_API, RID, jobs, tmp_path / "nope.json", "--route", "search-jobs")
+    r = run_script(RECORD_API, RID, jobs, tmp_path / "nope.json", "--route", "search-jobs",
+                   "--query-id", "q")
     assert r.returncode == 2
     assert "no such file" in r.stderr
     assert not jobs.exists()
@@ -669,11 +693,12 @@ def test_the_source_flag_names_the_source_of_a_call_that_returned_no_rows(tmp_pa
     can say which source the call was billed against."""
     with_flag = tmp_path / "with.jsonl"
     r = run_script(RECORD_API, RID, with_flag, FIXTURES / "search.zero.json",
-                   "--route", "search-jobs", "--source", "ashby")
+                   "--route", "search-jobs", "--query-id", "q", "--source", "ashby")
     assert r.returncode == 0, r.stderr
     assert [e for e in lines(with_flag) if e["event"] == "call"][0]["source"] == "ashby"
     without = tmp_path / "without.jsonl"
-    run_script(RECORD_API, RID, without, FIXTURES / "search.zero.json", "--route", "search-jobs")
+    run_script(RECORD_API, RID, without, FIXTURES / "search.zero.json", "--route", "search-jobs",
+               "--query-id", "q")
     assert [e for e in lines(without) if e["event"] == "call"][0]["source"] is None
 
 
@@ -741,7 +766,7 @@ def test_posted_at_takes_the_later_date_when_a_row_carries_both(tmp_path):
          "source_url": "https://example.invalid/2",
          "posted_at": "2026-06-30T00:00:00+00:00", "published_at": "2026-01-01T00:00:00+00:00"}]}}))
     jobs = tmp_path / "jobs.jsonl"
-    r = run_script(RECORD_API, RID, jobs, both, "--route", "search-jobs")
+    r = run_script(RECORD_API, RID, jobs, both, "--route", "search-jobs", "--query-id", "q")
     assert r.returncode == 0, r.stderr
     dates = {e["source_id"]: e["posted_at"] for e in lines(jobs) if e["event"] == "surfaced"}
     assert dates == {"s1": "2026-06-30T00:00:00+00:00", "s2": "2026-06-30T00:00:00+00:00"}
@@ -804,7 +829,7 @@ def test_one_bad_row_rejects_the_whole_response(tmp_path):
     del rows[1]["source_id"]
     bad.write_text(json.dumps({"data": {"query": {"source": "ashby"}, "results": rows}}))
     jobs = tmp_path / "jobs.jsonl"
-    r = run_script(RECORD_API, RID, jobs, bad, "--route", "search-jobs")
+    r = run_script(RECORD_API, RID, jobs, bad, "--route", "search-jobs", "--query-id", "q")
     assert r.returncode == 1
     assert "row 2" in r.stderr, r.stderr
     assert [e for e in lines(jobs) if e["event"] == "surfaced"] == []
@@ -820,7 +845,7 @@ def test_a_truncated_response_records_the_call_and_appends_no_rows(tmp_path):
     whole = (FIXTURES / "search.ashby.json").read_text()
     cut.write_text(whole[:len(whole) // 2])
     jobs = tmp_path / "jobs.jsonl"
-    r = run_script(RECORD_API, RID, jobs, cut, "--route", "search-jobs")
+    r = run_script(RECORD_API, RID, jobs, cut, "--route", "search-jobs", "--query-id", "q")
     assert r.returncode == 1
     assert "not well-formed JSON" in r.stderr
     assert [e for e in lines(jobs) if e["event"] == "surfaced"] == []
@@ -840,7 +865,7 @@ def test_an_empty_string_in_a_required_field_is_refused(tmp_path, key):
     empty = tmp_path / "empty.json"
     empty.write_text(json.dumps({"data": {"results": [row]}}))
     jobs = tmp_path / "jobs.jsonl"
-    r = run_script(RECORD_API, RID, jobs, empty, "--route", "search-jobs")
+    r = run_script(RECORD_API, RID, jobs, empty, "--route", "search-jobs", "--query-id", "q")
     assert r.returncode == 1, r.stdout + r.stderr
     assert "is missing %s" % key in r.stderr, r.stderr
     assert [e for e in lines(jobs) if e["event"] == "surfaced"] == []
@@ -853,7 +878,8 @@ def test_a_non_string_id_is_refused_at_ingestion(tmp_path):
     bad.write_text(json.dumps({"data": {"results": [
         {"source": "linkedin", "source_id": 4449006488, "id": "jp_x",
          "source_url": "https://example.invalid/x"}]}}))
-    r = run_script(RECORD_API, RID, tmp_path / "jobs.jsonl", bad, "--route", "search-jobs")
+    r = run_script(RECORD_API, RID, tmp_path / "jobs.jsonl", bad, "--route", "search-jobs",
+                   "--query-id", "q")
     assert r.returncode == 1
     assert "source_id" in r.stderr
 
@@ -874,7 +900,7 @@ def test_a_get_posting_body_is_not_recorded_as_a_search(tmp_path):
                                             "description_markdown": "A role."},
                                    "meta": {"request_id": "req_1"}}))
     jobs = tmp_path / "jobs.jsonl"
-    r = run_script(RECORD_API, RID, jobs, posting, "--route", "search-jobs")
+    r = run_script(RECORD_API, RID, jobs, posting, "--route", "search-jobs", "--query-id", "q")
     assert r.returncode == 2
     assert [e for e in lines(jobs) if e["event"] == "surfaced"] == []
 
@@ -923,6 +949,15 @@ def seeded_jobs(tmp_path, search_fixture):
 def record_detail(jobs, fixture, shell="sh"):
     return run_script(RECORD_API, RID, jobs, FIXTURES / fixture, "--route", "get-posting",
                       shell=shell)
+
+
+def test_a_detail_read_takes_no_query_id(tmp_path):
+    """A detail read is not grouped by query when a run's numbers are worked out, so the query-id
+    guard on the search route must not reach it. Every call here passes no `--query-id` at all."""
+    jobs = seeded_jobs(tmp_path, "search.ashby.json")
+    r = record_detail(jobs, "detail.ashby.json")
+    assert r.returncode == 0, r.stderr
+    assert len([e for e in lines(jobs) if e["event"] == "detail"]) == 1
 
 
 def test_a_detail_response_stores_the_description_byte_exact(tmp_path):
@@ -2095,6 +2130,9 @@ def test_by_source_sums_to_surfaced(tmp_path):
     assert sum(per.values()) == int(c["postings_surfaced"])
     assert per == {"by_source_linkedin": len(api_rows("search.linkedin.json")),
                    "by_source_ashby": len(api_rows("search.ashby.json"))}
+    # The order the sources first surfaced a posting, which is what `srcorder` fixes: built from an
+    # unordered walk instead, these two lines swap under BSD awk (measured).
+    assert list(per) == ["by_source_linkedin", "by_source_ashby"]
 
 
 def test_rows_new_total_equals_surfaced(tmp_path):
@@ -2212,6 +2250,63 @@ def test_a_search_that_never_returned_is_named(tmp_path):
     _, c = counts(jobs)
     assert c["searches_never_succeeded"] == "1"
     assert c["searches_never_succeeded_ids"] == "ashby:q2"
+
+
+def test_the_writer_cannot_produce_two_searches_on_one_source_that_share_a_query_id(tmp_path):
+    """A search call with no query id used to be groupable with every other query-id-less search on
+    its source. One that returned marked the group answered, one whose attempts all failed stopped
+    being counted, and the run closed healthy with a whole search never returned — measured at
+    `searches_never_succeeded=0` on exactly this pair before the writer was guarded.
+
+    `record-api-response.sh` refuses a search call with no query id now, so the log cannot hold that
+    pair, and the same two searches written the sanctioned way name the one that never returned."""
+    jobs = tmp_path / "jobs.jsonl"
+    refused = run_script(RECORD_API, RID, jobs, FIXTURES / "search.zero.json",
+                         "--route", "search-jobs", "--source", "linkedin")
+    assert refused.returncode == 2, refused.stderr
+    assert not jobs.exists()                       # no call event, so no group keyed on a null
+
+    jobs.write_text("")
+    ok = run_script(RECORD_API, RID, jobs, FIXTURES / "search.zero.json", "--route", "search-jobs",
+                    "--source", "linkedin", "--query-id", "q1")
+    assert ok.returncode == 0, ok.stderr
+    for _ in range(3):                             # three attempts, none of which returned
+        run_script(RECORD_API, RID, jobs, FIXTURES / "detail.error.json", "--route", "search-jobs",
+                   "--source", "linkedin", "--query-id", "q2")
+    _, c = counts(jobs)
+    assert c["calls_searches"] == "4" and c["calls_failed"] == "3"
+    assert c["searches_never_succeeded"] == "1"
+    assert c["searches_never_succeeded_ids"] == "linkedin:q2"
+
+
+def test_the_lost_searches_are_named_in_the_order_the_log_holds_them(tmp_path):
+    """awk walks an array in no defined order. Built from one instead of from `grouporder`, this
+    list comes out in a different order under each awk — measured on this log, BSD awk gave
+    greenhouse, lever, ashby, linkedin and mawk gave ashby, lever, linkedin, greenhouse. A run
+    record written on one machine and a digest written on another would then carry different
+    lines for the same run."""
+    jobs = tmp_path / "jobs.jsonl"
+    jobs.write_text("".join(
+        '{"event":"call","run_id":"%s","route":"search-jobs","source":"%s","query_id":"%s",'
+        '"ok":false,"rows_returned":0,"rows_new":0,"retryable":true}\n' % (RID, src, qid)
+        for src, qid in [("ashby", "q1"), ("lever", "q2"), ("greenhouse", "q3"),
+                         ("linkedin", "q4")]))
+    _, c = counts(jobs)
+    assert c["searches_never_succeeded"] == "4"
+    assert c["searches_never_succeeded_ids"] == "ashby:q1,lever:q2,greenhouse:q3,linkedin:q4"
+
+
+def test_a_later_runs_detail_event_is_not_this_runs_coverage(tmp_path):
+    """`postings_detail_read` says how many of this run's postings this run has the full text of.
+    A posting a later run read in full leaves that number where it was."""
+    jobs = seeded_jobs(tmp_path, "search.ashby.json")
+    row = first_surfaced(jobs)
+    jobs.write_text(jobs.read_text() +
+        '{"event":"detail","run_id":"2026-09-01T00-00-00Z","source":"%s","source_id":"%s",'
+        '"description_markdown":"The full text.","ts":"2026-09-01T00:00:00Z"}\n'
+        % (row["source"], row["source_id"]))
+    _, c = counts(jobs)
+    assert c["postings_detail_read"] == "0"
 
 
 def test_a_failed_detail_read_is_not_a_lost_search(tmp_path):
