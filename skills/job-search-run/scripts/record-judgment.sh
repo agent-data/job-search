@@ -16,7 +16,9 @@
 #
 # Exit 0: recorded, or this posting already carries exactly this judgment.
 # Exit 1: nothing written; stderr names the problem.
-# Exit 2: no temporary file could be made, so nothing was attempted.
+# Exit 2: nothing was attempted — no operand at all, or no temporary file could be made. The shell
+#         picks the code when the operand is missing, so that case is 2 under dash and 1 under sh
+#         and bash; every exit this script chooses itself is 0 or 1.
 set -u
 
 here=$(dirname "$0")
@@ -88,7 +90,7 @@ fi
 # the numeric ids under tests/fixtures and every .jsonl by file gives 20 distinct ids and no such
 # pair, in one file or across all of them. So nothing a test reads can fire this today. Prose and
 # hand-written events do hold such pairs — "1" and "123" are both in
-# tests/test_mechanics_scripts.py, and 19 more span files ("2"/"2001", "444"/"4449006488") — and
+# tests/test_mechanics_scripts.py, and 18 more span files ("2"/"2001", "444"/"4449006488") — and
 # nothing keeps a live numeric id one width, so a run that surfaced "100" and "1001" would match
 # the wrong one.
 #
