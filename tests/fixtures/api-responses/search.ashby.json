@@ -19,16 +19,16 @@
         "id": "jp_22d0d871db24",
         "detail_available": true,
         "salary_display": "$216K – $240K • Offers Equity",
-        "company_name": "Initech",
+        "company_name": "Wonka Industries",
         "posted_at": null,
         "source_id": "ashby-0000",
         "staleness_status": "fresh",
         "workplace_type": "Hybrid",
         "is_remote": true,
         "capture_method": "official_api",
-        "team_name": "FP&A",
-        "department_name": "Accounting",
-        "title": "Strategic Finance Manager"
+        "team_name": "Strategic Finance",
+        "department_name": "Corporate Development",
+        "title": "Senior Financial Analyst"
       },
       {
         "missing_fields": [],
@@ -41,15 +41,15 @@
         "id": "jp_500d0a1decef",
         "detail_available": true,
         "salary_display": "$266K – $295K • Offers Equity",
-        "company_name": "Soylent Foods",
+        "company_name": "Wonka Industries",
         "posted_at": null,
         "source_id": "ashby-0001",
         "staleness_status": "fresh",
         "workplace_type": "Hybrid",
         "is_remote": true,
         "capture_method": "official_api",
-        "team_name": "Revenue Finance",
-        "department_name": "Finance",
+        "team_name": "Strategic Finance",
+        "department_name": "Operations",
         "title": "Finance Business Partner"
       },
       {
@@ -70,9 +70,9 @@
         "workplace_type": "Hybrid",
         "is_remote": true,
         "capture_method": "official_api",
-        "team_name": "Strategic Finance",
-        "department_name": "Strategy",
-        "title": "Corporate Development Associate"
+        "team_name": "Treasury",
+        "department_name": "Corporate Development",
+        "title": "Director, FP&A"
       },
       {
         "missing_fields": [],
@@ -85,16 +85,16 @@
         "id": "jp_813ba152d28f",
         "detail_available": true,
         "salary_display": "$226K – $285K • Offers Equity",
-        "company_name": "Globex",
+        "company_name": "Northwind Labs",
         "posted_at": null,
         "source_id": "ashby-0003",
         "staleness_status": "fresh",
         "workplace_type": "Hybrid",
         "is_remote": true,
         "capture_method": "official_api",
-        "team_name": "Treasury",
+        "team_name": "Revenue Finance",
         "department_name": "Business Operations",
-        "title": "Strategic Finance Manager"
+        "title": "Director, FP&A"
       },
       {
         "missing_fields": [],
@@ -107,16 +107,16 @@
         "id": "jp_552634f782a5",
         "detail_available": true,
         "salary_display": "$185K – $205K • Offers Equity",
-        "company_name": "Cyberdyne",
+        "company_name": "Soylent Foods",
         "posted_at": null,
         "source_id": "ashby-0004",
         "staleness_status": "fresh",
         "workplace_type": "Hybrid",
         "is_remote": true,
         "capture_method": "official_api",
-        "team_name": "Corporate Finance",
-        "department_name": "Corporate Development",
-        "title": "Senior Financial Analyst"
+        "team_name": "Treasury",
+        "department_name": "Accounting",
+        "title": "Director, FP&A"
       },
       {
         "missing_fields": [
@@ -131,16 +131,16 @@
         "id": "jp_74e5fc8364f2",
         "detail_available": true,
         "salary_display": null,
-        "company_name": "Globex",
+        "company_name": "Initech",
         "posted_at": null,
         "source_id": "ashby-0005",
         "staleness_status": "fresh",
         "workplace_type": "OnSite",
         "is_remote": false,
         "capture_method": "official_api",
-        "team_name": "Financial Planning",
-        "department_name": "Business Operations",
-        "title": "Strategic Finance Manager"
+        "team_name": "Strategic Finance",
+        "department_name": "Corporate Development",
+        "title": "Senior Financial Analyst"
       },
       {
         "missing_fields": [],
@@ -153,16 +153,16 @@
         "id": "jp_7babfecbaf70",
         "detail_available": true,
         "salary_display": "$140K – $170K • Offers Equity • Offers Bonus",
-        "company_name": "Soylent Foods",
+        "company_name": "Globex",
         "posted_at": null,
         "source_id": "ashby-0006",
         "staleness_status": "fresh",
         "workplace_type": "Hybrid",
         "is_remote": true,
         "capture_method": "official_api",
-        "team_name": "Revenue Finance",
+        "team_name": "FP&A",
         "department_name": "Strategy",
-        "title": "Strategic Finance Manager"
+        "title": "Senior Financial Analyst"
       },
       {
         "missing_fields": [],
@@ -175,16 +175,16 @@
         "id": "jp_922250ec8a6a",
         "detail_available": true,
         "salary_display": "$234K – $260K • Offers Equity",
-        "company_name": "Vandelay Industries",
+        "company_name": "Initech",
         "posted_at": null,
         "source_id": "ashby-0007",
         "staleness_status": "fresh",
         "workplace_type": "Hybrid",
         "is_remote": true,
         "capture_method": "official_api",
-        "team_name": "Financial Planning",
-        "department_name": "Business Operations",
-        "title": "Corporate Development Associate"
+        "team_name": "FP&A",
+        "department_name": "Operations",
+        "title": "Director, FP&A"
       },
       {
         "missing_fields": [],
@@ -197,14 +197,14 @@
         "id": "jp_d681a83d4659",
         "detail_available": true,
         "salary_display": "$250K – $280K • Offers Equity",
-        "company_name": "Cyberdyne",
+        "company_name": "Tyrell Corp",
         "posted_at": null,
         "source_id": "ashby-0008",
         "staleness_status": "fresh",
         "workplace_type": "Hybrid",
         "is_remote": true,
         "capture_method": "official_api",
-        "team_name": "Corporate Finance",
+        "team_name": "Revenue Finance",
         "department_name": "Accounting",
         "title": "Finance Business Partner"
       },
@@ -221,16 +221,16 @@
         "id": "jp_8441ed8d8f93",
         "detail_available": true,
         "salary_display": null,
-        "company_name": "Soylent Foods",
+        "company_name": "Northwind Labs",
         "posted_at": null,
         "source_id": "ashby-0009",
         "staleness_status": "fresh",
         "workplace_type": "OnSite",
         "is_remote": false,
         "capture_method": "official_api",
-        "team_name": "Treasury",
-        "department_name": "Operations",
-        "title": "Director, FP&A"
+        "team_name": "Financial Planning",
+        "department_name": "Strategy",
+        "title": "Finance Business Partner"
       },
       {
         "missing_fields": [],
@@ -243,16 +243,16 @@
         "id": "jp_0f9eab8cbb3e",
         "detail_available": true,
         "salary_display": "$265K – $325K • Offers Equity",
-        "company_name": "Globex",
+        "company_name": "Soylent Foods",
         "posted_at": null,
         "source_id": "ashby-0010",
         "staleness_status": "fresh",
         "workplace_type": "Hybrid",
         "is_remote": true,
         "capture_method": "official_api",
-        "team_name": "Revenue Finance",
-        "department_name": "Corporate Development",
-        "title": "Strategic Finance Manager"
+        "team_name": "FP&A",
+        "department_name": "Business Operations",
+        "title": "Corporate Development Associate"
       },
       {
         "missing_fields": [],
@@ -273,7 +273,7 @@
         "is_remote": true,
         "capture_method": "official_api",
         "team_name": "Revenue Finance",
-        "department_name": "Corporate Development",
+        "department_name": "Finance",
         "title": "Finance Business Partner"
       },
       {
@@ -287,16 +287,16 @@
         "id": "jp_c1826c00f5dd",
         "detail_available": true,
         "salary_display": "$239K – $265K • Offers Equity",
-        "company_name": "Acme Robotics",
+        "company_name": "Wonka Industries",
         "posted_at": null,
         "source_id": "ashby-0012",
         "staleness_status": "fresh",
         "workplace_type": "Hybrid",
         "is_remote": true,
         "capture_method": "official_api",
-        "team_name": "Financial Planning",
-        "department_name": "Business Operations",
-        "title": "Finance Business Partner"
+        "team_name": "Strategic Finance",
+        "department_name": "Corporate Development",
+        "title": "Corporate Development Associate"
       },
       {
         "missing_fields": [],
@@ -316,9 +316,9 @@
         "workplace_type": "Hybrid",
         "is_remote": true,
         "capture_method": "official_api",
-        "team_name": "Corporate Finance",
-        "department_name": "Strategy",
-        "title": "Director, FP&A"
+        "team_name": "Treasury",
+        "department_name": "Accounting",
+        "title": "Finance Business Partner"
       },
       {
         "missing_fields": [
@@ -334,16 +334,16 @@
         "id": "jp_60bd713cae7d",
         "detail_available": true,
         "salary_display": null,
-        "company_name": "Cyberdyne",
+        "company_name": "Globex",
         "posted_at": null,
         "source_id": "ashby-0014",
         "staleness_status": "fresh",
         "workplace_type": "Hybrid",
         "is_remote": true,
         "capture_method": "official_api",
-        "team_name": "FP&A",
-        "department_name": "Operations",
-        "title": "Senior Financial Analyst"
+        "team_name": "Corporate Finance",
+        "department_name": "Corporate Development",
+        "title": "Strategic Finance Manager"
       },
       {
         "missing_fields": [
@@ -358,16 +358,16 @@
         "id": "jp_816c60c7e5dc",
         "detail_available": true,
         "salary_display": null,
-        "company_name": "Umbrella Systems",
+        "company_name": "Wonka Industries",
         "posted_at": null,
         "source_id": "ashby-0015",
         "staleness_status": "fresh",
         "workplace_type": "OnSite",
         "is_remote": false,
         "capture_method": "official_api",
-        "team_name": "Financial Planning",
+        "team_name": "FP&A",
         "department_name": "Business Operations",
-        "title": "Finance Business Partner"
+        "title": "Senior Financial Analyst"
       },
       {
         "missing_fields": [
@@ -384,16 +384,16 @@
         "id": "jp_50a1c26c8572",
         "detail_available": true,
         "salary_display": null,
-        "company_name": "Tyrell Corp",
+        "company_name": "Soylent Foods",
         "posted_at": null,
         "source_id": "ashby-0016",
         "staleness_status": "fresh",
         "workplace_type": null,
         "is_remote": null,
         "capture_method": "official_api",
-        "team_name": "Revenue Finance",
-        "department_name": "Corporate Development",
-        "title": "Director, FP&A"
+        "team_name": "Financial Planning",
+        "department_name": "Operations",
+        "title": "Senior Financial Analyst"
       },
       {
         "missing_fields": [
@@ -409,16 +409,16 @@
         "id": "jp_0271bad9e4e1",
         "detail_available": true,
         "salary_display": "$226K – $264K • Offers Equity",
-        "company_name": "Umbrella Systems",
+        "company_name": "Initech",
         "posted_at": null,
         "source_id": "ashby-0017",
         "staleness_status": "fresh",
         "workplace_type": null,
         "is_remote": null,
         "capture_method": "official_api",
-        "team_name": "Financial Planning",
-        "department_name": "Strategy",
-        "title": "Senior Financial Analyst"
+        "team_name": "Corporate Finance",
+        "department_name": "Finance",
+        "title": "Director, FP&A"
       },
       {
         "missing_fields": [],
@@ -431,16 +431,16 @@
         "id": "jp_16714a540863",
         "detail_available": true,
         "salary_display": "$160K – $240K • Offers Equity • Offers Bonus",
-        "company_name": "Wonka Industries",
+        "company_name": "Umbrella Systems",
         "posted_at": null,
         "source_id": "ashby-0018",
         "staleness_status": "fresh",
         "workplace_type": "Hybrid",
         "is_remote": true,
         "capture_method": "official_api",
-        "team_name": "Strategic Finance",
-        "department_name": "Business Operations",
-        "title": "Corporate Development Associate"
+        "team_name": "Financial Planning",
+        "department_name": "Strategy",
+        "title": "Senior Financial Analyst"
       },
       {
         "missing_fields": [],
@@ -453,16 +453,16 @@
         "id": "jp_67e961151b32",
         "detail_available": true,
         "salary_display": "$125K – $140K • Offers Equity • Offers Bonus",
-        "company_name": "Umbrella Systems",
+        "company_name": "Tyrell Corp",
         "posted_at": null,
         "source_id": "ashby-0019",
         "staleness_status": "fresh",
         "workplace_type": "OnSite",
         "is_remote": false,
         "capture_method": "official_api",
-        "team_name": "Revenue Finance",
+        "team_name": "Strategic Finance",
         "department_name": "Strategy",
-        "title": "Director, FP&A"
+        "title": "Finance Business Partner"
       },
       {
         "missing_fields": [],
@@ -475,16 +475,16 @@
         "id": "jp_8fe15c6850a3",
         "detail_available": true,
         "salary_display": "$150K – $250K • Offers Equity",
-        "company_name": "Acme Robotics",
+        "company_name": "Vandelay Industries",
         "posted_at": null,
         "source_id": "ashby-0020",
         "staleness_status": "fresh",
         "workplace_type": "Hybrid",
         "is_remote": true,
         "capture_method": "official_api",
-        "team_name": "Revenue Finance",
-        "department_name": "Business Operations",
-        "title": "Senior Financial Analyst"
+        "team_name": "Treasury",
+        "department_name": "Finance",
+        "title": "Corporate Development Associate"
       },
       {
         "missing_fields": [],
@@ -497,15 +497,15 @@
         "id": "jp_0ca4b1d59204",
         "detail_available": true,
         "salary_display": "$155K – $195K • Offers Equity • Offers Bonus",
-        "company_name": "Acme Robotics",
+        "company_name": "Vandelay Industries",
         "posted_at": null,
         "source_id": "ashby-0021",
         "staleness_status": "fresh",
         "workplace_type": "Hybrid",
         "is_remote": true,
         "capture_method": "official_api",
-        "team_name": "Revenue Finance",
-        "department_name": "Business Operations",
+        "team_name": "Treasury",
+        "department_name": "Accounting",
         "title": "Finance Business Partner"
       },
       {
@@ -519,7 +519,7 @@
         "id": "jp_97abdc681d41",
         "detail_available": true,
         "salary_display": "$225K – $300K • Offers Equity",
-        "company_name": "Soylent Foods",
+        "company_name": "Tyrell Corp",
         "posted_at": null,
         "source_id": "ashby-0022",
         "staleness_status": "fresh",
@@ -527,8 +527,8 @@
         "is_remote": true,
         "capture_method": "official_api",
         "team_name": "FP&A",
-        "department_name": "Operations",
-        "title": "Finance Business Partner"
+        "department_name": "Corporate Development",
+        "title": "Corporate Development Associate"
       },
       {
         "missing_fields": [],
@@ -549,8 +549,8 @@
         "is_remote": true,
         "capture_method": "official_api",
         "team_name": "Strategic Finance",
-        "department_name": "Accounting",
-        "title": "Director, FP&A"
+        "department_name": "Operations",
+        "title": "Strategic Finance Manager"
       },
       {
         "missing_fields": [],
@@ -563,16 +563,16 @@
         "id": "jp_0d85aab3fd6a",
         "detail_available": true,
         "salary_display": "$160K – $230K • Offers Equity • Offers Bonus",
-        "company_name": "Umbrella Systems",
+        "company_name": "Globex",
         "posted_at": null,
         "source_id": "ashby-0024",
         "staleness_status": "fresh",
         "workplace_type": "Hybrid",
         "is_remote": true,
         "capture_method": "official_api",
-        "team_name": "FP&A",
-        "department_name": "Operations",
-        "title": "Director, FP&A"
+        "team_name": "Financial Planning",
+        "department_name": "Finance",
+        "title": "Corporate Development Associate"
       }
     ],
     "warnings": [],

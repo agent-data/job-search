@@ -12,6 +12,7 @@ construct fails the suite. The two `.awk` programs are driven the same way, one 
 case, asserting what the program prints. Nothing here asserts how the reference documents word the
 same rules.
 """
+import base64
 import importlib.util
 import json
 import os
@@ -906,28 +907,119 @@ def _scrub_module():
     return mod
 
 
-@pytest.mark.parametrize("name", ["search.linkedin.json", "search.ashby.json"])
-def test_a_committed_fixture_carries_no_live_posting_text(name):
+def _every_object(node):
+    """Every JSON object in the document, at any depth.
+
+    Walking beats indexing into a known shape: a search fixture keeps its fields under
+    `data.results[]`, a get-posting fixture keeps the same fields directly under `data`, and the
+    error fixture has none of them.
+    """
+    if isinstance(node, dict):
+        yield node
+        for value in node.values():
+            yield from _every_object(value)
+    elif isinstance(node, list):
+        for value in node:
+            yield from _every_object(value)
+
+
+def _decodes_to_the_scrubbed_cursor(value):
+    try:
+        padded = value + "=" * (-len(value) % 4)
+        return json.loads(base64.urlsafe_b64decode(padded)) == {"scrubbed": True}
+    except Exception:
+        return False
+
+
+def live_values(doc, scrub):
+    """Every value in `doc` that `scrub.py` replaces but which does not look replaced.
+
+    One entry per field, `(key, value)`. A key that is absent or null is fine — which rows carry a
+    field is itself a parser input — but a key present with a value from outside the scrub's
+    vocabulary is live text.
+
+    `salary_display` and `location_display` are deliberately absent from this list: `scrub.py`
+    leaves both alone because they are real parser inputs.
+    """
+    looks_scrubbed = {
+        "company_name": lambda v: v in scrub.COMPANIES,
+        "title": lambda v: v in scrub.TITLES,
+        "department_name": lambda v: v in scrub.DEPARTMENTS,
+        "team_name": lambda v: v in scrub.TEAMS,
+        "source_id": lambda v: bool(re.fullmatch(r"[a-z0-9_]+-\d{4}", str(v))),
+        "id": lambda v: bool(re.fullmatch(r"jp_[0-9a-f]{12}", str(v))),
+        "source_url": lambda v: str(v).startswith("https://example.invalid/"),
+        "apply_url": lambda v: str(v).startswith("https://example.invalid/apply/"),
+        "description_markdown": lambda v: isinstance(v, str) and scrub.BODY.startswith(v),
+        "description_plain": lambda v: isinstance(v, str) and scrub.BODY.startswith(v),
+        "keywords": lambda v: v == "scrubbed",
+        "location": lambda v: v == "scrubbed",
+        "next_cursor": lambda v: _decodes_to_the_scrubbed_cursor(v),
+        # Microsecond precision is a live value and one more thing to match a real posting on.
+        "posted_at": lambda v: not re.search(r"\.\d", str(v)),
+        "published_at": lambda v: not re.search(r"\.\d", str(v)),
+    }
+    found = []
+    for obj in _every_object(doc):
+        for key, ok in looks_scrubbed.items():
+            value = obj.get(key)
+            if value is not None and not ok(value):
+                found.append((key, value))
+    return found
+
+
+@pytest.mark.parametrize("path", sorted(FIXTURES.glob("*.json")), ids=lambda p: p.name)
+def test_a_committed_fixture_carries_no_live_posting_text(path):
     """`.gitignore` gives the reason eval output is not committed — it "carries machine paths and
     live posting text" — and `tests/fixtures/` is not gitignored, so the same rule holds here by
-    hand. This is the check that makes it hold: a fixture captured live and committed without
-    running `scrub.py` over it fails.
+    hand. This is what makes it hold: a fixture captured live and committed without `scrub.py`
+    run over it fails.
 
-    `salary_display` and `location_display` are deliberately not checked. Both are real parser
-    inputs that `scrub.py` leaves alone on purpose.
+    Every fixture in the directory is found by glob, so a file added by a later task is covered
+    the moment it lands rather than when somebody remembers to list it.
     """
-    scrub = _scrub_module()
-    rows = api_rows(name)
-    assert rows
-    for row in rows:
-        assert row["company_name"] in scrub.COMPANIES
-        assert row["title"] in scrub.TITLES
-        assert row["source_url"].startswith("https://example.invalid/")
-        for key, vocab in (("department_name", scrub.DEPARTMENTS), ("team_name", scrub.TEAMS)):
-            assert row[key] is None or row[key] in vocab, (key, row[key])
-        for key in ("posted_at", "published_at"):
-            # Microsecond precision is a live value, and one more thing to match a real posting on.
-            assert row[key] is None or not re.search(r"\.\d", row[key]), (key, row[key])
+    found = live_values(json.loads(path.read_text(encoding="utf-8")), _scrub_module())
+    assert found == [], "%s carries live values: %s" % (path.name, found[:5])
+
+
+@pytest.mark.parametrize("key,doc", [
+    # A LinkedIn source_id is a direct lookup key to a real posting.
+    ("source_id", {"data": {"results": [{"source": "linkedin", "source_id": "4417545222"}]}}),
+    ("id", {"data": {"results": [{"id": "4417545222"}]}}),
+    ("source_url", {"data": {"results": [
+        {"source_url": "https://www.linkedin.com/jobs/view/strategic-finance-at-x-4417545222"}]}}),
+    ("company_name", {"data": {"results": [{"company_name": "A Real Employer, Inc."}]}}),
+    ("team_name", {"data": {"results": [{"team_name": "Merchant Services"}]}}),
+    ("published_at", {"data": {"results": [{"published_at": "2026-08-03T01:16:44.665000"}]}}),
+    ("keywords", {"data": {"query": {"keywords": "strategic finance"}}}),
+    ("location", {"data": {"query": {"location": "San Francisco Bay Area"}}}),
+    ("next_cursor", {"data": {"pagination": {"next_cursor": "eyJmaWVsZHMiOm51bGwsImxhc3Rf"}}}),
+    # A get-posting body keeps its fields directly under `data`, which is the shape Task 2 commits
+    # and where the largest amount of live text sits.
+    ("description_markdown", {"data": {"source": "ashby", "id": "jp_000000000000",
+                                       "description_markdown": "About the role\n\nWe are hiring."}}),
+    ("apply_url", {"data": {"apply_url": "https://jobs.ashbyhq.com/OpenAI/x/application"}}),
+])
+def test_the_fixture_guard_catches_a_live_value(key, doc):
+    """The guard is only worth having if it reaches the fields that carry the most live text, so
+    each one is driven with a value taken from the shape the live API actually returns."""
+    found = live_values(doc, _scrub_module())
+    assert key in [k for k, _ in found], found
+
+
+@pytest.mark.parametrize("path", sorted(FIXTURES.glob("*.json")), ids=lambda p: p.name)
+def test_scrubbing_a_committed_fixture_reproduces_it(tmp_path, path):
+    """`scrub.py` is stable from its first pass, so re-running it over a committed fixture changes
+    nothing. It seeds every replacement from the source and the row number, neither of which it
+    replaces; seeding from `source_id`, which it does replace, made a second pass reseed every
+    company and title and churn the fixtures for no reason.
+
+    This is also what covers `id`, which the guard above can only pattern-check: a live `jp_` id
+    and a scrubbed one are the same twelve hex characters, so only re-deriving it tells them apart.
+    """
+    out = tmp_path / path.name
+    _scrub_module().main(str(path), str(out))
+    assert out.read_text(encoding="utf-8") == path.read_text(encoding="utf-8")
 
 
 @pytest.mark.skipif(not shutil.which("dash"), reason="dash is not installed here")

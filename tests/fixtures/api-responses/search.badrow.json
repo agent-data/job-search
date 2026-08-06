@@ -1,7 +1,11 @@
 {
   "data": {
     "results": [
-      { "id": "jp_x", "title": "No id row", "source_url": "https://example.invalid/x" }
+      {
+        "id": "jp_534cfc534caf",
+        "title": "Strategic Finance Manager",
+        "source_url": "https://example.invalid/jobs/jp_534cfc534caf"
+      }
     ]
   }
 }

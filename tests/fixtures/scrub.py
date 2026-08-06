@@ -47,41 +47,54 @@ TEAMS = ["FP&A", "Treasury", "Strategic Finance", "Financial Planning", "Corpora
 HOSTILE = ('A role at the company. He said "it\'s a \\"strong\\" fit" — path C:\\temp, '
            'a {braced} phrase, a tab\there and a newline\nafter it.\n\n')
 
+# Every scrubbed description is a prefix of this, cut to the length of the text it replaces, so a
+# test can tell a scrubbed description from a live one without knowing how long the live one was.
+BODY = HOSTILE + ("Responsibilities and requirements. " * 120)
+
+# What a paging cursor becomes. A cursor is opaque everywhere in this repo — it is replayed, never
+# read — so replacing it with one fixed value loses nothing a fixture was testing.
+SCRUBBED_CURSOR = base64.urlsafe_b64encode(
+    json.dumps({"scrubbed": True}).encode()).decode().rstrip("=")
+
 
 def pick(seq, seed):
     return seq[int(hashlib.sha256(seed.encode()).hexdigest(), 16) % len(seq)]
 
 
 def scrub_row(row, i):
+    # Seeded with the source and the row number, both of which this function leaves alone, so the
+    # scrub is stable from its first pass. Seeding off `source_id` — which line 3 below replaces —
+    # made a re-run reseed every company and title off the already-scrubbed id, and re-scrubbing
+    # moved 19 of 25 LinkedIn company names and 20 of 25 Ashby ones with nothing having asked for
+    # it. The source is not scrubbed: it names a job board, not a posting.
+    seed = "%s-%d" % (row.get("source", "src"), i)
     if "company_name" in row and row["company_name"] is not None:
-        row["company_name"] = pick(COMPANIES, row.get("source_id", "") or str(i))
+        row["company_name"] = pick(COMPANIES, seed)
     if "title" in row and row["title"] is not None:
-        row["title"] = pick(TITLES, (row.get("source_id", "") or str(i)) + "t")
+        row["title"] = pick(TITLES, seed + "t")
     for key, vocab in (("department_name", DEPARTMENTS), ("team_name", TEAMS)):
         if row.get(key):
-            row[key] = pick(vocab, (row.get("source_id", "") or str(i)) + key)
+            row[key] = pick(vocab, seed + key)
     for key in ("posted_at", "published_at"):
         if row.get(key):
             row[key] = re.sub(r"\.\d+", "", row[key])
     if row.get("source_id"):
         row["source_id"] = "%s-%04d" % (row.get("source", "src"), i)
     if row.get("id"):
-        seed = "%s-%d" % (row.get("source", "src"), i)
         row["id"] = "jp_%s" % hashlib.sha256(seed.encode()).hexdigest()[:12]
     if row.get("source_url"):
         # Keep LinkedIn's tracking-parameter shape; it is a real parser input.
         tail = "?position=%d&pageNum=0&refId=AAAA%%3D%%3D" % (i + 1) if "?" in row["source_url"] else ""
         row["source_url"] = "https://example.invalid/jobs/%s%s" % (row["id"], tail)
     if row.get("description_markdown"):
-        body = HOSTILE + ("Responsibilities and requirements. " * 120)
-        row["description_markdown"] = body[:len(row["description_markdown"])] or body
+        row["description_markdown"] = BODY[:len(row["description_markdown"])] or BODY
     if row.get("apply_url"):
         row["apply_url"] = "https://example.invalid/apply/%s" % row["id"]
     return row
 
 
 def main(src, dst):
-    doc = json.load(open(src))
+    doc = json.load(open(src, encoding="utf-8"))
     data = doc.get("data")
     if isinstance(data, dict) and isinstance(data.get("results"), list):
         for i, row in enumerate(data["results"]):
@@ -92,15 +105,14 @@ def main(src, dst):
                 q[k] = "scrubbed"
         page = data.get("pagination") or {}
         if page.get("next_cursor"):
-            page["next_cursor"] = base64.urlsafe_b64encode(
-                json.dumps({"scrubbed": True}).encode()).decode().rstrip("=")
+            page["next_cursor"] = SCRUBBED_CURSOR
     elif isinstance(data, dict):
         scrub_row(data, 0)
     text = json.dumps(doc, indent=2, ensure_ascii=False) + "\n"
     # Case-insensitive: 13 of the 25 live Ashby URLs in one capture carry a capitalised company
     # segment (`jobs.ashbyhq.com/OpenAI/…`), which a case-sensitive `[a-z]` does not catch.
     assert not re.search(r"linkedin\.com/jobs/view|ashbyhq\.com/[a-z]", text, re.I), "an id survived"
-    open(dst, "w").write(text)
+    open(dst, "w", encoding="utf-8").write(text)
 
 
 if __name__ == "__main__":
