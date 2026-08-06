@@ -4,7 +4,21 @@
 The repo does not commit live posting text — .gitignore says so for eval output, and the same
 holds here. What a fixture is FOR is the row shape, so the scrub keeps every key, every type,
 every null, the row count, and the per-source date pattern, and replaces only what identifies a
-real posting: company, title, the two ids, the URL, and the description body.
+real posting: company, title, the two ids, the URL, the description body, and the department and
+team the opening sits in.
+
+`department_name` and `team_name` are replaced because a live capture puts a company's internal
+org chart in the fixture — "Nirvana", "Merchant Services", "CEO Office" name one employer even
+after the company field is fictional. Which rows have them is a parser input, so a null stays null
+and a filled field stays filled.
+
+`salary_display` and `location_display` are deliberately left alone. Both are genuine parser
+inputs: `skills/agent-data-reference/SKILL.md` records that `salary_display` is free text that
+arrives as raw HTML on some rows, and a synthesised band would stop testing that.
+
+A fractional-seconds part is dropped from `posted_at` and `published_at`. Microsecond precision is
+a live value with nothing to test in it, and dropping it leaves the shape that tells the two
+sources apart — Ashby sends no timezone, LinkedIn sends `+00:00` — exactly as it was.
 
 Usage: python3 tests/fixtures/scrub.py raw.search.linkedin.json search.linkedin.json
 
@@ -24,6 +38,10 @@ COMPANIES = ["Globex", "Initech", "Umbrella Systems", "Northwind Labs", "Acme Ro
              "Vandelay Industries", "Soylent Foods", "Cyberdyne", "Wonka Industries", "Tyrell Corp"]
 TITLES = ["Strategic Finance Manager", "Senior Financial Analyst", "Director, FP&A",
           "Finance Business Partner", "Corporate Development Associate"]
+DEPARTMENTS = ["Finance", "Operations", "Corporate Development", "Business Operations",
+               "Accounting", "Strategy"]
+TEAMS = ["FP&A", "Treasury", "Strategic Finance", "Financial Planning", "Corporate Finance",
+         "Revenue Finance"]
 
 # Every character a JSON string can carry that the scanner and the event builder must survive.
 HOSTILE = ('A role at the company. He said "it\'s a \\"strong\\" fit" — path C:\\temp, '
@@ -39,6 +57,12 @@ def scrub_row(row, i):
         row["company_name"] = pick(COMPANIES, row.get("source_id", "") or str(i))
     if "title" in row and row["title"] is not None:
         row["title"] = pick(TITLES, (row.get("source_id", "") or str(i)) + "t")
+    for key, vocab in (("department_name", DEPARTMENTS), ("team_name", TEAMS)):
+        if row.get(key):
+            row[key] = pick(vocab, (row.get("source_id", "") or str(i)) + key)
+    for key in ("posted_at", "published_at"):
+        if row.get(key):
+            row[key] = re.sub(r"\.\d+", "", row[key])
     if row.get("source_id"):
         row["source_id"] = "%s-%04d" % (row.get("source", "src"), i)
     if row.get("id"):

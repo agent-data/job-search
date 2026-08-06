@@ -12,6 +12,7 @@ construct fails the suite. The two `.awk` programs are driven the same way, one 
 case, asserting what the program prints. Nothing here asserts how the reference documents word the
 same rules.
 """
+import importlib.util
 import json
 import os
 import pathlib
@@ -572,6 +573,103 @@ def record_search(jobs, fixture, query_id="q", shell="sh"):
                       "--route", "search-jobs", "--query-id", query_id, shell=shell)
 
 
+def awk_shim(tmp_path, marker, spill=""):
+    """A PATH whose `awk` fails the one invocation carrying `marker` and passes the rest through.
+
+    Returns the env to hand `run_script`. `spill` is printed to stdout before the failure, standing
+    in for the lines an awk that died partway had already written — the whole point of checking the
+    status is that those lines are there and must not be used.
+    """
+    d = tmp_path / "shim"
+    d.mkdir(exist_ok=True)
+    shim = d / "awk"
+    shim.write_text(
+        "#!/bin/sh\n"
+        "for a in \"$@\"; do\n"
+        "  case $a in\n"
+        "    *%s*)\n"
+        "      printf '%%s' '%s'\n"
+        "      echo 'awk: simulated failure' >&2\n"
+        "      exit 2 ;;\n"
+        "  esac\n"
+        "done\n"
+        "exec %s \"$@\"\n" % (marker, spill, shutil.which("awk")),
+        encoding="utf-8")
+    shim.chmod(0o755)
+    return {"PATH": "%s:%s" % (d, os.environ["PATH"])}
+
+
+SPILL = '{"event":"surfaced","run_id":"%s","source":"linkedin","source_id":"partial-1"}\\n' % RID
+
+
+def test_a_failure_reading_the_rows_appends_nothing_and_records_the_call(tmp_path):
+    """The row count is written in that awk's END block, so it is absent exactly when the awk died.
+    Reading it as 0 would append the rows that did reach the file next to a call event saying the
+    call returned nothing."""
+    jobs = tmp_path / "jobs.jsonl"
+    r = run_script(RECORD_API, RID, jobs, FIXTURES / "search.linkedin.json", "--route",
+                   "search-jobs", env=awk_shim(tmp_path, "badfile=", SPILL))
+    assert r.returncode == 1, r.stdout + r.stderr
+    assert [e for e in lines(jobs) if e["event"] == "surfaced"] == []
+    calls = [e for e in lines(jobs) if e["event"] == "call"]
+    assert len(calls) == 1 and calls[0]["ok"] is False
+
+
+def test_a_failure_skipping_seen_postings_appends_nothing_and_records_the_call(tmp_path):
+    """Lower stakes than the row builder — the response was read, so the call event still carries
+    a truthful `rows_returned` — but appending a partial dedup would record part of a response as
+    all of it."""
+    jobs = tmp_path / "jobs.jsonl"
+    r = run_script(RECORD_API, RID, jobs, FIXTURES / "search.linkedin.json", "--route",
+                   "search-jobs", env=awk_shim(tmp_path, "dedup-surfaced.awk", SPILL))
+    assert r.returncode == 1, r.stdout + r.stderr
+    assert [e for e in lines(jobs) if e["event"] == "surfaced"] == []
+    calls = [e for e in lines(jobs) if e["event"] == "call"]
+    assert len(calls) == 1
+    assert calls[0]["ok"] is True
+    assert calls[0]["rows_returned"] == len(api_rows("search.linkedin.json"))
+    assert calls[0]["rows_new"] == 0
+
+
+@pytest.mark.parametrize("tail,says", [
+    ([], "usage:"),                                            # fewer than three arguments
+    (["--route"], "usage:"),                                   # --route with no value after it
+    (["--route", "bogus"], "--route must be"),                 # not a route this script knows
+    (["--route", "search-jobs", "--nope"], "unknown option"),  # an option it does not take
+])
+def test_bad_arguments_exit_two_and_append_nothing(tmp_path, tail, says):
+    """Each case asserts what stderr says, not only the exit code. `set -u` turns an unguarded
+    `$2` into an exit 2 of its own, so a test that checked the code alone would pass with the
+    argument guards deleted and the operator left reading `$2: parameter not set`."""
+    jobs = tmp_path / "jobs.jsonl"
+    head = [RID] if not tail else [RID, jobs, FIXTURES / "search.zero.json"]
+    r = run_script(RECORD_API, *head, *tail)
+    assert r.returncode == 2, r.stdout
+    assert says in r.stderr, r.stderr
+    assert not jobs.exists()
+
+
+def test_a_missing_response_file_exits_two_and_appends_nothing(tmp_path):
+    jobs = tmp_path / "jobs.jsonl"
+    r = run_script(RECORD_API, RID, jobs, tmp_path / "nope.json", "--route", "search-jobs")
+    assert r.returncode == 2
+    assert "no such file" in r.stderr
+    assert not jobs.exists()
+
+
+def test_the_source_flag_names_the_source_of_a_call_that_returned_no_rows(tmp_path):
+    """With no rows there is no row to read the source from, so `--source` is the only thing that
+    can say which source the call was billed against."""
+    with_flag = tmp_path / "with.jsonl"
+    r = run_script(RECORD_API, RID, with_flag, FIXTURES / "search.zero.json",
+                   "--route", "search-jobs", "--source", "ashby")
+    assert r.returncode == 0, r.stderr
+    assert [e for e in lines(with_flag) if e["event"] == "call"][0]["source"] == "ashby"
+    without = tmp_path / "without.jsonl"
+    run_script(RECORD_API, RID, without, FIXTURES / "search.zero.json", "--route", "search-jobs")
+    assert [e for e in lines(without) if e["event"] == "call"][0]["source"] is None
+
+
 def test_a_search_response_surfaces_one_event_per_row(tmp_path):
     jobs = tmp_path / "jobs.jsonl"
     jobs.write_text("")
@@ -581,6 +679,11 @@ def test_a_search_response_surfaces_one_event_per_row(tmp_path):
     surfaced = [e for e in lines(jobs) if e["event"] == "surfaced"]
     assert len(surfaced) == len(api)
     assert {e["posting_id_at_seen"] for e in surfaced} == {row["id"] for row in api}
+    # The call event's own fields: `source` is read back out of the first surfaced line, and the
+    # two counts are what every later task's per-source and per-run totals are added up from.
+    call = [e for e in lines(jobs) if e["event"] == "call"][0]
+    assert call["source"] == api[0]["source"]
+    assert call["rows_returned"] == len(api) and call["rows_new"] == len(api)
 
 
 def test_surfaced_values_equal_the_api_values(tmp_path):
@@ -699,7 +802,7 @@ def test_one_bad_row_rejects_the_whole_response(tmp_path):
     assert "row 2" in r.stderr, r.stderr
     assert [e for e in lines(jobs) if e["event"] == "surfaced"] == []
     call = [e for e in lines(jobs) if e["event"] == "call"][0]
-    assert call["rows_returned"] == 3 and call["rows_new"] == 0
+    assert call["rows_returned"] == len(rows) and call["rows_new"] == 0
 
 
 def test_a_truncated_response_records_the_call_and_appends_no_rows(tmp_path):
@@ -716,6 +819,24 @@ def test_a_truncated_response_records_the_call_and_appends_no_rows(tmp_path):
     assert [e for e in lines(jobs) if e["event"] == "surfaced"] == []
     calls = [e for e in lines(jobs) if e["event"] == "call"]
     assert len(calls) == 1 and calls[0]["ok"] is False and calls[0]["rows_returned"] == 0
+
+
+@pytest.mark.parametrize("key", ["source", "source_id", "id", "source_url"])
+def test_an_empty_string_in_a_required_field_is_refused(tmp_path, key):
+    """A JSON empty string reaches the row builder as the two characters `""`, not as awk's own
+    empty string, so it has to be named separately. A row carrying `"source_id":""` would be
+    appended and then never found again — the outcome the non-string check refuses one branch
+    later, in the same words."""
+    row = {"source": "linkedin", "source_id": "s1", "id": "jp_x",
+           "source_url": "https://example.invalid/x"}
+    row[key] = ""
+    empty = tmp_path / "empty.json"
+    empty.write_text(json.dumps({"data": {"results": [row]}}))
+    jobs = tmp_path / "jobs.jsonl"
+    r = run_script(RECORD_API, RID, jobs, empty, "--route", "search-jobs")
+    assert r.returncode == 1, r.stdout + r.stderr
+    assert "is missing %s" % key in r.stderr, r.stderr
+    assert [e for e in lines(jobs) if e["event"] == "surfaced"] == []
 
 
 def test_a_non_string_id_is_refused_at_ingestion(tmp_path):
@@ -775,6 +896,38 @@ def test_a_posting_already_judged_in_an_earlier_run_is_not_surfaced_again(tmp_pa
     surfaced = [e for e in lines(jobs) if e["event"] == "surfaced"]
     assert known["source_id"] not in {e["source_id"] for e in surfaced}
     assert len(surfaced) == len(api) - 1
+
+
+def _scrub_module():
+    spec = importlib.util.spec_from_file_location(
+        "fixture_scrub", ROOT / "tests" / "fixtures" / "scrub.py")
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+@pytest.mark.parametrize("name", ["search.linkedin.json", "search.ashby.json"])
+def test_a_committed_fixture_carries_no_live_posting_text(name):
+    """`.gitignore` gives the reason eval output is not committed — it "carries machine paths and
+    live posting text" — and `tests/fixtures/` is not gitignored, so the same rule holds here by
+    hand. This is the check that makes it hold: a fixture captured live and committed without
+    running `scrub.py` over it fails.
+
+    `salary_display` and `location_display` are deliberately not checked. Both are real parser
+    inputs that `scrub.py` leaves alone on purpose.
+    """
+    scrub = _scrub_module()
+    rows = api_rows(name)
+    assert rows
+    for row in rows:
+        assert row["company_name"] in scrub.COMPANIES
+        assert row["title"] in scrub.TITLES
+        assert row["source_url"].startswith("https://example.invalid/")
+        for key, vocab in (("department_name", scrub.DEPARTMENTS), ("team_name", scrub.TEAMS)):
+            assert row[key] is None or row[key] in vocab, (key, row[key])
+        for key in ("posted_at", "published_at"):
+            # Microsecond precision is a live value, and one more thing to match a real posting on.
+            assert row[key] is None or not re.search(r"\.\d", row[key]), (key, row[key])
 
 
 @pytest.mark.skipif(not shutil.which("dash"), reason="dash is not installed here")

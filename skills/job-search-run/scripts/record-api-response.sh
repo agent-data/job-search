@@ -66,7 +66,7 @@ ts=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 emit_call() {
   RAR_QUERY=$query_id RAR_REQ=${req:-} RAR_CODE=${code:-} \
   awk -v run_id="$run_id" -v ts="$ts" -v route="$route" -v source="$1" \
-      -v ok="$2" -v returned="$3" -v new="$4" -v retryable="${retryable:-}" '
+      -v ok="$2" -v returned="$3" -v newrows="$4" -v retryable="${retryable:-}" '
     function esc(s) { gsub(/\\/, "\\\\", s); gsub(/"/, "\\\"", s); return s }
     function jstr(s) { return "\"" esc(s) "\"" }
     function jopt(s) { return s == "" ? "null" : jstr(s) }
@@ -76,7 +76,7 @@ emit_call() {
       out = out ",\"source\":" jopt(source)
       out = out ",\"query_id\":" jopt(ENVIRON["RAR_QUERY"])
       out = out ",\"ok\":" ok
-      out = out ",\"rows_returned\":" returned ",\"rows_new\":" new
+      out = out ",\"rows_returned\":" returned ",\"rows_new\":" newrows
       out = out ",\"error_code\":" jopt(ENVIRON["RAR_CODE"])
       out = out ",\"retryable\":" (retryable == "" ? "null" : retryable)
       out = out ",\"request_id\":" jopt(ENVIRON["RAR_REQ"])
@@ -151,9 +151,16 @@ awk -F'\t' -v run_id="$run_id" -v query_id="$query_id" -v ts="$ts" -v badfile="$
     rows++
     split("source source_id id source_url", req, " ")
     missing = ""; notstr = ""
+    # A JSON empty string arrives from the scanner as the two characters "", where the awk empty
+    # string is what an absent key gives, so it has to be named separately. Without it a row
+    # carrying "source_id":"" is appended and can then never be found again, which is the outcome
+    # the non-string branch below refuses in its own error text.
+    #
+    # No apostrophe may appear anywhere in this awk program: it is inside a single-quoted shell
+    # string, so one would end that string and the rest would be read as shell.
     for (i = 1; i <= 4; i++) {
       k = req[i]
-      if (!(k in v) || v[k] == "" || v[k] == "null")
+      if (!(k in v) || v[k] == "" || v[k] == "null" || v[k] == "\"\"")
         missing = missing (missing == "" ? "" : ", ") k
       else if (!isstr(k))
         notstr = notstr (notstr == "" ? "" : ", ") k
@@ -199,8 +206,20 @@ awk -F'\t' -v run_id="$run_id" -v query_id="$query_id" -v ts="$ts" -v badfile="$
     delete v
   }
 ' "$scan" > "$new"
+rowstatus=$?
 
-returned=$(cat "$bad.count" 2>/dev/null || echo 0)
+# Check the status, and check the count file the END block writes. Both matter, and for the same
+# reason the scanner above is checked rather than piped: the rows read before a failure are already
+# in "$new". Without this, an awk that died partway leaves no count file, `returned` falls back to
+# 0, and the run appends those partial rows next to a call event saying the call returned nothing.
+if [ "$rowstatus" -ne 0 ] || [ ! -f "$bad.count" ]; then
+  emit_call "$src_flag" false 0 0
+  printf 'record-api-response.sh: reading the rows of %s failed — the call is recorded, nothing else\n' \
+    "$resp" >&2
+  exit 1
+fi
+
+returned=$(cat "$bad.count")
 src=$(head -1 "$new" 2>/dev/null | sed -n 's/.*"source":"\([^"]*\)".*/\1/p')
 [ -n "$src" ] || src=$src_flag
 
@@ -213,8 +232,15 @@ fi
 
 # Skip a posting this run already surfaced, and one any run has already judged. The judged check
 # is deliberately not scoped to this run: a posting with a verdict is not offered again.
-awk -f "$here/event-field.awk" -f "$here/dedup-surfaced.awk" \
-    -v jobs="$jobs" -v run_id="$run_id" "$new" > "$keep"
+if ! awk -f "$here/event-field.awk" -f "$here/dedup-surfaced.awk" \
+     -v jobs="$jobs" -v run_id="$run_id" "$new" > "$keep"; then
+  # "$keep" holds whatever was printed before the failure, so appending it would record part of a
+  # response as all of it. The row count is known here, so the call event still carries it.
+  emit_call "$src" true "$returned" 0
+  printf 'record-api-response.sh: skipping the postings already seen failed — nothing was appended for %s\n' \
+    "$resp" >&2
+  exit 1
+fi
 
 kept=$(wc -l < "$keep" | tr -d ' ')
 emit_call "$src" true "$returned" "$kept"
