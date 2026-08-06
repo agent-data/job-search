@@ -1,0 +1,22 @@
+{
+  "data": {
+    "status": "completed",
+    "query": {
+      "keywords": "scrubbed",
+      "location": null,
+      "source": "ashby",
+      "published_on_or_after": null
+    },
+    "results": [],
+    "warnings": [],
+    "started_at": "2026-08-06T06:32:30.260338+00:00",
+    "completed_at": "2026-08-06T06:32:30.275499+00:00",
+    "pagination": {
+      "has_more": false,
+      "next_cursor": null
+    }
+  },
+  "meta": {
+    "request_id": "req_2c075f060a5a404583e28a0c"
+  }
+}

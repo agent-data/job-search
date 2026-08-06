@@ -34,8 +34,9 @@ DISCOVERY = RUNBOOK_SCRIPTS / "workspace-discovery.sh"
 VALIDATE = RUNBOOK_SCRIPTS / "validate-workspace.sh"
 SCAN = RUN_SCRIPTS / "json-scan.awk"
 FIELD = RUN_SCRIPTS / "event-field.awk"
+RECORD_API = RUN_SCRIPTS / "record-api-response.sh"
 
-ALL_SCRIPTS = [DEDUP, APPEND, SCHEDULE, DISCOVERY, VALIDATE]
+ALL_SCRIPTS = [DEDUP, APPEND, SCHEDULE, DISCOVERY, VALIDATE, RECORD_API]
 
 
 # A contract-valid single-line `evaluated` event, in the shape
@@ -543,6 +544,253 @@ def test_backspace_and_formfeed_resolve_and_a_unicode_escape_is_left_as_written(
     assert json.loads(line)["u"] == "gröffnung"          # what the escape means
     assert field(line, "u")[1] == "gr%sffnung" % escape       # what jval returns: left as written
     assert field(line, "after")[1] == "OK"
+
+
+# ------------------------------------------------------------------ record-api-response.sh
+
+RID = "2026-08-05T16-47-00Z"
+
+
+def run_script(script, *args, shell="sh", env=None):
+    e = dict(os.environ)
+    if env:
+        e.update(env)
+    return subprocess.run([shell, str(script), *[str(a) for a in args]],
+                          capture_output=True, text=True, env=e)
+
+
+def lines(path):
+    return [json.loads(l) for l in path.read_text().splitlines() if l.strip()]
+
+
+def api_rows(name):
+    return json.loads((FIXTURES / name).read_text())["data"]["results"]
+
+
+def record_search(jobs, fixture, query_id="q", shell="sh"):
+    return run_script(RECORD_API, RID, jobs, FIXTURES / fixture,
+                      "--route", "search-jobs", "--query-id", query_id, shell=shell)
+
+
+def test_a_search_response_surfaces_one_event_per_row(tmp_path):
+    jobs = tmp_path / "jobs.jsonl"
+    jobs.write_text("")
+    r = record_search(jobs, "search.linkedin.json", "strategic-finance-sf")
+    assert r.returncode == 0, r.stderr
+    api = api_rows("search.linkedin.json")
+    surfaced = [e for e in lines(jobs) if e["event"] == "surfaced"]
+    assert len(surfaced) == len(api)
+    assert {e["posting_id_at_seen"] for e in surfaced} == {row["id"] for row in api}
+
+
+def test_surfaced_values_equal_the_api_values(tmp_path):
+    jobs = tmp_path / "jobs.jsonl"
+    jobs.write_text("")
+    r = record_search(jobs, "search.ashby.json")
+    assert r.returncode == 0, r.stderr
+    api = {row["id"]: row for row in api_rows("search.ashby.json")}
+    surfaced = [x for x in lines(jobs) if x["event"] == "surfaced"]
+    # Without this the loop below iterates nothing and the test passes with no script at all.
+    assert len(surfaced) == len(api)
+    for e in surfaced:
+        row = api[e["posting_id_at_seen"]]
+        for key in ("title", "company_name", "location_display", "source_url", "source_id",
+                    "salary_display", "employment_type", "is_remote", "workplace_type",
+                    "department_name", "team_name"):
+            assert e[key] == row.get(key), (e["posting_id_at_seen"], key)
+
+
+def test_posted_at_takes_whichever_date_field_the_source_filled(tmp_path):
+    jobs = tmp_path / "jobs.jsonl"
+    jobs.write_text("")
+    api = {}
+    for name in ("search.linkedin.json", "search.ashby.json"):
+        r = record_search(jobs, name)
+        assert r.returncode == 0, r.stderr
+        for row in api_rows(name):
+            api[row["id"]] = row
+    surfaced = [x for x in lines(jobs) if x["event"] == "surfaced"]
+    # Without this the loop below iterates nothing and the test passes with no script at all.
+    assert len(surfaced) == len(api)
+    for e in surfaced:
+        row = api[e["posting_id_at_seen"]]
+        p, q = row.get("posted_at"), row.get("published_at")
+        assert e["posted_at"] == (max(p, q) if p and q else (p or q))
+
+
+def test_posted_at_takes_the_later_date_when_a_row_carries_both(tmp_path):
+    """Neither live fixture fills both fields — LinkedIn fills `posted_at` and leaves
+    `published_at` null, Ashby the reverse — so the branch that compares the two dates is only
+    reached from a row written here."""
+    both = tmp_path / "both.json"
+    both.write_text(json.dumps({"data": {"query": {"source": "ashby"}, "results": [
+        {"source": "ashby", "source_id": "s1", "id": "jp_1",
+         "source_url": "https://example.invalid/1",
+         "posted_at": "2026-01-01T00:00:00+00:00", "published_at": "2026-06-30T00:00:00+00:00"},
+        {"source": "ashby", "source_id": "s2", "id": "jp_2",
+         "source_url": "https://example.invalid/2",
+         "posted_at": "2026-06-30T00:00:00+00:00", "published_at": "2026-01-01T00:00:00+00:00"}]}}))
+    jobs = tmp_path / "jobs.jsonl"
+    r = run_script(RECORD_API, RID, jobs, both, "--route", "search-jobs")
+    assert r.returncode == 0, r.stderr
+    dates = {e["source_id"]: e["posted_at"] for e in lines(jobs) if e["event"] == "surfaced"}
+    assert dates == {"s1": "2026-06-30T00:00:00+00:00", "s2": "2026-06-30T00:00:00+00:00"}
+
+
+def test_an_error_response_fails_loudly_and_appends_no_rows(tmp_path):
+    jobs = tmp_path / "jobs.jsonl"
+    jobs.write_text("")
+    r = record_search(jobs, "detail.error.json")
+    assert r.returncode == 1
+    assert "validation_error" in r.stderr
+    assert [e for e in lines(jobs) if e["event"] == "surfaced"] == []
+
+
+def test_an_error_response_records_the_call_with_its_code_and_retryable(tmp_path):
+    jobs = tmp_path / "jobs.jsonl"
+    jobs.write_text("")
+    run_script(RECORD_API, RID, jobs, FIXTURES / "detail.error.json", "--route", "get-posting")
+    calls = [e for e in lines(jobs) if e["event"] == "call"]
+    assert len(calls) == 1
+    assert calls[0]["ok"] is False
+    assert calls[0]["route"] == "get-posting"      # the route is passed in, not guessed
+    assert calls[0]["error_code"] == "validation_error"
+    assert calls[0]["retryable"] is False
+    assert calls[0]["request_id"].startswith("req_")
+
+
+def test_a_successful_call_records_its_request_id_from_meta(tmp_path):
+    jobs = tmp_path / "jobs.jsonl"
+    jobs.write_text("")
+    record_search(jobs, "search.linkedin.json")
+    call = [e for e in lines(jobs) if e["event"] == "call"][0]
+    meta = json.loads((FIXTURES / "search.linkedin.json").read_text()).get("meta", {})
+    assert call["request_id"] == meta.get("request_id")
+
+
+def test_a_zero_row_search_is_not_a_failure(tmp_path):
+    jobs = tmp_path / "jobs.jsonl"
+    jobs.write_text("")
+    r = record_search(jobs, "search.zero.json")
+    assert r.returncode == 0, r.stderr
+    call = [e for e in lines(jobs) if e["event"] == "call"][0]
+    assert call["ok"] is True and call["rows_returned"] == 0
+
+
+def test_a_row_missing_source_id_appends_nothing_and_names_it(tmp_path):
+    jobs = tmp_path / "jobs.jsonl"
+    jobs.write_text("")
+    r = record_search(jobs, "search.badrow.json")
+    assert r.returncode == 1
+    assert "source_id" in r.stderr
+    assert [e for e in lines(jobs) if e["event"] == "surfaced"] == []
+
+
+def test_one_bad_row_rejects_the_whole_response(tmp_path):
+    """All-or-nothing: the good rows next to a bad one are not appended either, so a response is
+    never half-recorded."""
+    bad = tmp_path / "onebad.json"
+    rows = [dict(r) for r in api_rows("search.ashby.json")[:3]]
+    del rows[1]["source_id"]
+    bad.write_text(json.dumps({"data": {"query": {"source": "ashby"}, "results": rows}}))
+    jobs = tmp_path / "jobs.jsonl"
+    r = run_script(RECORD_API, RID, jobs, bad, "--route", "search-jobs")
+    assert r.returncode == 1
+    assert "row 2" in r.stderr, r.stderr
+    assert [e for e in lines(jobs) if e["event"] == "surfaced"] == []
+    call = [e for e in lines(jobs) if e["event"] == "call"][0]
+    assert call["rows_returned"] == 3 and call["rows_new"] == 0
+
+
+def test_a_truncated_response_records_the_call_and_appends_no_rows(tmp_path):
+    """`json-scan.awk` prints the rows it read before the bad byte, then exits 2. Those rows are
+    real and complete, so a script that read them would append a short list of results and report
+    it as the whole response."""
+    cut = tmp_path / "cut.json"
+    whole = (FIXTURES / "search.ashby.json").read_text()
+    cut.write_text(whole[:len(whole) // 2])
+    jobs = tmp_path / "jobs.jsonl"
+    r = run_script(RECORD_API, RID, jobs, cut, "--route", "search-jobs")
+    assert r.returncode == 1
+    assert "not well-formed JSON" in r.stderr
+    assert [e for e in lines(jobs) if e["event"] == "surfaced"] == []
+    calls = [e for e in lines(jobs) if e["event"] == "call"]
+    assert len(calls) == 1 and calls[0]["ok"] is False and calls[0]["rows_returned"] == 0
+
+
+def test_a_non_string_id_is_refused_at_ingestion(tmp_path):
+    """Every script that finds a posting greps for the quoted form, so a numeric id would be
+    surfaced and then unreachable. Refuse it where it arrives, not three scripts later."""
+    bad = tmp_path / "numeric.json"
+    bad.write_text(json.dumps({"data": {"results": [
+        {"source": "linkedin", "source_id": 4449006488, "id": "jp_x",
+         "source_url": "https://example.invalid/x"}]}}))
+    r = run_script(RECORD_API, RID, tmp_path / "jobs.jsonl", bad, "--route", "search-jobs")
+    assert r.returncode == 1
+    assert "source_id" in r.stderr
+
+
+def test_a_response_that_does_not_match_the_route_is_refused(tmp_path):
+    jobs = tmp_path / "jobs.jsonl"
+    jobs.write_text("")
+    r = run_script(RECORD_API, RID, jobs, FIXTURES / "search.linkedin.json", "--route", "get-posting")
+    assert r.returncode == 2
+    assert "get-posting" in r.stderr
+
+
+def test_a_get_posting_body_is_not_recorded_as_a_search(tmp_path):
+    """A posting body carries neither `data.query` nor `data.results`. Read as a search it would
+    record a call that returned nothing, which is what a search that found nothing also records."""
+    posting = tmp_path / "posting.json"
+    posting.write_text(json.dumps({"data": {"source": "ashby", "source_id": "s1", "id": "jp_1",
+                                            "description_markdown": "A role."},
+                                   "meta": {"request_id": "req_1"}}))
+    jobs = tmp_path / "jobs.jsonl"
+    r = run_script(RECORD_API, RID, jobs, posting, "--route", "search-jobs")
+    assert r.returncode == 2
+    assert [e for e in lines(jobs) if e["event"] == "surfaced"] == []
+
+
+def test_the_same_posting_from_two_queries_is_surfaced_once(tmp_path):
+    jobs = tmp_path / "jobs.jsonl"
+    jobs.write_text("")
+    n = len(api_rows("search.linkedin.json"))
+    record_search(jobs, "search.linkedin.json", "a")
+    record_search(jobs, "search.linkedin.json", "b")
+    keys = [(e["source"], e["source_id"]) for e in lines(jobs) if e["event"] == "surfaced"]
+    assert len(keys) == len(set(keys)) == n
+    calls = [e for e in lines(jobs) if e["event"] == "call"]
+    assert calls[1]["rows_returned"] == n and calls[1]["rows_new"] == 0
+
+
+def test_a_posting_already_judged_in_an_earlier_run_is_not_surfaced_again(tmp_path):
+    jobs = tmp_path / "jobs.jsonl"
+    api = api_rows("search.linkedin.json")
+    known = api[0]
+    jobs.write_text(
+        '{"event":"evaluated","run_id":"2026-01-01T00-00-00Z","source":"%s",'
+        '"source_id":"%s","detail_read":true,"relevant":false,"match":null}\n'
+        % (known["source"], known["source_id"]))
+    record_search(jobs, "search.linkedin.json")
+    surfaced = [e for e in lines(jobs) if e["event"] == "surfaced"]
+    assert known["source_id"] not in {e["source_id"] for e in surfaced}
+    assert len(surfaced) == len(api) - 1
+
+
+@pytest.mark.skipif(not shutil.which("dash"), reason="dash is not installed here")
+def test_the_whole_path_runs_under_dash(tmp_path):
+    """Run the dedup path — the two chained `-f` awk programs and the two-pass event build — under
+    strict dash, not only under the host's `sh`."""
+    jobs = tmp_path / "jobs.jsonl"
+    jobs.write_text("")
+    n = len(api_rows("search.ashby.json"))
+    first = record_search(jobs, "search.ashby.json", "a", shell="dash")
+    second = record_search(jobs, "search.ashby.json", "b", shell="dash")
+    assert first.returncode == 0, first.stderr
+    assert second.returncode == 0, second.stderr
+    assert len([e for e in lines(jobs) if e["event"] == "surfaced"]) == n
+    calls = [e for e in lines(jobs) if e["event"] == "call"]
+    assert [c["rows_new"] for c in calls] == [n, 0]
 
 
 # ------------------------------------------------------------------- POSIX portability

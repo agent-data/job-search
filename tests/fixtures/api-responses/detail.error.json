@@ -1,0 +1,23 @@
+{
+  "error": {
+    "status": 400,
+    "body": {
+      "error": {
+        "status": 400,
+        "code": "validation_error",
+        "message": "posting_id and source_url refer to different jobs",
+        "param": "source_url",
+        "request_id": "req_a819b1d0acb742639181deb0",
+        "retryable": false,
+        "source": "service",
+        "body": null
+      }
+    },
+    "code": "validation_error",
+    "message": "posting_id and source_url refer to different jobs",
+    "param": "source_url",
+    "request_id": "req_a819b1d0acb742639181deb0",
+    "retryable": false,
+    "source": "service"
+  }
+}
