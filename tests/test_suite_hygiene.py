@@ -38,9 +38,8 @@ def test_no_scope_defines_one_test_name_twice():
 
     It happened here. A judgment test took the name of a queue test in the same module and removed
     its three parametrized cases. Measured afterwards: shadowing a parametrized test drops the
-    collected count, which is how that one was caught, but shadowing a plain one leaves the count
-    identical — 193 collected and 193 passed either way — so nothing but this guard sees it. Tasks
-    5 through 16 all add cases to `test_mechanics_scripts.py`.
+    collected count, which is how that one was caught, but shadowing a plain one collects and passes
+    the same number of tests either way, so nothing but this guard sees it.
 
     Names are read with `ast` per scope rather than by grep, because a method on a test class and a
     module-level function of the same name do not shadow each other, and a `def` nested inside
