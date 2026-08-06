@@ -608,7 +608,7 @@ cd -
 
 `description_markdown` comes out of this **better** than the live text: it is built to contain a `"`, a `\`, a tab, a newline and a `{`, so Task 2's byte-exactness assertion is exercising the string handling on purpose rather than by luck. The length band is preserved, so §9's storage arithmetic still describes the fixtures.
 
-Then hand-write the bad-row fixture:
+Then hand-write the bad-row fixture and put it through the same scrub. Hand-writing it is not an exemption: `test_a_committed_fixture_carries_no_live_posting_text` globs every file in the directory, so a hand-written row has to satisfy the same vocabularies as a captured one. Write it as:
 
 ```json
 {
@@ -620,7 +620,23 @@ Then hand-write the bad-row fixture:
 }
 ```
 
-Save it as `tests/fixtures/api-responses/search.badrow.json`. It is missing `source` and `source_id`.
+then `python3 tests/fixtures/scrub.py raw.search.badrow.json search.badrow.json`, which gives the committed shape:
+
+```json
+{
+  "data": {
+    "results": [
+      {
+        "id": "jp_534cfc534caf",
+        "title": "Strategic Finance Manager",
+        "source_url": "https://example.invalid/jobs/jp_534cfc534caf"
+      }
+    ]
+  }
+}
+```
+
+`jp_534cfc534caf` is `sha256("src-0")[:12]` — real scrub output, so the fixed-point pin passes. The row still carries no `source` and no `source_id`, which is its entire purpose.
 
 Finally, run the two Task 0 tests that were waiting on a fixture:
 
