@@ -395,8 +395,15 @@ def test_a_scalar_is_printed_with_its_path_and_its_raw_value():
     not (FIXTURES / "search.linkedin.json").exists(), reason="fixture arrives in Task 1"
 )
 def test_the_same_document_compacted_scans_identically():
+    """Two rows are read off the fixture by hand first, so the comparison below is against a scan
+    that printed something. Measured 2026-08-06 with both `printf` statements in `json-scan.awk`
+    replaced by bare `readstring()` / `readbare()` calls — the scanner still parses, and prints no
+    rows: 156 of the 303 cases in this module failed and this one passed, because both sides of the
+    comparison were the empty list."""
     pretty = (FIXTURES / "search.linkedin.json").read_text()
     compact = json.dumps(json.loads(pretty), separators=(",", ":"), ensure_ascii=False)
+    assert ["data.query.source", '"linkedin"'] in scan(pretty)[1]
+    assert ["data.results.0.source_id", '"linkedin-0000"'] in scan(pretty)[1]
     assert scan(pretty)[1] == scan(compact)[1]
 
 
@@ -2677,9 +2684,16 @@ def test_another_runs_events_do_not_enter_these_counts(tmp_path):
 
 
 def test_a_later_run_judging_an_earlier_runs_posting_does_not_move_its_counts(tmp_path):
-    """Invariant 4 has to hold a year later, not only at close."""
+    """Invariant 4 has to hold a year later, not only at close.
+
+    The two counts are pinned to the fixture before the later run's events are added, because a
+    counter that never moves at all also satisfies `after == before`. Measured 2026-08-06 with
+    `reviewed++` and `unreviewed++` deleted from `run-counts.awk`'s END loop: both counts printed 0
+    before and after, 8 cases in this module failed, and this one passed."""
     jobs = seeded_jobs(tmp_path, "search.linkedin.json")
     _, before = counts(jobs)
+    assert before["postings_unreviewed"] == str(len(api_rows("search.linkedin.json")))
+    assert before["postings_reviewed"] == "0"
     row = first_surfaced(jobs)
     later = "2026-09-01T00-00-00Z"
     jobs.write_text(jobs.read_text() +
@@ -2794,13 +2808,25 @@ def test_another_runs_judgments_are_not_listed(tmp_path):
 
 
 def test_the_listing_and_the_counts_agree(tmp_path):
-    """The assertion B8 will make against a live run, made here against a fixture."""
+    """The assertion B8 will make against a live run, made here against a fixture.
+
+    The three numbers this test recorded are pinned first, because two scripts that are wrong in
+    the same way also agree. Measured 2026-08-06 with `jval` in `event-field.awk` returning "" for
+    `relevant`: every judgment read as not relevant, `run-counts.sh` put all 25 postings in
+    `filtered_out`, `run-matches.sh` printed all 25 under `filtered`, the two agreed, 11 cases in
+    this module failed, and this one passed.
+
+    The 3 below is the slice point the two `judge_all` calls use, not a count of the fixture's
+    rows."""
     jobs = seeded_jobs(tmp_path, "search.linkedin.json")
     rows = [e for e in lines(jobs) if e["event"] == "surfaced"]
     judge_all(jobs, rows[:3], detail_read="true", relevant="true", match="moderate", reasoning="Ok.")
     judge_all(jobs, rows[3:], detail_read="false", relevant="false", reasoning="No.")
     _, c = counts(jobs)
     _, out = matches(jobs)
+    assert int(c["match_moderate"]) == 3
+    assert int(c["filtered_out"]) == len(rows) - 3
+    assert len(out) == len(rows)
     tally = {}
     for o in out:
         tally[o[0]] = tally.get(o[0], 0) + 1
