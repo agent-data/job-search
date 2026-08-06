@@ -43,9 +43,10 @@ LIST_QUEUE = RUN_SCRIPTS / "list-detail-read-queue.sh"
 JUDGE = RUN_SCRIPTS / "record-judgment.sh"
 COUNTS = RUN_SCRIPTS / "run-counts.sh"
 MATCHES = RUN_SCRIPTS / "run-matches.sh"
+OPEN_RUN = RUNBOOK_SCRIPTS / "open-run.sh"
 
 ALL_SCRIPTS = [DEDUP, APPEND, SCHEDULE, DISCOVERY, VALIDATE, RECORD_API, QUEUE, LIST_QUEUE,
-               JUDGE, COUNTS, MATCHES]
+               JUDGE, COUNTS, MATCHES, OPEN_RUN]
 
 
 # A contract-valid single-line `evaluated` event, in the shape
@@ -2984,6 +2985,133 @@ def test_a_listing_for_a_log_that_is_not_there_exits_two_and_prints_nothing(tmp_
     assert r.returncode == 2
     assert out == []
     assert "no such file" in r.stderr
+
+
+# ---------------------------------------------------------------------------------- open-run.sh
+
+RUN_ID_RE = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}Z$")
+UTC_TS_RE = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$")
+
+
+def parsed_output(r):
+    """The `key=value` lines `open-run.sh` prints, as a dict.
+
+    The split takes the first `=` only, and lines without one are dropped, so the workspace
+    findings that follow the three lines on stdout do not enter the dict.
+    """
+    return dict(l.split("=", 1) for l in r.stdout.splitlines() if "=" in l)
+
+
+def date_shim(tmp_path):
+    """A PATH whose `date` answers a later second on every call and records how many it got.
+
+    `validate-workspace.sh` runs no `date`, so every call the shim records is one this script made.
+    """
+    d = tmp_path / "date-shim"
+    d.mkdir(exist_ok=True)
+    calls = d / "calls"
+    shim = d / "date"
+    shim.write_text(
+        "#!/bin/sh\n"
+        "printf 'x' >> %s\n"
+        "n=$(wc -c < %s | tr -d ' ')\n"
+        "printf '2026-07-30T15:04:%%02dZ\\n' \"$n\"\n" % (calls, calls),
+        encoding="utf-8")
+    shim.chmod(0o755)
+    return calls, {"PATH": "%s:%s" % (d, os.environ["PATH"])}
+
+
+def test_run_id_and_started_at_name_the_same_instant(tmp_workspace):
+    r = run_script(OPEN_RUN, tmp_workspace)
+    assert r.returncode == 0, r.stdout + r.stderr
+    out = parsed_output(r)
+    assert RUN_ID_RE.match(out["run_id"])
+    assert UTC_TS_RE.match(out["started_at"])
+    assert out["run_id"] == out["started_at"].replace(":", "-")
+
+
+def test_the_clock_is_read_once(tmp_workspace, tmp_path):
+    """Two `date` calls back to back land in the same second nearly every time, so the test above
+    passes against a script that reads the clock twice: with the `tr` line replaced by a second
+    `date -u` call, this is the only test in the suite that fails (1 failed, 697 passed). Against a
+    `date` that never answers twice alike, only one read can produce two lines naming the same
+    instant."""
+    calls, env = date_shim(tmp_path)
+    r = run_script(OPEN_RUN, tmp_workspace, env=env)
+    assert r.returncode == 0, r.stdout + r.stderr
+    out = parsed_output(r)
+    assert calls.read_text() == "x"
+    assert out["started_at"] == "2026-07-30T15:04:01Z"
+    assert out["run_id"] == "2026-07-30T15-04-01Z"
+
+
+def test_opening_creates_the_marker(tmp_workspace):
+    out = parsed_output(run_script(OPEN_RUN, tmp_workspace))
+    assert (tmp_workspace / "runs" / (".started-" + out["run_id"])).exists()
+
+
+def test_brief_revision_is_the_first_twelve_of_the_digest(tmp_workspace):
+    import hashlib
+    out = parsed_output(run_script(OPEN_RUN, tmp_workspace))
+    digest = hashlib.sha256((tmp_workspace / "preferences.md").read_bytes()).hexdigest()
+    assert out["brief_revision"] == digest[:12]
+
+
+def test_a_broken_workspace_still_opens_the_run_and_reports_the_findings(tmp_workspace):
+    (tmp_workspace / "config.yaml").write_text("version: 2\n")     # missing queries, schedule, sources
+    r = run_script(OPEN_RUN, tmp_workspace)
+    assert r.returncode == 1
+    out = parsed_output(r)
+    assert RUN_ID_RE.match(out["run_id"])
+    assert (tmp_workspace / "runs" / (".started-" + out["run_id"])).exists()
+    assert "INVALID config.yaml" in r.stdout
+
+
+def test_no_config_means_no_run_at_all(tmp_path):
+    ws = tmp_path / "empty"
+    ws.mkdir()
+    r = run_script(OPEN_RUN, ws)
+    assert r.returncode == 2
+    assert "config.yaml" in r.stderr
+    assert not list(ws.glob("runs/.started-*"))
+
+
+def test_a_workspace_with_no_brief_opens_a_run_that_carries_an_empty_revision(tmp_workspace):
+    """A missing brief is a workspace finding, not a reason to refuse to open: the marker and the
+    three lines come first, and the finding prints after them, so the run closes `blocked` with a
+    record instead of leaving nothing behind. Exit 1, not 2 — 2 is reserved for a workspace the
+    script cannot write into at all, and a caller that read `!= 0` could not tell the two apart.
+    """
+    (tmp_workspace / "preferences.md").unlink()
+    r = run_script(OPEN_RUN, tmp_workspace)
+    assert r.returncode == 1, r.stdout + r.stderr
+    out = parsed_output(r)
+    assert out["brief_revision"] == ""
+    assert (tmp_workspace / "runs" / (".started-" + out["run_id"])).exists()
+    assert "preferences.md" in (r.stdout + r.stderr)
+
+
+def test_a_workspace_with_no_brief_reports_the_missing_brief_once(tmp_workspace):
+    """`validate-workspace.sh` is the only reporter of the missing brief. `open-run.sh` printing the
+    same line too would report one finding on two lines, and a caller counting them would count it
+    twice."""
+    (tmp_workspace / "preferences.md").unlink()
+    r = run_script(OPEN_RUN, tmp_workspace)
+    named = [l for l in r.stdout.splitlines() if "INVALID preferences.md" in l]
+    assert named == ["INVALID preferences.md missing-file"], r.stdout
+
+
+@pytest.mark.skipif(not shutil.which("dash"), reason="dash is not installed here")
+def test_opening_a_run_runs_under_dash(tmp_workspace):
+    """This is the only shipped script that runs another shipped script rather than an awk program
+    (`grep -rn '\\.sh"' skills/*/scripts/*.sh` returns its one line), so it is run end to end under
+    strict dash: `${1:?}`, `command -v`, the `printf ''` that writes the marker and the `sh` call on
+    `validate-workspace.sh` are none of them exercised by `dash -n`."""
+    r = run_script(OPEN_RUN, tmp_workspace, shell="dash")
+    assert r.returncode == 0, r.stdout + r.stderr
+    out = parsed_output(r)
+    assert (tmp_workspace / "runs" / (".started-" + out["run_id"])).exists()
+    assert len(out["brief_revision"]) == 12
 
 
 # ------------------------------------------------------------------- POSIX portability
