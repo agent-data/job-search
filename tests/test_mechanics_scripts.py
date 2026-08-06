@@ -2672,7 +2672,7 @@ def test_the_listing_and_the_counts_agree(tmp_path):
 
 def test_one_bands_postings_come_out_in_the_order_they_were_judged(tmp_path):
     """Within a band the order is the order the judgments landed, which is neither the order the
-    search surfaced them nor the order awk happens to walk an array in.
+    search surfaced them nor the order an awk array walk returns them in.
 
     The five are judged in a scrambled order so a listing that kept the surfaced order fails, and
     the ids are asserted rather than the bands, which are all the same here.
@@ -2740,13 +2740,15 @@ def test_a_relevant_row_with_no_band_is_not_listed(tmp_path):
     assert out == []
 
 
-def test_a_tab_in_the_reasoning_does_not_invent_a_column(tmp_path):
+def test_a_tab_in_the_reasoning_does_not_add_an_eleventh_column(tmp_path):
     """A row is ten tab-separated columns, so a tab inside the free text would put an eleventh one
     there and shift every column after it. `jval` maps a tab, a newline and a CR to a space;
     resolving the escapes here instead of calling it is what would break this.
 
     HOSTILE puts a real tab and a real newline on the event — see
-    `test_free_text_with_quotes_backslashes_tabs_and_newlines_round_trips`.
+    `test_free_text_with_quotes_backslashes_tabs_and_newlines_round_trips` — along with a quote and
+    a backslash, which must arrive unchanged. The whole value is asserted rather than a substring,
+    so the two whitespace substitutions are the only difference the row may carry.
     """
     jobs = seeded_jobs(tmp_path, "search.linkedin.json")
     row = first_surfaced(jobs)
@@ -2755,13 +2757,12 @@ def test_a_tab_in_the_reasoning_does_not_invent_a_column(tmp_path):
     r, out = matches(jobs)
     assert len(r.stdout.splitlines()) == 1
     assert len(out[0]) == 10
-    assert "\t" not in out[0][9]
-    assert "C:\\temp tab and a newline." in out[0][9]     # the tab and the newline, each a space
+    assert out[0][9] == HOSTILE.replace("\t", " ").replace("\n", " ")
 
 
 def test_an_awk_that_died_partway_is_not_reported_as_a_listing(tmp_path):
     """The rows go to stdout, so a caller cannot tell a complete listing from a partial one by
-    reading it — an awk that died after printing two postings leaves two real-looking rows there.
+    reading it — an awk that died after printing one posting leaves one real-looking row there.
     The exit status is what tells them apart, and it is awk's own status: with awk shimmed to print
     one row and then fail, this must not exit 0."""
     jobs = seeded_jobs(tmp_path, "search.linkedin.json")
