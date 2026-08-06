@@ -3077,11 +3077,11 @@ def test_a_run_opening_in_the_same_second_as_another_is_refused(tmp_workspace, t
     crash both produce: the first call has finished before the second starts. The case where the
     two overlap — a scheduled run starting alongside a manual one — is the one below.
 
-    A failed marker write reports one of two things now that `set -C` refuses an existing file:
-    the name is taken, or `runs/` will not accept a write. Both come back from the same failed
-    redirection, so one message for both would leave a caller either cleaning up a workspace that
-    is fine or retrying a `runs/` that will never take the file. This case asserts the first
-    message and asserts the second is absent.
+    The script reports one of two things when the marker write fails, now that `set -C` refuses an
+    existing file: the name is taken, or `runs/` cannot be written to. Both come back from the same
+    failed redirection, so one message for both would leave a caller either cleaning up a workspace
+    that is fine or retrying a write that will fail every time. This case asserts the first message
+    and asserts the second is absent.
 
     The retry it names is `open-run.sh` again and nothing else. The marker on disk belongs to a run
     that opened this same second, so sending the caller back through the run contract's step 1 —
@@ -3107,10 +3107,12 @@ def forked_together(workspace, env, tmp_path, count=2, shell="sh"):
     """Start `count` `open-run.sh` processes from one shell's forks and collect their exits.
 
     One shell forks them in a loop, so the children start tens of microseconds apart. Starting
-    them with `Popen` from Python instead spaces them by milliseconds, which is wider than the gap
-    this is about: against one and the same script — the version that tested for the marker with
-    `[ -e ]` and wrote it afterwards — `Popen` had both children open the run in 1 of 300 rounds
-    and this launcher in 261 of 300.
+    them with `Popen` from Python instead spaces them about seven times wider. Measured with a
+    `clock_gettime` stamp taken in each child, 200 rounds: this launcher a median of 87 microseconds
+    apart, `Popen` a median of 591, with 199 of its 200 samples still under a millisecond. That gap
+    decides whether the defect is reachable at all: against one and the same script — the version
+    that tested for the marker with `[ -e ]` and wrote it afterwards — `Popen` had both children
+    open the run in 1 of 300 rounds and this launcher in 261 of 300.
 
     Each child's stderr goes to its own file, and the statuses come back in the order the children
     were forked, which is the order the files are named in, so the two lists line up.
