@@ -2123,10 +2123,15 @@ exec awk -f "$here/event-field.awk" -f "$here/run-counts.awk" -v want="$run_id" 
       g = jval($0, "source") ":" jval($0, "query_id")
       if (!(g in group)) { group[g] = 1; ngroup++; grouporder[ngroup] = g }
       if (ok == "true") answered[g] = 1
+      # Only a search's rows_new counts toward rows_new_total. A stored posting body also
+      # carries rows_new 1 (record-api-response.sh emits `emit_call get-posting … 1 1`), so
+      # summing every route gives 26 against 25 postings surfaced on a run that reads one
+      # posting in full — measured — and Task 10's surfaced-does-not-match-rows-new gate
+      # would then fire on every real run.
+      n = jval($0, "rows_new"); if (n != "") rowsnew += n
     }
     else if (route == "get-posting") detailcalls++
     else                             other++
-    n = jval($0, "rows_new"); if (n != "") rowsnew += n
     next
   }
   if (ev == "surfaced") {

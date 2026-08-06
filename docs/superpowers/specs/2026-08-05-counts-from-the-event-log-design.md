@@ -140,8 +140,10 @@ Four invariants, checked by `validate-workspace.sh --post-close`:
 1. `strong + moderate + weak + filtered_out == postings_reviewed`
 2. `postings_reviewed + postings_unreviewed == postings_surfaced`
 3. `sum(by_source) == postings_surfaced`, and `postings_surfaced == sum(rows_new)` over this run's
-   successful `call` events — `rows_new` and not `rows_returned`, because one opening reached by
-   two queries is returned twice and surfaced once
+   successful **`search-jobs`** call events — `rows_new` and not `rows_returned`, because one
+   opening reached by two queries is returned twice and surfaced once, and `search-jobs` and not
+   every route, because a stored posting body also carries `rows_new` 1 and would push the sum one
+   past the count of postings for every posting a run reads in full
 4. every count equals what `run-counts.sh` recomputes from `jobs.jsonl`
 
 Only 3 and 4 compare the record against something outside itself. Invariants 1 and 2 are
