@@ -51,7 +51,7 @@ path cannot be read, rather than picking a workspace it might not name. The scri
 |---|---|---|
 | `config.yaml` — queries, sources, schedule | setup, then the user by hand | every run, the home view |
 | `preferences.md` — the brief, in prose | the preference interview | every run, every fit judgment |
-| `jobs.jsonl` — append-only event log, one JSON object per line. A run writes a `call` event for each agent-data request and `surfaced`, `queued`, `detail` and `evaluated` events about postings; a `status_changed` event records what the user says about one. A posting has several lines, all carrying the same `source` and `source_id`: read them in order, and the last line to carry a field states that field's current value. | every run; the home view for `status_changed` | the home view, the pipeline, duplicate checks |
+| `jobs.jsonl` — append-only event log, one JSON object per line. A run writes a `call` event for each agent-data request and `surfaced`, `queued`, `detail` and `evaluated` events about postings. A posting has several lines, all carrying the same `source` and `source_id`, and its current state is its last `evaluated` line. | every run | the home view, duplicate checks |
 | `runs/<run_id>.json` — one record per run; `<run_id>` is the run's UTC start time with dashes for the colons, like `2026-07-30T15-04-02Z`, so it works as a filename | `skills/job-search-runbook/scripts/close-run.sh` | the home view, the agent skill |
 | `runs/.started-<run_id>` — empty marker: this run is open | `skills/job-search-runbook/scripts/open-run.sh`, deleted by `skills/job-search-runbook/scripts/clear-run.sh` | the next run |
 | `reports/<date>-digest.md` — the digest the user reads | a run at close | the user, the home view |

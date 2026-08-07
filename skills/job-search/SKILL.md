@@ -123,10 +123,13 @@ leaves it off hears that it starts whenever they ask, and a search on demand is 
 
 Read, all of it local: `config.yaml` (enabled queries, `search.sources`, `schedule.frequency`,
 `schedule.consented`), the registry the runbook names, for the schedule state, the `updated_at` line
-of `preferences.md` (`created_at` where that is the only one), the newest `runs/<run_id>.json` and
-the digest it points at, and `jobs.jsonl` folded to one entry per `source` + `source_id` with the
-last line winning, counting a line that names another posting in `same_role_as` as that one role.
-Then render the card:
+of `preferences.md` (`created_at` where that is the only one), and the newest `runs/<run_id>.json`
+and the digest it points at. For the match counts, run this skill's
+`scripts/posting-counts.sh <workspace>/jobs.jsonl` rather than reading that log yourself: it prints
+`relevant`, `to_confirm` and `filtered`, one `key=value` per line. The log only grows — every run
+appends to it and nothing shortens it. Exit 2 means there is no file at that path and nothing was
+printed: leave the Matches block off the card and say the workspace holds no event log yet. Then
+render the card:
 
 ```
 Job search — <workspace path>
@@ -135,8 +138,8 @@ Brief: updated <date>  ·  Sources: LinkedIn + Ashby  ·  Schedule: daily  ·  L
 Latest digest — <date>
   <the digest's counts line, as it is written there>
 
-Pipeline
-  new <n> · interested <n> · applied <n> · rejected <n> · archived <n>   (<k> to confirm)
+Matches
+  <n> relevant postings found · <k> need your confirmation · <f> filtered out
 
 What next? Just tell me:
   • run a search now            • add or edit a query
@@ -147,17 +150,20 @@ What next? Just tell me:
 Sources are the ones `search.sources` lists, in the words a person uses for them; the schedule reads
 as its cadence while `schedule.consented` holds a date and the registry's `scheduling` carries
 `installed` and `verified` both true, and off otherwise — an object missing either one is an install
-no canary proved. Last run is the newest record's `run_health`. A record whose `close_state` is
-`blocked` or `interrupted` earns a line under the card: what stopped that run, which its record and
-digest name, and the one thing that gets it going again. Before the first run, offer that search in
-place of the digest and pipeline lines. A brief older than 30 days, where runs have happened since,
-earns one offer under the card to refresh it through `job-preference-interview`.
+no canary proved. Last run is the newest record's `run_health`. In Matches, `<n>` is `relevant`,
+`<k>` is `to_confirm` and `<f>` is `filtered`, each taken from the script's output rather than
+worked out; `<k>` counts among the relevant postings only, and a posting whose judgment names
+another one in `same_role_as` is in none of the three, because it is the same opening seen twice and
+the posting it names is counted on its own line. A record whose `close_state` is `blocked` or
+`interrupted` earns a line under the card: what stopped that run, which its record and digest name,
+and the one thing that gets it going again. Before the first run, offer that search in place of the
+digest and Matches lines. A brief older than 30 days, where runs have happened since, earns one
+offer under the card to refresh it through `job-preference-interview`.
 
 ## When the user reacts
 
 | What they say | Where it lands |
 |---|---|
 | A preference that holds across postings — only fully-remote, nothing under a pay floor | `preferences.md`, through `job-preference-interview`, which refreshes `updated_at`. Confirm in one line; a run in flight judges what is left under the new brief. |
-| Something about one posting — already applied there, not this company | that posting's line in `jobs.jsonl`: append a `status_changed` event carrying its new `status`. |
 | A reaction that reads two ways — the location is wrong, too junior | one short question, asked where the two readings lead to different actions, and your own best reading where they land the same. |
 | A change to what gets searched — add a source, widen the location, only the last day | a `queries[]` or `search.sources` edit in `config.yaml`, with the new cost stated first per rule 2. A one-off ask runs once and leaves the file as it is. Every config edit here is yours to make, comments and shape preserved. |
