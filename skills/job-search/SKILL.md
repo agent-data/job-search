@@ -156,9 +156,13 @@ worked out; `<k>` counts among the relevant postings only, and a posting whose j
 another one in `same_role_as` is in none of the three, because it is the same opening seen twice and
 the posting it names is counted on its own line. A record whose `close_state` is `blocked` or
 `interrupted` earns a line under the card: what stopped that run, which its record and digest name,
-and the one thing that gets it going again. Before the first run, offer that search in place of the
-digest and Matches lines. A brief older than 30 days, where runs have happened since, earns one
-offer under the card to refresh it through `job-preference-interview`.
+and the one thing that gets it going again. `close-run.sh` refuses a `complete` close over postings
+nobody judged, so a record whose `postings_unreviewed` is not zero is in one of those two states too
+and already has that line; add to it how many postings that run found and never judged, and the
+offer to run the search again, which reaches them because a posting carrying no judgment is not
+treated as one already seen. Before the first run, offer that search in place of the digest and
+Matches lines. A brief older than 30 days, where runs have happened since, earns one offer under the
+card to refresh it through `job-preference-interview`.
 
 ## When the user reacts
 
