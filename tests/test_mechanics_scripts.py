@@ -3403,7 +3403,7 @@ def test_a_present_brief_with_no_way_to_digest_it_is_not_called_missing(tmp_work
 def test_opening_a_run_runs_under_dash(tmp_workspace):
     """One of the two shipped scripts that run another shipped script rather than an awk program —
     `command grep -rn '\\.sh"' skills/*/scripts/*.sh` returns two lines, `open-run.sh:126` and
-    `close-run.sh:111` — so it is run end to end under strict dash: `${1:?}`, `command -v`, the
+    `close-run.sh:170` — so it is run end to end under strict dash: `${1:?}`, `command -v`, the
     `printf ''` that writes the marker and the `sh` call on `validate-workspace.sh` are none of them
     exercised by `dash -n`. `close-run.sh` gets the same treatment at
     `test_closing_and_clearing_a_run_run_under_dash`."""
@@ -4332,6 +4332,157 @@ def test_a_real_run_id_still_closes_under_a_collating_locale(tmp_workspace):
     assert record_of(tmp_workspace, o["run_id"])["run_health"] == "healthy"
     c = run_script(CLEAR_RUN, tmp_workspace, o["run_id"], env=env)
     assert c.returncode == 0, c.stderr
+
+
+# Ten run ids, each carrying one digit in all fourteen digit positions of the format. Between them
+# they cover every position-and-digit pair either `case` glob can be wrong about — 14 × 10 = 140,
+# asserted below rather than counted by eye. They are shape probes rather than instants: the globs
+# and `validate-workspace.sh:50` both check that a run id is twenty characters in the documented
+# arrangement, not that it names a real time.
+#
+# The suite settled nothing about this before. Measured on 2026-08-06 at commit `1d1dc40` by
+# dropping `8` from the first bracket of `close-run.sh`'s glob and running the module with
+# `PYTHONDONTWRITEBYTECODE=1 python3 -m pytest tests/test_mechanics_scripts.py -p no:cacheprovider`:
+# 414 passed, returncode 0. Same for `clear-run.sh`. The reason is that no well-formed run id
+# written out in the close and clear cases carries an `8`: `git show
+# 1d1dc40:tests/test_mechanics_scripts.py | sed -n '3417,4340p' | command grep -oE
+# '[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}-[0-9]{2}-[0-9]{2}Z' | sort -u` returned four —
+# `2026-07-30T09-00-00Z`, `2026-07-30T15-04-01Z`, `2026-07-30T15-04-02Z` and
+# `2026-12-31T23-59-59Z` — which between them use 0, 1, 2, 3, 4, 5, 6, 7 and 9. Every other run id
+# those cases pass is minted by `open-run.sh` from the clock, so whatever the later brackets were
+# covered by was whatever the clock happened to read, which no case states and none controls.
+DIGIT_COVER_RUN_IDS = [
+    "0000-00-00T00-00-00Z",
+    "1111-11-11T11-11-11Z",
+    "2222-22-22T22-22-22Z",
+    "3333-33-33T33-33-33Z",
+    "4444-44-44T44-44-44Z",
+    "5555-55-55T55-55-55Z",
+    "6666-66-66T66-66-66Z",
+    "7777-77-77T77-77-77Z",
+    "8888-88-88T88-88-88Z",
+    "9999-99-99T99-99-99Z",
+]
+
+
+def test_the_ten_shape_probe_ids_carry_every_digit_in_every_position():
+    """`DIGIT_COVER_RUN_IDS` is worth running only while it does what its comment says, and nothing
+    about it is obvious from reading ten similar strings. The positions come from the format written
+    out here — four year, two month, two day, two hour, two minute, two second — not from either
+    script and not from the table itself.
+    """
+    template = "YYYY-MM-DDTHH-MM-SSZ"
+    positions = [i for i, ch in enumerate(template) if ch in "YMDHS"]
+    assert len(positions) == 14, positions
+    assert len(DIGIT_COVER_RUN_IDS) == 10
+    pairs = {(p, rid[p]) for rid in DIGIT_COVER_RUN_IDS for p in positions}
+    assert len(pairs) == 140, len(pairs)
+    for rid in DIGIT_COVER_RUN_IDS:
+        assert RUN_ID_RE.match(rid), rid
+        assert len(rid) == len(template), rid
+        assert [i for i, ch in enumerate(rid) if ch.isdigit()] == positions, rid
+
+
+@pytest.mark.parametrize("run_id", DIGIT_COVER_RUN_IDS)
+def test_a_run_id_carrying_one_digit_in_every_position_closes_and_clears(tmp_workspace, run_id):
+    """Each glob lists its ten digits out fourteen times over, and a digit missing from any one of
+    those twenty-eight brackets refuses a run id that is well formed: `close-run.sh` writes no
+    record for it, or `clear-run.sh` leaves the marker and the scratch on disk. Neither script has
+    anything else that would notice.
+
+    One case fails for every bracket its own digit is missing from, in either script, because that
+    digit is in all fourteen positions of the id. Measured on 2026-08-06 with `8` dropped from the
+    first bracket of `close-run.sh`'s glob: 414 passed and returncode 0 without these cases, 1
+    failed with them.
+
+    Both scripts are driven, because they carry separate copies of the glob and only running each
+    one reaches its own. The marker and the scratch are put on disk first so `clear-run.sh` has both
+    removals to make and exit 0 means it made them.
+    """
+    runs = tmp_workspace / "runs"
+    (tmp_workspace / "jobs.jsonl").write_text("")
+    marker = runs / (".started-" + run_id)
+    marker.write_text("")
+    scratch = runs / ".scratch" / run_id
+    scratch.mkdir(parents=True)
+    (scratch / "response.json").write_text("{}")
+
+    r = close(tmp_workspace, run_id)
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert record_of(tmp_workspace, run_id)["run_id"] == run_id
+
+    c = run_script(CLEAR_RUN, tmp_workspace, run_id)
+    assert c.returncode == 0, c.stdout + c.stderr
+    assert not marker.exists()
+    assert not scratch.exists()
+
+
+@needs_collating_locale
+@pytest.mark.parametrize("shell", ["sh", "dash"])
+@pytest.mark.parametrize("key", ["postings_unreviewed", "searches_never_succeeded"])
+def test_a_count_in_digits_outside_ascii_stops_the_close_under_a_collating_locale(
+        tmp_workspace, tmp_path, shell, key):
+    """`close-run.sh` checks these two counts are numbers before it branches on them, and with
+    `*[!0-9]*` that check moved with the locale: negating a bracket expression with `!` does not
+    stop the range inside it being decided by the collation order.
+
+    Measured on 2026-08-06 with `[!0-9]` in `close-run.sh` and a `run-counts.sh` shimmed to print
+    `postings_unreviewed=٢`: under `LC_ALL=ar_SA.UTF-8` in sh the check passed, `[ "$unreviewed"
+    -ne 0 ]` then wrote `integer expression expected` and the `&&` chain came out false, so the
+    refusal over unjudged postings never ran and the script exited 0 having written the record with
+    `close_state` complete and `postings_unreviewed` 0 — over a count set saying two postings were
+    never judged. The same call exited 1 with nothing written under `LC_ALL=C`, under
+    `LC_ALL=en_US.UTF-8`, and under dash at all three locales.
+
+    Both shells for that reason. `/bin/sh` is bash on the machine this was written on and dash on
+    the CI runner, and the two disagreed. The close is `interrupted` so the only thing in the script
+    that can produce exit 1 is the check under test.
+
+    `test_a_real_run_id_still_closes_under_a_collating_locale` is the other half: it closes a run
+    with ASCII counts under this same locale at exit 0, so a check that refused every value under it
+    would not pass both.
+    """
+    if shell == "dash" and not shutil.which("dash"):
+        pytest.skip("dash is not installed here")
+    o = opened(tmp_workspace)
+    (tmp_workspace / "jobs.jsonl").write_text("")
+    broken = "".join((key + "=٢\n") if l.startswith(key + "=") else l + "\n"
+                     for l in WHOLE_COUNT_SET.splitlines())
+    assert broken.count("٢") == 1, broken
+    env = dict(awk_shim(tmp_path, "run-counts.awk", broken, status=0, stderr=""))
+    env["LC_ALL"] = COLLATING_LOCALE
+    r = close(tmp_workspace, o["run_id"], "interrupted", env=env, shell=shell)
+    assert r.returncode == 1, r.stdout + r.stderr
+    assert r.stdout == "", r.stdout
+    assert key in r.stderr, r.stderr
+    assert not (tmp_workspace / "runs" / (o["run_id"] + ".json")).exists()
+    assert (tmp_workspace / "runs" / (".started-" + o["run_id"])).exists()
+
+
+def test_a_count_carrying_every_digit_still_reads_as_a_number(tmp_workspace, tmp_path):
+    """The other direction on the same two checks. `*[!0123456789]*` scans every character of the
+    value, so a digit dropped from either list turns a legitimate count into `is not a number` and
+    stops the close. `1234567890` carries all ten, so one value catches a drop of any one of them.
+
+    Measured on 2026-08-06 with this case deselected: dropping `3`, `4`, `6` or `9` from the
+    `postings_unreviewed` list left the module at 429 passed, returncode 0 — no other value the
+    suite hands that key carries any of those four digits. Dropping `5` failed 2 cases, so the gap
+    was four digits wide rather than all ten.
+    """
+    o = opened(tmp_workspace)
+    (tmp_workspace / "jobs.jsonl").write_text("")
+    every_digit = "1234567890"
+    counts = "".join(
+        (l.split("=", 1)[0] + "=" + every_digit + "\n")
+        if l.startswith(("postings_unreviewed=", "searches_never_succeeded=")) else l + "\n"
+        for l in WHOLE_COUNT_SET.splitlines())
+    assert counts.count("=" + every_digit) == 2, counts
+    r = close(tmp_workspace, o["run_id"], "interrupted",
+              env=awk_shim(tmp_path, "run-counts.awk", counts, status=0, stderr=""))
+    assert r.returncode == 0, r.stdout + r.stderr
+    rec = record_of(tmp_workspace, o["run_id"])
+    assert rec["postings_unreviewed"] == 1234567890
+    assert rec["postings_surfaced"] == 30          # the rest of the set is untouched
 
 
 def test_the_record_matches_the_template_field_set(tmp_workspace):

@@ -135,6 +135,19 @@ esac
 #
 # --trigger and --close-state take no check here. The two case statements above already hold them
 # to two and three words, which is stricter than this.
+#
+# `[[:cntrl:]]` is the one bracket expression in this file whose verdict the locale changes, and the
+# measurement on 2026-08-06 bounds which way. Under LC_ALL=C, LC_ALL=en_US.UTF-8 and
+# LC_ALL=ar_SA.UTF-8 in sh, dash and bash, tab, newline, vertical tab, ESC and DEL are control
+# characters in all nine combinations — every character this check exists for. Two values move:
+# U+0085 and a lone 0x80 byte are control characters in sh and bash under the two UTF-8 locales and
+# ordinary characters under LC_ALL=C and in dash. So a lone 0x80 in --sources is refused here by sh
+# under a UTF-8 locale and reaches the record everywhere else: measured, close-run.sh exited 0 and
+# wrote runs/<run_id>.json under LC_ALL=C in both shells with both awks, and under
+# LC_ALL=en_US.UTF-8 in dash with mawk, which is the pair Ubuntu CI runs. That file is not valid
+# UTF-8, so nothing that reads a run record can parse it. BSD awk is the only thing that stops it,
+# dying with a multibyte conversion failure that :343 catches. The same check is in three scripts
+# under job-search-run/scripts, so widening it is a change to four files, not one.
 reject_id() {
   case $2 in
     *[[:cntrl:]]*) die "$1 may hold no control character" ;;
@@ -187,18 +200,38 @@ done
 
 # -f2- rather than -f2, so a value carrying an `=` keeps it. searches_never_succeeded_ids holds
 # `<source>:<query_id>` pairs, and a query id is model-supplied.
+#
+# `cut` reads the field by byte under LC_ALL=C and by character under a UTF-8 locale. Measured on
+# 2026-08-06 with BSD cut: a line whose value holds a byte that is not valid UTF-8 gives `cut:
+# stdin: Illegal byte sequence` and no output under LC_ALL=en_US.UTF-8 and LC_ALL=ar_SA.UTF-8 in
+# both sh and dash, and passes the bytes through under LC_ALL=C. Only searches_never_succeeded_ids
+# can carry such a byte — every other key run-counts.awk prints comes out of `printf "%d"`, and its
+# whole output was byte-identical and all ASCII under the three locales — and that list goes to
+# stderr for the operator and is in no field of the record, so an empty one costs a diagnostic and
+# no number. GNU cut, which is what Ubuntu CI has, was not measured; there is no GNU cut here.
 get() { printf '%s\n' "$counts" | grep "^$1=" | cut -d= -f2-; }
 unreviewed=$(get postings_unreviewed)
 lost=$(get searches_never_succeeded)
 lostids=$(get searches_never_succeeded_ids)
 
 # `[ "$x" -ne 0 ]` on a value that is not a number writes a diagnostic and exits non-zero, so the
-# surrounding `if` runs its else branch. Measured on 2026-08-06 with x=many: `integer expression
-# expected` under sh and bash, `Illegal number` under dash, and the else branch in all three. An
-# unreadable postings_unreviewed would therefore read as no posting left unjudged, let a complete
-# close through, and close the run healthy.
-case $unreviewed in ''|*[!0-9]*) die "postings_unreviewed is not a number: $unreviewed" ;; esac
-case $lost in ''|*[!0-9]*) die "searches_never_succeeded is not a number: $lost" ;; esac
+# surrounding `if` runs its else branch. Measured on 2026-08-06 with x=many and with x=٢, under sh,
+# dash and bash and under LC_ALL=C, LC_ALL=en_US.UTF-8 and LC_ALL=ar_SA.UTF-8: `integer expression
+# expected` under sh and bash, `Illegal number` under dash, and the else branch in all nine
+# combinations. An unreadable postings_unreviewed would therefore read as no posting left unjudged
+# and let a complete close write a record over postings nobody judged.
+#
+# The digits are written out one by one here for the reason measured at :108-115, and negating the
+# bracket expression with `!` does not change it: a range is still decided by the collation order
+# the locale sets. Measured on 2026-08-06 with the Arabic-Indic ٢, `*[!0-9]*` called it a number
+# under LC_ALL=ar_SA.UTF-8 in sh and in bash, and not a number under LC_ALL=C, under
+# LC_ALL=en_US.UTF-8 and in dash; `*[!0123456789]*` called it not a number in all nine combinations
+# and still called 23 a number in all nine. End to end with `[!0-9]` in these two lines and a
+# run-counts.sh shimmed to print postings_unreviewed=٢: under LC_ALL=ar_SA.UTF-8 in sh, close-run.sh
+# exited 0 having written runs/2026-07-30T15-04-02Z.json with close_state complete and
+# postings_unreviewed 0, over a count set saying two postings were never judged.
+case $unreviewed in ''|*[!0123456789]*) die "postings_unreviewed is not a number: $unreviewed" ;; esac
+case $lost in ''|*[!0123456789]*) die "searches_never_succeeded is not a number: $lost" ;; esac
 
 if [ "$close_state" = complete ] && [ "$unreviewed" -ne 0 ]; then
   die "close_state complete, but $unreviewed postings were never judged — close interrupted, or judge them"
