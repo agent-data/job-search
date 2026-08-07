@@ -3721,7 +3721,7 @@ def test_a_relevant_row_with_no_band_closes_the_run_and_degrades_it(tmp_workspac
     Treating that as a failure would leave the run unclosable: no record, the marker still on disk,
     which is the state this work exists to remove. So the record is written — and the run is
     degraded, because such a row is counted in `postings_reviewed` and in neither `matches` nor
-    `filtered_out`, so a healthy record would assert an arithmetic it does not satisfy. This case
+    `filtered_out`, so a healthy record would be one that does not add up. This case
     checks that arithmetic directly: the two hand-written rows give
     `strong + moderate + weak + filtered_out = 1` against `postings_reviewed = 2`, and `run_health`
     is the only field of the record that can say so. stderr would not do — the digest reads
@@ -3769,7 +3769,12 @@ def test_every_row_banded_over_the_same_shape_of_log_is_healthy(tmp_workspace):
     assert "relevant-row-without-a-band" not in r.stderr, r.stderr
     rec = record_of(tmp_workspace, o["run_id"])
     assert rec["run_health"] == "healthy"
+    # Every term pinned by hand off the four lines above — two postings, both judged, both relevant,
+    # one weak and one strong, so none filtered out — before the sum is asserted. Without the three
+    # pins the sum holds for any record whose fields are all wrong together.
     assert rec["matches"] == {"strong": 1, "moderate": 0, "weak": 1}
+    assert rec["filtered_out"] == 0
+    assert rec["postings_reviewed"] == 2
     m = rec["matches"]
     assert m["strong"] + m["moderate"] + m["weak"] + rec["filtered_out"] == rec["postings_reviewed"]
 
@@ -4054,9 +4059,13 @@ def test_an_identifier_the_close_writes_is_refused(tmp_workspace, flag, bad, say
     assert (tmp_workspace / "runs" / (".started-" + o["run_id"])).exists()
 
 
-# Each is a run id no `open-run.sh` can mint. The first two walk out of `runs/`; the next two are
-# the shapes `reject_id` used to be the only guard against; the rest are near-misses that traverse
-# nothing and still name a record no check in the workspace would ever read.
+# Run ids no `open-run.sh` can mint. The first two walk out of `runs/`; the next two carry a
+# character an identifier may not hold; the rest traverse nothing and are still not run ids.
+#
+# The empty string is deliberately not here. `${2:?}` at `close-run.sh:64` and `clear-run.sh:22`
+# refuses it before the format check ever runs, and the code that picks the status is the shell's,
+# so it is 1 under sh and 2 under dash. A case for it would pass with the format check deleted and
+# would be red under one of the two shells the suite runs.
 BAD_RUN_IDS = [
     "../elsewhere/pwned",
     "../../victim",
@@ -4067,79 +4076,175 @@ BAD_RUN_IDS = [
     "2026-07-30T15-04-02",           # no trailing Z
     "26-07-30T15-04-02Z",            # two-digit year
     "2026-07-30T15-04-02Z.json",     # the suffix already on it
-    "",
+    " 2026-07-30T15-04-02Z",         # a leading space
+    "2026-07-30T15-04-02Z ",         # a trailing space
 ]
 
+# Run ids whose first or last line is a run id and which are still not run ids. These are the
+# reason the check is a `case` glob and not a grep: `printf '%s\n' "$v" | grep -qE` exits 0 when any
+# one line matches. Measured on 2026-08-06 with the grep form, under mawk, which is Ubuntu CI's awk:
+# a trailing newline gave `run_health=healthy`, exit 0, and a record whose filename holds a literal
+# newline. The single-line ids above were refused by that form too and are not what broke.
+MULTILINE_RUN_IDS = [
+    "2026-07-30T15-04-02Z\n",
+    "\n2026-07-30T15-04-02Z",
+    "../../victim\n2026-07-30T15-04-02Z",
+    "2026-07-30T15-04-02Z\n../../victim",
+]
 
-@pytest.mark.parametrize("bad", BAD_RUN_IDS, ids=lambda s: (s or "empty")[:24])
+ALL_BAD_RUN_IDS = BAD_RUN_IDS + MULTILINE_RUN_IDS
+
+
+def run_id_case_id(s):
+    return repr(s)[1:-1][:26] or "empty"
+
+
+# `RUN_ID_RE` is anchored, so it answers "is this whole string a run id". This one answers "does
+# this text hold a run id anywhere", which is what a message showing the required shape does.
+RUN_ID_ANYWHERE_RE = re.compile(r"\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}Z")
+
+
+def refusal_names_the_shape(stderr, offending):
+    """The refusal names the value that is wrong and the shape it needed.
+
+    The offending value is cut out of the message first. Without that, two of these cases pass on
+    nothing: pytest names the temp directory for this test `…/test_a_run_id_that_is_not_a_ru0`, so
+    any message echoing the workspace path contains the substring `run_id`, and the case whose
+    offending value is `2026-07-30T15-04-02Z.json` contains a well-formed run id inside the value
+    the message quotes back. `<run_id>` with its angle brackets is in neither.
+
+    Only the last occurrence is cut, because three of these values are substrings of the example the
+    message shows — `2026-07-30T15-04-02` without its `Z`, `26-07-30T15-04-02Z` without its century,
+    and the one with a leading space — and cutting every occurrence would take the example with them.
+    The value the message quotes back is the last thing on the line.
+    """
+    rest = stderr
+    if offending:
+        i = stderr.rfind(offending)
+        if i >= 0:
+            rest = stderr[:i] + stderr[i + len(offending):]
+    return "<run_id>" in rest and RUN_ID_ANYWHERE_RE.search(rest) is not None
+
+
+@pytest.mark.parametrize("bad", ALL_BAD_RUN_IDS, ids=run_id_case_id)
 def test_a_run_id_that_is_not_a_run_id_is_refused_by_the_close(tmp_workspace, bad):
     """`run_id` is the one value here that becomes a path — the record goes to
     `runs/<run_id>.json` — so it is checked for its whole shape rather than for two characters.
 
-    Measured on 2026-08-06 before this check: `close-run.sh . ../elsewhere/pwned --trigger manual
-    --close-state complete` printed `run_health=healthy`, exited 0, and left the record at
-    `ws/elsewhere/pwned.json` with `runs/` empty. A run that reports itself complete and healthy
-    while its record is somewhere no reader looks is worse than one that fails.
+    Measured on 2026-08-06 before the check existed, in a workspace whose parent holds it:
+    `close-run.sh . ../pwned --trigger manual --close-state complete` printed `run_health=healthy`,
+    exited 0, and left the record at `ws/pwned.json` with `runs/` empty. `ws/` is the directory the
+    record lands in there, so that command needs no directory made first. A run that reports itself
+    complete and healthy while its record is somewhere no reader looks is worse than one that fails.
 
-    The near-misses are here for a second reason, and it is not traversal:
-    `validate-workspace.sh:186` reads a file in `runs/` as a run record only when its whole name
-    matches this same expression, so a record under any other name is skipped by every check the
-    workspace has — and `started_at` would carry the run id in a field the system compares as a
-    timestamp.
+    The ids that traverse nothing are here for a second reason: `validate-workspace.sh:186` reads a
+    file in `runs/` as a run record only when its whole name matches the same rule, so a record
+    named anything else is skipped by every check the workspace has — measured, a workspace holding
+    `runs/not-a-run-id.json` gets no line about it at all — and `started_at` would carry the run id
+    into a field the system compares as a timestamp.
+
+    `ws/elsewhere/` is made first so the traversal has somewhere to land: `close-run.sh` makes no
+    directory but `$ws/runs`, so without it the `mv` would fail and the case would pass on the wrong
+    thing.
     """
     o = opened(tmp_workspace)
     (tmp_workspace / "jobs.jsonl").write_text("")
-    before = sorted(p.name for p in tmp_workspace.rglob("*") if p.is_file())
+    (tmp_workspace / "elsewhere").mkdir()
+    (tmp_workspace.parent / "elsewhere").mkdir(exist_ok=True)
+    before = sorted(str(p.relative_to(tmp_workspace.parent))
+                    for p in tmp_workspace.parent.rglob("*") if p.is_file())
     r = close(tmp_workspace, bad)
     assert r.returncode == 1, r.stdout + r.stderr
     assert r.stdout == "", r.stdout
-    assert "run_id" in r.stderr, r.stderr
-    assert sorted(p.name for p in tmp_workspace.rglob("*") if p.is_file()) == before
-    assert not (tmp_workspace.parent / "elsewhere").exists()
+    assert refusal_names_the_shape(r.stderr, bad), r.stderr
+    assert sorted(str(p.relative_to(tmp_workspace.parent))
+                  for p in tmp_workspace.parent.rglob("*") if p.is_file()) == before
+    assert list((tmp_workspace / "elsewhere").iterdir()) == []
+    assert list((tmp_workspace.parent / "elsewhere").iterdir()) == []
     assert (tmp_workspace / "runs" / (".started-" + o["run_id"])).exists()
 
 
-@pytest.mark.parametrize("bad", BAD_RUN_IDS, ids=lambda s: (s or "empty")[:24])
+@pytest.mark.parametrize("bad", ALL_BAD_RUN_IDS, ids=run_id_case_id)
 def test_a_run_id_that_is_not_a_run_id_is_refused_by_the_clear(tmp_workspace, bad):
     """The same value reaches `rm -f` and `rm -rf` here, so this is the half where a bad run id
     costs data rather than putting a file in the wrong place.
 
-    Measured on 2026-08-06 before this check, with a file at `ws/runs/../../victim.json` to satisfy
-    the record check: `clear-run.sh . ../../victim` printed its normal cleared message, exited 0,
-    and deleted `ws/victim/` with its contents. The check runs before any path is composed, so the
-    record check never gets the chance to be satisfied by a file outside `runs/`.
+    Measured on 2026-08-06 before the check existed: with `runs/.scratch/` present — which every run
+    that stored a response leaves — and a file at `ws/runs/../../victim.json` to satisfy the record
+    check, `clear-run.sh . ../../victim` printed its normal cleared message, exited 0, and deleted
+    `ws/victim/` with its contents. Both preconditions are needed and this case sets both up: `rm
+    -rf` removes nothing when a directory along the path is absent, and the record check stops the
+    run before either `rm` without that file.
+
+    Everything the id names is on disk, for every case: the record that satisfies the guard, the
+    marker, and the scratch directory. So the format check is the only thing between the call and
+    the removal, and if it lets a value through, something here is gone.
     """
+    runs = tmp_workspace / "runs"
+    (runs / ".scratch").mkdir()
     victim = tmp_workspace.parent / "victim"
     victim.mkdir(exist_ok=True)
     (victim / "keepme.txt").write_text("keep")
-    (tmp_workspace.parent / "victim.json").write_text("{}")
-    (tmp_workspace / "runs" / "elsewhere").mkdir(exist_ok=True)
+    for base in (tmp_workspace.parent, tmp_workspace):
+        try:
+            (base / (bad.lstrip("./") + ".json")).write_text("{}")
+            target = base / bad.lstrip("./")
+            target.mkdir(parents=True, exist_ok=True)
+            (target / "keepme.txt").write_text("keep")
+        except OSError:
+            pass                      # a name the filesystem will not take; the refusal still holds
+    (runs / (bad.replace("/", "_") + ".json")).write_text("{}")
+    before = sorted(str(p.relative_to(tmp_workspace.parent))
+                    for p in tmp_workspace.parent.rglob("*") if p.is_file())
+    assert before, "the case has to have put something on disk to be worth running"
     r = run_script(CLEAR_RUN, tmp_workspace, bad)
     assert r.returncode == 1, r.stdout + r.stderr
-    assert "run_id" in r.stderr, r.stderr
+    assert refusal_names_the_shape(r.stderr, bad), r.stderr
+    assert sorted(str(p.relative_to(tmp_workspace.parent))
+                  for p in tmp_workspace.parent.rglob("*") if p.is_file()) == before
     assert (victim / "keepme.txt").read_text() == "keep"
-    assert victim.exists()
 
 
-def test_the_three_shell_copies_of_the_run_id_pattern_agree():
-    """`close-run.sh` and `clear-run.sh` refuse a run id that does not match, and
-    `validate-workspace.sh` skips a file in `runs/` whose name does not match. A copy that drifted
-    wider would let a record be written under a name the validator then skips; one that drifted
-    narrower would refuse an id `open-run.sh` had already minted and written a marker for. The
-    behaviour on either side is covered by its own cases; this is the one assertion that catches the
-    three going out of step in a direction no case happens to drive.
+def _validator_reads_a_record_named(value):
+    """Whether `validate-workspace.sh` would read a file named `<value>.json` in `runs/` as a run
+    record, decided by running the expression that script uses rather than by restating it here.
     """
-    found = {}
-    for name in ("close-run.sh", "clear-run.sh", "validate-workspace.sh"):
-        text = (RUNBOOK_SCRIPTS / name).read_text(encoding="utf-8")
-        matches = re.findall(r"^RUN_ID_RE=(.+)$", text, re.M)
-        assert len(matches) == 1, (name, matches)
-        found[name] = matches[0]
-    assert len(set(found.values())) == 1, found
-    # And the pattern the tests match against is the same rule, so a case that builds a run id by
-    # hand cannot pass here and be refused by the scripts.
-    pattern = next(iter(found.values())).strip("'")
-    assert RUN_ID_RE.pattern == pattern.replace("[0-9]{4}", r"\d{4}").replace("[0-9]{2}", r"\d{2}")
+    text = (RUNBOOK_SCRIPTS / "validate-workspace.sh").read_text(encoding="utf-8")
+    found = re.findall(r"^RUN_ID_RE='(.+)'$", text, re.M)
+    assert len(found) == 1, found
+    r = subprocess.run(["grep", "-qE", found[0]], input=value + "\n",
+                       capture_output=True, text=True)
+    return r.returncode == 0
+
+
+@pytest.mark.parametrize("value", ["2026-07-30T15-04-02Z", "2026-12-31T23-59-59Z"] + BAD_RUN_IDS,
+                         ids=run_id_case_id)
+def test_the_two_scripts_and_the_validator_take_the_same_run_ids(tmp_workspace, value):
+    """`close-run.sh` and `clear-run.sh` spell the rule as a `case` glob and
+    `validate-workspace.sh` spells it as a regular expression, so nothing compares as text. What has
+    to agree is which ids they take, and that is what this drives: every id goes through both
+    scripts and through the validator's own expression, and all three have to reach the same
+    verdict.
+
+    A script that drifted wider would write a record under a name the validator then skips; one that
+    drifted narrower would refuse an id `open-run.sh` had already minted and written a marker for.
+
+    Single-line ids only. The validator decides by piping a filename into `grep -qE`, which takes
+    any one matching line, so it and the `case` globs genuinely disagree about a name holding a
+    newline — the scripts refuse those and the validator would read one. That is
+    `validate-workspace.sh`'s own behaviour to settle, and the cases above pin what these two
+    scripts do about it.
+    """
+    (tmp_workspace / "jobs.jsonl").write_text("")
+    accepted_by_validator = _validator_reads_a_record_named(value)
+    closed = close(tmp_workspace, value)
+    accepted_by_close = closed.returncode == 0
+    cleared = run_script(CLEAR_RUN, tmp_workspace, value)
+    # clear-run.sh exits 1 for a missing record as well as for a bad run id, so what separates the
+    # two here is which message it gave.
+    refused_by_clear = "must be a UTC timestamp" in cleared.stderr
+    assert accepted_by_close == accepted_by_validator, (value, closed.stderr)
+    assert (not refused_by_clear) == accepted_by_validator, (value, cleared.stderr)
 
 
 def test_the_record_matches_the_template_field_set(tmp_workspace):

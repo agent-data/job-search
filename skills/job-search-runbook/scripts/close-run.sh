@@ -16,12 +16,12 @@
 # gets judged from its summary row.
 #
 # The fourth term is what carries the unbanded row into the record. Such a row is counted in
-# postings_reviewed and in neither matches nor filtered_out, so a record that called the run healthy
-# would assert an arithmetic it does not satisfy: measured, one unbanded row among two reviewed
-# postings gives match_strong + match_moderate + match_weak + filtered_out = 1 against
-# postings_reviewed = 2, and validate-workspace.sh passes that workspace clean. run_health is the
-# only field that can hold it — the digest reads run_health off this script's stdout, by which point
-# the stderr line below is gone.
+# postings_reviewed and in neither matches nor filtered_out, so the record does not add up:
+# measured, one unbanded row among two reviewed postings gives
+# match_strong + match_moderate + match_weak + filtered_out = 1 against postings_reviewed = 2, and
+# validate-workspace.sh passes that workspace clean. run_health is the only field that can hold it —
+# the digest reads run_health off this script's stdout, by which point the stderr line below is
+# gone.
 #
 # A close_state of complete over unjudged postings is refused and nothing is written: a run that
 # did not finish must not read as one that did. A lost search does not block the close; the run
@@ -85,19 +85,34 @@ case $close_state in
   *) die '--close-state must be complete, blocked or interrupted' ;;
 esac
 
-# run_id is checked for its whole shape rather than for the two characters below, because it is the
-# only value here that becomes a path: the record is written to runs/<run_id>.json, so `..` in it
-# writes outside runs/. Measured on 2026-08-06 before this check: `close-run.sh . ../elsewhere/pwned
-# --trigger manual --close-state complete` printed run_health=healthy, exited 0 and left the record
-# at ws/elsewhere/pwned.json with runs/ empty.
+# run_id is checked for its whole shape rather than for the two characters the other four are
+# checked for, because it is the only value here that becomes a path: the record is written to
+# runs/<run_id>.json, so `..` in it writes outside runs/. Measured on 2026-08-06 against the version
+# with no check, in a workspace with nothing made first: `close-run.sh . ../pwned --trigger manual
+# --close-state complete` printed run_health=healthy, exited 0, and left the record at ws/pwned.json
+# with runs/ empty.
 #
-# A run id that traverses nothing is refused too, and for a second reason: validate-workspace.sh:186
-# reads a file in runs/ as a run record only when its whole name matches this same expression, so a
-# record under any other name is skipped by every check the workspace has. The same expression is at
-# validate-workspace.sh:50 and in clear-run.sh; the three have to agree.
-RUN_ID_RE='^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}-[0-9]{2}-[0-9]{2}Z$'
-printf '%s\n' "$run_id" | grep -qE "$RUN_ID_RE" || \
-  die "<run_id> must be a UTC timestamp with dashes for the colons, like 2026-07-30T15-04-02Z, and got: $run_id"
+# A run id that traverses nothing is refused too, and for a second reason. validate-workspace.sh:186
+# reads a file in runs/ as a run record only when its whole name matches the same rule, so a record
+# named anything else is skipped by every check the workspace has: measured, a workspace holding
+# runs/not-a-run-id.json gets no line about it at all.
+#
+# The check is a `case` glob rather than a grep on the value. POSIX pattern matching compares the
+# whole word and has no notion of lines, while `printf '%s\n' "$run_id" | grep -qE ...` exits 0 when
+# ANY line matches — so a run_id carrying a newline passed on the strength of one well-formed line.
+# Measured on 2026-08-06 with the grep form and a run id of `2026-07-30T15-04-02Z` plus a trailing
+# newline, under mawk, which is what Ubuntu CI runs: run_health=healthy, exit 0, and a record whose
+# filename holds a literal newline. validate-workspace.sh reads that one rather than skipping it —
+# its own check is a per-line grep too — and then reports the finding broken across two lines.
+#
+# Spelling the format out here rather than sharing validate-workspace.sh:50's expression is the
+# trade this makes: one guard with no per-line behaviour, against two files that state the same rule
+# in two notations. tests/test_mechanics_scripts.py drives both notations over one table of run ids
+# and requires the same verdict for each, so the two cannot come apart without a case failing.
+case $run_id in
+  [0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]-[0-9][0-9]-[0-9][0-9]Z) ;;
+  *) die "<run_id> must be a UTC timestamp with dashes for the colons, like 2026-07-30T15-04-02Z, and got: $run_id" ;;
+esac
 
 # The other four values this script writes are identifiers too — there is no free text among them —
 # so each is refused rather than escaped, and refused here, before anything is written. An
@@ -137,9 +152,9 @@ if [ "$counts_status" -ne 0 ]; then
   last=$(printf '%s\n' "$counts" | tail -n 1)
   case $counts_status:$last in
     1:INVALID\ relevant-row-without-a-band=*)
-      # The flag is whether the finding fired, not how many rows it names. run-counts.awk prints
-      # that line only when the number is above zero, so the line is the fact and the number on it
-      # is for the operator.
+      # run-counts.awk prints this line only when at least one relevant row carries no band, so
+      # whether the line is there is all this branch needs. The number on it is printed to stderr
+      # for the operator and nothing here reads it.
       unbanded=yes
       printf 'close-run: run-counts.sh reported: %s\n' "$last" >&2
       printf 'close-run:   a relevant row with no band is counted in postings_reviewed and in neither matches nor filtered_out, so the record would not add up — this run closes degraded\n' >&2 ;;

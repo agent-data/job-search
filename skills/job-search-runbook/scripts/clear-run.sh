@@ -22,19 +22,27 @@ ws=${1:?usage: clear-run.sh <workspace> <run_id>}
 run_id=${2:?usage: clear-run.sh <workspace> <run_id>}
 
 # run_id is checked for its whole shape before any path is composed from it, because both paths
-# below reach rm and one of them reaches `rm -rf`. Measured on 2026-08-06 before this check, with a
-# file at ws/runs/../../victim.json to satisfy the record check: `clear-run.sh . ../../victim`
-# printed its normal cleared message, exited 0, and deleted ws/victim/ with its contents.
+# below reach rm and one of them reaches `rm -rf`. Measured on 2026-08-06 against the version with
+# no check, in a workspace that had a runs/.scratch directory — which every run that stored a
+# response leaves — and a file at ws/runs/../../victim.json to satisfy the record check below:
+# `clear-run.sh . ../../victim` printed its normal cleared message, exited 0, and deleted ws/victim/
+# with its contents. Both preconditions are needed: `rm -rf` removes nothing when a directory along
+# the path is absent, and the record check stops the run before either rm without that file.
 #
-# The same expression is at validate-workspace.sh:50 and in close-run.sh; the three have to agree.
-# validate-workspace.sh:186 reads a file in runs/ as a run record only when its whole name matches
-# it, so a run id of any other shape names a record no check in the workspace ever looks at.
-RUN_ID_RE='^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}-[0-9]{2}-[0-9]{2}Z$'
-printf '%s\n' "$run_id" | grep -qE "$RUN_ID_RE" || {
-  printf 'clear-run: <run_id> must be a UTC timestamp with dashes for the colons, like 2026-07-30T15-04-02Z, and got: %s\n' \
-    "$run_id" >&2
-  exit 1
-}
+# A `case` glob rather than a grep on the value, for the reason written out at close-run.sh:100-106:
+# a grep on `printf '%s\n' "$run_id"` exits 0 when any one line matches, so a run id carrying a
+# newline got through on the strength of a single well-formed line. `case` compares the whole word.
+#
+# validate-workspace.sh:50 states the same rule as a regular expression, and :186 uses it to decide
+# whether a file in runs/ is a run record at all. The two notations are driven over one table of run
+# ids in tests/test_mechanics_scripts.py and must give the same verdict for each.
+case $run_id in
+  [0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]-[0-9][0-9]-[0-9][0-9]Z) ;;
+  *)
+    printf 'clear-run: <run_id> must be a UTC timestamp with dashes for the colons, like 2026-07-30T15-04-02Z, and got: %s\n' \
+      "$run_id" >&2
+    exit 1 ;;
+esac
 
 [ -d "$ws" ] || { printf 'clear-run: no such workspace: %s\n' "$ws" >&2; exit 1; }
 [ -f "$ws/runs/$run_id.json" ] || {
