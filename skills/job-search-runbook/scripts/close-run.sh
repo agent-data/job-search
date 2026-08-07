@@ -105,12 +105,24 @@ esac
 # filename holds a literal newline. validate-workspace.sh reads that one rather than skipping it —
 # its own check is a per-line grep too — and then reports the finding broken across two lines.
 #
+# The digits are written out one by one rather than as `[0-9]`, because a range inside a bracket
+# expression is decided by the collation order the locale sets, and a list of ten characters is not.
+# Measured on 2026-08-06 with a run id spelled in Arabic-Indic digits: `[0-9]` matched it under
+# LC_ALL=ar_SA.UTF-8 in sh and bash, and refused it under LC_ALL=C, LC_ALL=en_US.UTF-8 and dash,
+# while `[0123456789]` refused it under all three locales in all three shells and still accepted
+# 2026-07-30T15-04-02Z. validate-workspace.sh decides with `grep -E`, which refuses that id under
+# every one of the three, so the range form let this script write a record that script would not
+# read — the invisible record the whole check exists to prevent.
+#
 # Spelling the format out here rather than sharing validate-workspace.sh:50's expression is the
-# trade this makes: one guard with no per-line behaviour, against two files that state the same rule
-# in two notations. tests/test_mechanics_scripts.py drives both notations over one table of run ids
-# and requires the same verdict for each, so the two cannot come apart without a case failing.
+# trade this makes: one guard with no per-line behaviour, against two files stating the same rule in
+# two notations. tests/test_mechanics_scripts.py drives both notations over one table of single-line
+# run ids, under two locales, and requires the same verdict for each. That table is where a
+# divergence gets caught; it is not a proof that none is left. One is known and deliberate: this
+# guard refuses a run id holding a newline and validate-workspace.sh:186 reads a filename holding
+# one, because its check is a per-line grep.
 case $run_id in
-  [0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]-[0-9][0-9]-[0-9][0-9]Z) ;;
+  [0123456789][0123456789][0123456789][0123456789]-[0123456789][0123456789]-[0123456789][0123456789]T[0123456789][0123456789]-[0123456789][0123456789]-[0123456789][0123456789]Z) ;;
   *) die "<run_id> must be a UTC timestamp with dashes for the colons, like 2026-07-30T15-04-02Z, and got: $run_id" ;;
 esac
 

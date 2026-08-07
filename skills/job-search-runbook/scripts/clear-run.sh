@@ -33,11 +33,17 @@ run_id=${2:?usage: clear-run.sh <workspace> <run_id>}
 # a grep on `printf '%s\n' "$run_id"` exits 0 when any one line matches, so a run id carrying a
 # newline got through on the strength of a single well-formed line. `case` compares the whole word.
 #
+# The digits are written out one by one rather than as `[0-9]`, for the reason measured at
+# close-run.sh:108-115: a range inside a bracket expression is decided by the collation order the
+# locale sets, so `[0-9]` matched a run id spelled in Arabic-Indic digits under LC_ALL=ar_SA.UTF-8.
+# A list of ten characters is not a range and no locale changes it.
+#
 # validate-workspace.sh:50 states the same rule as a regular expression, and :186 uses it to decide
-# whether a file in runs/ is a run record at all. The two notations are driven over one table of run
-# ids in tests/test_mechanics_scripts.py and must give the same verdict for each.
+# whether a file in runs/ is a run record at all. The two notations are driven over one table of
+# single-line run ids in tests/test_mechanics_scripts.py, under two locales, and must give the same
+# verdict for each.
 case $run_id in
-  [0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]-[0-9][0-9]-[0-9][0-9]Z) ;;
+  [0123456789][0123456789][0123456789][0123456789]-[0123456789][0123456789]-[0123456789][0123456789]T[0123456789][0123456789]-[0123456789][0123456789]-[0123456789][0123456789]Z) ;;
   *)
     printf 'clear-run: <run_id> must be a UTC timestamp with dashes for the colons, like 2026-07-30T15-04-02Z, and got: %s\n' \
       "$run_id" >&2

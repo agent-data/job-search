@@ -4059,6 +4059,14 @@ def test_an_identifier_the_close_writes_is_refused(tmp_workspace, flag, bad, say
     assert (tmp_workspace / "runs" / (".started-" + o["run_id"])).exists()
 
 
+# `2026-07-30T15-04-02Z` written in Arabic-Indic digits: the same instant, in characters that are
+# not `0` through `9`. It is here because a `[0-9]` range inside a shell bracket expression is
+# decided by the collation order the locale sets, so the guard matched this under
+# `LC_ALL=ar_SA.UTF-8` while `validate-workspace.sh`'s `grep -E` refused it — the two checks
+# disagreeing by locale, which is how an invisible record gets written. Nothing else in the suite
+# carries a digit outside ASCII.
+AR_DIGIT_RUN_ID = "٢٠٢٦-٠٧-٣٠T١٥-٠٤-٠٢Z"
+
 # Run ids no `open-run.sh` can mint. The first two walk out of `runs/`; the next two carry a
 # character an identifier may not hold; the rest traverse nothing and are still not run ids.
 #
@@ -4078,6 +4086,7 @@ BAD_RUN_IDS = [
     "2026-07-30T15-04-02Z.json",     # the suffix already on it
     " 2026-07-30T15-04-02Z",         # a leading space
     "2026-07-30T15-04-02Z ",         # a trailing space
+    AR_DIGIT_RUN_ID,                 # the same instant, in digits that are not 0-9
 ]
 
 # Run ids whose first or last line is a run id and which are still not run ids. These are the
@@ -4096,7 +4105,24 @@ ALL_BAD_RUN_IDS = BAD_RUN_IDS + MULTILINE_RUN_IDS
 
 
 def run_id_case_id(s):
+    if not s.isascii():
+        return "non-ascii-digits"
     return repr(s)[1:-1][:26] or "empty"
+
+
+def locale_is_installed(name):
+    r = subprocess.run(["locale", "-a"], capture_output=True, text=True)
+    return name in r.stdout.split()
+
+
+# A locale whose collation makes a `[0-9]` range match a digit outside ASCII. Measured on
+# 2026-08-06: under it, `case ٢٠٢٦-٠٧-٣٠T١٥-٠٤-٠٢Z in [0-9][0-9]…` matched in sh and bash — and
+# refused in dash, and under LC_ALL=C and LC_ALL=en_US.UTF-8 in all three. `grep -E` with the same
+# expression refused it under every one.
+COLLATING_LOCALE = "ar_SA.UTF-8"
+needs_collating_locale = pytest.mark.skipif(
+    not locale_is_installed(COLLATING_LOCALE),
+    reason="%s is not installed here" % COLLATING_LOCALE)
 
 
 # `RUN_ID_RE` is anchored, so it answers "is this whole string a run id". This one answers "does
@@ -4202,24 +4228,33 @@ def test_a_run_id_that_is_not_a_run_id_is_refused_by_the_clear(tmp_workspace, ba
     assert refusal_names_the_shape(r.stderr, bad), r.stderr
     assert sorted(str(p.relative_to(tmp_workspace.parent))
                   for p in tmp_workspace.parent.rglob("*") if p.is_file()) == before
+    # The listing above is what catches a removal. This line is a second reading of the same thing
+    # and cannot fire for the `../../victim` case on its own: from `runs/.scratch/` that id resolves
+    # to `tmp_workspace/victim`, not to the `victim` beside the workspace that this reads.
     assert (victim / "keepme.txt").read_text() == "keep"
 
 
-def _validator_reads_a_record_named(value):
+def _validator_reads_a_record_named(value, locale=None):
     """Whether `validate-workspace.sh` would read a file named `<value>.json` in `runs/` as a run
     record, decided by running the expression that script uses rather than by restating it here.
     """
     text = (RUNBOOK_SCRIPTS / "validate-workspace.sh").read_text(encoding="utf-8")
     found = re.findall(r"^RUN_ID_RE='(.+)'$", text, re.M)
     assert len(found) == 1, found
+    env = dict(os.environ)
+    if locale:
+        env["LC_ALL"] = locale
     r = subprocess.run(["grep", "-qE", found[0]], input=value + "\n",
-                       capture_output=True, text=True)
+                       capture_output=True, text=True, env=env)
     return r.returncode == 0
 
 
+@pytest.mark.parametrize("locale", [None, pytest.param(COLLATING_LOCALE,
+                                                       marks=needs_collating_locale)],
+                         ids=["default-locale", "collating-locale"])
 @pytest.mark.parametrize("value", ["2026-07-30T15-04-02Z", "2026-12-31T23-59-59Z"] + BAD_RUN_IDS,
                          ids=run_id_case_id)
-def test_the_two_scripts_and_the_validator_take_the_same_run_ids(tmp_workspace, value):
+def test_the_two_scripts_and_the_validator_take_the_same_run_ids(tmp_workspace, value, locale):
     """`close-run.sh` and `clear-run.sh` spell the rule as a `case` glob and
     `validate-workspace.sh` spells it as a regular expression, so nothing compares as text. What has
     to agree is which ids they take, and that is what this drives: every id goes through both
@@ -4229,22 +4264,74 @@ def test_the_two_scripts_and_the_validator_take_the_same_run_ids(tmp_workspace, 
     A script that drifted wider would write a record under a name the validator then skips; one that
     drifted narrower would refuse an id `open-run.sh` had already minted and written a marker for.
 
+    Under two locales, because a `[0-9]` range in a shell bracket expression is decided by the
+    locale's collation order and the validator's `grep -E` is not: with `[0-9]` in the globs, this
+    case measurably disagreed on `AR_DIGIT_RUN_ID` under `ar_SA.UTF-8` and agreed under the default
+    one. The globs list their ten digits out for that reason.
+
     Single-line ids only. The validator decides by piping a filename into `grep -qE`, which takes
     any one matching line, so it and the `case` globs genuinely disagree about a name holding a
     newline — the scripts refuse those and the validator would read one. That is
     `validate-workspace.sh`'s own behaviour to settle, and the cases above pin what these two
     scripts do about it.
+
+    On its own this compares two implementations, so all three drifting together would survive it.
+    What pins the absolute verdicts is `..._refused_by_the_close` and `..._refused_by_the_clear`
+    above, which name every bad id by hand.
     """
     (tmp_workspace / "jobs.jsonl").write_text("")
-    accepted_by_validator = _validator_reads_a_record_named(value)
-    closed = close(tmp_workspace, value)
+    env = {"LC_ALL": locale} if locale else None
+    accepted_by_validator = _validator_reads_a_record_named(value, locale)
+    closed = close(tmp_workspace, value, env=env)
     accepted_by_close = closed.returncode == 0
-    cleared = run_script(CLEAR_RUN, tmp_workspace, value)
+    cleared = run_script(CLEAR_RUN, tmp_workspace, value, env=env)
     # clear-run.sh exits 1 for a missing record as well as for a bad run id, so what separates the
     # two here is which message it gave.
     refused_by_clear = "must be a UTC timestamp" in cleared.stderr
     assert accepted_by_close == accepted_by_validator, (value, closed.stderr)
     assert (not refused_by_clear) == accepted_by_validator, (value, cleared.stderr)
+
+
+@needs_collating_locale
+@pytest.mark.parametrize("shell", ["sh", "dash"])
+def test_a_run_id_in_digits_outside_ascii_is_refused_under_a_collating_locale(tmp_workspace, shell):
+    """The guard has to refuse the same ids whatever locale the run is under, because
+    `validate-workspace.sh` decides with `grep -E`, which does not move.
+
+    Measured on 2026-08-06 with `[0-9]` in the glob: `case ٢٠٢٦-٠٧-٣٠T١٥-٠٤-٠٢Z in [0-9][0-9]…`
+    matched under `LC_ALL=ar_SA.UTF-8` in sh and bash and refused under dash, so `close-run.sh`
+    wrote `runs/٢٠٢٦-٠٧-٣٠T١٥-٠٤-٠٢Z.json` at exit 0 while the validator skipped the file entirely.
+    Both shells are driven because the two disagreed with each other, and `/bin/sh` is bash on the
+    machine this was written on and dash on the CI runner.
+    """
+    if shell == "dash" and not shutil.which("dash"):
+        pytest.skip("dash is not installed here")
+    (tmp_workspace / "jobs.jsonl").write_text("")
+    env = {"LC_ALL": COLLATING_LOCALE}
+    r = close(tmp_workspace, AR_DIGIT_RUN_ID, env=env, shell=shell)
+    assert r.returncode == 1, r.stdout + r.stderr
+    assert r.stdout == "", r.stdout
+    assert refusal_names_the_shape(r.stderr, AR_DIGIT_RUN_ID), r.stderr
+    assert list((tmp_workspace / "runs").glob("*.json")) == []
+    c = run_script(CLEAR_RUN, tmp_workspace, AR_DIGIT_RUN_ID, env=env, shell=shell)
+    assert c.returncode == 1, c.stdout + c.stderr
+    assert refusal_names_the_shape(c.stderr, AR_DIGIT_RUN_ID), c.stderr
+
+
+@needs_collating_locale
+def test_a_real_run_id_still_closes_under_a_collating_locale(tmp_workspace):
+    """The other half. A guard that refused everything under this locale would pass the case above
+    and stop every run on a machine set to it.
+    """
+    env = {"LC_ALL": COLLATING_LOCALE}
+    o = parsed_output(run_script(OPEN_RUN, tmp_workspace, env=env))
+    assert RUN_ID_RE.match(o["run_id"]), o      # `date` still emits ASCII digits under this locale
+    (tmp_workspace / "jobs.jsonl").write_text("")
+    r = close(tmp_workspace, o["run_id"], env=env)
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert record_of(tmp_workspace, o["run_id"])["run_health"] == "healthy"
+    c = run_script(CLEAR_RUN, tmp_workspace, o["run_id"], env=env)
+    assert c.returncode == 0, c.stderr
 
 
 def test_the_record_matches_the_template_field_set(tmp_workspace):
