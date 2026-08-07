@@ -1,6 +1,6 @@
 {
   "skill_name": "job-search-run",
-  "harness": "Each case: run skills/job-search-run/evals/files/setup-workspace.sh <tmp>, which builds the workspace at <tmp> from the skills' templates, writes <tmp>/_bin/registry.json pointing discovery at it, and links <tmp>/_bin/agent-data to the fake shim. Export what that script prints (PATH with <tmp>/_bin first, JOBSEARCH_OS_REGISTRY, JOBSEARCH_FIXTURES), add JOBSEARCH_TEST_SCENARIO=<scenario> and the per-case env, then run job-search-run: discovery lands on <tmp> and every agent-data call hits the shim, so no case spends a real credit. Read the result from <tmp>/reports/<date>-digest.md, jobs.jsonl, runs/<run_id>.json, and JOBSEARCH_TEST_CALL_LOG. Close is checked by running skills/job-search-runbook/scripts/validate-workspace.sh <tmp> --post-close <run_id> and requiring exit 0. Scope: these shim cases cover the error, dedup, and close paths that cost money or cannot be triggered on demand. How the skill behaves against the real API on sonnet and haiku is graded by the live behavior evals in evals/ (see evals/behaviors.md); nothing here asserts sentences of documentation. Stochastic cases carry reps >= 5 and a no-guidance control arm — run them with scripts/eval_harness.py aggregate_reps and record pass-rate, variance, and the control delta.",
+  "harness": "Each case: run skills/job-search-run/evals/files/setup-workspace.sh <tmp>, which builds the workspace at <tmp> from the skills' templates, writes <tmp>/_bin/registry.json pointing discovery at it, and links <tmp>/_bin/agent-data to the fake shim. Export what that script prints (PATH with <tmp>/_bin first, JOBSEARCH_OS_REGISTRY, JOBSEARCH_FIXTURES), add JOBSEARCH_TEST_SCENARIO=<scenario> and the per-case env, then run job-search-run: discovery lands on <tmp> and every agent-data call hits the shim, so no case spends a real credit. Read the result from <tmp>/reports/<date>-digest.md, jobs.jsonl, runs/<run_id>.json, and JOBSEARCH_TEST_CALL_LOG. Close is checked by running skills/job-search-runbook/scripts/validate-workspace.sh <tmp> --post-close <run_id> and requiring exit 0, and by running skills/job-search-run/scripts/run-counts.sh <tmp>/jobs.jsonl <run_id> and skills/job-search-run/scripts/run-matches.sh <tmp>/jobs.jsonl <run_id> and requiring the record's count fields and the digest's counts line to hold the numbers the first printed, and the postings the digest lists under each band to be the rows the second printed for that band. Scope: these shim cases cover the error, dedup, and close paths that cost money or cannot be triggered on demand. How the skill behaves against the real API on sonnet and haiku is graded by the live behavior evals in evals/ (see evals/behaviors.md); nothing here asserts sentences of documentation. Stochastic cases carry reps >= 5 and a no-guidance control arm — run them with scripts/eval_harness.py aggregate_reps and record pass-rate, variance, and the control delta.",
   "evals": [
     {
       "id": 1,
@@ -12,9 +12,12 @@
         "Issues one search-jobs call per enabled query per enabled source (4 for the 2-query, 2-source template config), each naming its --source",
         "Reads fewer postings in full than the searches returned: the summary scan settles clearly-irrelevant rows without a get-posting call",
         "Every get-posting call carries a posting_id and source_url copied from the same search row",
-        "Appends one evaluated event per judged row to jobs.jsonl, each with source, source_id, query_id, detail_read, and the judgment fields",
+        "Every row the search returned has a surfaced event carrying the row's own values",
+        "Every posting the run judged has an evaluated event carrying the posting's title, company, location and URL, and every posting it read in full has a detail event",
+        "The digest's counts line, the run record's counts, and run-counts.sh output are the same numbers",
+        "The postings the digest lists under each band are the ones run-matches.sh prints for that band",
         "Writes the digest at the notify.digest_path_template path with the run id, run health, the counts line, and the usage line",
-        "Writes runs/<run_id>.json with trigger manual, scheduler_id null, close_state complete, run_health healthy, brief_revision, and agent_data_usage totals",
+        "Writes runs/<run_id>.json with trigger manual, scheduler_id null, close_state complete, run_health healthy, brief_revision, postings_unreviewed zero, and agent_data_usage totals",
         "validate-workspace.sh --post-close exits 0: the started-marker and the scratch directory are gone"
       ]
     },
@@ -35,6 +38,7 @@
       "expectations": [
         "The known-id step leaves no candidate, so the run makes no get-posting call",
         "No second evaluated event is appended for a (source, source_id) the log already holds",
+        "No surfaced event is written for a posting that already has a judgment",
         "Digest reports zero new postings and the run closes healthy"
       ]
     },
@@ -112,12 +116,15 @@
     },
     {
       "id": 11,
-      "scenario": "expired detail link",
-      "prompt": "Same harness but JOBSEARCH_TEST_SCENARIO=invalid-pair (get-posting rejects the pair as a non-retryable validation error). Run job-search-run and show the call log, jobs.jsonl, and the digest.",
+      "scenario": "every detail link has expired",
+      "prompt": "Same harness but JOBSEARCH_TEST_SCENARIO=invalid-pair, where get-posting rejects every pair as a non-retryable validation error, with JOBSEARCH_TEST_CALL_LOG=<tmp>/calls.jsonl. Run job-search-run and show the call log, jobs.jsonl, the digest, the run record, and the output of run-counts.sh <tmp>/jobs.jsonl <run_id>.",
       "expectations": [
-        "Judges that posting from its summary row rather than dropping it",
-        "The event for it carries detail_read false",
-        "Retries nothing on a non-retryable rejection, and a footnote tells the reader the detail link had expired"
+        "Judges every posting on the read list from its summary row rather than dropping it",
+        "Each of those events carries detail_read false, and jobs.jsonl holds no detail event",
+        "Retries nothing on a non-retryable rejection, stops reading a source after the second rejection in a row, and a footnote tells the reader the detail links had expired",
+        "The run finishes: postings_unreviewed is zero and the close is complete",
+        "run_health is healthy — a rejected detail read is not a search that never returned, and the run judged every posting it surfaced",
+        "The rejections are counted where they cost money rather than named in a health word: calls_failed from run-counts.sh is not zero, and agent_data_usage.detail_reads counts the attempts"
       ]
     },
     {
@@ -223,6 +230,18 @@
         "strip": "the routing sentences in this skill's description",
         "expectation": "without them, at least one rep opens the front door instead of running the pass"
       }
+    },
+    {
+      "id": 19,
+      "scenario": "a run killed after the search leaves an honest record",
+      "prompt": "Same harness, JOBSEARCH_TEST_SCENARIO=happy and JOBSEARCH_TEST_CALL_LOG=<tmp>/calls.jsonl. Run job-search-run and stop it once the last search-jobs response has gone through record-api-response.sh, before any judgment is recorded. Then, from the shell, run close-run.sh <tmp> <run_id> --trigger manual --close-state complete, and after it refuses, close-run.sh <tmp> <run_id> --trigger manual --close-state interrupted. Show both close-run.sh runs with their exit statuses, jobs.jsonl, and the record.",
+      "expectations": [
+        "The complete close is refused: close-run.sh exits 1, says how many postings were never judged, and runs/<run_id>.json does not exist afterwards",
+        "The interrupted close writes the record, whose postings_surfaced equals the surfaced events in jobs.jsonl for this run counted by hand, which is the rows the searches returned less any posting a run had already judged",
+        "postings_unreviewed equals that same number and postings_reviewed is zero: the kill landed before any judgment",
+        "close_state is interrupted and run_health is degraded",
+        "agent_data_usage.searches equals the search-jobs entries in the call log, so the calls made before the kill are still counted"
+      ]
     }
   ]
 }

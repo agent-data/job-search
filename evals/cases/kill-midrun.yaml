@@ -4,7 +4,7 @@
 # (kill_after_event below — a regex matched against each tool call's name + JSON input),
 # leaving an orphaned started-marker. Session 2 (followup_prompt, same workspace) must
 # say the last run died, then rerun.
-behaviors: [B9]
+behaviors: [B9, B19]
 workspace: seeded
 # Same allowance as headless-run: session 2 does not just report the marker, it runs a whole pass
 # over the same seed, which took 981 s on sonnet. The first run of this case died at the old 900 s
