@@ -365,12 +365,10 @@ if [ -n "$POST_CLOSE" ]; then
     # one filtered-out row and two linkedin postings, drew no finding at all and exited 0. So each
     # band is required by name, and by_source is held to its sum below and to the log's source list
     # further down.
-    hasmatches=no
     hasbysrc=no
     matchnums=''
     bysrcnums=''
     if grep -q '"matches"[[:space:]]*:' "$record"; then
-      hasmatches=yes
       matchnums=$(json_obj_nums "$record" matches)
       for b in strong moderate weak; do
         [ -n "$(objval "$b" "$matchnums")" ] || invalid "$rel" "missing-key matches.$b"
@@ -397,6 +395,12 @@ if [ -n "$POST_CLOSE" ]; then
     # since been deleted as well as for one written this minute. A record can satisfy all three and
     # still be uniformly wrong — 2 + 5 + 2 balances against 17 actual rows — which is what the
     # comparison against the log below is for.
+    #
+    # The three [ -n ] tests on the bands are a decision, not a precaution, so do not replace them
+    # with `[ -z "$s" ] && s=0`. A record whose matches block states no band gets one missing-key
+    # line naming each band, above, and that is the whole report about it. Reading the absent bands
+    # as zero here would add arithmetic over numbers the record never stated — 0 + 0 + 0 + 1 against
+    # 2 reviewed — which says the same thing again and does not say which band to add.
     if [ -n "$reviewed" ] && [ -n "$filtered" ] && [ -n "$s" ] && [ -n "$m" ] && [ -n "$w" ]; then
       [ $((s + m + w + filtered)) -eq "$reviewed" ] || \
         invalid "$rel" "bands-do-not-sum-to-reviewed $((s + m + w + filtered)) vs $reviewed"
@@ -409,6 +413,12 @@ if [ -n "$POST_CLOSE" ]; then
     # leaves out and a source the run never had, both of which the comparison against the log misses:
     # it walks the log's sources, so a source the log does not name is never looked for, and one the
     # record does not carry only shows up as a missing key. The sum needs no log at all.
+    #
+    # One case is deliberately left passing: a source the run never had, stated as 0. It moves no
+    # total, so this sum cannot see it, and the comparison below never looks for it. A source with no
+    # postings against it says nothing false about the run, and refusing it would mean walking the
+    # record's sources as well to report a name rather than a number. The other direction — a source
+    # the log has and the record leaves out — is reported, by missing-key below.
     if [ "$hasbysrc" = yes ] && [ -n "$surfaced" ]; then
       bysum=$(printf '%s\n' "$bysrcnums" | awk -F= '{ t += $NF } END { printf "%d\n", t }')
       [ "$bysum" -eq "$surfaced" ] || \
