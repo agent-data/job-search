@@ -54,7 +54,7 @@ Four facts settled by live calls on 2026-08-05 and 2026-08-06. Three of them are
 1. **A search response is pretty-printed, one key per line**, and `source_id` arrives as a quoted string (`"source_id": "4417545222"`). The scanner in Task 0 does not depend on either — that is the point of it — but the fixtures will look like this.
 2. **`request_id` on a success is at `meta.request_id`**, not at the top level.
 3. **A failed call writes its body to stderr and exits 1.** stdout is empty. Any recipe that wants the error body must redirect: `agent-data call … > resp.json 2> resp.err`.
-4. **The error body is a top-level `error` object** carrying `status`, `code`, `message`, `param`, `request_id`, `retryable`, `source`, and a nested duplicate under `error.body.error`. Note `error.source` is `"service"` — it is not a job source, and nothing may read it as one.
+4. **The error body is a top-level `error` object** carrying `status`, `code`, `message`, `param`, `request_id`, `retryable`, `source`, and a nested duplicate under `error.body.error`. Note `error.source` names what rejected the call, not a job source, and nothing may read it as one. It is NOT always `"service"`: measured live on 2026-08-07, a bad `--source` gives `error.source` `"service"` at status 400, and `--limit 5000` gives `"client"` at status 422 with `error.param` `"limit"`. This item said `"service"` was the only value until then.
 
 ```json
 { "error": { "status": 400, "code": "validation_error",
@@ -928,7 +928,7 @@ fi
 field() { awk -F'\t' -v p="$1" '$1 == p { print $2; exit }' "$scan" | sed 's/^"//; s/"$//'; }
 haspath() { awk -F'\t' -v p="$1" '$1 ~ p { found = 1; exit } END { exit !found }' "$scan"; }
 
-# An error body: a top-level `error` object. error.source is "service", never a job source.
+# An error body: a top-level `error` object. error.source is "service" or "client", never a job source.
 if [ -n "$(field error.code)" ]; then
   code=$(field error.code)
   msg=$(field error.message)
@@ -3844,7 +3844,7 @@ A failed call writes its body to **stderr** and exits non-zero; stdout is empty.
 
 - [ ] **Step 3: Add the request-id row**
 
-`request_id` is at `meta.request_id` on a success and at `error.request_id` on a failure. Note also that `error.source` is the string `service` and is not a job source, so nothing may read a source from an error body.
+`request_id` is at `meta.request_id` on a success and at `error.request_id` on a failure. Note also that `error.source` names what rejected the call — measured live on 2026-08-07 as `service` on a 400 and `client` on a 422 — and is never a job source, so nothing may read a source from an error body.
 
 - [ ] **Step 4: Check the word count and the gates**
 
