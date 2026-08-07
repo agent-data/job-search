@@ -8,9 +8,12 @@
 # out as `a|b|c`, and the two would be counted as one.
 #
 # An `evaluated` event is the only one that says what a run decided about a posting, so a posting's
-# current state is its last `evaluated` line. Dropping the other event types here saves three jval
-# calls on each one; it is not what keeps them out of the counts, since none of them carries
-# `relevant` for the END block to read.
+# current state is its last `evaluated` line. The event-type test below is LOAD-BEARING, not an
+# optimisation: the END block sorts every posting it reaches into `relevant` or `filtered`, so a
+# `surfaced`, `queued`, `call` or `detail` line that got through would be counted as filtered out.
+# Measured on 2026-08-07 against a log of one surfaced, one queued and one call line: this program
+# prints filtered=0, and the same program with that one test deleted prints filtered=3, under both
+# BSD awk and mawk. Do not drop it to save the four jval calls it skips.
 #
 # Nothing here depends on the order the END block visits postings in: all three printed numbers are
 # sums and the three printf statements are in a fixed order, so `for (k in seen)` prints the same

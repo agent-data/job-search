@@ -6,17 +6,22 @@
 # Prints one key=value per line: relevant, to_confirm, filtered.
 #
 # A posting's current state is its last `evaluated` line — the judgment the run that found it wrote.
-# A posting the run judged relevant counts under `relevant`, one it judged not relevant counts under
-# `filtered`, and every judged posting is in exactly one of the two. A posting that names another in
-# same_role_as is the same opening seen twice and counts once, under the one that was read.
+# A posting the run judged relevant counts under `relevant` and one it judged not relevant counts
+# under `filtered`. A posting whose judgment names another in same_role_as counts under NEITHER: it
+# is the same opening seen twice, and the row it names was read and is counted on its own line. So
+# `relevant` plus `filtered` is the number of openings judged, not the number of postings judged —
+# measured on 2026-08-07, two judgments where the second names the first give relevant=1 filtered=0.
 #
 # to_confirm counts over the relevant postings only. A filtered posting whose judgment set
 # needs_human_check is counted under `filtered`, and its open question is in no number here.
 #
 # The event log grows past what a context window holds, which is why the home view runs this script
-# rather than reading the file itself. One live run's log is in the repository:
-# `wc -lc evals/results/2026-07-31T10-53-54Z-headless-run-sonnet/workspace/jobs.jsonl` gives 317
-# lines and 274,335 bytes.
+# rather than reading the file itself. A run appends one `surfaced` line per NEW row a search
+# returns (record-api-response.sh:9) and one `evaluated` line per posting it judges, so a first run
+# of three searches at limit 25 leaves 150 lines before any `call`, `queued` or `detail` line, and
+# every later run adds to the same file. There is
+# no live log in the repository to point at: `.gitignore` excludes `evals/results/`, so any figure
+# taken from a run on one machine cannot be re-run on another.
 #
 # `../../job-search-run/scripts` is where event-field.awk lives, and the walk out of this skill and
 # into the next one holds because `skills/` ships as one directory in every packaging in this repo:
