@@ -7,17 +7,34 @@
 # key: with a pipe, source `a` with source_id `b|c` and source `a|b` with source_id `c` both come
 # out as `a|b|c`, and the two would be counted as one.
 #
-# `order` fixes nothing on the six count lines. They are six printf statements in a fixed order and
-# every number on them is a sum, so `order` is only how the END block reaches each posting exactly
-# once. Measured on 2026-08-07 against a live log of 159 lines carrying no uncounted status:
-# rewritten as `for (k in seen)`, this prints byte-identical output under BSD awk and under mawk.
+# The six count lines do not depend on `order` or on `badorder`. The word order on the INVALID line
+# depends on both. The count lines are printf statements in a fixed order and every number on them
+# is a sum, so the six numbers come out the same whatever order the walk visits the postings in.
+# `badorder` is filled inside that walk, so the order the walk visits them in is the order the words
+# are appended to `badorder`, and the word list on the INVALID line is `badorder` read back from 1
+# to nbad.
 #
-# `badorder` is different — it does fix what is printed, and dropping it moves the word list on the
-# INVALID line. Measured on 2026-08-07 with `for (bw in badword)` in its place, against a log
-# carrying shortlisted, offer and screening in that order: BSD awk printed
-# shortlisted,screening,offer and mawk printed screening,offer,shortlisted, so the same log read on
-# two machines named the same three words two ways. Two words is not enough to show it — BSD awk
-# happens to keep those in log order — which is why the case that pins this uses three.
+# The walk reaches each posting exactly once because of `seen`, not because of `order`. `seen[k]` is
+# set once per distinct posting, on the same line that appends to `order`, so a `for (k in seen)`
+# walk reaches each posting exactly once too. Measured on 2026-08-07 against a log where one posting
+# carries three lines — two evaluated and one status_changed carrying interested — this program and
+# a copy with the walk rewritten that way both print interested=1, under BSD awk and under mawk.
+#
+# That rewrite does change the word list on the INVALID line. Measured on 2026-08-07 against a log
+# carrying shortlisted, offer and screening in that order, `badorder` left as it is: this program
+# prints shortlisted,offer,screening under both awks, and the rewrite prints
+# shortlisted,offer,screening under BSD awk and screening,offer,shortlisted under mawk. Replacing
+# `badorder` with `for (bw in badword)` and leaving the walk alone changes the word list too: on
+# that log BSD awk prints shortlisted,screening,offer and mawk prints screening,offer,shortlisted.
+# Two status words are not enough to show either difference — BSD awk keeps two in log order — which
+# is why the case that pins this uses three.
+#
+# On a log carrying no uncounted status the program prints no INVALID line at all, so such a log
+# cannot show either difference. Measured on 2026-08-07 against a live log of 159 lines carrying
+# none, this program and the `for (k in seen)` rewrite print byte-identical output under BSD awk and
+# under mawk. Every measurement above was run by copying this file and event-field.awk to a
+# directory outside the repository, making the change there, and running
+# `awk -f event-field.awk -f pipeline-counts.awk <log>` under /usr/bin/awk and again under mawk.
 #
 # same_role_as is read for whether it is there, not for what it names. The row it names is the row
 # that was read, and that row is counted on its own line; looking it up would change no count.
