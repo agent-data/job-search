@@ -3403,7 +3403,7 @@ def test_a_present_brief_with_no_way_to_digest_it_is_not_called_missing(tmp_work
 def test_opening_a_run_runs_under_dash(tmp_workspace):
     """One of the two shipped scripts that run another shipped script rather than an awk program —
     `command grep -rn '\\.sh"' skills/*/scripts/*.sh` returns two lines, `open-run.sh:126` and
-    `close-run.sh:170` — so it is run end to end under strict dash: `${1:?}`, `command -v`, the
+    `close-run.sh:172` — so it is run end to end under strict dash: `${1:?}`, `command -v`, the
     `printf ''` that writes the marker and the `sh` call on `validate-workspace.sh` are none of them
     exercised by `dash -n`. `close-run.sh` gets the same treatment at
     `test_closing_and_clearing_a_run_run_under_dash`."""

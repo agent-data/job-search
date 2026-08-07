@@ -139,9 +139,11 @@ esac
 # `[[:cntrl:]]` is the one bracket expression in this file whose verdict the locale changes, and the
 # measurement on 2026-08-06 bounds which way. Under LC_ALL=C, LC_ALL=en_US.UTF-8 and
 # LC_ALL=ar_SA.UTF-8 in sh, dash and bash, tab, newline, vertical tab, ESC and DEL are control
-# characters in all nine combinations — every character this check exists for. Two values move:
-# U+0085 and a lone 0x80 byte are control characters in sh and bash under the two UTF-8 locales and
-# ordinary characters under LC_ALL=C and in dash. So a lone 0x80 in --sources is refused here by sh
+# characters in all nine combinations — every character this check exists for. What moves is the
+# C1 range, 0x80 through 0x9F: a lone byte anywhere in it, and U+0085, are control characters in sh
+# and bash under the two UTF-8 locales and ordinary characters under LC_ALL=C and in dash. Measured
+# at 0x80, 0x85 and 0x9F, which all move, and 0xA0, which does not. So a lone
+# 0x80 in --sources is refused here by sh
 # under a UTF-8 locale and reaches the record everywhere else: measured, close-run.sh exited 0 and
 # wrote runs/<run_id>.json under LC_ALL=C in both shells with both awks, and under
 # LC_ALL=en_US.UTF-8 in dash with mawk, which is the pair Ubuntu CI runs. That file is not valid
