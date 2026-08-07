@@ -4,9 +4,25 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.9.0] — 2026-08-07
 
 ### Changed
+- **A run's digest counts from the event log it wrote, not from the agent's memory of the run.**
+  Every number the digest reports — how many searches went out, how many new postings they
+  surfaced, how many were read in full, how each was judged, and how many calls the run spent — is
+  now produced by a script reading `jobs.jsonl` after the fact. The run record copies those values, so the two
+  cannot disagree, and the postings the digest names come from a second script reading the same
+  log, so the section headed "3 strong" holds three postings and they are the three the log says
+  are strong. Re-run
+  `skills/job-search-run/scripts/run-counts.sh <workspace>/jobs.jsonl <run_id>` a year later and
+  you get the numbers that run reported, because every event is selected by that run's id.
+- **The run writes its log through scripts instead of composing JSON lines by hand.** Each
+  agent-data response goes to `record-api-response.sh`, which appends the call and one line per new
+  posting; a posting the summary scan cannot settle from the row goes on a read list through
+  `queue-detail-read.sh`; and `record-judgment.sh` writes each verdict, escaping the free text so a
+  reasoning line with a quote or a tab in it cannot corrupt the log. What is still to read is read
+  back out of the log by `list-detail-read-queue.sh` rather than carried in the session, so the list
+  survives however long the run gets.
 - **The home card says what the filtering found.** Where it used to show a Pipeline block counting
   postings by status, it now shows a **Matches** block: how many relevant postings the search found,
   how many of those need your confirmation, and how many were filtered out. A posting needs your
