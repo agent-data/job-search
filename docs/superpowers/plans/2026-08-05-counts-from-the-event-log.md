@@ -3676,7 +3676,9 @@ Replace "a posting's current state is the fold of its events by `source` + `sour
 
 - [ ] **Step 5: Check the word count**
 
-Run: `wc -w skills/job-search-runbook/SKILL.md skills/*/SKILL.md`
+Run: `wc -w skills/*/SKILL.md`
+The glob already covers the runbook, so do not name it a second time on the same command line — that
+counts it twice and prints a total of 10,078 instead of 9,092 (measured 2026-08-07 at 8ac2b13).
 The runbook was 986 words and the corpus 9,092. Record both numbers in the commit message.
 
 - [ ] **Step 6: Run the doc gates**
