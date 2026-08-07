@@ -1,6 +1,6 @@
 ---
 name: job-search
-description: Set up, check on, and steer the user's job search — the front door and home view. Use when they want to start or set up a job search, see their status, matches, latest digest, or pipeline, change what they are looking for, or start, change, or stop the search that runs on a schedule — set up job search, start my job search, I am looking for a new job, check my job search, show me my matches, what is new in my pipeline, keep this running daily — or /job-search. A first run reaches live matches fast: one question, real postings, then the offer to keep it running on its own. (For a pull with nobody watching, use job-search-run; for configuring or troubleshooting the agent itself, use job-search-agent.)
+description: Set up, check on, and steer the user's job search — the front door and home view. Use when they want to start or set up a job search, see their status, matches, or latest digest, change what they are looking for, or start, change, or stop the search that runs on a schedule — set up job search, start my job search, I am looking for a new job, check my job search, show me my matches, what did my job search find, keep this running daily — or /job-search. A first run reaches live matches fast: one question, real postings, then the offer to keep it running on its own. (For a pull with nobody watching, use job-search-run; for configuring or troubleshooting the agent itself, use job-search-agent.)
 ---
 
 # job-search
