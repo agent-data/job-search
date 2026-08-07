@@ -585,7 +585,7 @@ it is the single most important check, and in every case the verifier confirmed 
   `opencode run`. OpenCode `1.18.4` was observed installing the git-backed package through Bun; the
   corrected local adapter loaded without error, discovered all five bundled skills, and loaded
   `job-search` through the native skill tool. Skill-level HALT exit behavior was not tested.
-- **Gemini:** headless/print-mode command spelling; headless exit-code semantics; `ask_user`
+- **Gemini:** what the headless/print-mode command is called; headless exit-code semantics; `ask_user`
   closed-choice fidelity (labeled options vs free-text); whether any native scheduler ships at all;
   `@generalist` gating; notification surface; current Flash/Pro-class model ids; whether the GEMINI.md
   `@`-import auto-attaches at session start (syntax confirmed in-file, runtime unobserved); whether
