@@ -46,10 +46,10 @@ MATCHES = RUN_SCRIPTS / "run-matches.sh"
 OPEN_RUN = RUNBOOK_SCRIPTS / "open-run.sh"
 CLOSE_RUN = RUNBOOK_SCRIPTS / "close-run.sh"
 CLEAR_RUN = RUNBOOK_SCRIPTS / "clear-run.sh"
-PIPELINE = SEARCH_SCRIPTS / "pipeline-counts.sh"
+POSTINGS = SEARCH_SCRIPTS / "posting-counts.sh"
 
 ALL_SCRIPTS = [DEDUP, APPEND, SCHEDULE, DISCOVERY, VALIDATE, RECORD_API, QUEUE, LIST_QUEUE,
-               JUDGE, COUNTS, MATCHES, OPEN_RUN, CLOSE_RUN, CLEAR_RUN, PIPELINE]
+               JUDGE, COUNTS, MATCHES, OPEN_RUN, CLOSE_RUN, CLEAR_RUN, POSTINGS]
 
 
 # A contract-valid single-line `evaluated` event, in the shape
@@ -4640,202 +4640,140 @@ def test_closing_and_clearing_a_run_run_under_dash(tmp_workspace):
     assert not (tmp_workspace / "runs" / (".started-" + o["run_id"])).exists()
 
 
-# ----------------------------------------------------------------------- pipeline-counts.sh
+# ------------------------------------------------------------------------ posting-counts.sh
 
-def pipeline(jobs, shell="sh"):
-    """Run `pipeline-counts.sh` and return its result and its key/value lines as a dict.
+def postings(jobs, shell="sh"):
+    """Run `posting-counts.sh` and return its result and its key/value lines as a dict.
 
     The split takes the first `=` only, matching `counts` above, so a value carrying one keeps it.
     """
-    r = run_script(PIPELINE, jobs, shell=shell)
+    r = run_script(POSTINGS, jobs, shell=shell)
     return r, dict(l.split("=", 1) for l in r.stdout.splitlines() if "=" in l)
 
 
 def ev(source_id, **kw):
-    """One `evaluated` line, in the field set `record-judgment.awk` writes.
+    """One `evaluated` line, carrying the fields `posting-counts.awk` reads.
 
-    The default is the shape a run writes for a posting it kept: relevant, banded, no open question,
-    and `status` `new` — which `record-judgment.awk:57` writes on every judgment, a rejection
-    included. Each case overrides only what it is about.
+    The default is the shape a run writes for a posting it kept: relevant, banded, and no open
+    question. Each case overrides only what it is about, and every count each case expects is
+    worked out by hand from the lines that case writes.
     """
     d = {"event": "evaluated", "source": "linkedin", "source_id": source_id,
-         "relevant": True, "match": "strong", "needs_human_check": False, "status": "new"}
+         "relevant": True, "match": "strong", "needs_human_check": False}
     d.update(kw)
     return json.dumps(d)
 
 
-def test_the_last_line_for_a_posting_wins(tmp_path):
-    """A posting counted under its first line stays `new` after the user says they applied: the
-    judgment and the reaction are two lines for one posting, and the reaction is the later one.
-
-    Counted under the first line instead, this log reads new=1 applied=0 — the home card telling
-    someone they have not applied to a job they told it they applied to.
-    """
-    jobs = tmp_path / "jobs.jsonl"
-    jobs.write_text(ev("a") + "\n" +
-                    '{"event":"status_changed","source":"linkedin","source_id":"a",'
-                    '"status":"applied"}\n')
-    r, p = pipeline(jobs)
-    assert r.returncode == 0, r.stderr
-    assert p["applied"] == "1" and p["new"] == "0"
+# Every mutation a docstring below names was run the same way: copy `posting-counts.awk` and
+# `event-field.awk` to a directory outside the repository, make the change in the copy, and run
+# `awk -f event-field.awk -f posting-counts.awk <log>` under /usr/bin/awk and again under mawk.
 
 
-def test_a_posting_judged_not_relevant_is_not_in_the_pipeline(tmp_path):
-    """`record-judgment.awk:57` writes `"status":"new"` on every judgment, a rejection included, so
-    counting by status alone puts every posting a run threw out into `new`.
+def test_a_posting_judged_not_relevant_is_counted_as_filtered(tmp_path):
+    """A posting the run threw out is counted under `filtered`. The home card reports what the
+    filtering found, so the postings it rejected are a number it shows rather than lines it drops.
 
-    A run now writes an `evaluated` line for every posting it surfaced rather than for the handful
-    it read in full, so that count would be dominated by rejects. Two postings here, one kept and
-    one rejected: the kept one is the only thing in any count, which the total pins as well as the
-    `new` line does.
+    Two postings, one kept and one thrown out. All three counts are asserted, because a change that
+    moves a posting from one key to another leaves the third key alone. Measured 2026-08-07 with
+    the else branch's `filtered++` written `relevant++`: relevant=2 filtered=0 under both awks, the
+    card naming two matches where the run kept one.
     """
     jobs = tmp_path / "jobs.jsonl"
     jobs.write_text(ev("a") + "\n" + ev("b", relevant=False, match=None) + "\n")
-    _, p = pipeline(jobs)
-    assert p["new"] == "1"
-    assert sum(int(v) for v in p.values()) == 1
+    r, p = postings(jobs)
+    assert r.returncode == 0, r.stderr
+    assert p == {"relevant": "1", "to_confirm": "0", "filtered": "1"}
 
 
-def test_a_rejected_posting_the_user_reacts_to_enters_the_pipeline(tmp_path):
-    """The user can react to a posting the run rejected — `job-search/SKILL.md:161`, "already
-    applied there" — and that reaction is the more recent and better-informed answer.
+def test_an_evaluated_line_carrying_no_relevant_field_is_counted_as_filtered(tmp_path):
+    """`record-judgment.awk` writes `relevant` on every judgment, but that is not the only way an
+    `evaluated` event reaches the log: `event-log-append.sh` takes one written by hand on a host
+    with no runtime, and it checks `source_id`, `source` and `same_role_as` — never `relevant`. The
+    line is appended through that script here rather than written straight to the file, so the case
+    stands on what that script accepts.
 
-    A relevance filter with no reaction check drops this posting from every count, so the home card
-    would show nothing for a job the user has applied to.
+    A line carrying no verdict is not a posting a run kept, so it counts under `filtered`. Measured
+    2026-08-07 with `rel[k] == "true"` written `rel[k] != "false"`: relevant=1 filtered=0 under
+    both awks, putting every such line into the number the card leads with.
     """
     jobs = tmp_path / "jobs.jsonl"
-    jobs.write_text(ev("b", relevant=False, match=None) + "\n" +
-                    '{"event":"status_changed","source":"linkedin","source_id":"b",'
-                    '"status":"applied"}\n')
-    _, p = pipeline(jobs)
-    assert p["applied"] == "1" and p["new"] == "0"
+    append = subprocess.run(
+        ["sh", str(APPEND), str(jobs)], text=True, capture_output=True,
+        input=json.dumps({"event": "evaluated", "source": "linkedin", "source_id": "a",
+                          "match": "strong", "needs_human_check": False}))
+    assert append.returncode == 0, append.stderr
+    r, p = postings(jobs)
+    assert r.returncode == 0, r.stderr
+    assert p == {"relevant": "0", "to_confirm": "0", "filtered": "1"}
 
 
-def test_surfaced_rows_without_a_judgment_are_not_in_the_pipeline(tmp_path):
-    """A posting a search returned and nothing has judged is not in any state yet, and a `call`
-    event is about a request rather than a posting and carries no `source_id` at all. A log holding
-    only those lines prints six zeros.
+def test_rows_that_are_not_judgments_are_in_no_count(tmp_path):
+    """A posting a search returned and nothing has judged is not a match and is not something the
+    filtering rejected, and a `call` event is about a request rather than a posting and carries no
+    `source_id` at all. A log holding only those lines prints three zeros.
 
-    Two lines keep them out and either one is enough on its own, which is why this case pins the
-    pair rather than one of them. Measured on 2026-08-07 against `pipeline-counts.awk`: with the
-    event-type filter removed this case still passes, with the relevance check in the END block
-    removed it still passes, and with both removed it reports new=2 — one for the posting nobody has
-    judged, and one for the `call` event, which carries neither `source` nor `source_id` and so
-    keys to two empty strings joined by SUBSEP.
+    The event-type filter is the only thing that keeps them out. The END block sorts every posting
+    it reaches into `relevant` or `filtered`, so there is no second check behind the filter — that
+    changed when the five status counts became these three. Measured 2026-08-07 with
+    `if (jval($0, "event") != "evaluated") next` deleted: filtered=2 under both awks — one for the
+    posting nobody has judged, whose `surfaced` and `queued` lines share a key, and one for the
+    `call` event, which carries neither `source` nor `source_id` and so keys to two empty strings
+    joined by SUBSEP.
     """
     jobs = tmp_path / "jobs.jsonl"
     jobs.write_text(
         '{"event":"surfaced","source":"linkedin","source_id":"a"}\n'
         '{"event":"call","route":"search-jobs","ok":true}\n'
         '{"event":"queued","source":"linkedin","source_id":"a"}\n')
-    _, p = pipeline(jobs)
-    assert p["new"] == "0" and p["applied"] == "0"
+    r, p = postings(jobs)
+    assert r.returncode == 0, r.stderr
+    assert p == {"relevant": "0", "to_confirm": "0", "filtered": "0"}
 
 
-def test_to_confirm_counts_pipeline_judgments_needing_a_human(tmp_path):
-    """`(<k> to confirm)` sits on the Pipeline line of the home card, so it counts over the same
-    postings the numbers beside it count. A rejected posting whose judgment set
-    `needs_human_check` is not one of them.
+def test_to_confirm_counts_over_the_relevant_postings_only(tmp_path):
+    """`to_confirm` is the count of matches the user still has to confirm, so it counts over the
+    postings `relevant` counts. A posting the run threw out is behind the `filtered` number, and an
+    open question on it is in no number here.
 
-    Three postings: one kept with an open question, one kept without, one rejected with an open
-    question. Measured on 2026-08-07 with `confirm++` moved above both `continue`s, so that the
-    rejected posting's open question is counted: `to_confirm=2` over a Pipeline line whose five
-    numbers still name 2 postings — one question too many, on a posting the line does not show.
+    Three postings: one kept with an open question, one kept without, one thrown out with an open
+    question. Measured 2026-08-07 with `confirm++` moved above the relevance branch, so that the
+    thrown-out posting's open question is counted too: to_confirm=2 beside relevant=2 under both
+    awks — one more question than there are postings the card offers to confirm.
     """
     jobs = tmp_path / "jobs.jsonl"
     jobs.write_text(ev("a", needs_human_check=True) + "\n" +
                     ev("b", match="weak") + "\n" +
                     ev("c", relevant=False, match=None, needs_human_check=True) + "\n")
-    _, p = pipeline(jobs)
-    assert p["to_confirm"] == "1" and p["new"] == "2"
+    r, p = postings(jobs)
+    assert r.returncode == 0, r.stderr
+    assert p == {"relevant": "2", "to_confirm": "1", "filtered": "1"}
 
 
 def test_a_second_posting_for_the_same_role_is_counted_once(tmp_path):
     """One opening reached by two queries gets an `evaluated` line each, and the second names the
-    first in `same_role_as` — `job-search-run/SKILL.md:90`. It is the same job, so it is one entry
-    in the pipeline.
+    first in `same_role_as` — `job-search-run/SKILL.md:90`. It is the same job, so it is one entry.
 
-    Counted separately, the home card reports two jobs where the user has one to apply to.
+    The second line is left out of every count rather than moved into `filtered`, which is why all
+    three are asserted. Measured 2026-08-07 with `if (k in alias) continue` deleted: relevant=2
+    under both awks, the card reporting two jobs where the user has one to apply to.
     """
     jobs = tmp_path / "jobs.jsonl"
     jobs.write_text(ev("a", source="ashby") + "\n" +
                     ev("b", source="ashby", same_role_as="ashby:a") + "\n")
-    _, p = pipeline(jobs)
-    assert p["new"] == "1"
+    r, p = postings(jobs)
+    assert r.returncode == 0, r.stderr
+    assert p == {"relevant": "1", "to_confirm": "0", "filtered": "0"}
 
 
 def test_an_empty_log_prints_zeroes(tmp_path):
     """A workspace set up and never run has an empty `jobs.jsonl`, and the home card is rendered
-    from it. Every key is printed at zero rather than left out, so the caller reads six numbers
+    from it. Every key is printed at zero rather than left out, so the caller reads three numbers
     instead of deciding for itself what a missing key means."""
     jobs = tmp_path / "jobs.jsonl"
     jobs.write_text("")
-    r, p = pipeline(jobs)
+    r, p = postings(jobs)
     assert r.returncode == 0
-    assert p == {"new": "0", "interested": "0", "applied": "0",
-                 "rejected": "0", "archived": "0", "to_confirm": "0"}
-
-
-def test_a_judgment_written_without_a_status_counts_as_new(tmp_path):
-    """`record-judgment.awk:57` puts `"status":"new"` on every judgment it writes, but that is not
-    the only way an `evaluated` event reaches the log: `event-log-append.sh` takes one written by
-    hand on a host with no runtime, and it checks `source`, `source_id` and `same_role_as` — never
-    `status`. Such a posting is at the funnel's starting state, so it counts under `new`.
-
-    Without the default it lands under the empty-string key instead, which no `printf` here prints:
-    the posting is in the pipeline and in none of the six numbers, so the five status counts stop
-    summing to the postings behind them.
-    """
-    jobs = tmp_path / "jobs.jsonl"
-    jobs.write_text(json.dumps({"event": "evaluated", "source": "linkedin", "source_id": "a",
-                                "relevant": True, "match": "strong",
-                                "needs_human_check": False}) + "\n")
-    r, p = pipeline(jobs)
-    assert r.returncode == 0, r.stderr
-    assert p["new"] == "1"
-    assert sum(int(v) for v in p.values()) == 1
-
-
-def test_a_status_none_of_the_six_lines_counts_is_reported_and_not_dropped(tmp_path):
-    """Five status words have a line here and a sixth has none, so a posting carrying any other
-    status is in the pipeline by this script's own filter and in none of the six numbers.
-
-    Nothing upstream stops one arriving: `event-log-append.sh` appends a `status_changed` carrying
-    `shortlisted` at exit 0 — driven here rather than asserted — and `job-search/SKILL.md:161` hands
-    the agent the field with no list of allowed values.
-
-    Measured on 2026-08-07 before the finding existed: two relevant postings gave new=2, and the
-    same log with one `shortlisted` reaction gave new=1 with everything else 0, at exit 0. The home
-    card would have shown one job where the user has two, with nothing said. So the count set is
-    printed first, then the finding names how many postings it leaves out and which words did it,
-    and the status is 1 — the shape `run-counts.awk:105-108` uses for the same kind of loss.
-
-    Three words rather than one, because the last assertion pins the order they are listed in and
-    three is the fewest that both awks move. Measured on 2026-08-07 with `badorder` replaced by a
-    `for (bw in badword)` walk: two words came out in log order under BSD awk and reversed under
-    mawk, so a case built on two would pass here and fail on the CI runner; at three, BSD awk gave
-    shortlisted,screening,offer and mawk gave screening,offer,shortlisted, and neither matched the
-    log.
-    """
-    jobs = tmp_path / "jobs.jsonl"
-    jobs.write_text("".join(ev(k) + "\n" for k in ("a", "b", "c", "d")))
-    before, p = pipeline(jobs)
-    assert before.returncode == 0, before.stderr
-    assert p["new"] == "4"
-
-    for source_id, status in (("b", "shortlisted"), ("c", "offer"), ("d", "screening")):
-        append = subprocess.run(
-            ["sh", str(APPEND), str(jobs)], text=True, capture_output=True,
-            input='{"event":"status_changed","source":"linkedin","source_id":"%s","status":"%s"}'
-                  % (source_id, status))
-        assert append.returncode == 0, append.stderr
-
-    r, p = pipeline(jobs)
-    assert r.returncode == 1, r.stdout
-    assert p["new"] == "1"
-    assert sum(int(v) for k, v in p.items() if not k.startswith("INVALID")) == 1
-    assert r.stdout.splitlines()[-1] == (
-        "INVALID posting-with-an-uncounted-status=3 shortlisted,offer,screening")
+    assert p == {"relevant": "0", "to_confirm": "0", "filtered": "0"}
 
 
 def test_two_postings_that_would_share_a_pipe_joined_key_are_counted_separately(tmp_path):
@@ -4844,43 +4782,62 @@ def test_two_postings_that_would_share_a_pipe_joined_key_are_counted_separately(
     `reject_id` refuses only a control character and a backslash, so source `s` with source_id `x|y`
     and source `s|x` with source_id `y` are both recorded, and both join to `s|x|y`.
 
-    Measured on 2026-08-07 with the key joined on `|` instead: this log counts new=1 where two
-    postings are in the pipeline, and the home card shows one job where the user has two.
+    Measured 2026-08-07 with the key joined on `|` instead: relevant=1 under both awks where two
+    postings were judged relevant, and the card shows one job where the user has two.
     `run-matches.awk` is pinned against the same collision at
     `test_two_postings_that_would_share_a_pipe_joined_key_are_both_listed`.
     """
     jobs = tmp_path / "jobs.jsonl"
     jobs.write_text(ev("x|y", source="s") + "\n" + ev("y", source="s|x") + "\n")
-    r, p = pipeline(jobs)
+    r, p = postings(jobs)
     assert r.returncode == 0, r.stderr
-    assert p["new"] == "2"
+    assert p == {"relevant": "2", "to_confirm": "0", "filtered": "0"}
 
 
-def test_pipeline_counts_for_a_log_that_is_not_there_exit_two_and_print_nothing(tmp_path):
-    """A workspace whose log is missing is not a workspace with an empty pipeline. Printing six
-    zeros would show an empty home card for a path typed wrong, and the user would read it as
-    having no jobs rather than as a broken workspace. `run-counts.sh` refuses the same way, at
-    `test_counts_for_a_log_that_is_not_there_exit_two_and_print_nothing`."""
-    r, p = pipeline(tmp_path / "absent.jsonl")
+def test_a_hand_written_log_with_two_judgments_for_one_posting_takes_the_later_line(tmp_path):
+    """No run writes this log. Both append paths refuse a second `evaluated` event for a
+    `(source, source_id)` that already has one — `event-log-append.sh:19-20` states the rule and
+    `:60-72` enforces it, and `record-judgment.sh:17` reads "Exit 0: recorded, or this posting
+    already carries exactly this judgment" — so only a log written or edited by hand reaches this
+    case. What is pinned here is `posting-counts.awk`'s behavior, not the product's.
+
+    It is pinned because the awk's header states it: the three assignments in the main block are
+    unconditional, so a hand-edited log with two judgments for one posting takes the later line.
+    Measured 2026-08-07 with `rel[k]` set only the first time a key is seen: relevant=1 filtered=0
+    under both awks, where the later judgment is the one that threw the posting out.
+    """
+    jobs = tmp_path / "jobs.jsonl"
+    jobs.write_text(ev("a") + "\n" + ev("a", relevant=False, match=None) + "\n")
+    r, p = postings(jobs)
+    assert r.returncode == 0, r.stderr
+    assert p == {"relevant": "0", "to_confirm": "0", "filtered": "1"}
+
+
+def test_posting_counts_for_a_log_that_is_not_there_exit_two_and_print_nothing(tmp_path):
+    """A workspace whose log is missing is not a workspace where the filtering found nothing.
+    Printing three zeros would show an empty home card for a path typed wrong, and the user would
+    read it as having no matches rather than as a broken workspace. `run-counts.sh` refuses the same
+    way, at `test_counts_for_a_log_that_is_not_there_exit_two_and_print_nothing`."""
+    r, p = postings(tmp_path / "absent.jsonl")
     assert r.returncode == 2
     assert p == {}
     assert "no such file" in r.stderr
 
 
 @pytest.mark.skipif(not shutil.which("dash"), reason="dash is not installed here")
-def test_the_pipeline_counts_run_under_dash(tmp_path):
+def test_the_posting_counts_run_under_dash(tmp_path):
     """`/bin/sh` is bash on the machine this was written on and dash on the CI runner, and a
     construct that works under one and not the other reaches CI as a script that cannot run at all.
-    `sh -n` and `dash -n` do not catch it: measured on 2026-08-07 with this script's `[ -f "$jobs" ]`
-    written `[[ -f "$jobs" ]]`, both syntax checks passed, every case above passed, and this one
-    failed — dash finds no `[[` command, so the `||` branch runs and the script exits 2 on a log
+    `sh -n` and `dash -n` do not catch it: measured 2026-08-07 with this script's `[ -f "$jobs" ]`
+    written `[[ -f "$jobs" ]]`, from a copy under an absolute temp path — both syntax checks passed
+    and the script ran under `sh`, and under `dash` it printed `[[: not found` and exited 2 on a log
     that is there.
     """
     jobs = tmp_path / "jobs.jsonl"
     jobs.write_text(ev("a") + "\n" + ev("b", relevant=False, match=None) + "\n")
-    r, p = pipeline(jobs, shell="dash")
+    r, p = postings(jobs, shell="dash")
     assert r.returncode == 0, r.stderr
-    assert p["new"] == "1"
+    assert p == {"relevant": "1", "to_confirm": "0", "filtered": "1"}
 
 
 # ------------------------------------------------------------------- POSIX portability
