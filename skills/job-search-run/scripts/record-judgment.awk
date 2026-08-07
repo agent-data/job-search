@@ -2,7 +2,7 @@
 #
 # Field order is load-bearing. Every field a script reads to decide something comes before the
 # three free-text ones, because the readers take a key's first occurrence: reasoning that happens
-# to contain "status": cannot be mistaken for the status field. The reverse case — a dealbreaker
+# to contain "match": cannot be mistaken for the match field. The reverse case — a dealbreaker
 # holding the literal "reasoning": — would misread one line of display text and no count, which is
 # the trade this ordering makes on purpose.
 #
@@ -54,7 +54,6 @@ BEGIN {
   out = out ",\"relevant\":" relevant
   out = out ",\"match\":" (band == "" ? "null" : jstr(band))
   out = out ",\"needs_human_check\":" nhc
-  out = out ",\"status\":\"new\""
   out = out ",\"ts\":" jstr(ts)
   if (same_role != "")        out = out ",\"same_role_as\":" jstr(same_role)
   if (posted_extracted != "") out = out ",\"posted_at_extracted\":" jstr(posted_extracted)

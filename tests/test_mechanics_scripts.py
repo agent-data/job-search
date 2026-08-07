@@ -61,7 +61,7 @@ def evaluated(source, source_id, ts="2026-07-11T00:00:00Z", extra=""):
         '"salary_display":"","posted_at":"%s","source_url":"https://example/%s",'
         '"posting_id_at_seen":"jp_1","detail_read":true,"relevant":true,"match":"strong",'
         '"reasoning":"solid fit","dealbreakers_hit":[],"unknowns":[],'
-        '"needs_human_check":false,"status":"new","first_seen":"%s"%s}'
+        '"needs_human_check":false,"first_seen":"%s"%s}'
         % (ts, source, source_id, ts, source_id, ts, extra)
     )
 
@@ -576,18 +576,22 @@ def test_an_absent_key_is_empty():
 @pytest.mark.parametrize(
     "line",
     [
-        '{"source":"linkedin","status":"applied","n":25}',
-        '{"source": "linkedin","status": "applied","n": 25}',
-        '{"source" :"linkedin","status" :"applied","n" :25}',
-        '{"source" : "linkedin" , "status" : "applied" , "n" : 25 }',
+        '{"source":"linkedin","match":"strong","n":25}',
+        '{"source": "linkedin","match": "strong","n": 25}',
+        '{"source" :"linkedin","match" :"strong","n" :25}',
+        '{"source" : "linkedin" , "match" : "strong" , "n" : 25 }',
     ],
 )
 def test_whitespace_around_the_colon_does_not_hide_a_field(line):
     """`event-log-append.sh` accepts every one of these — its field checks all read
     `"key"[[:space:]]*:[[:space:]]*` — so an event written by hand arrives in these shapes. A
-    `status_changed` read as `" \\"applied\\""` would land in the wrong pipeline bucket."""
+    `match` read as `" \\"strong\\""` equals none of the three band names `run-counts.awk:73-76`
+    tests for: measured 2026-08-07 against a copy of `event-field.awk` outside the repository with
+    the post-colon `_jskipws` call in `_jafter` dropped, a log carrying `"match" : "strong"` gave
+    `match_strong=0` and the line `INVALID relevant-row-without-a-band=1`, exit 1, under
+    /usr/bin/awk and mawk."""
     assert field(line, "source") == ('"linkedin"', "linkedin")
-    assert field(line, "status") == ('"applied"', "applied")
+    assert field(line, "match") == ('"strong"', "strong")
     assert field(line, "n") == ("25", "25")
 
 
@@ -1701,7 +1705,7 @@ def test_a_judgment_lands_as_one_evaluated_event(tmp_path):
     assert len(ev) == 1
     assert ev[0]["match"] == "strong" and ev[0]["relevant"] is True
     assert ev[0]["dealbreakers_hit"] == [] and ev[0]["unknowns"] == []
-    assert ev[0]["status"] == "new"
+    assert ev[0]["needs_human_check"] is False
 
 
 def test_the_display_fields_are_copied_off_the_surfaced_event(tmp_path):
@@ -1752,26 +1756,28 @@ def test_the_dropped_fields_are_gone_on_purpose(tmp_path):
 
 
 def test_every_field_a_script_decides_on_comes_before_the_free_text(tmp_path):
-    """The readers take a key's first occurrence, so reasoning holding the literal "status":
+    """The readers take a key's first occurrence, so reasoning holding the literal "match":
     must not be found before the real one.
 
     The assertions compare positions in the raw line, so moving any of the named fields after
-    `reasoning` fails here (measured: moving the `status` field alone below `reasoning` fails this
-    test and no other in the module; the same holds for `needs_human_check`).
+    `reasoning` fails here. Measured 2026-08-07 on a copy of the repository outside it: with the
+    `match` line of `record-judgment.awk` moved below the `reasoning` line, `python3 -m pytest
+    tests/test_mechanics_scripts.py -q` gives 1 failed, 448 passed, and the one failure is this
+    test; moving `needs_human_check` there instead gives the same.
 
-    All six machine-read fields are listed, not the four the plan names. With `detail_read` and
-    `ts` left out, moving either one below `reasoning` gave a fully green module — and Task 5
-    derives a run's start and end from `ts`."""
+    All five machine-read fields the event carries are listed. The plan named four, `status` among
+    them, and that field is gone. `detail_read` and `ts` are the two added: with them left out,
+    moving either one below `reasoning` gave a fully green module — and Task 5 derives a run's
+    start and end from `ts`."""
     jobs = seeded_jobs(tmp_path, "search.linkedin.json")
     row = first_surfaced(jobs)
     run_script(JUDGE, *judge_args(jobs, row, detail_read="true", relevant="true", match="strong",
-                                  reasoning='It says "status": "closed" halfway down.'))
+                                  reasoning='It pastes a config rule holding "match": "any".'))
     raw = [l for l in jobs.read_text().splitlines() if '"event":"evaluated"' in l][0]
-    for key in ('"status":', '"needs_human_check":', '"match":', '"relevant":',
-                '"detail_read":', '"ts":'):
+    for key in ('"needs_human_check":', '"match":', '"relevant":', '"detail_read":', '"ts":'):
         assert raw.index(key) < raw.index('"reasoning":'), key
     ev = json.loads(raw)
-    assert ev["status"] == "new"
+    assert ev["match"] == "strong"
 
 
 def test_free_text_with_quotes_backslashes_tabs_and_newlines_round_trips(tmp_path):

@@ -78,7 +78,7 @@ this skill's `scripts/event-log-append.sh <workspace>/jobs.jsonl`, which checks 
 pair the log already holds. This skill's `templates/jobs-event.example.json` is one such line with
 every field filled — copy that field set, and fill it from this run:
 
-- `event` is `evaluated`, `run_id` is this run's id, and `status` starts at `new`.
+- `event` is `evaluated` and `run_id` is this run's id.
 - `source`, `source_id`, `title`, `company_name`, `location_display`, `salary_display`, and
   `source_url` copied from the row as they arrived; `posting_id_at_seen` from the row's `id`;
   `posted_at` from its dates through `agent-data-reference`'s per-source date row; `query_id` the
