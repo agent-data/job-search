@@ -1,15 +1,18 @@
 #!/bin/sh
 # event-log-append.sh — validate a jobs.jsonl event line, then append it idempotently.
 #
-# Appends one jobs.jsonl event line, in the shape this skill's templates/jobs-event.example.json
-# shows.
+# Appends one jobs.jsonl posting event, in one of the posting-event shapes this skill's
+# templates/jobs-event.example.json shows.
 #
-# This is the append path for an `evaluated` event a host writes by hand: SKILL.md's "Read and
-# judge" section tells the model to pipe each judgment into this script. The events a run's own
-# scripts write never come through here, because each of those scripts builds its event and appends
-# it: record-api-response.sh writes `call`, `surfaced` and `detail`, queue-detail-read.sh writes
-# `queued`, and record-judgment.sh writes the run's `evaluated` events. A `call` event is about a
-# request rather than a posting and carries no "source_id" at all. What this script checks is
+# This is the append path for an `evaluated` event written by hand. No skill's prose sends a
+# judgment here any more: SKILL.md's "Read and judge" section names record-judgment.sh, which builds
+# the event itself, so this script is the standalone path a host takes when it is writing an event
+# without that script. The events a run's own scripts write never come through here, because each of
+# those scripts builds its event and appends it: record-api-response.sh writes `call`, `surfaced`
+# and `detail`, queue-detail-read.sh writes `queued`, and record-judgment.sh writes the run's
+# `evaluated` events. A `call` event is about a request rather than a posting and carries no
+# "source_id" at all, so this script refuses one — the template's `call` line is there to be read,
+# not to be piped in here. What this script checks is
 # therefore what a hand-written posting event must satisfy: one event per line; a non-empty
 # "source_id", with the literal key appearing exactly once; for an `evaluated` event a non-empty
 # "source", with that key appearing at most once, because the per-source grep depends on it; and

@@ -38,66 +38,104 @@ list, `search.freshness` as the cutoff parameter the route docs name (the `any` 
 none). This pass reads those first pages and stops there — a continuation page holds what the next
 run finds new.
 
-Send each response straight into `runs/.scratch/<run_id>/` as it arrives, every row with its `id`
-and `source_url` together (the scratch rule), then check the saved copy for the echoes: the source
-echo per `agent-data-reference`'s source-echo row, and the cutoff the same way, where one that comes
-back missing or altered means applying that date to the rows yourself.
+Capture both streams of every call into `runs/.scratch/<run_id>/`, because a call that fails writes
+its body to stderr and leaves stdout empty: `agent-data call … > <name>.json 2> <name>.err`. Then
+hand whichever file got written — the `.json` when the call returned, the `.err` when it failed — to
+this skill's `scripts/record-api-response.sh <run_id> <workspace>/jobs.jsonl <response>
+--route search-jobs --query-id <the query's id> --source <the source you asked for>`. That appends
+the call itself and one line per row it kept, leaving out a posting any run has already judged and
+one an earlier search of this run surfaced. Pass `--source` on every call, a failed one
+included: `run-counts.sh` groups the search calls by source and query id, and a failed attempt
+recorded without it lands in a group of its own, where the run reports a search that never returned
+even though the retry answered. A non-zero exit means the call failed or a row was unusable, and
+stderr says which — the call event is written either way, and nothing else is.
+
+Then check the saved response for the echoes: the source echo per `agent-data-reference`'s
+source-echo row, and the cutoff the same way, where one that comes back missing or altered means
+applying that date to the rows yourself.
 
 ## Reconcile
 
-1. **Already judged** — per source, feed the candidate `source_id`s into this skill's
-   `scripts/dedup.sh <workspace>/jobs.jsonl <source>`; what it prints, every source's output
-   together, is what this run has to judge.
-2. **The same row from two queries** — one `(source, source_id)` pair reaching you twice is one
-   candidate: keep the first, and remember the other query found it too.
-3. **One opening posted twice** — pipe the survivors as `source_id<TAB>company<TAB>title` into
-   `dedup.sh --near`, which prints the openings to judge: one role in four cities, one read.
+`record-api-response.sh` has already left out the rows that need no judgment. One case is left for
+you, because no script decides it: one opening posted several times over. A company running the same
+role in four cities returns four rows with four `source_id`s and titles that differ only by the
+city, and reading each spends a detail call on a posting already read. Pipe the rows this run
+surfaced as `source_id<TAB>company<TAB>title` into this skill's `scripts/dedup.sh --near`, which
+prints back the `source_id` of the first row in each group sharing a company and a title: one role
+in four cities, one read. Keep the ids it left out — each of those postings still needs a judgment
+before this run can close, and "Read and judge" says how it gets one.
 
 ## Scan the summaries
 
-Judge every candidate from its row first — title, company, `location_display`, `salary_display`,
-date. Settle a row that plainly breaks a must-have the brief names right there: record it as not
-relevant, with no detail read. That keeps detail reads few, and this scan is where you write the
-guidance each read works from: everything that could match, and what a row leaves open, goes on
-the read list with a one-line **steer** — your provisional read plus the question that read has to
-answer, the must-have the row left unconfirmed. A senior-IC title with an Austin location earns a
-steer that reads strong and asks whether the role is remote within the US; a row with neither date
-field filled also asks for the date the description states.
+Judge every surfaced row from what the row carries — title, company, `location_display`,
+`salary_display`, the date. A row that plainly breaks a must-have the brief names is settled here,
+with no detail read, through this skill's
+`scripts/record-judgment.sh <workspace>/jobs.jsonl --run-id <run_id> --source <source>
+--source-id <source_id> --detail-read false --relevant false --reasoning '<the must-have it broke>'`.
+Every other row goes on the read list with this skill's
+`scripts/queue-detail-read.sh <workspace>/jobs.jsonl --run-id <run_id> --source <source>
+--source-id <source_id>`, which records that the posting is one to read and nothing else.
+
+This scan is the only thing deciding whether a posting costs a detail call, so settling every row
+the row itself settles is what keeps detail reads few. Send nothing about the judgment you expect: a
+provisional band would anchor the reader before it has read anything, and naming the question it
+has to answer would stop it looking for anything else. The reader works the open question out from
+the posting and writes it into its reasoning.
 
 ## Read and judge
 
-Where your host has subagents, dispatch one per posting on the read list, in parallel: each is
-judged in its own fresh context, leaving this session's for coordinating the run. Where your host
-has none, work the list in order. Both paths run on the host's own model. Brief each subagent
-cold: the row's `id` and `source_url` as the pair they arrived in, its `source`, the path to
-`preferences.md`, the `evaluate-job-fit` skill to follow, and that posting's steer. The read is
-`agent-data-reference`'s `get-posting` recipe.
+The read list is this skill's `scripts/list-detail-read-queue.sh <workspace>/jobs.jsonl <run_id>`,
+which prints one tab-separated line per posting this run queued and has not judged yet: `source`,
+`source_id`, `posting_id_at_seen`, `source_url`, `title`, `company_name`. Where your host has
+subagents, dispatch one per line, in parallel: each posting is judged in its own fresh context,
+leaving this session's for coordinating the run. Where your host has none, work the list in order.
+Both paths run on the host's own model.
 
-Append one line per row to `<workspace>/jobs.jsonl` by piping the single-line event JSON into
-this skill's `scripts/event-log-append.sh <workspace>/jobs.jsonl`, which checks the line and skips a
-pair the log already holds. This skill's `templates/jobs-event.example.json` is one such line with
-every field filled — copy that field set, and fill it from this run:
+A reader has none of this session's context, so its line is the whole brief. Hand it that line as it
+came off the list — `posting_id_at_seen` and `source_url` are the pair `get-posting` needs, and
+`agent-data-reference`'s recipe for that route is how the call is written — along with the path to
+`preferences.md` and the `evaluate-job-fit` skill to follow.
 
-- `event` is `evaluated` and `run_id` is this run's id.
-- `source`, `source_id`, `title`, `company_name`, `location_display`, `salary_display`, and
-  `source_url` copied from the row as they arrived; `posting_id_at_seen` from the row's `id`;
-  `posted_at` from its dates through `agent-data-reference`'s per-source date row; `query_id` the
-  query.
-- `detail_read` is true for a posting read in full and false for one settled from its row;
-  `relevant`, `match`, `reasoning`, `dealbreakers_hit`, `unknowns`, and `needs_human_check` are the
-  judgment as `evaluate-job-fit` returned it, and `ts` and `first_seen` the UTC moment of it.
-- `posted_at_extracted` joins the line when the row carried no date and the description states one;
-  `same_role_as` joins a dropped near-duplicate, holding `<source>:<source_id>` of the row that was
-  read, whose judgment it carries with `detail_read` false.
+Capture each detail response the way a search is captured, then send it through
+`scripts/record-api-response.sh <run_id> <workspace>/jobs.jsonl <response> --route get-posting
+--source <source>`, which stores the posting's text on a `detail` event so a later run can judge it
+again against a changed brief instead of paying to read it twice. Record what `evaluate-job-fit`
+returned with `record-judgment.sh`: `--detail-read true`, `--relevant true|false`,
+`--match strong|moderate|weak` on a relevant posting and no `--match` on one that is not,
+`--needs-human-check true` when the judgment leaves the user a question, `--dealbreakers` and
+`--unknowns` as semicolon-separated lists, and `--reasoning` as the line the digest prints. The
+script writes the JSON, so nothing a reasoning line says has to be escaped, and it copies the title,
+company, location, URL and date off the row that surfaced the posting rather than taking them from
+you. Two more flags cover what a row left open: `--posted-at-extracted <date>` when the row carried
+no date and the description states one, and `--same-role-as <source>:<source_id>` on a posting
+`dedup.sh --near` left out, naming the row that was read and carrying its judgment with
+`--detail-read false`. Each of those two flags is the only thing that writes its field, so a
+judgment recorded without them carries neither.
 
-Every candidate ends this run with a line in `jobs.jsonl` — the judgment from its detail read, or
-the one the scan settled from its row. A pass ending with candidates unjudged closes `interrupted`,
-its digest saying how many are left.
+This skill's `templates/jobs-event.example.json` holds one line of each of the five event types a
+run writes — `call`, `surfaced`, `queued`, `detail`, `evaluated` — each in the shape and field order
+the script that writes it produces. Read it to see what a line in the log holds; the scripts above
+write every line a run appends, and none is filled in by hand.
+
+Every posting this run surfaced ends the run with a judgment — the one from its detail read, or the
+one the scan settled from its row. `close-run.sh` refuses a `complete` close while any is still
+unjudged and says how many, so a pass that ends that way closes `interrupted`, its digest saying how
+many are left.
 
 ## Digest
 
 `<date>` is this run's start date in UTC as `YYYY-MM-DD`; the path is
 `notify.digest_path_template` with `{date}` substituted, or `reports/{date}-digest.md` by default.
+
+Both halves of the file are read back out of `jobs.jsonl` rather than written from memory of the
+run. The numbers come from this skill's `scripts/run-counts.sh <workspace>/jobs.jsonl <run_id>`,
+which prints one `key=value` per line; the postings come from
+`scripts/run-matches.sh <workspace>/jobs.jsonl <run_id>`, which prints one tab-separated line per
+posting this run judged — band, source, source_id, title, company_name, location_display,
+source_url, needs_human_check, posted_at, reasoning — strong first, then moderate, weak, and the
+ones judged not relevant. Render each section from the lines carrying its band, so a heading that
+says three strong is followed by the three lines whose band is strong.
+
 The file takes this shape, with this run's numbers and matches in place of the placeholders:
 
 ```
@@ -110,7 +148,7 @@ Agent-data usage: 9 metered calls this run
 ## Strong matches
 - **<title>** — <company> — <location> · <Source>
   <one line of reasoning>.  [view](<source_url>)
-  ⚠ confirm: <the open question, on a judgment that set needs_human_check>
+  ⚠ confirm: <the open question, from the reasoning of a posting whose needs_human_check reads true>
 
 ## Moderate matches
 ## Weak matches
@@ -120,29 +158,40 @@ Agent-data usage: 9 metered calls this run
 <footnotes>
 ```
 
-Strong band first. The counts line opens with the number of lines this run appended to
-`jobs.jsonl`, and its band and per-source numbers count those same lines; the breakdown and the
-` · <Source>` tag appear when the run searched more than one source. A match whose row carried no
-date ends its reasoning line with the date the description stated, or with the fact that none is.
-Footnotes carry the rest: expired detail links, a source lost partway, and — for each company
-board (ashby, greenhouse, lever) that returned rows while this workspace held none of its postings
-yet — a first pass over it reaching back further than the freshness window.
+`Run health:` is the `run_health=` line `close-run.sh` printed. The counts line opens with
+`postings_surfaced` and reads on through `match_strong`, `match_moderate`, `match_weak` and
+`filtered_out`; the parenthetical breaks that opening number down by the `by_source_*` lines and
+appears, with the ` · <Source>` tag on each posting, only when the run searched more than one
+source. `calls_searches` and `calls_detail_reads` close the line, and `calls_total_metered` is the
+usage line under it. A match whose `posted_at` came back empty ends its reasoning line with the date
+the description stated, or with the fact that none is.
+
+Two more lines belong in the digest when these counts are not zero. When `postings_unreviewed` is
+not zero, say how many postings this run never judged. When `searches_never_succeeded` is not zero,
+a footnote names the searches `searches_never_succeeded_ids` lists, each written
+`<source>:<query_id>`, as searches that never returned. Footnotes carry the rest: expired detail
+links, a source lost partway, and — for each company board (ashby, greenhouse, lever) that returned
+rows while this workspace held none of its postings yet — a first pass over it reaching back
+further than the freshness window.
 
 ## Close
 
-Close through the runbook's steps 4 and 5, in that order: the run record, the digest, deleting the
-marker and the scratch directory, then the plugin's
-`skills/job-search-runbook/scripts/validate-workspace.sh <workspace> --post-close <run_id>`,
-fixing whatever it prints. Copy the field set of this skill's `templates/run-record.example.json`,
-with this run's value in each field.
+Close is the runbook's step 4, in the order it gives: `close-run.sh`, then this digest, then
+`clear-run.sh`, then the plugin's
+`skills/job-search-runbook/scripts/validate-workspace.sh <workspace> --post-close <run_id>`, fixing
+whatever it prints. Three values on the `close-run.sh` command line are yours to decide and nothing
+else in the record is. `--trigger` is `manual` for a run the user asked for and `scheduled` for one
+a scheduler started, including the verification run after a schedule change; `--scheduler-id` names
+that job; `--close-state` is the runbook's `complete`, `blocked` or `interrupted`.
+`--brief-revision`, `--sources` and `--queries` come off the open and off this run.
 
-`trigger` is `manual` for a run the user asked for and `scheduled` for one a scheduler started,
-including the verification run after a schedule change. `agent_data_usage` counts the calls this
-run made, retries and failed attempts included, rather than the calls it opened with.
-`run_health` is the single word `healthy` when every search answered and every candidate reached a
-judgment, and `degraded` on every other close, a `blocked` one included — the digest then names
-which source was lost or what stopped the run. `close_state` is a separate field, defined in the
-runbook. Finish by saying what the run found and where the digest is, in plain language.
+The script fills the rest of the record from `run-counts.sh` and one clock read, so the record and
+the digest are built from the same log and cannot disagree — this skill's
+`templates/run-record.example.json` shows the fields it writes. It works out `run_health` as well,
+and prints it as `run_health=healthy` or `run_health=degraded`: a run reads `degraded` when it
+closed anything but `complete`, left a posting unjudged, had a search that never returned after its
+retries, or judged a posting relevant without a band. Finish by saying what the run found and where
+the digest is, in plain language.
 
 ## When a call or a run stops early
 
