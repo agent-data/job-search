@@ -185,7 +185,8 @@ rawfield() { awk -F'\t' -v p="$1" '$1 == p { print $2; exit }' "$scan"; }
 # `^data.query.`, where each dot matches any character (measured — `dataXqueryYz` matches it).
 haspath() { awk -F'\t' -v p="$1" '$1 ~ p { found = 1; exit } END { exit !found }' "$scan"; }
 
-# An error body: a top-level `error` object. error.source is "service", never a job source.
+# An error body: a top-level `error` object. error.source names what rejected the call — "service"
+# or "client" — and is never a job source, so nothing below reads a source out of it.
 if [ -n "$(field error.code)" ]; then
   code=$(field error.code)
   msg=$(field error.message)
