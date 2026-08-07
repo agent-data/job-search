@@ -3545,7 +3545,8 @@ def test_an_empty_log_prints_zeroes(tmp_path):
 
 - [ ] **Step 2: Run the tests and watch them fail**
 
-Run: `python3 -m pytest tests/test_mechanics_scripts.py -k pipeline -v`
+Run: `python3 -m pytest tests/test_mechanics_scripts.py -k "last_line_for_a_posting or not_relevant_is_not_in_the_pipeline or reacts_to_enters_the_pipeline or without_a_judgment_are_not_in_the_pipeline or to_confirm_counts_pipeline or same_role_is_counted_once or empty_log_prints_zeroes" -v`, then the whole module.
+Expected: **7 collected** — confirm with `--collect-only -q` first. `-k pipeline` matches only four of the seven names below, so three would never run; both it and the selector above were measured on 2026-08-07 to collect 0 of the module's 439 today, so anything the one above picks up after Step 1 is one of the seven.
 Expected: FAIL — the script does not exist.
 
 - [ ] **Step 3: Write `pipeline-counts.sh`**
@@ -3623,7 +3624,8 @@ END {
 
 - [ ] **Step 5: Run the tests to verify they pass**
 
-Run: `python3 -m pytest tests/test_mechanics_scripts.py -k pipeline -v`
+Run: `python3 -m pytest tests/test_mechanics_scripts.py -k "last_line_for_a_posting or not_relevant_is_not_in_the_pipeline or reacts_to_enters_the_pipeline or without_a_judgment_are_not_in_the_pipeline or to_confirm_counts_pipeline or same_role_is_counted_once or empty_log_prints_zeroes" -v`, then the whole module.
+Expected: **7 collected** — confirm with `--collect-only -q` first. `-k pipeline` matches only four of the seven names below, so three would never run; both it and the selector above were measured on 2026-08-07 to collect 0 of the module's 439 today, so anything the one above picks up after Step 1 is one of the seven.
 Expected: all seven PASS.
 
 - [ ] **Step 6: Commit**
