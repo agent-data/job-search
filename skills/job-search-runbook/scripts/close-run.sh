@@ -17,11 +17,14 @@
 #
 # The fourth term is what carries the unbanded row into the record. Such a row is counted in
 # postings_reviewed and in neither matches nor filtered_out, so the record does not add up:
-# measured, one unbanded row among two reviewed postings gives
-# match_strong + match_moderate + match_weak + filtered_out = 1 against postings_reviewed = 2, and
-# validate-workspace.sh passes that workspace clean. run_health is the only field that can hold it —
-# the digest reads run_health off this script's stdout, by which point the stderr line below is
-# gone.
+# measured on 2026-08-07, one unbanded row among two reviewed postings gives
+# match_strong + match_moderate + match_weak + filtered_out = 1 against postings_reviewed = 2, this
+# script writes the record and prints run_health=degraded at exit 0, and
+# validate-workspace.sh --post-close then reports
+# `INVALID runs/<run_id>.json bands-do-not-sum-to-reviewed 1 vs 2` at exit 1. run_health is what
+# carries the fact into the digest, which reads it off this script's stdout by which point the
+# stderr line below is gone; the validator names the same record separately, for a reader checking
+# the close rather than writing it.
 #
 # A close_state of complete over unjudged postings is refused and nothing is written: a run that
 # did not finish must not read as one that did. A lost search does not block the close; the run
@@ -92,7 +95,7 @@ esac
 # --close-state complete` printed run_health=healthy, exited 0, and left the record at ws/pwned.json
 # with runs/ empty.
 #
-# A run id that traverses nothing is refused too, and for a second reason. validate-workspace.sh:186
+# A run id that traverses nothing is refused too, and for a second reason. validate-workspace.sh:237
 # reads a file in runs/ as a run record only when its whole name matches the same rule, so a record
 # named anything else is skipped by every check the workspace has: measured, a workspace holding
 # runs/not-a-run-id.json gets no line about it at all.
@@ -102,25 +105,23 @@ esac
 # ANY line matches — so a run_id carrying a newline passed on the strength of one well-formed line.
 # Measured on 2026-08-06 with the grep form and a run id of `2026-07-30T15-04-02Z` plus a trailing
 # newline, under mawk, which is what Ubuntu CI runs: run_health=healthy, exit 0, and a record whose
-# filename holds a literal newline. validate-workspace.sh reads that one rather than skipping it —
-# its own check is a per-line grep too — and then reports the finding broken across two lines.
+# filename holds a literal newline.
 #
 # The digits are written out one by one rather than as `[0-9]`, because a range inside a bracket
 # expression is decided by the collation order the locale sets, and a list of ten characters is not.
 # Measured on 2026-08-06 with a run id spelled in Arabic-Indic digits: `[0-9]` matched it under
 # LC_ALL=ar_SA.UTF-8 in sh and bash, and refused it under LC_ALL=C, LC_ALL=en_US.UTF-8 and dash,
 # while `[0123456789]` refused it under all three locales in all three shells and still accepted
-# 2026-07-30T15-04-02Z. validate-workspace.sh decides with `grep -E`, which refuses that id under
-# every one of the three, so the range form let this script write a record that script would not
-# read — the invisible record the whole check exists to prevent.
+# 2026-07-30T15-04-02Z. The range form therefore let this script write, under one locale, a record
+# named in digits that validate-workspace.sh refuses — the invisible record the whole check exists
+# to prevent.
 #
-# Spelling the format out here rather than sharing validate-workspace.sh:50's expression is the
-# trade this makes: one guard with no per-line behaviour, against two files stating the same rule in
-# two notations. tests/test_mechanics_scripts.py drives both notations over one table of single-line
-# run ids, under two locales, and requires the same verdict for each. That table is where a
-# divergence gets caught; it is not a proof that none is left. One is known and deliberate: this
-# guard refuses a run id holding a newline and validate-workspace.sh:186 reads a filename holding
-# one, because its check is a per-line grep.
+# Spelling the format out here rather than sharing one statement of it with validate-workspace.sh:73
+# is the trade this makes: one guard per script, against three files stating the same rule.
+# tests/test_mechanics_scripts.py drives all three over one table of run ids, under two locales, and
+# requires the same verdict for each. That table is where a divergence gets caught; it is not a
+# proof that none is left, because three copies that drifted together would survive it. What pins
+# the verdicts themselves is the by-hand table of bad ids in that same file.
 case $run_id in
   [0123456789][0123456789][0123456789][0123456789]-[0123456789][0123456789]-[0123456789][0123456789]T[0123456789][0123456789]-[0123456789][0123456789]-[0123456789][0123456789]Z) ;;
   *) die "<run_id> must be a UTC timestamp with dashes for the colons, like 2026-07-30T15-04-02Z, and got: $run_id" ;;
@@ -223,7 +224,7 @@ lostids=$(get searches_never_succeeded_ids)
 # combinations. An unreadable postings_unreviewed would therefore read as no posting left unjudged
 # and let a complete close write a record over postings nobody judged.
 #
-# The digits are written out one by one here for the reason measured at :108-115, and negating the
+# The digits are written out one by one here for the reason measured at :110-117, and negating the
 # bracket expression with `!` does not change it: a range is still decided by the collation order
 # the locale sets. Measured on 2026-08-06 with the Arabic-Indic ٢, `*[!0-9]*` called it a number
 # under LC_ALL=ar_SA.UTF-8 in sh and in bash, and not a number under LC_ALL=C, under

@@ -3331,10 +3331,15 @@ def path_without_a_digest_command(tmp_path):
     The twelve were measured by dropping one at a time and comparing the whole run against the full
     list: each of these changes what the run prints or its status, and `wc` and `cat` change
     nothing. Four of them need a workspace of the right shape before they run at all — `grep`,
-    `head` and `cut` read a run record's fields, all three on `validate-workspace.sh:71`, and
+    `head` and `cut` read a run record's fields, all three on `validate-workspace.sh:103`, and
     `sort` prints the findings — so on a clean workspace with no run record neither script runs any
     of the four. That is why the case below writes a record, and a broken one, rather than reusing
     `tmp_workspace` as it comes.
+
+    The twelve cover the paths these cases drive, which is `open-run.sh` and the validator without
+    `--post-close`. `--post-close` on a workspace holding that run's record reaches `sed`, `touch`
+    and `tr` as well; no case here drives it, and no case here should be read as having measured
+    those three.
 
     `sh` is on the list but no case here proves it. Dropping it raises `FileNotFoundError` from
     `run_script` instead, because `subprocess.run(["sh", …], env=e)` resolves the interpreter
@@ -3401,12 +3406,14 @@ def test_a_present_brief_with_no_way_to_digest_it_is_not_called_missing(tmp_work
 
 @pytest.mark.skipif(not shutil.which("dash"), reason="dash is not installed here")
 def test_opening_a_run_runs_under_dash(tmp_workspace):
-    """One of the two shipped scripts that run another shipped script rather than an awk program —
-    `command grep -rn '\\.sh"' skills/*/scripts/*.sh` returns two lines, `open-run.sh:126` and
-    `close-run.sh:172` — so it is run end to end under strict dash: `${1:?}`, `command -v`, the
-    `printf ''` that writes the marker and the `sh` call on `validate-workspace.sh` are none of them
-    exercised by `dash -n`. `close-run.sh` gets the same treatment at
-    `test_closing_and_clearing_a_run_run_under_dash`."""
+    """One of the three shipped scripts that run another shipped script rather than an awk program —
+    `command grep -rn '\\.sh"' skills/*/scripts/*.sh` returns three lines, `open-run.sh:126`,
+    `close-run.sh:175` and `validate-workspace.sh:332` — so it is run end to end under strict dash:
+    `${1:?}`, `command -v`, the `printf ''` that writes the marker and the `sh` call on
+    `validate-workspace.sh` are none of them exercised by `dash -n`. `close-run.sh` gets the same
+    treatment at `test_closing_and_clearing_a_run_run_under_dash`, and `validate-workspace.sh` at
+    `test_the_count_and_timestamp_checks_run_under_every_shell` in
+    `tests/test_validate_workspace.py`, which is the case that drives its `sh` call."""
     r = run_script(OPEN_RUN, tmp_workspace, shell="dash")
     assert r.returncode == 0, r.stdout + r.stderr
     out = parsed_output(r)
@@ -4070,7 +4077,7 @@ AR_DIGIT_RUN_ID = "٢٠٢٦-٠٧-٣٠T١٥-٠٤-٠٢Z"
 # Run ids no `open-run.sh` can mint. The first two walk out of `runs/`; the next two carry a
 # character an identifier may not hold; the rest traverse nothing and are still not run ids.
 #
-# The empty string is deliberately not here. `${2:?}` at `close-run.sh:64` and `clear-run.sh:22`
+# The empty string is deliberately not here. `${2:?}` at `close-run.sh:67` and `clear-run.sh:22`
 # refuses it before the format check ever runs, and the code that picks the status is the shell's,
 # so it is 1 under sh and 2 under dash. A case for it would pass with the format check deleted and
 # would be red under one of the two shells the suite runs.
@@ -4163,7 +4170,7 @@ def test_a_run_id_that_is_not_a_run_id_is_refused_by_the_close(tmp_workspace, ba
     record lands in there, so that command needs no directory made first. A run that reports itself
     complete and healthy while its record is somewhere no reader looks is worse than one that fails.
 
-    The ids that traverse nothing are here for a second reason: `validate-workspace.sh:186` reads a
+    The ids that traverse nothing are here for a second reason: `validate-workspace.sh:237` reads a
     file in `runs/` as a run record only when its whole name matches the same rule, so a record
     named anything else is skipped by every check the workspace has — measured, a workspace holding
     `runs/not-a-run-id.json` gets no line about it at all — and `started_at` would carry the run id
@@ -4236,48 +4243,75 @@ def test_a_run_id_that_is_not_a_run_id_is_refused_by_the_clear(tmp_workspace, ba
 
 def _validator_reads_a_record_named(value, locale=None):
     """Whether `validate-workspace.sh` would read a file named `<value>.json` in `runs/` as a run
-    record, decided by running the expression that script uses rather than by restating it here.
+    record, decided by running the glob that script uses rather than by restating it here.
+
+    The glob is expanded out of a variable in a `case`, which is what the script itself does at
+    both places it decides a run id, so a value carrying a newline is compared the same way here as
+    there. Running the validator on a real file instead would settle nothing for the four ids that
+    hold a `/` or a control character, since no filesystem takes those names.
     """
     text = (RUNBOOK_SCRIPTS / "validate-workspace.sh").read_text(encoding="utf-8")
-    found = re.findall(r"^RUN_ID_RE='(.+)'$", text, re.M)
+    found = re.findall(r"^RUN_ID_GLOB='(.+)'$", text, re.M)
     assert len(found) == 1, found
     env = dict(os.environ)
     if locale:
         env["LC_ALL"] = locale
-    r = subprocess.run(["grep", "-qE", found[0]], input=value + "\n",
+    env["JS_VALUE"] = value
+    env["JS_GLOB"] = found[0]
+    r = subprocess.run(["sh", "-c", 'case $JS_VALUE in $JS_GLOB) exit 0 ;; *) exit 1 ;; esac'],
                        capture_output=True, text=True, env=env)
     return r.returncode == 0
+
+
+def test_the_validators_glob_reads_a_real_record_the_way_this_helper_says_it_does(tmp_workspace):
+    """`_validator_reads_a_record_named` runs the glob rather than the script, so something has to
+    tie the two together. A well-formed name and a name that is not a run id both go through the
+    helper and through the validator on a real file, and the two have to agree.
+
+    The record written here is missing `close_state`, so a finding naming it is what shows the file
+    was read rather than skipped by a rule this comparison never reaches.
+    """
+    for name, expected in (("2026-07-30T15-04-02Z", True), ("not-a-run-id", False)):
+        (tmp_workspace / "runs" / (name + ".json")).write_text(
+            json.dumps({"run_id": name, "trigger": "manual"}), encoding="utf-8")
+        assert _validator_reads_a_record_named(name) is expected, name
+        r = run_script(VALIDATE, tmp_workspace)
+        read_it = ("runs/%s.json missing-key close_state" % name) in r.stdout
+        assert read_it is expected, (name, r.stdout)
+        (tmp_workspace / "runs" / (name + ".json")).unlink()
 
 
 @pytest.mark.parametrize("locale", [None, pytest.param(COLLATING_LOCALE,
                                                        marks=needs_collating_locale)],
                          ids=["default-locale", "collating-locale"])
-@pytest.mark.parametrize("value", ["2026-07-30T15-04-02Z", "2026-12-31T23-59-59Z"] + BAD_RUN_IDS,
+@pytest.mark.parametrize("value",
+                         ["2026-07-30T15-04-02Z", "2026-12-31T23-59-59Z"] + ALL_BAD_RUN_IDS,
                          ids=run_id_case_id)
 def test_the_two_scripts_and_the_validator_take_the_same_run_ids(tmp_workspace, value, locale):
-    """`close-run.sh` and `clear-run.sh` spell the rule as a `case` glob and
-    `validate-workspace.sh` spells it as a regular expression, so nothing compares as text. What has
-    to agree is which ids they take, and that is what this drives: every id goes through both
-    scripts and through the validator's own expression, and all three have to reach the same
+    """All three spell the rule as a `case` glob, and each holds its own copy, so nothing compares
+    as text. What has to agree is which ids they take, and that is what this drives: every id goes
+    through both scripts and through the validator's own glob, and all three have to reach the same
     verdict.
 
     A script that drifted wider would write a record under a name the validator then skips; one that
     drifted narrower would refuse an id `open-run.sh` had already minted and written a marker for.
 
     Under two locales, because a `[0-9]` range in a shell bracket expression is decided by the
-    locale's collation order and the validator's `grep -E` is not: with `[0-9]` in the globs, this
-    case measurably disagreed on `AR_DIGIT_RUN_ID` under `ar_SA.UTF-8` and agreed under the default
-    one. The globs list their ten digits out for that reason.
+    locale's collation order: with `[0-9]` in the globs, this case measurably disagreed on
+    `AR_DIGIT_RUN_ID` under `ar_SA.UTF-8` and agreed under the default one, because the validator
+    decided with `grep -E`, which does not move. All three list their ten digits out now, so
+    nothing here moves with the locale — and the case stays, since that is the property being kept.
 
-    Single-line ids only. The validator decides by piping a filename into `grep -qE`, which takes
-    any one matching line, so it and the `case` globs genuinely disagree about a name holding a
-    newline — the scripts refuse those and the validator would read one. That is
-    `validate-workspace.sh`'s own behaviour to settle, and the cases above pin what these two
-    scripts do about it.
+    The multi-line ids are in the table too. They were left out while the validator decided by
+    piping a filename into `grep -qE`, which takes any one matching line: it read a name holding a
+    newline as a run record while both scripts refused to write one. `validate-workspace.sh` now
+    compares the whole word the way they do.
 
-    On its own this compares two implementations, so all three drifting together would survive it.
+    On its own this compares three implementations, so all three drifting together would survive it.
     What pins the absolute verdicts is `..._refused_by_the_close` and `..._refused_by_the_clear`
-    above, which name every bad id by hand.
+    above, which name every bad id by hand, and
+    `test_a_record_whose_name_holds_a_newline_is_skipped` in `tests/test_validate_workspace.py`,
+    which names the validator's.
     """
     (tmp_workspace / "jobs.jsonl").write_text("")
     env = {"LC_ALL": locale} if locale else None
@@ -4337,8 +4371,9 @@ def test_a_real_run_id_still_closes_under_a_collating_locale(tmp_workspace):
 # Ten run ids, each carrying one digit in all fourteen digit positions of the format. Between them
 # they cover every position-and-digit pair either `case` glob can be wrong about — 14 × 10 = 140,
 # asserted below rather than counted by eye. They are shape probes rather than instants: the globs
-# and `validate-workspace.sh:50` both check that a run id is twenty characters in the documented
-# arrangement, not that it names a real time.
+# and `validate-workspace.sh:73` both check that a run id is twenty characters in the documented
+# arrangement, not that it names a real time. `tests/test_validate_workspace.py` drives the same
+# ten through the validator's copy, which these cases do not reach.
 #
 # The suite settled nothing about this before. Measured on 2026-08-06 at commit `1d1dc40` by
 # dropping `8` from the first bracket of `close-run.sh`'s glob and running the module with

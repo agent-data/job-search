@@ -29,19 +29,19 @@ run_id=${2:?usage: clear-run.sh <workspace> <run_id>}
 # with its contents. Both preconditions are needed: `rm -rf` removes nothing when a directory along
 # the path is absent, and the record check stops the run before either rm without that file.
 #
-# A `case` glob rather than a grep on the value, for the reason written out at close-run.sh:100-106:
+# A `case` glob rather than a grep on the value, for the reason written out at close-run.sh:103-108:
 # a grep on `printf '%s\n' "$run_id"` exits 0 when any one line matches, so a run id carrying a
 # newline got through on the strength of a single well-formed line. `case` compares the whole word.
 #
 # The digits are written out one by one rather than as `[0-9]`, for the reason measured at
-# close-run.sh:108-115: a range inside a bracket expression is decided by the collation order the
+# close-run.sh:110-117: a range inside a bracket expression is decided by the collation order the
 # locale sets, so `[0-9]` matched a run id spelled in Arabic-Indic digits under LC_ALL=ar_SA.UTF-8.
 # A list of ten characters is not a range and no locale changes it.
 #
-# validate-workspace.sh:50 states the same rule as a regular expression, and :186 uses it to decide
-# whether a file in runs/ is a run record at all. The two notations are driven over one table of
-# single-line run ids in tests/test_mechanics_scripts.py, under two locales, and must give the same
-# verdict for each.
+# validate-workspace.sh:73 states the same rule in the same notation, and uses it both to decide
+# whether a file in runs/ is a run record at all and to check the run id --post-close is given. The
+# three copies are driven over one table of run ids in tests/test_mechanics_scripts.py, under two
+# locales, and must give the same verdict for each.
 case $run_id in
   [0123456789][0123456789][0123456789][0123456789]-[0123456789][0123456789]-[0123456789][0123456789]T[0123456789][0123456789]-[0123456789][0123456789]-[0123456789][0123456789]Z) ;;
   *)
