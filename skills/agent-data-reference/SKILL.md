@@ -45,6 +45,7 @@ check, so one query across three enabled sources is three calls.
 | Paging works through `--cursor` on ashby, greenhouse, and lever, and LinkedIn rejects a cursor with a non-retryable 400 | When a run pages: take the next page from `data.pagination.next_cursor` while `has_more` is true, replaying every other flag exactly as sent. LinkedIn returns one page, so there is no next page to fetch |
 | An older service deployment ignores `--source` and answers as linkedin, so a search aimed at another source comes back holding linkedin rows | After every search, compare the echoed `data.query.source` against the source you asked for (an absent echo counts as linkedin); when the two differ, file the returned rows under the source that actually answered, and skip the rest of that source's queries this run |
 | ashby leaves `posted_at` null and carries the date in `published_at`; greenhouse and lever fill both; LinkedIn fills `posted_at` and leaves `published_at` null | Take freshness from whichever of the two is present, and from the later one when both are |
+| The two date fields are not written the same way: ashby's `published_at` carries no timezone (`2026-08-07T16:28:53.710000`) where LinkedIn's `posted_at` ends in `+00:00` (`2026-07-25T00:00:00+00:00`) | Compare them as text only to order rows by day, which is the part both strings start with. Anything finer needs each value parsed, and ashby's names no zone |
 | `salary_display` is free text on every source and arrives as raw HTML on some lever rows; `employment_type` comes back as FULL_TIME, FullTime, or Full-time depending on the source | Strip any markup from `salary_display` and quote the remaining text as written; read `employment_type` as text, since its casing differs per source |
 | A detail read returns `missing_fields[]`, naming what the page did not yield | Report each as a detail the posting leaves unstated |
 | `source_url` on ashby, greenhouse, and lever is the live apply page; LinkedIn's carries tracking params | Link it as where the user applies |
@@ -55,13 +56,24 @@ check, so one query across three enabled sources is three calls.
 
 ```sh
 agent-data call f9a6ec16-0bfd-44d8-b3ee-073776745ee7 get-posting \
-  --posting_id <the row's id> --source_url <the same row's source_url> --source <the row's source>
+  --posting_id <the row's id> --source_url <the same row's source_url> --source <the row's source> \
+  > posting.json 2> posting.err
 ```
 
 `posting_id` and `source_url` are both required. `--source` is optional, and passing the row's own
 value removes an inference step. `--fields` is optional and trims the response.
 
 ## When a call fails
+
+A failed call writes its body to stderr and exits non-zero, and stdout stays empty. Redirect both
+streams on every call — `agent-data call … > resp.json 2> resp.err` — because a call captured with
+`>` alone leaves an empty file and no copy of the error, and `retryable`, `code` and `param` are
+only in that body.
+
+On a success the request id is at `meta.request_id`, and on a failure it is at `error.request_id`;
+neither response carries one at the top level. `error.source` names what rejected the call — it
+comes back as `service` or `client`, never as a job source — so nothing reads a job source out of
+an error body.
 
 Branch on the response's `retryable` boolean. The service collapses most 4xx failures into
 `validation_error` and names the offending field in `error.param`, so several different problems
