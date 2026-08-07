@@ -42,7 +42,7 @@
 - **Word budget:** `AGENTS.md:29` sets 10,000 words across the seven `SKILL.md` files. `wc -w skills/*/SKILL.md` reports 9,092 at the start of this plan. Exceeding 10,000 at the end is a blocking defect.
 - **Public repo, MIT, © Aptiq Labs, Inc.** No tracked file — not a doc, not a commit message — mentions a hosted or commercial product. This is a counting and timestamp fix.
 - **Prose voice.** The `SKILL.md` files are continuous prose read by a model at runtime. Do not restructure them into checklists or add headings that were not there.
-- **No metaphors, no invented jargon.** Say what the code does. "The last line for a `source` and `source_id` wins", never "the fold". Personification is the same failure: a gate does not see, a contract does not know.
+- **No metaphors, no invented jargon.** Say what the code does. A posting's current state is "the last `evaluated` line for a `source` and `source_id`", never "the fold" — and not "the last line", because `surfaced`, `queued` and `detail` events carry those two fields too. Personification is the same failure: a gate does not see, a contract does not know.
 - **Never state a measurable fact without running the command that settles it.** Cite the command next to the number.
 - **`git add` names paths.** No `git add -A` in any commit step; a blunt `-A` is how an untracked stray gets committed.
 - Unchanged: the `strong / moderate / weak` vocabulary; `run_id`'s format (`2026-07-30T15-04-02Z`); `.scratch/` and `.started-<run_id>` semantics. No token or cost field is added.
@@ -74,10 +74,12 @@ Single-line JSON, one event per line, appended to `<workspace>/jobs.jsonl`.
 {"event":"surfaced","run_id":"…","query_id":"…","source":"linkedin","source_id":"4449006488","posting_id_at_seen":"jp_74856f265f40","source_url":"…","title":"…","company_name":"…","location_display":"…","salary_display":null,"employment_type":null,"department_name":null,"team_name":null,"is_remote":null,"workplace_type":null,"posted_at":"2026-08-04T00:00:00+00:00","detail_available":true,"ts":"…"}
 {"event":"queued","run_id":"…","source":"linkedin","source_id":"4449006488","ts":"…"}
 {"event":"detail","run_id":"…","source":"linkedin","source_id":"4449006488","description_markdown":"…","employment_type":"…","apply_url":"…","is_listed":true,"is_remote":null,"workplace_type":null,"staleness_status":"fresh","ts":"…"}
-{"event":"evaluated","run_id":"…","source":"linkedin","source_id":"4449006488","title":"…","company_name":"…","location_display":"…","source_url":"…","posted_at":"…","detail_read":true,"relevant":true,"match":"strong","needs_human_check":false,"status":"new","ts":"…","dealbreakers_hit":[],"unknowns":["equity"],"reasoning":"…"}
+{"event":"evaluated","run_id":"…","source":"linkedin","source_id":"4449006488","title":"…","company_name":"…","location_display":"…","source_url":"…","posted_at":"…","detail_read":true,"relevant":true,"match":"strong","needs_human_check":false,"ts":"…","dealbreakers_hit":[],"unknowns":["equity"],"reasoning":"…"}
 ```
 
-`status_changed` is unchanged.
+There is no `status_changed` event. It was removed on 2026-08-07 along with the `status` field — see [`2026-08-07-remove-status-changed.md`](2026-08-07-remove-status-changed.md). A posting's current state is its last `evaluated` line.
+
+The `evaluated` shape above carried `"status":"new"` until 2026-08-07 and no longer does, because Task 13 Step 1 copies these shapes into `templates/jobs-event.example.json` and would otherwise write the removed field back into a shipped template.
 
 **Field order in the `evaluated` event is load-bearing.** Every structural and display field comes before `reasoning`, `dealbreakers_hit` and `unknowns`. The field readers find a key by its first occurrence, so free text that happens to contain `"title":` cannot be mistaken for the field when the real field was already found earlier in the line.
 
@@ -3456,6 +3458,8 @@ git commit -m "feat(runbook): fail a run record whose counts or timestamps contr
 - Consumes: `jobs.jsonl` across all runs; `event-field.awk` from `job-search-run/scripts/`.
 - Produces: `pipeline-counts.sh <jobs.jsonl>` prints `new=`, `interested=`, `applied=`, `rejected=`, `archived=`, `to_confirm=`, one per line.
 
+**This task landed at `08baee7` and Task 2 of [`2026-08-07-remove-status-changed.md`](2026-08-07-remove-status-changed.md) replaces what it shipped** with `posting-counts.sh`, which prints `relevant`, `to_confirm` and `filtered`. (`git log --diff-filter=A -- skills/job-search/scripts/pipeline-counts.sh` names that commit.) The `status_changed` branch in the awk below, the three tests that only exist for it, and the paragraph about a posting the user has reacted to all go with it. The step text below is left as the record of what was built, except for the state rule in the script header, which was corrected on 2026-08-07 so that nobody starting from this copy carries the wrong rule into the replacement.
+
 **A posting is in the pipeline when its last judgment says it is relevant, or when the user has reacted to it.** `record-judgment.sh` writes `"status":"new"` on every judgment, a rejection included — the status is the funnel's starting state, not a claim about relevance, and making the event shape conditional would cost the uniform field set the whole design rests on. So the filter lives here. Without it the home card's `new` count is dominated by rejects: this change makes a run write a line for every posting it surfaced instead of only the handful it read, so `new` would jump from around nine to around fifty, nearly all of them postings the run threw out.
 
 The second clause matters because the user can react to a rejected posting — `job-search/SKILL.md:161`, "already applied there" — and that reaction pulls it in.
@@ -3559,10 +3563,11 @@ Expected: FAIL — the script does not exist.
 #
 # Prints one key=value per line: new, interested, applied, rejected, archived, to_confirm.
 #
-# A posting can have several lines — the judgment the run that found it wrote, then a
-# status_changed line when the user says they applied somewhere. Its current state is the last line
-# sharing its source and source_id. A posting that names another in same_role_as is the same
-# opening seen twice and counts once, under the one that was read.
+# A posting can have several lines — the judgment the run that found it wrote, plus the surfaced,
+# queued and detail lines that run wrote about it. Its current state is its last evaluated line
+# sharing its source and source_id, because evaluated is the only event type that says what a run
+# decided about a posting. A posting that names another in same_role_as is the same opening seen
+# twice and counts once, under the one that was read.
 #
 # A posting the run judged not relevant is not in the pipeline. Its judgment still carries
 # status new — that is the funnel's starting state, not a claim about relevance — and a run now
@@ -3664,7 +3669,7 @@ Then state what the model still supplies: `trigger`, `scheduler_id`, `close_stat
 
 - [ ] **Step 2: Rewrite the file table's `jobs.jsonl` row**
 
-Replace "a posting's current state is the fold of its events by `source` + `source_id`" with a plain statement. The rule: a posting can have several lines, and its current state is the last line sharing its `source` and `source_id`. Name the five event types a run writes — `call`, `surfaced`, `queued`, `detail`, `evaluated` — plus `status_changed` for what the user tells it.
+Replace "a posting's current state is the fold of its events by `source` + `source_id`" with a plain statement. The rule: a posting can have several lines sharing its `source` and `source_id`, and its current state is the last `evaluated` line among them. Name the five event types a run writes — `call`, `surfaced`, `queued`, `detail`, `evaluated` — and nothing else; those five are every event type there is.
 
 - [ ] **Step 3: Remove full job descriptions from the off-disk list**
 
@@ -3784,7 +3789,9 @@ git commit -m "docs(run): record the run's events with the scripts, and count fr
 - Consumes: `pipeline-counts.sh` (Task 11), the record's new fields (Task 9).
 - Produces: prose. Graded by the evals in Task 17.
 
-- [ ] **Step 1: Rewrite the home view's read**
+- [ ] **Step 1: Rewrite the home view's read** — done by Task 4 Step 1 of [`2026-08-07-remove-status-changed.md`](2026-08-07-remove-status-changed.md); skip it here.
+
+That plan deletes `pipeline-counts.sh` and puts `posting-counts.sh` in its place, so running this step as written would name a script that no longer exists. The text below is the record of what it said.
 
 `:127` currently says to read "`jobs.jsonl` folded to one entry per `source` + `source_id` with the last line winning, counting a line that names another posting in `same_role_as` as that one role". Replace with a call to `skills/job-search/scripts/pipeline-counts.sh <workspace>/jobs.jsonl`, which prints `new`, `interested`, `applied`, `rejected`, `archived` and `to_confirm`. The rule about the last line winning stays in the runbook's file table, where it has its one home.
 
@@ -3792,24 +3799,20 @@ git commit -m "docs(run): record the run's events with the scripts, and count fr
 
 A newest record whose `postings_unreviewed` is not zero earns a line under the card saying how many postings that run never judged and offering to run again — the same shape as the existing `blocked`/`interrupted` line at `:150-152`.
 
-- [ ] **Step 3: Say how a posting the user names is found**
-
-The reaction row at `:161` tells the agent to append a `status_changed` event for "that posting's line in `jobs.jsonl`". Say how to find it now that the log is large: every `evaluated` event carries the posting's title, company, location and URL, so `grep` the company or the title in `jobs.jsonl` and take the `source` and `source_id` from the line that matches. Ask which one when more than one matches.
-
-- [ ] **Step 4: Rewrite "Explaining what a run spent"**
+- [ ] **Step 3: Rewrite "Explaining what a run spent"**
 
 `agent_data_usage` is now counted from the run's `call` events rather than reported, so the numbers in the record are what the run actually spent — retries, repeats and failed attempts included. Say that. The billing pointer and the rate table pointer stay as they are.
 
-- [ ] **Step 5: Add two symptom rows**
+- [ ] **Step 4: Add two symptom rows**
 
 | The digest says the run left postings unjudged | the run stopped before it finished, or a source failed partway | Its record's `postings_unreviewed` is how many; run the search again, which offers them once more because a posting with no judgment is not treated as already seen |
 | The run says `degraded` but nothing looks wrong | a search never returned after its retries, so its postings were never seen at all | The digest's footnote names which search; the record's counts cover only what did return, and running again is what covers the rest |
 
-- [ ] **Step 6: Run the gates**
+- [ ] **Step 5: Run the gates**
 
 Run: `python3 scripts/doc_lint.py --root . && python3 scripts/philosophy_guard.py --root . && python3 -m pytest -q && wc -w skills/*/SKILL.md`
 
-- [ ] **Step 7: Commit**
+- [ ] **Step 6: Commit**
 
 ```bash
 git add skills/job-search/SKILL.md skills/job-search-agent/SKILL.md
@@ -3858,7 +3861,7 @@ git commit -m "docs(agent-data): record where an error body goes and where a req
 ### Task 16: The language sweep
 
 **Files:**
-- Modify: `skills/job-search/evals/evals.json:65`, `docs/RELIABILITY.md:41,44,53`, `ARCHITECTURE.md:96`, `TESTING.md:302`, `INSTALL_FOR_HERMES.md:264`, `docs/design-docs/multi-harness-portability.md:588`, `skills/job-search-run/evals/evals.json:174,193,194`
+- Modify: `docs/RELIABILITY.md:41,44,53`, `ARCHITECTURE.md:96`, `TESTING.md:302`, `INSTALL_FOR_HERMES.md:264`, `docs/design-docs/multi-harness-portability.md:588`, `skills/job-search-run/evals/evals.json:174,193,194`
 
 Live files only. Dated design docs and dated plans keep their wording as written records — which is why `docs/superpowers/plans/2026-07-23-hermes-plugin-install.md:720` is **not** on this list, though an earlier draft of this plan had it there while stating the opposite rule two lines above. `evals/baseline/2026-07-30-red-baseline.md:178` ("the close state's presence and spelling") is literal — it means whether `complete` is spelled correctly — and stays.
 
@@ -3868,12 +3871,17 @@ Each of these stands in for a plain fact. Say the fact.
 
 | File | Line | Now | Say instead |
 |---|---|---|---|
-| `skills/job-search/evals/evals.json` | 65 | "The pipeline counts are the fold of jobs.jsonl by source and source_id with the last line winning" | "The pipeline counts come from `pipeline-counts.sh`, which takes the last line for each source and source_id" |
 | `docs/RELIABILITY.md` | 41 | "the event-log fold" | "working out a posting's current state from its lines" |
 | `docs/RELIABILITY.md` | 44 | "the same event log always folds" | "the same event log always gives the same current state" |
-| `docs/RELIABILITY.md` | 53 | "current state is computed by folding them by dedup key" | "current state is the last line for each dedup key" |
+| `docs/RELIABILITY.md` | 53 | the whole line: "events, and current state is computed by folding them by dedup key (last-write-wins per field)." | "events, and a posting's current state is its last `evaluated` line for that dedup key." |
 | `ARCHITECTURE.md` | 96 | "(known-ids / append / fold)" | "(the known-ids check, the event append, and working out current state)" |
 | `TESTING.md` | 302 | "fold the state" | "work out the current state" |
+
+Two notes on that table.
+
+The `RELIABILITY.md:53` row quotes the whole line rather than the substring the word "fold" matched. This inventory was built by scanning for "fold", and until 2026-08-07 the row's "Now" column read "current state is computed by folding them by dedup key" — it stopped one character before "(last-write-wins per field)", the qualifier that states the rule, because a substring match does not carry what follows it. The replacement written against that truncated quote was "current state is the last line for each dedup key", which is the opposite rule, and this is the one knowledge-base doc that carries the per-field rule: `grep -rn last-write-wins --include='*.md' .` on 2026-08-07, ignoring `evals/results/`, finds it in `docs/RELIABILITY.md:53`, in the dated `docs/design-docs/2026-06-05-os-design.md:168`, and otherwise only in exec-plans and in this plan and its spec. Read the whole line before rewriting one, and quote the whole line here.
+
+`skills/job-search/evals/evals.json:65` was on this table until 2026-08-07. Task 5 Step 2 of [`2026-08-07-remove-status-changed.md`](2026-08-07-remove-status-changed.md) owns that line now: the home card no longer prints pipeline counts, so the sentence is rewritten rather than reworded.
 
 - [ ] **Step 2: Replace "spelling"**
 
@@ -3932,7 +3940,7 @@ Run: `python3 scripts/doc_lint.py --root . && python3 scripts/philosophy_guard.p
 - [ ] **Step 8: Commit**
 
 ```bash
-git add skills/job-search/evals/evals.json skills/job-search-run/evals/evals.json \
+git add skills/job-search-run/evals/evals.json \
         docs/RELIABILITY.md ARCHITECTURE.md TESTING.md INSTALL_FOR_HERMES.md \
         docs/design-docs/multi-harness-portability.md CHANGELOG.md
 git commit -m "docs: say what the code does instead of naming it by metaphor"
@@ -3944,7 +3952,7 @@ git commit -m "docs: say what the code does instead of naming it by metaphor"
 
 **Files:**
 - Modify: `evals/behaviors.md`, `evals/cases/headless-run.yaml`, `evals/cases/kill-midrun.yaml`, `evals/cases/fault-503.yaml`
-- Modify: `skills/job-search-run/evals/evals.json`, `skills/job-search/evals/evals.json`, `skills/job-search-agent/evals/evals.json`
+- Modify: `skills/job-search-run/evals/evals.json`, `skills/job-search-agent/evals/evals.json`
 
 **Everything a skill's prose governs is graded here, by reading the artifacts a run leaves behind.** No assertion may match a substring of a documentation file. This is the existing bar — `evals/behaviors.md:27` already states "No assertion may match substrings of documentation files", and `tests/test_mechanics_scripts.py`'s docstring says "Nothing here asserts how the reference documents word the same rules."
 
@@ -3985,9 +3993,11 @@ Scenario 3 ("every returned row is already judged") still holds: `record-api-res
 
 Add a scenario: **a run killed after the search leaves an honest record.** Kill the run after the last `search-jobs` call, then run `close-run.sh … --close-state interrupted`, and expect the record's `postings_surfaced` to equal the rows the searches returned and `postings_unreviewed` to equal the same number.
 
-- [ ] **Step 4: Update `skills/job-search/evals/evals.json` and `skills/job-search-agent/evals/evals.json`**
+- [ ] **Step 4: Update `skills/job-search-agent/evals/evals.json`**
 
-The home-view scenario's pipeline-count assertion reads whatever `pipeline-counts.sh` prints, not a hand-worked-out number, and gains one expectation: a posting the run judged not relevant is not among the pipeline counts. The agent skill's usage scenario asserts the reported `agent_data_usage` equals the record's, which now equals the `call` events.
+The agent skill's usage scenario asserts the reported `agent_data_usage` equals the record's, which now equals the `call` events.
+
+The home-view scenario in `skills/job-search/evals/evals.json` was this step's other half until 2026-08-07. Task 5 Step 2 of [`2026-08-07-remove-status-changed.md`](2026-08-07-remove-status-changed.md) owns it now, and reseeds it: the nine postings across five statuses it graded are not reachable once every judgment carries the same fields.
 
 - [ ] **Step 5: Check the case files still load**
 
@@ -3998,7 +4008,7 @@ Expected: clean. `eval_harness.py` is not a CI job, so nothing else catches a ma
 
 ```bash
 git add evals/behaviors.md evals/cases/ skills/job-search-run/evals/evals.json \
-        skills/job-search/evals/evals.json skills/job-search-agent/evals/evals.json
+        skills/job-search-agent/evals/evals.json
 git commit -m "test(evals): grade the counts and the listings against the log the run actually wrote"
 ```
 

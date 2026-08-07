@@ -74,8 +74,8 @@ response or computed from `jobs.jsonl`. The model supplies judgments and nothing
 
 ## 3. Architecture
 
-`jobs.jsonl` is already an append-only log where the last line for a `source` + `source_id` wins.
-Four new event types join the `evaluated` one it already holds:
+`jobs.jsonl` is already an append-only log, and a posting's current state is its last `evaluated`
+line for a `source` + `source_id`. Four new event types join the `evaluated` one it already holds:
 
 | Event | Written by | Carries |
 |---|---|---|
@@ -85,7 +85,27 @@ Four new event types join the `evaluated` one it already holds:
 | `detail` | a script, from the get-posting response | `description_markdown` and the detail-only fields |
 | `evaluated` | a script, from the model's judgment | relevant, band, reasoning, dealbreakers, unknowns, needs-human-check |
 
-`status_changed` stays as it is — the user saying they applied somewhere.
+There is no `status_changed` event. It was removed on 2026-08-07 along with the `status` field, by
+`docs/superpowers/plans/2026-08-07-remove-status-changed.md`. That removal is what lets the state
+rule above be one sentence: `evaluated` is the only posting event a state reader looks at, and it
+carries every field on every line.
+
+The state rule opening this section read "the last line for a `source` + `source_id` wins" until
+2026-08-07, and it was wrong when it was written. The rule has been last-write-wins per field since
+`docs/design-docs/2026-06-05-os-design.md:168` — "Current state = fold events by `source_id`
+(last-write-wins per field)" — and `docs/RELIABILITY.md:53` has said the same since 2026-06-07
+(`git log --date=short -L 53,53:docs/RELIABILITY.md` names `3569eba 2026-06-07` as the last commit
+to touch it). Those are the only two files that state it: `grep -rn last-write-wins --include='*.md' .`
+on 2026-08-07, ignoring `evals/results/`, finds it nowhere else but the exec-plans, this spec, and
+the plan it belongs to.
+
+The two rules give different answers. On a log holding an `evaluated` event with `needs_human_check`
+true followed by a `status_changed` event carrying `applied`, the shipped per-field code prints
+`to_confirm=1`, because it carries `needs_human_check` forward from the earlier line; a per-line
+variant prints `to_confirm=0`, because the `status_changed` line does not carry that field.
+Measured 2026-08-07 at `d01d89c` by running `sh skills/job-search/scripts/pipeline-counts.sh` over
+that two-line log. Task 2 of `docs/superpowers/plans/2026-08-07-remove-status-changed.md` replaces
+that script, so re-run the measurement at that commit.
 
 Eight scripts, placed in the skill that owns the step:
 
@@ -98,7 +118,7 @@ Eight scripts, placed in the skill that owns the step:
 | `record-judgment.sh` | run | records one posting's judgment |
 | `run-counts.sh` | run | prints this run's counts, `agent_data_usage` included |
 | `close-run.sh` | runbook | reads the clock for `completed_at`; takes the counts from `run-counts.sh`; writes the record; clears the marker and scratch |
-| `pipeline-counts.sh` | job-search | prints the home view's per-status counts |
+| `posting-counts.sh` | job-search | prints the home view's three numbers: how many postings this workspace's runs judged relevant, how many of those need the user's confirmation, and how many were filtered out |
 
 The `call` event is written for every attempt, including a failed one — it is the record that the
 call happened, which is what makes `agent_data_usage` a count rather than a report. The rows are
@@ -263,7 +283,7 @@ three-query, two-source config at `limit: 25`, a run surfaces up to 150 postings
 and reads roughly 35 in full, so `jobs.jsonl` grows by about 326 KB a run and about 10 MB a month
 on a daily schedule.
 
-That growth is why §8's queue and `pipeline-counts.sh` exist. `grep` and `awk` are unbothered by a
+That growth is why §8's queue and `posting-counts.sh` exist. `grep` and `awk` are unbothered by a
 10 MB file; a context window is not.
 
 ## 10. What changes in each file
@@ -275,8 +295,8 @@ That growth is why §8's queue and `pipeline-counts.sh` exist. `grep` and `awk` 
 | `job-search-run/templates/` | run record gains the seven fields; the event example becomes one per event type |
 | `job-search-runbook/SKILL.md` | steps 2 and 4 become `open-run.sh` and `close-run.sh`; the file table's rule restated plainly; full job descriptions leave the off-disk list |
 | `job-search-runbook/scripts/` | `open-run.sh`, `close-run.sh` new; `validate-workspace.sh` gains the four invariants, the count fields and the two timestamp gates |
-| `job-search/SKILL.md` | the home view calls `pipeline-counts.sh` instead of reading `jobs.jsonl` |
-| `job-search/scripts/` | `pipeline-counts.sh` new |
+| `job-search/SKILL.md` | the home view calls `posting-counts.sh` instead of reading `jobs.jsonl` |
+| `job-search/scripts/` | `posting-counts.sh` new |
 | `job-search-agent/SKILL.md` | `agent_data_usage` is counted, not reported; a symptom row for a run with unreviewed postings |
 | `scripts/doc_lint.py` | `DUP_SIGNATURES`' digest-counts-line entry gains an owner once the rule moves out of prose and into `run-counts.sh` |
 
@@ -303,7 +323,8 @@ exec-plans keep their wording as written records.
 | `skills/job-search-runbook/SKILL.md` | 54 | "the fold of its events" |
 | `skills/job-search/SKILL.md` | 127 | "folded to one entry per" |
 | `skills/job-search/evals/evals.json` | 65 | "the fold of jobs.jsonl by" |
-| `docs/RELIABILITY.md` | 41, 44, 53 | "the event-log fold", "always folds", "computed by folding" |
+| `docs/RELIABILITY.md` | 41, 44 | "the event-log fold", "always folds" |
+| `docs/RELIABILITY.md` | 53 | the whole line: "events, and current state is computed by folding them by dedup key (last-write-wins per field)." |
 | `ARCHITECTURE.md` | 96 | "(known-ids / append / fold)" |
 | `TESTING.md` | 302 | "fold the state" |
 | `INSTALL_FOR_HERMES.md` | 264 | "any `~`/`${VAR}` spelling of the same directory" |
@@ -311,6 +332,14 @@ exec-plans keep their wording as written records.
 | `docs/design-docs/multi-harness-portability.md` | 588 | "command spelling" |
 | `skills/job-search-run/SKILL.md` | 62, 64, 73 | "a steer" as a noun — deleted with the concept, per §8 |
 | `skills/job-search-run/evals/evals.json` | 174, 193, 194 | the same |
+
+The `RELIABILITY.md:53` row carries the whole line, not the substring the scan matched. This table
+was built by scanning for the word "fold", and until 2026-08-07 that row read "computed by folding"
+— which stops one character before "(last-write-wins per field)", the qualifier that states the
+rule, because a substring match does not carry what follows it. The rewrite written against the
+truncated quote said "current state is the last line for each dedup key", the opposite rule, and
+`RELIABILITY.md` is the one knowledge-base doc that carries the per-field rule (see §3). Read the
+whole line before rewriting one, and quote the whole line in an inventory like this.
 
 `evals/baseline/2026-07-30-red-baseline.md:178` ("the close state's presence and spelling") is
 literal — it means whether `complete` is spelled correctly — and stays.
