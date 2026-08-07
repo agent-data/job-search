@@ -4719,7 +4719,9 @@ def test_surfaced_rows_without_a_judgment_are_not_in_the_pipeline(tmp_path):
     Two lines keep them out and either one is enough on its own, which is why this case pins the
     pair rather than one of them. Measured on 2026-08-07 against `pipeline-counts.awk`: with the
     event-type filter removed this case still passes, with the relevance check in the END block
-    removed it still passes, and with both removed it reports new=1 for a posting nobody has judged.
+    removed it still passes, and with both removed it reports new=2 — one for the posting nobody has
+    judged, and one for the `call` event, which carries neither `source` nor `source_id` and so
+    keys to two empty strings joined by SUBSEP.
     """
     jobs = tmp_path / "jobs.jsonl"
     jobs.write_text(
@@ -4736,8 +4738,9 @@ def test_to_confirm_counts_pipeline_judgments_needing_a_human(tmp_path):
     `needs_human_check` is not one of them.
 
     Three postings: one kept with an open question, one kept without, one rejected with an open
-    question. Counting the open question on the rejected one would put a 3 in `to_confirm`
-    over a Pipeline line that names 2 postings.
+    question. Measured on 2026-08-07 with `confirm++` moved above both `continue`s, so that the
+    rejected posting's open question is counted: `to_confirm=2` over a Pipeline line whose five
+    numbers still name 2 postings — one question too many, on a posting the line does not show.
     """
     jobs = tmp_path / "jobs.jsonl"
     jobs.write_text(ev("a", needs_human_check=True) + "\n" +
@@ -4791,6 +4794,66 @@ def test_a_judgment_written_without_a_status_counts_as_new(tmp_path):
     assert r.returncode == 0, r.stderr
     assert p["new"] == "1"
     assert sum(int(v) for v in p.values()) == 1
+
+
+def test_a_status_none_of_the_six_lines_counts_is_reported_and_not_dropped(tmp_path):
+    """Five status words have a line here and a sixth has none, so a posting carrying any other
+    status is in the pipeline by this script's own filter and in none of the six numbers.
+
+    Nothing upstream stops one arriving: `event-log-append.sh` appends a `status_changed` carrying
+    `shortlisted` at exit 0 — driven here rather than asserted — and `job-search/SKILL.md:161` hands
+    the agent the field with no list of allowed values.
+
+    Measured on 2026-08-07 before the finding existed: two relevant postings gave new=2, and the
+    same log with one `shortlisted` reaction gave new=1 with everything else 0, at exit 0. The home
+    card would have shown one job where the user has two, with nothing said. So the count set is
+    printed first, then the finding names how many postings it leaves out and which words did it,
+    and the status is 1 — the shape `run-counts.awk:105-108` uses for the same kind of loss.
+
+    Three words rather than one, because the last assertion pins the order they are listed in and
+    three is the fewest that both awks move. Measured on 2026-08-07 with `badorder` replaced by a
+    `for (bw in badword)` walk: two words came out in log order under BSD awk and reversed under
+    mawk, so a case built on two would pass here and fail on the CI runner; at three, BSD awk gave
+    shortlisted,screening,offer and mawk gave screening,offer,shortlisted, and neither matched the
+    log.
+    """
+    jobs = tmp_path / "jobs.jsonl"
+    jobs.write_text("".join(ev(k) + "\n" for k in ("a", "b", "c", "d")))
+    before, p = pipeline(jobs)
+    assert before.returncode == 0, before.stderr
+    assert p["new"] == "4"
+
+    for source_id, status in (("b", "shortlisted"), ("c", "offer"), ("d", "screening")):
+        append = subprocess.run(
+            ["sh", str(APPEND), str(jobs)], text=True, capture_output=True,
+            input='{"event":"status_changed","source":"linkedin","source_id":"%s","status":"%s"}'
+                  % (source_id, status))
+        assert append.returncode == 0, append.stderr
+
+    r, p = pipeline(jobs)
+    assert r.returncode == 1, r.stdout
+    assert p["new"] == "1"
+    assert sum(int(v) for k, v in p.items() if not k.startswith("INVALID")) == 1
+    assert r.stdout.splitlines()[-1] == (
+        "INVALID posting-with-an-uncounted-status=3 shortlisted,offer,screening")
+
+
+def test_two_postings_that_would_share_a_pipe_joined_key_are_counted_separately(tmp_path):
+    """The posting key joins `source` and `source_id` with SUBSEP, the 0x1c byte, which cannot reach
+    a value — the reason is written out at `run-counts.awk:14-16`. A `|` can: `record-judgment.sh`'s
+    `reject_id` refuses only a control character and a backslash, so source `s` with source_id `x|y`
+    and source `s|x` with source_id `y` are both recorded, and both join to `s|x|y`.
+
+    Measured on 2026-08-07 with the key joined on `|` instead: this log counts new=1 where two
+    postings are in the pipeline, and the home card shows one job where the user has two.
+    `run-matches.awk` is pinned against the same collision at
+    `test_two_postings_that_would_share_a_pipe_joined_key_are_both_listed`.
+    """
+    jobs = tmp_path / "jobs.jsonl"
+    jobs.write_text(ev("x|y", source="s") + "\n" + ev("y", source="s|x") + "\n")
+    r, p = pipeline(jobs)
+    assert r.returncode == 0, r.stderr
+    assert p["new"] == "2"
 
 
 def test_pipeline_counts_for_a_log_that_is_not_there_exit_two_and_print_nothing(tmp_path):

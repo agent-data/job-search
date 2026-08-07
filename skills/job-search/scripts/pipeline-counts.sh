@@ -20,9 +20,14 @@
 # judgment set needs_human_check is in none of them, so its open question is in no number here
 # either; the home card puts `(<k> to confirm)` on the Pipeline line, beside the five.
 #
+# Five status words have a line and a sixth has none. A posting carrying any other status is in the
+# pipeline and in none of the six numbers, so it is reported rather than dropped — see the exit
+# codes below.
+#
 # The event log grows past what a context window holds. Measured on 2026-08-07: three live searches
-# at limit 25, one detail read and a judgment on each of the 75 postings gave a jobs.jsonl of 159
-# lines and 106,263 bytes, and that is one run. The home view runs this script rather than reading
+# at limit 25, one detail read, a judgment on each of the 75 postings and four status_changed
+# events gave a jobs.jsonl of 159 lines and 106,263 bytes — 75 surfaced, 75 evaluated, 4 call, 1
+# detail, 4 status_changed — and that is one run. The home view runs this script rather than reading
 # the file itself for that reason.
 #
 # `../../job-search-run/scripts` is where event-field.awk lives, and the walk out of this skill and
@@ -33,9 +38,11 @@
 # close-run.sh:53-57 is the same paragraph about its own walk to run-counts.sh; change the two
 # together.
 #
-# Exit 0: the counts printed. Exit 2: nothing printed — no log at that path. Any other status is
-# awk failing partway, which leaves part of the key set on stdout: read these counts after checking
-# the status, never because stdout has lines in it.
+# Exit 0: the counts printed. Exit 1: at least one posting carries a status none of the six lines
+# counts, named on the last line as `INVALID posting-with-an-uncounted-status=<n> <words>`; the six
+# counts are printed first and they leave those <n> postings out. Exit 2: nothing printed — no log
+# at that path. Any other status is awk failing partway, which leaves part of the key set on stdout:
+# read these counts after checking the status, never because stdout has lines in it.
 #
 # A missing operand is the exception the caller sees a shell-picked code for, the way
 # run-counts.sh:28-29 records: measured on 2026-08-07 at 1 under sh and bash and 2 under dash.

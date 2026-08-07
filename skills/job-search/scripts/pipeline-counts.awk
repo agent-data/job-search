@@ -7,10 +7,17 @@
 # key: with a pipe, source `a` with source_id `b|c` and source `a|b` with source_id `c` both come
 # out as `a|b|c`, and the two would be counted as one.
 #
-# `order` fixes nothing that is printed. The six lines are six printf statements in a fixed order
-# and every number on them is a sum, so it is only how the END block reaches each posting exactly
-# once. Measured on 2026-08-07 against a live log of 159 lines: rewritten as `for (k in seen)`,
-# this prints byte-identical output under BSD awk and under mawk.
+# `order` fixes nothing on the six count lines. They are six printf statements in a fixed order and
+# every number on them is a sum, so `order` is only how the END block reaches each posting exactly
+# once. Measured on 2026-08-07 against a live log of 159 lines carrying no uncounted status:
+# rewritten as `for (k in seen)`, this prints byte-identical output under BSD awk and under mawk.
+#
+# `badorder` is different — it does fix what is printed, and dropping it moves the word list on the
+# INVALID line. Measured on 2026-08-07 with `for (bw in badword)` in its place, against a log
+# carrying shortlisted, offer and screening in that order: BSD awk printed
+# shortlisted,screening,offer and mawk printed screening,offer,shortlisted, so the same log read on
+# two machines named the same three words two ways. Two words is not enough to show it — BSD awk
+# happens to keep those in log order — which is why the case that pins this uses three.
 #
 # same_role_as is read for whether it is there, not for what it names. The row it names is the row
 # that was read, and that row is counted on its own line; looking it up would change no count.
@@ -47,6 +54,17 @@ END {
     if (rel[k] != "true" && !(k in reacted)) continue
     s = status[k]
     if (s == "") s = "new"
+    # Five status words have a count line below and no other word has one, so a posting carrying
+    # any other status would be in the pipeline and in none of the six numbers. Nothing upstream
+    # stops one arriving: event-log-append.sh appends a status_changed carrying shortlisted at
+    # exit 0, and job-search/SKILL.md:161 hands the agent the field with no list of allowed values.
+    # So the posting is reported below rather than dropped, and to_confirm skips it as well, for the
+    # reason to_confirm counts over the five in the first place.
+    if (s != "new" && s != "interested" && s != "applied" && s != "rejected" && s != "archived") {
+      uncounted++
+      if (!(s in badword)) { badword[s] = 1; nbad++; badorder[nbad] = s }
+      continue
+    }
     count[s]++
     if (human[k] == "true") confirm++
   }
@@ -56,4 +74,13 @@ END {
   printf "rejected=%d\n",    count["rejected"]+0
   printf "archived=%d\n",    count["archived"]+0
   printf "to_confirm=%d\n",  confirm+0
+  # After every count line and then exit 1, the shape run-counts.awk:105-108 uses: a caller that
+  # checks the status before reading stdout has the whole key set, and one that reads stdout without
+  # checking gets six numbers that do not account for these postings and a line saying so.
+  if (uncounted > 0) {
+    words = ""
+    for (i = 1; i <= nbad; i++) words = words (words == "" ? "" : ",") badorder[i]
+    printf "INVALID posting-with-an-uncounted-status=%d %s\n", uncounted, words
+    exit 1
+  }
 }
