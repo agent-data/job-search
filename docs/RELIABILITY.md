@@ -181,9 +181,11 @@ Reliability claims are only as good as their tests. Four layers back this system
   self-tested by `tests/test_validate_workspace.py`, is what turns the file rules into something
   mechanical: config keys, the brief's front matter, run-record fields and UTC timestamps, and —
   with `--post-close <run_id>` — that the run left no started-marker and no scratch behind, that
-  every count in its record is the number `run-counts.sh` reads back out of `jobs.jsonl`, and that
-  its `completed_at` is neither earlier than `started_at` nor later than the record's own mtime.
-  Those rules used to be prose in the skills, which meant nothing checked them.
+  every count in its record is the number `run-counts.sh` reads back out of `jobs.jsonl`, each
+  match band and each source the log names included, that the record's own three sums hold with or
+  without a log, and that its `completed_at` is neither earlier than `started_at` nor later than
+  the record's own mtime. Those rules used to be prose in the skills, which meant nothing checked
+  them.
 - **A credit-free fake `agent-data` shim** (a PATH shim under [../tests/](../tests/)) lets a
   whole run be driven with deterministic, injectable upstream behavior — a spent allowance, an
   outage, stale links, a degraded service, cursor chains, malformed pagination — with **no network

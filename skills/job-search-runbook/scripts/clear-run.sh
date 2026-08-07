@@ -38,7 +38,7 @@ run_id=${2:?usage: clear-run.sh <workspace> <run_id>}
 # locale sets, so `[0-9]` matched a run id spelled in Arabic-Indic digits under LC_ALL=ar_SA.UTF-8.
 # A list of ten characters is not a range and no locale changes it.
 #
-# validate-workspace.sh:73 states the same rule in the same notation, and uses it both to decide
+# validate-workspace.sh:75 states the same rule in the same notation, and uses it both to decide
 # whether a file in runs/ is a run record at all and to check the run id --post-close is given. The
 # three copies are driven over one table of run ids in tests/test_mechanics_scripts.py, under two
 # locales, and must give the same verdict for each.

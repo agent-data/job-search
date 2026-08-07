@@ -3331,7 +3331,7 @@ def path_without_a_digest_command(tmp_path):
     The twelve were measured by dropping one at a time and comparing the whole run against the full
     list: each of these changes what the run prints or its status, and `wc` and `cat` change
     nothing. Four of them need a workspace of the right shape before they run at all — `grep`,
-    `head` and `cut` read a run record's fields, all three on `validate-workspace.sh:103`, and
+    `head` and `cut` read a run record's fields, all three on `validate-workspace.sh:106`, and
     `sort` prints the findings — so on a clean workspace with no run record neither script runs any
     of the four. That is why the case below writes a record, and a broken one, rather than reusing
     `tmp_workspace` as it comes.
@@ -3408,7 +3408,7 @@ def test_a_present_brief_with_no_way_to_digest_it_is_not_called_missing(tmp_work
 def test_opening_a_run_runs_under_dash(tmp_workspace):
     """One of the three shipped scripts that run another shipped script rather than an awk program —
     `command grep -rn '\\.sh"' skills/*/scripts/*.sh` returns three lines, `open-run.sh:126`,
-    `close-run.sh:175` and `validate-workspace.sh:332` — so it is run end to end under strict dash:
+    `close-run.sh:175` and `validate-workspace.sh:421` — so it is run end to end under strict dash:
     `${1:?}`, `command -v`, the `printf ''` that writes the marker and the `sh` call on
     `validate-workspace.sh` are none of them exercised by `dash -n`. `close-run.sh` gets the same
     treatment at `test_closing_and_clearing_a_run_run_under_dash`, and `validate-workspace.sh` at
@@ -4170,7 +4170,7 @@ def test_a_run_id_that_is_not_a_run_id_is_refused_by_the_close(tmp_workspace, ba
     record lands in there, so that command needs no directory made first. A run that reports itself
     complete and healthy while its record is somewhere no reader looks is worse than one that fails.
 
-    The ids that traverse nothing are here for a second reason: `validate-workspace.sh:237` reads a
+    The ids that traverse nothing are here for a second reason: `validate-workspace.sh:293` reads a
     file in `runs/` as a run record only when its whole name matches the same rule, so a record
     named anything else is skipped by every check the workspace has — measured, a workspace holding
     `runs/not-a-run-id.json` gets no line about it at all — and `started_at` would carry the run id
@@ -4371,7 +4371,7 @@ def test_a_real_run_id_still_closes_under_a_collating_locale(tmp_workspace):
 # Ten run ids, each carrying one digit in all fourteen digit positions of the format. Between them
 # they cover every position-and-digit pair either `case` glob can be wrong about — 14 × 10 = 140,
 # asserted below rather than counted by eye. They are shape probes rather than instants: the globs
-# and `validate-workspace.sh:73` both check that a run id is twenty characters in the documented
+# and `validate-workspace.sh:75` both check that a run id is twenty characters in the documented
 # arrangement, not that it names a real time. `tests/test_validate_workspace.py` drives the same
 # ten through the validator's copy, which these cases do not reach.
 #

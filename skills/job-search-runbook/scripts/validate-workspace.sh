@@ -12,10 +12,12 @@
 #
 # Usage: validate-workspace.sh WORKSPACE [--post-close RUN_ID]
 #   --post-close RUN_ID   also check run RUN_ID: that it left no started-marker and no scratch dir,
-#                         and that its record's counts and timestamps hold up. The counts are read
-#                         back out of jobs.jsonl with run-counts.sh and compared field by field,
-#                         the record's own arithmetic is checked, and completed_at is required to
-#                         be no earlier than started_at and no later than the record's mtime.
+#                         and that its record's counts and timestamps hold up. Every count the
+#                         record states is read back out of jobs.jsonl with run-counts.sh and
+#                         compared, including each match band and each source the log names; the
+#                         record's own three sums are checked with or without a log; and completed_at
+#                         is required to be no earlier than started_at and no later than the
+#                         record's mtime.
 set -u
 
 WS=''
@@ -104,22 +106,76 @@ json_str() {
   grep -o "\"$2\"[[:space:]]*:[[:space:]]*\"[^\"]*\"" "$1" 2>/dev/null | head -1 | cut -d'"' -f4
 }
 
-# Read one JSON number by key. json_num takes a key at the top level; json_num_in takes the outer
-# key naming an object and a key inside it — `matches` and `by_source` are the two the record has.
+# Read one JSON number by key, at the top level of the record.
 #
-# json_num_in folds the newlines out first, so the object may be written on one line, the way
-# close-run.sh writes it, or split over several. Without the fold the object-shaped pattern matches
-# nothing on a split record and every band comparison is skipped, which is a check that reports
-# nothing rather than one that fails.
+# The leading zeros come off, because every number this script reads reaches `$(( ))` or `test -eq`
+# and POSIX arithmetic reads a leading zero as octal. `08` is not a valid octal number, and an
+# arithmetic syntax error is fatal: measured on 2026-08-07 on a record carrying
+# `"postings_reviewed": 08` and no close_state, sh exited 1 and dash exited 2 with EVERY finding
+# collected so far unprinted, and bash carried on. A count written that way is still that count, so
+# it is read as 8 rather than reported. json_num's own pattern is a minus and digits, so a leading
+# zero is the only value it can return that arithmetic refuses.
 json_num() {
   grep -o "\"$2\"[[:space:]]*:[[:space:]]*-\{0,1\}[0-9][0-9]*" "$1" 2>/dev/null \
-    | head -1 | sed 's/.*:[[:space:]]*//'
+    | head -1 | sed 's/.*:[[:space:]]*//; s/^\(-\{0,1\}\)0*\([0-9]\)/\1\2/'
 }
-json_num_in() {
-  tr '\n' ' ' < "$1" 2>/dev/null \
-    | grep -o "\"$2\"[[:space:]]*:[[:space:]]*{[^}]*}" \
-    | grep -o "\"$3\"[[:space:]]*:[[:space:]]*-\{0,1\}[0-9][0-9]*" \
-    | head -1 | sed 's/.*:[[:space:]]*//'
+
+# Every `"<key>": <number>` member of the object one top-level key names, printed as one
+# `<key>=<number>` line each. `matches` and `by_source` are the two objects the record has.
+#
+# The newlines come out first, so the object may be on one line, the way close-run.sh writes it, or
+# split over several. Reading it per line finds nothing on a split record, and every band comparison
+# was then skipped — a check that reports nothing rather than one that fails.
+#
+# awk rather than a second grep, because a source name is model-supplied: record-api-response.sh
+# refuses only a control character and a backslash, so `*` is an accepted source. Built into a
+# regular expression that name matches the wrong member. Measured on 2026-08-07 with the grep form
+# and a run whose only source was `*`: a record stating `by_source { "AAAA": 99 }` drew no finding.
+# index() compares literal text, so a name is looked up as itself.
+#
+# A name holding a `"` reads as the text up to that quote and so matches no key the log has, which
+# reports a missing key rather than passing a wrong number.
+#
+# The name has to be followed by a colon and then an opening brace, and every occurrence is tried
+# until one is. `sources` and `queries` hold model-supplied words, so `"by_source"` can appear in
+# the record as a value rather than as a key — and taking the first occurrence and then looking
+# ahead for a brace would read the next object along, which is `matches`.
+json_obj_nums() {
+  tr '\n' ' ' < "$1" 2>/dev/null | awk -v want="$2" '
+    {
+      s = $0
+      while ((i = index(s, "\"" want "\"")) > 0) {
+        rest = substr(s, i + length(want) + 2)
+        s = rest
+        if (rest !~ /^[ \t]*:/) continue
+        sub(/^[ \t]*:[ \t]*/, "", rest)
+        if (substr(rest, 1, 1) != "{") continue
+        e = index(rest, "}")
+        if (e == 0) exit
+        obj = substr(rest, 2, e - 2)
+        while ((q1 = index(obj, "\"")) > 0) {
+          obj = substr(obj, q1 + 1)
+          q2 = index(obj, "\"")
+          if (q2 == 0) break
+          k = substr(obj, 1, q2 - 1)
+          obj = substr(obj, q2 + 1)
+          sub(/^[ \t]*:[ \t]*/, "", obj)
+          v = obj
+          sub(/[^-0-9].*$/, "", v)
+          # %d reads 08 as 8, which is why nothing here has to strip a leading zero by hand.
+          if (v ~ /^-?[0-9]+$/) printf "%s=%d\n", k, v
+        }
+        exit
+      }
+    }'
+}
+
+# One member of that list, looked up by its whole key. The parameter expansions compare text, so a
+# key holding a regular-expression character is looked up as itself.
+objval() {
+  printf '%s\n' "$2" | while IFS= read -r kv; do
+    if [ "${kv%%=*}" = "$1" ]; then printf '%s' "${kv##*=}"; break; fi
+  done
 }
 
 # One awk function, prepended to both file checks below, that reads a YAML scalar as written. Both
@@ -302,21 +358,45 @@ if [ -n "$POST_CLOSE" ]; then
                  filtered_out; do
       [ -n "$(json_num "$record" "$field")" ] || invalid "$rel" "missing-key $field"
     done
-    grep -q '"matches"[[:space:]]*:' "$record"   || invalid "$rel" "missing-key matches"
-    grep -q '"by_source"[[:space:]]*:' "$record" || invalid "$rel" "missing-key by_source"
+
+    # An object that is there but holds no member states no count, and a comparison that skips a
+    # value it cannot read passes it. Measured on 2026-08-07 before these two blocks existed: a
+    # record carrying `"matches": {}` and `"by_source": {}`, against a log holding one strong match,
+    # one filtered-out row and two linkedin postings, drew no finding at all and exited 0. So each
+    # band is required by name, and by_source is held to its sum below and to the log's source list
+    # further down.
+    hasmatches=no
+    hasbysrc=no
+    matchnums=''
+    bysrcnums=''
+    if grep -q '"matches"[[:space:]]*:' "$record"; then
+      hasmatches=yes
+      matchnums=$(json_obj_nums "$record" matches)
+      for b in strong moderate weak; do
+        [ -n "$(objval "$b" "$matchnums")" ] || invalid "$rel" "missing-key matches.$b"
+      done
+    else
+      invalid "$rel" "missing-key matches"
+    fi
+    if grep -q '"by_source"[[:space:]]*:' "$record"; then
+      hasbysrc=yes
+      bysrcnums=$(json_obj_nums "$record" by_source)
+    else
+      invalid "$rel" "missing-key by_source"
+    fi
 
     surfaced=$(json_num "$record" postings_surfaced)
     reviewed=$(json_num "$record" postings_reviewed)
     unreviewed=$(json_num "$record" postings_unreviewed)
     filtered=$(json_num "$record" filtered_out)
-    s=$(json_num_in "$record" matches strong)
-    m=$(json_num_in "$record" matches moderate)
-    w=$(json_num_in "$record" matches weak)
+    s=$(objval strong "$matchnums")
+    m=$(objval moderate "$matchnums")
+    w=$(objval weak "$matchnums")
 
-    # The two rules the record can be held to on its own, so they hold for a record whose log has
-    # since been deleted as well as for one written this minute. A record can satisfy both and still
-    # be uniformly wrong — 2 + 5 + 2 balances against 17 actual rows — which is what the comparison
-    # against the log below is for.
+    # The three rules the record can be held to on its own, so they hold for a record whose log has
+    # since been deleted as well as for one written this minute. A record can satisfy all three and
+    # still be uniformly wrong — 2 + 5 + 2 balances against 17 actual rows — which is what the
+    # comparison against the log below is for.
     if [ -n "$reviewed" ] && [ -n "$filtered" ] && [ -n "$s" ] && [ -n "$m" ] && [ -n "$w" ]; then
       [ $((s + m + w + filtered)) -eq "$reviewed" ] || \
         invalid "$rel" "bands-do-not-sum-to-reviewed $((s + m + w + filtered)) vs $reviewed"
@@ -324,6 +404,15 @@ if [ -n "$POST_CLOSE" ]; then
     if [ -n "$surfaced" ] && [ -n "$reviewed" ] && [ -n "$unreviewed" ]; then
       [ $((reviewed + unreviewed)) -eq "$surfaced" ] || \
         invalid "$rel" "reviewed-plus-unreviewed-is-not-surfaced $((reviewed + unreviewed)) vs $surfaced"
+    fi
+    # The by_source block adds up to the postings surfaced. This is what catches a source the record
+    # leaves out and a source the run never had, both of which the comparison against the log misses:
+    # it walks the log's sources, so a source the log does not name is never looked for, and one the
+    # record does not carry only shows up as a missing key. The sum needs no log at all.
+    if [ "$hasbysrc" = yes ] && [ -n "$surfaced" ]; then
+      bysum=$(printf '%s\n' "$bysrcnums" | awk -F= '{ t += $NF } END { printf "%d\n", t }')
+      [ "$bysum" -eq "$surfaced" ] || \
+        invalid "$rel" "by-source-does-not-sum-to-surfaced $bysum vs $surfaced"
     fi
 
     # An empty count set means the reader could not run — no jobs.jsonl, or no run-counts.sh where
@@ -340,19 +429,31 @@ if [ -n "$POST_CLOSE" ]; then
           invalid "$rel" "counts-disagree-with-log $field $got vs $want"
       done
       for b in strong moderate weak; do
-        want=$(logval "match_$b"); got=$(json_num_in "$record" matches "$b")
+        want=$(logval "match_$b"); got=$(objval "$b" "$matchnums")
         [ -z "$want" ] || [ -z "$got" ] || [ "$want" = "$got" ] || \
           invalid "$rel" "counts-disagree-with-log matches.$b $got vs $want"
       done
-      # The log names which sources are in the run, so the by_source block is compared source by
-      # source. Nothing else in this script reads that block, so without this a record could name
-      # any split at all and pass every other check.
-      for src in $(printf '%s\n' "$counts" | grep '^by_source_' | sed 's/^by_source_//; s/=.*//')
-      do
-        want=$(logval "by_source_$src"); got=$(json_num_in "$record" by_source "$src")
-        [ -z "$want" ] || [ -z "$got" ] || [ "$want" = "$got" ] || \
-          invalid "$rel" "counts-disagree-with-log by_source.$src $got vs $want"
-      done
+      # The log names which sources the run had, so each one is looked for in the record by name.
+      # A source the log names and the record leaves out is a missing key rather than a silent skip.
+      #
+      # `while read` rather than `for src in $(...)`: the unquoted substitution split each source
+      # name on whitespace and then expanded it as a pathname. Measured on 2026-08-07 with the `for`
+      # form, on a run whose only source was `*`: the loop walked the files in the working directory
+      # instead, and a record stating `by_source { "AAAA": 99 }` passed. `invalid` appends to a file,
+      # so the findings this loop reports survive the subshell the pipeline puts it in.
+      if [ "$hasbysrc" = yes ]; then
+        printf '%s\n' "$counts" | grep '^by_source_' | while IFS= read -r kv; do
+          src=${kv#by_source_}
+          want=${src##*=}
+          src=${src%%=*}
+          got=$(objval "$src" "$bysrcnums")
+          if [ -z "$got" ]; then
+            invalid "$rel" "missing-key by_source.$src"
+          elif [ "$want" != "$got" ]; then
+            invalid "$rel" "counts-disagree-with-log by_source.$src $got vs $want"
+          fi
+        done
+      fi
 
       # One opening reached by two queries is returned twice and surfaced once, so this counts the
       # new rows the search calls brought in rather than the rows they returned. The two disagree
@@ -375,11 +476,19 @@ if [ -n "$POST_CLOSE" ]; then
     # TZ=UTC — without it the gate is wrong by the runner's offset. A completed_at carrying a
     # fractional second does not fit `touch -t`, which takes whole seconds, so touch fails, the
     # `&&` stops, and this gate passes rather than reporting something it did not measure.
+    # Two gates, and only the first one needs started_at. They were one `if` requiring both, and a
+    # record with no started_at turned the mtime gate off with it: measured on 2026-08-07, a record
+    # stating completed_at 2099-01-01T00:00:00Z and carrying no started_at drew no finding, and the
+    # same record with a started_at added reported completed-at-after-the-file-that-states-it. A
+    # clock five hours ahead is what the mtime gate exists to catch, and leaving one field out of
+    # the record must not switch it off.
     sa=$(json_str "$record" started_at)
     ca=$(json_str "$record" completed_at)
-    if [ -n "$sa" ] && [ -n "$ca" ]; then
-      [ "$ca" \> "$sa" ] || [ "$ca" = "$sa" ] || \
-        invalid "$rel" "completed-at-before-started-at $ca"
+    if [ -n "$ca" ]; then
+      if [ -n "$sa" ]; then
+        [ "$ca" \> "$sa" ] || [ "$ca" = "$sa" ] || \
+          invalid "$rel" "completed-at-before-started-at $ca"
+      fi
       stamp=$(printf '%s\n' "$ca" | sed 's/[-:]//g; s/T\(..\)\(..\)\(..\)Z/\1\2.\3/')
       if TZ=UTC touch -t "$stamp" "$tsref" 2>/dev/null && [ "$tsref" -nt "$record" ]; then
         invalid "$rel" "completed-at-after-the-file-that-states-it $ca"

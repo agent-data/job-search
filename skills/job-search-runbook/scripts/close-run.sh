@@ -95,7 +95,7 @@ esac
 # --close-state complete` printed run_health=healthy, exited 0, and left the record at ws/pwned.json
 # with runs/ empty.
 #
-# A run id that traverses nothing is refused too, and for a second reason. validate-workspace.sh:237
+# A run id that traverses nothing is refused too, and for a second reason. validate-workspace.sh:293
 # reads a file in runs/ as a run record only when its whole name matches the same rule, so a record
 # named anything else is skipped by every check the workspace has: measured, a workspace holding
 # runs/not-a-run-id.json gets no line about it at all.
@@ -116,7 +116,7 @@ esac
 # named in digits that validate-workspace.sh refuses — the invisible record the whole check exists
 # to prevent.
 #
-# Spelling the format out here rather than sharing one statement of it with validate-workspace.sh:73
+# Spelling the format out here rather than sharing one statement of it with validate-workspace.sh:75
 # is the trade this makes: one guard per script, against three files stating the same rule.
 # tests/test_mechanics_scripts.py drives all three over one table of run ids, under two locales, and
 # requires the same verdict for each. That table is where a divergence gets caught; it is not a

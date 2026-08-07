@@ -164,7 +164,7 @@ def seed_log(workspace, run_id=RUN_ID, rows_new=2):
     (workspace / "jobs.jsonl").write_text("\n".join(rows) + "\n", encoding="utf-8")
 
 
-def run_validator(workspace, *args, shell="sh", env=None):
+def run_validator(workspace, *args, shell="sh", env=None, cwd=None):
     e = None
     if env is not None:
         e = dict(os.environ)
@@ -174,7 +174,11 @@ def run_validator(workspace, *args, shell="sh", env=None):
         capture_output=True,
         text=True,
         env=e,
+        cwd=None if cwd is None else str(cwd),
     )
+
+
+SHELLS = ["sh"] + [s for s in ("dash", "bash") if shutil.which(s)]
 
 
 # ----------------------------------------------------------------- a workspace with nothing wrong
@@ -777,12 +781,41 @@ def test_a_run_with_an_unbanded_relevant_row_closes_degraded_and_is_reported_her
         r.stdout
 
 
-def test_a_record_for_a_run_with_no_log_events_is_not_checked_against_counts(tmp_workspace):
-    """An older record, written before this change, must still read as valid."""
-    (tmp_workspace / "jobs.jsonl").write_text("", encoding="utf-8")
-    write_run(tmp_workspace, run_record())
-    r = run_validator(tmp_workspace)          # no --post-close
+def test_the_count_checks_are_behind_post_close(tmp_workspace):
+    """An older record, written before this change, must still read as valid when the run it
+    belongs to is not the one being checked.
+
+    The record here fails `--post-close` — its `postings_surfaced` is 9 against the log's 2 — so the
+    run without it passing at exit 0 is what shows the count checks are reached only through that
+    flag. Hoisting the block out of the `--post-close` branch would make every workspace holding an
+    old record fail every validation, which is what this pins.
+    """
+    seed_log(tmp_workspace)
+    write_run(tmp_workspace, full_record(postings_surfaced=9))
+    plain = run_validator(tmp_workspace)          # no --post-close
+    assert plain.returncode == 0, plain.stdout + plain.stderr
+    assert plain.stdout == "", plain.stdout
+    checked = run_validator(tmp_workspace, "--post-close", RUN_ID)
+    assert checked.returncode == 1, checked.stdout + checked.stderr
+    assert "counts-disagree-with-log postings_surfaced 9 vs 2" in checked.stdout, checked.stdout
+
+
+def test_a_record_for_a_run_the_log_holds_no_events_for_is_compared_against_zeroes(tmp_workspace):
+    """`run-counts.sh` prints every key as 0 for a run id its log holds no event for, rather than
+    printing nothing, so such a record is compared against zeroes rather than skipped. The log here
+    holds one whole run's events under a different run id."""
+    seed_log(tmp_workspace, run_id="2026-09-01T00-00-00Z")
+    empty = full_record(postings_surfaced=0, postings_reviewed=0, postings_unreviewed=0,
+                        postings_detail_read=0, filtered_out=0,
+                        matches={"strong": 0, "moderate": 0, "weak": 0}, by_source={})
+    write_run(tmp_workspace, empty)
+    r = run_validator(tmp_workspace, "--post-close", RUN_ID)
     assert r.returncode == 0, r.stdout + r.stderr
+    # The other half: the 2 the other run surfaced is not this run's, so a record claiming it fails.
+    write_run(tmp_workspace, full_record())
+    r = run_validator(tmp_workspace, "--post-close", RUN_ID)
+    assert r.returncode == 1, r.stdout + r.stderr
+    assert "counts-disagree-with-log postings_surfaced 2 vs 0" in r.stdout, r.stdout
 
 
 def test_a_workspace_with_no_log_at_all_reports_no_count_disagreement(tmp_workspace):
@@ -846,6 +879,243 @@ def test_a_later_run_judging_this_runs_leftovers_does_not_invalidate_this_record
     assert r.returncode == 0, r.stdout + r.stderr
 
 
+# ----------------------------------------- an object that is there and states nothing, and awk
+
+# `record-api-response.sh` refuses only a control character and a backslash in `--source`, so this
+# is an accepted source name. It is here because it is a shell glob and a regular-expression
+# metacharacter at once: the source list was read with an unquoted `$(...)` and the name was built
+# into a `grep -o` pattern, and both read it as something other than itself.
+GLOB_SOURCE = "*"
+
+# `.` matches any character in a regular expression, so a source named this finds a record key
+# spelled `abc` when it is built into a pattern instead of compared as text.
+REGEX_SOURCE = "a.c"
+
+
+def source_log(workspace, source, run_id=RUN_ID):
+    """`seed_log`'s six rows with every `linkedin` replaced by `source`."""
+    rows = [r.replace('"linkedin"', '"%s"' % source) for r in SEED_LOG_ROWS]
+    rows = [rows[0] % (run_id, 2)] + [r % run_id for r in rows[1:]]
+    (workspace / "jobs.jsonl").write_text("\n".join(rows) + "\n", encoding="utf-8")
+
+
+def test_the_record_the_review_measured_names_every_field_it_states_nothing_for(tmp_workspace):
+    """`"matches": {}` and `"by_source": {}` passed every check at exit 0: the key was there, so the
+    presence check was satisfied, and no band or source could be read, so every comparison that
+    guards on an unreadable value skipped it. Two objects stating nothing drew no finding.
+
+    Five findings now, counted by hand off the seeded log: one per band, one for the one source the
+    log has, and the sum of an empty block against the 2 postings the record says it surfaced.
+
+    `bands-do-not-sum-to-reviewed` deliberately stays quiet. Firing it would mean reading the three
+    absent bands as zero and reporting arithmetic over numbers the record never stated; naming each
+    band that is missing says the same thing about the same record and says which one to add.
+    """
+    seed_log(tmp_workspace)
+    write_run(tmp_workspace, full_record(matches={}, by_source={}))
+    r = run_validator(tmp_workspace, "--post-close", RUN_ID)
+    assert r.returncode == 1, r.stdout + r.stderr
+    assert [l.split(" ", 2)[2] for l in findings(r)] == [
+        "by-source-does-not-sum-to-surfaced 0 vs 2",
+        "missing-key by_source.linkedin",
+        "missing-key matches.moderate",
+        "missing-key matches.strong",
+        "missing-key matches.weak",
+    ], r.stdout
+
+
+@pytest.mark.parametrize("word", ["matches", "by_source"])
+def test_a_query_id_spelling_an_object_key_does_not_move_the_reader(tmp_workspace, word):
+    """`queries` holds model-supplied words, so the text `"by_source"` can be in the record as a
+    value rather than as a key — and it comes before both objects. A reader that took the first
+    occurrence and then looked ahead for a `{` would read `matches` as `by_source`, and the record
+    would be compared against the wrong numbers with no finding to say so.
+
+    The record here is correct in every other way, so any finding at all means the reader moved.
+    """
+    seed_log(tmp_workspace)
+    write_run(tmp_workspace, full_record(queries=[word], sources=[word]))
+    r = run_validator(tmp_workspace, "--post-close", RUN_ID)
+    assert r.returncode == 0, r.stdout + r.stderr
+    # And the numbers are still being read: moving one band has to still fail.
+    write_run(tmp_workspace, full_record(queries=[word], sources=[word],
+                                         matches={"strong": 0, "moderate": 1, "weak": 0}))
+    bad = run_validator(tmp_workspace, "--post-close", RUN_ID)
+    assert "counts-disagree-with-log matches.strong 0 vs 1" in bad.stdout, bad.stdout
+
+
+@pytest.mark.parametrize("band", ["strong", "moderate", "weak"])
+def test_a_matches_object_that_leaves_one_band_out_names_that_band(tmp_workspace, band):
+    """One case per band, because a loop that checked two of the three would pass a case that only
+    ever removed `strong`. Every other rule holds: the two bands left carry the log's own numbers
+    and `filtered_out` absorbs the one removed, so the finding named here is the only one."""
+    matches = {"strong": 1, "moderate": 0, "weak": 0}
+    filtered = 1 + matches.pop(band)
+    seed_log(tmp_workspace)
+    write_run(tmp_workspace, full_record(matches=matches, filtered_out=filtered))
+    r = run_validator(tmp_workspace, "--post-close", RUN_ID)
+    assert r.returncode == 1, r.stdout + r.stderr
+    assert "missing-key matches.%s" % band in r.stdout, r.stdout
+
+
+def test_a_by_source_block_that_leaves_out_a_source_the_log_has_fails(tmp_workspace):
+    """The likelier of the two by_source mistakes. The log holds two sources; the record names one
+    and gives it both postings, so the block still sums to the 2 surfaced and only the log knows
+    which source they came from."""
+    rows = [
+        '{"event":"call","run_id":"%s","route":"search-jobs","source":"linkedin","query_id":"q",'
+        '"ok":true,"rows_returned":1,"rows_new":1}' % RUN_ID,
+        '{"event":"call","run_id":"%s","route":"search-jobs","source":"ashby","query_id":"q",'
+        '"ok":true,"rows_returned":1,"rows_new":1}' % RUN_ID,
+        '{"event":"surfaced","run_id":"%s","source":"linkedin","source_id":"a"}' % RUN_ID,
+        '{"event":"surfaced","run_id":"%s","source":"ashby","source_id":"b"}' % RUN_ID,
+        '{"event":"detail","run_id":"%s","source":"linkedin","source_id":"a"}' % RUN_ID,
+        '{"event":"evaluated","run_id":"%s","source":"linkedin","source_id":"a",'
+        '"detail_read":true,"relevant":true,"match":"strong"}' % RUN_ID,
+        '{"event":"evaluated","run_id":"%s","source":"ashby","source_id":"b",'
+        '"detail_read":false,"relevant":false,"match":null}' % RUN_ID,
+    ]
+    (tmp_workspace / "jobs.jsonl").write_text("\n".join(rows) + "\n", encoding="utf-8")
+    write_run(tmp_workspace, full_record(by_source={"linkedin": 2}))
+    r = run_validator(tmp_workspace, "--post-close", RUN_ID)
+    assert r.returncode == 1, r.stdout + r.stderr
+    assert [l.split(" ", 2)[2] for l in findings(r)] == [
+        "counts-disagree-with-log by_source.linkedin 2 vs 1",
+        "missing-key by_source.ashby",
+    ], r.stdout
+
+
+def test_a_by_source_block_naming_a_source_the_log_never_had_fails(tmp_workspace):
+    """The other direction, and the one the comparison against the log cannot see: it walks the
+    log's sources, so a source only the record names is never looked for. 2 + 3 against the 2
+    postings surfaced is what catches it."""
+    seed_log(tmp_workspace)
+    write_run(tmp_workspace, full_record(by_source={"linkedin": 2, "greenhouse": 3}))
+    r = run_validator(tmp_workspace, "--post-close", RUN_ID)
+    assert r.returncode == 1, r.stdout + r.stderr
+    assert [l.split(" ", 2)[2] for l in findings(r)] == [
+        "by-source-does-not-sum-to-surfaced 5 vs 2"], r.stdout
+
+
+def test_by_source_that_does_not_sum_to_surfaced_fails_without_a_log(tmp_workspace):
+    """The sum is arithmetic over the record alone, so it holds for a record whose log has since
+    been deleted. 1 against the 2 the record says it surfaced."""
+    write_run(tmp_workspace, full_record(by_source={"linkedin": 1}))
+    assert not (tmp_workspace / "jobs.jsonl").exists()
+    r = run_validator(tmp_workspace, "--post-close", RUN_ID)
+    assert r.returncode == 1, r.stdout + r.stderr
+    assert [l.split(" ", 2)[2] for l in findings(r)] == [
+        "by-source-does-not-sum-to-surfaced 1 vs 2"], r.stdout
+
+
+def test_a_source_named_with_a_glob_character_is_looked_up_as_itself(tmp_workspace, tmp_path):
+    """Measured on 2026-08-07 before the fix, on a run whose only source was `*`: the unquoted
+    `$(...)` in the source loop expanded the name as a pathname, so the loop walked the working
+    directory instead of the log's one source, and a record stating `by_source { "AAAA": 99 }`
+    passed with nothing said about it.
+
+    The validator is run from a directory holding two files, so a pathname expansion has something
+    to expand to and the loop would name those files rather than the source.
+    """
+    elsewhere = tmp_path / "cwd-with-files"
+    elsewhere.mkdir()
+    (elsewhere / "linkedin").write_text("", encoding="utf-8")
+    (elsewhere / "ashby").write_text("", encoding="utf-8")
+    source_log(tmp_workspace, GLOB_SOURCE)
+    write_run(tmp_workspace, full_record(by_source={"AAAA": 99}))
+    r = run_validator(tmp_workspace, "--post-close", RUN_ID, cwd=elsewhere)
+    assert r.returncode == 1, r.stdout + r.stderr
+    assert [l.split(" ", 2)[2] for l in findings(r)] == [
+        "by-source-does-not-sum-to-surfaced 99 vs 2",
+        "missing-key by_source.*",
+    ], r.stdout
+
+
+def test_a_source_named_with_a_glob_character_still_compares_when_the_record_carries_it(
+    tmp_workspace, tmp_path
+):
+    """The other half. A lookup that refused every name would pass the case above and report a
+    missing key for every source a run ever had."""
+    elsewhere = tmp_path / "cwd-with-files"
+    elsewhere.mkdir()
+    (elsewhere / "linkedin").write_text("", encoding="utf-8")
+    source_log(tmp_workspace, GLOB_SOURCE)
+    write_run(tmp_workspace, full_record(by_source={GLOB_SOURCE: 2}))
+    good = run_validator(tmp_workspace, "--post-close", RUN_ID, cwd=elsewhere)
+    assert good.returncode == 0, good.stdout + good.stderr
+    write_run(tmp_workspace, full_record(by_source={GLOB_SOURCE: 2, "linkedin": 0}))
+    r = run_validator(tmp_workspace, "--post-close", RUN_ID, cwd=elsewhere)
+    assert r.returncode == 0, r.stdout + r.stderr
+
+
+def test_a_source_name_holding_a_regular_expression_character_is_looked_up_as_text(tmp_workspace):
+    """`a.c` is an accepted source name — `record-api-response.sh` refuses only a control character
+    and a backslash — and `.` matches any character in a regular expression. Looked up with
+    `grep "^$src="` in a record whose block holds `abc`, the log's `a.c` finds `abc`'s number and
+    the record passes carrying a source the run never had. Compared as text it does not, and the
+    sum cannot catch it: 2 against the 2 postings surfaced adds up either way.
+    """
+    source_log(tmp_workspace, REGEX_SOURCE)
+    write_run(tmp_workspace, full_record(by_source={"abc": 2}))
+    r = run_validator(tmp_workspace, "--post-close", RUN_ID)
+    assert r.returncode == 1, r.stdout + r.stderr
+    assert [l.split(" ", 2)[2] for l in findings(r)] == ["missing-key by_source.a.c"], r.stdout
+
+
+def test_a_source_name_holding_a_regular_expression_character_still_compares(tmp_workspace):
+    """The other half. The same record naming the source the log actually had passes."""
+    source_log(tmp_workspace, REGEX_SOURCE)
+    write_run(tmp_workspace, full_record(by_source={REGEX_SOURCE: 2}))
+    good = run_validator(tmp_workspace, "--post-close", RUN_ID)
+    assert good.returncode == 0, good.stdout + good.stderr
+    write_run(tmp_workspace, full_record(by_source={REGEX_SOURCE: 2, "z": 0}))
+    r = run_validator(tmp_workspace, "--post-close", RUN_ID)
+    assert r.returncode == 0, r.stdout + r.stderr
+
+
+# Where the badly written count sits decides which reader has to cope with it: a top-level field
+# goes through json_num and a band through json_obj_nums. Both values reach `$(( ))`.
+#
+# The digit is 8 in both, not 4: `04` is a valid octal number and reads as 4, so a case built on it
+# passes whether the reader normalises the value or hands it on as written.
+LEADING_ZERO_RECORDS = {
+    # matches 4 + 3 + 0 and filtered 1 against the 8 the record means by `08`.
+    "top-level-count": (dict(postings_reviewed=8, matches={"strong": 4, "moderate": 3, "weak": 0},
+                             filtered_out=1),
+                        '"postings_reviewed": 8', '"postings_reviewed": 08'),
+    # matches 8 + 0 + 0 and filtered 0 against the 8 reviewed.
+    "match-band": (dict(postings_reviewed=8, matches={"strong": 8, "moderate": 0, "weak": 0},
+                        filtered_out=0),
+                   '"strong": 8', '"strong": 08'),
+}
+
+
+@pytest.mark.parametrize("shell", SHELLS)
+@pytest.mark.parametrize("where", sorted(LEADING_ZERO_RECORDS))
+def test_a_count_written_with_a_leading_zero_loses_no_finding(tmp_workspace, shell, where):
+    """`08` is not a valid octal number and POSIX arithmetic reads a leading zero as octal.
+    Measured on 2026-08-07 before the fix, on the top-level record below: sh exited 1 and dash
+    exited 2, both with empty stdout — the `missing-key close_state` finding collected before the
+    arithmetic was thrown away with the shell — and bash carried on and printed it. Three shells,
+    three answers, and the two that aborted said nothing at all about a record with a missing key.
+
+    8 is what the record means, and the two records are built so their bands add up to it, so the
+    one finding every shell has to print is the missing `close_state` and nothing else.
+    """
+    fields, plain, zeroed = LEADING_ZERO_RECORDS[where]
+    body = full_record(postings_surfaced=8, postings_unreviewed=0,
+                       by_source={"linkedin": 8}, **fields)
+    del body["close_state"]
+    text = json.dumps(body, indent=2)
+    assert text.count(plain) == 1, (where, plain)
+    text = text.replace(plain, zeroed)
+    (tmp_workspace / "runs" / ("%s.json" % RUN_ID)).write_text(text + "\n", encoding="utf-8")
+    r = run_validator(tmp_workspace, "--post-close", RUN_ID, shell=shell)
+    assert r.stderr == "", r.stderr
+    assert r.returncode == 1, r.stdout + r.stderr
+    assert [l.split(" ", 2)[2] for l in findings(r)] == ["missing-key close_state"], r.stdout
+
+
 # --------------------------------------------------------------------------- the timestamp gates
 
 
@@ -900,6 +1170,33 @@ def test_a_record_written_after_the_time_it_states_passes(tmp_workspace):
     before the file is written — has to be silent."""
     seed_log(tmp_workspace)
     write_run(tmp_workspace, full_record(completed_at=utc_now_plus(minutes=-1)))
+    r = run_validator(tmp_workspace, "--post-close", RUN_ID)
+    assert r.returncode == 0, r.stdout + r.stderr
+
+
+def test_the_mtime_gate_fires_on_a_record_with_no_started_at(tmp_workspace):
+    """The two gates were one `if` requiring both timestamps, so a record with no `started_at`
+    turned the mtime gate off with it. Measured on 2026-08-07 before the split: this record drew no
+    finding, and the same record with a `started_at` added reported the line below. A clock five
+    hours ahead is what the gate exists to catch, and leaving a field out must not switch it off.
+    """
+    seed_log(tmp_workspace)
+    record = full_record(completed_at="2099-01-01T00:00:00Z")
+    del record["started_at"]
+    write_run(tmp_workspace, record)
+    r = run_validator(tmp_workspace, "--post-close", RUN_ID)
+    assert r.returncode == 1, r.stdout + r.stderr
+    assert [l.split(" ", 2)[2] for l in findings(r)] == [
+        "completed-at-after-the-file-that-states-it 2099-01-01T00:00:00Z"], r.stdout
+
+
+def test_a_record_with_no_started_at_and_a_past_completed_at_still_passes(tmp_workspace):
+    """The other half. A mtime gate that fired whenever `started_at` was absent would pass the case
+    above and fail every record written by an older close."""
+    seed_log(tmp_workspace)
+    record = full_record(completed_at=utc_now_plus(minutes=-1))
+    del record["started_at"]
+    write_run(tmp_workspace, record)
     r = run_validator(tmp_workspace, "--post-close", RUN_ID)
     assert r.returncode == 0, r.stdout + r.stderr
 
