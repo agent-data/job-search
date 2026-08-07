@@ -60,9 +60,9 @@ mkdir -p "$ws/runs" || exit 2
 #
 # Why a shared run_id has to be refused: run_id is the clock read to the second, so two runs that
 # open inside one second are handed the same one. They write runs/<run_id>.json to a single path, so
-# the second close overwrites the first's record, and run-counts.sh selects events by run_id, so
-# both runs' events fold into one set of counts — searches, detail_reads and total_metered come out
-# as the sum of two runs presented as one.
+# the second close overwrites the first's record, and run-counts.sh selects events by run_id, so it
+# counts both runs' events together — searches, detail_reads and total_metered come out as the sum
+# of two runs presented as one.
 #
 # The marker a run that died left behind is a different thing, handled by the run contract's step 1.
 # It carries that run's id, so the name written here differs from it and the write succeeds.

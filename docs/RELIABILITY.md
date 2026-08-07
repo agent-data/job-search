@@ -38,11 +38,12 @@ words, into its record and its digest. The record's shape is
 ## 1. Determinism — the core is a pinned contract and reproducible
 
 The mechanics that must never improvise — workspace discovery, registry writes, the schedule
-line, dedup, the event-log fold — are **pinned written contracts**: exact precedence rules,
+line, dedup, working out a posting's current state from its lines — are **pinned written
+contracts**: exact precedence rules,
 portable shell one-liners, and byte-level write rules that Claude Code executes natively with
 no runtime dependency (no Python on the user's machine). The *specification* is deterministic —
-the same frequency always composes the same schedule line, and the same event log always folds
-to the same current state — while the *executor* is the model following the contract verbatim.
+the same frequency always composes the same schedule line, and the same event log always gives
+the same current state — while the *executor* is the model following the contract verbatim.
 Two layers verify this. `tests/test_mechanics_scripts.py` drives each script through `sh` against a
 temp fixture, and `tests/test_validate_workspace.py` drives the validator against workspaces built
 per case — so the file rules and the scripted operations are unit-tested. What a *run* does with
@@ -50,13 +51,19 @@ them end to end is graded by the live behavior evals in [../evals/](../evals/) a
 [../TESTING.md](../TESTING.md) matrix, because that part is the model following the contract.
 
 State is an **append-only event log**, not a mutable record: `jobs.jsonl` is a sequence of
-events, and current state is computed by folding them by dedup key (last-write-wins per field).
+events, and a posting's current state is its last `evaluated` line for its `source` and
+`source_id`. A posting carries at most one such line: both append paths refuse a second
+`evaluated` event for a pair that already has one.
+[`event-log-append.sh`](../skills/job-search-run/scripts/event-log-append.sh) skips it, and
+[`record-judgment.sh`](../skills/job-search-run/scripts/record-judgment.sh) writes nothing —
+exiting 0 when the line it was asked to write is the one already recorded, and 1 with both lines
+on stderr when it is not.
 Re-running is therefore safe — nothing is overwritten in place, and a crash mid-run can at
 worst leave a trailing partial line, never a corrupted record. What each workspace file holds, the
 registry write rules, the workspace-discovery precedence, and the scheduling marker are all owned by
 the `job-search-runbook` skill; one event line's exact
 fields are [`jobs-event.example.json`](../skills/job-search-run/templates/jobs-event.example.json), and
-the known-ids and append operations are the scripts under
+the scripts that append every line and read the counts back out are under
 [../skills/job-search-run/scripts/](../skills/job-search-run/scripts/).
 
 Because the deterministic pieces are isolated from the LLM judgment, the parts that *can* be

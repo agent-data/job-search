@@ -40,16 +40,18 @@ Nothing is generated into `skills/`: there is no build step, and no file there i
 A skill's own `SKILL.md` and its `evals/` are **authored originals**, not generated — edit them in
 place.
 
-## Keep the agent-facing corpus under 10,000 words
+## Keep the agent-facing corpus near 10,000 words
 
 The seven `SKILL.md` files are what every run reads before it can do anything, so their
 combined length is a product cost, not a style question. Measure before and after any change to them:
 
 ```bash
-wc -w skills/*/SKILL.md   # 9,092 total; the budget is 10,000
+wc -w skills/*/SKILL.md   # 10,468 total on 2026-08-07
 ```
 
-If a change needs more words there, cut somewhere else in the same PR. Detail that only a contributor needs
+10,000 is the figure to aim at, not a gate: no check fails for going over it, and the corpus is over it
+today. So a change that needs more words there is a judgment call — look for something to cut in the same
+PR, and say in the PR why the words earn their place if you keep them. Detail that only a contributor needs
 belongs in this repo's docs, which no run reads.
 
 ## Before you open a PR: everything must be green

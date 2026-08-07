@@ -116,7 +116,7 @@ esac
 # named in digits that validate-workspace.sh refuses — the invisible record the whole check exists
 # to prevent.
 #
-# Spelling the format out here rather than sharing one statement of it with validate-workspace.sh:75
+# Writing the format out here rather than sharing one statement of it with validate-workspace.sh:75
 # is the trade this makes: one guard per script, against three files stating the same rule.
 # tests/test_mechanics_scripts.py drives all three over one table of run ids, under two locales, and
 # requires the same verdict for each. That table is where a divergence gets caught; it is not a

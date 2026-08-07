@@ -171,7 +171,7 @@
       "reps": 5,
       "control": {
         "arm": "no-guidance",
-        "strip": "the read-list steer in the scan section, so nothing says what gets judged",
+        "strip": "the scan section's settle-or-queue instruction, so nothing says that a row the scan cannot settle from the row itself goes on the read list",
         "expectation": "without it, at least one rep stops after the first strong match or judges a subset"
       }
     },
@@ -190,8 +190,8 @@
       "scenario": "a detail read briefed cold",
       "prompt": "Same harness, JOBSEARCH_TEST_SCENARIO=happy, on a host with subagents. Run job-search-run and show the exact brief handed to one detail subagent.",
       "expectations": [
-        "The brief carries the row's posting id and source_url as the pair they arrived in, the row's source, the path to the workspace brief, the evaluate-job-fit skill to follow, and that posting's steer",
-        "The steer names the specific open question that read has to answer rather than a verdict",
+        "The brief carries the six fields list-detail-read-queue.sh printed for that posting — source, source_id, posting_id_at_seen, source_url, title, company_name — with posting_id_at_seen and source_url handed over as the pair they arrived in, plus the path to the workspace brief and the evaluate-job-fit skill to follow",
+        "The brief says nothing about the judgment to expect — no provisional band, and no question the read has to answer",
         "The brief names no model to run on, and the judging rubric travels by reference rather than restated",
         "One posting per subagent, dispatched in parallel where the host allows it"
       ]

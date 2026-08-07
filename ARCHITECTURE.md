@@ -39,12 +39,16 @@ Five canonical domains describe *what the system does*. Each names the files/ski
 the reference skill that owns its contract.
 
 ### discovery-search
-Find postings: run each saved query against the agent-data Job Postings API, dedup new results against the
-local record of already-seen postings, and respect retry / outage rules. Implemented by the [job-search-run](skills/job-search-run/SKILL.md)
-skill over the `jobs.jsonl` operations in
-[skills/job-search-run/scripts/dedup.sh](skills/job-search-run/scripts/dedup.sh) and
-[skills/job-search-run/scripts/event-log-append.sh](skills/job-search-run/scripts/event-log-append.sh) (dedup +
-persistence). The CLI routes, per-source quirks, retry rules, and what a call costs are owned by
+Find postings: run each saved query against the agent-data Job Postings API, skip the postings a run has
+already judged, and respect retry / outage rules. Implemented by the [job-search-run](skills/job-search-run/SKILL.md)
+skill, which hands every response to
+[skills/job-search-run/scripts/record-api-response.sh](skills/job-search-run/scripts/record-api-response.sh):
+it appends the `call` event and one `surfaced` event per new row, skipping any posting already judged in an
+earlier run or already surfaced in this one.
+[skills/job-search-run/scripts/dedup.sh](skills/job-search-run/scripts/dedup.sh) makes that same
+already-judged check standalone, and its `--near` mode groups the rows that are one opening posted in
+several cities so only the first of them costs a detail call. The CLI routes, per-source quirks, retry
+rules, and what a call costs are owned by
 [agent-data-reference](skills/agent-data-reference/SKILL.md).
 
 ### preferences-judgment
@@ -59,8 +63,18 @@ defined by the [evaluate-job-fit](skills/evaluate-job-fit/SKILL.md) skill that r
 Persist everything durably and discoverably: the workspace, config, the append-only job-event log, run
 audit logs, and digests. The engines are pinned procedures executed natively by the host agent: the registry +
 workspace-discovery rules in [job-search-runbook](skills/job-search-runbook/SKILL.md), which also
-maps what each file holds, and the event-log operations in
-[skills/job-search-run/scripts/event-log-append.sh](skills/job-search-run/scripts/event-log-append.sh).
+maps what each file holds, and the scripts under
+[skills/job-search-run/scripts/](skills/job-search-run/scripts/) that write every line a run appends —
+`record-api-response.sh` for the `call`, `surfaced` and `detail` events, `queue-detail-read.sh` for
+`queued`, and `record-judgment.sh` for `evaluated`. Each builds its own event, so no run composes a log
+line by hand;
+[skills/job-search-run/scripts/event-log-append.sh](skills/job-search-run/scripts/event-log-append.sh)
+is the standalone path for a host writing one without those scripts, and it validates the line before it
+appends. Reading back out is scripted too, so no number in a digest or a run record comes from an agent's
+memory of the run: `run-counts.sh` and `run-matches.sh` in the same directory produce one run's numbers and
+the postings its digest names, and
+[skills/job-search/scripts/posting-counts.sh](skills/job-search/scripts/posting-counts.sh) produces the
+three the home view shows across every run.
 
 ### scheduling-consent
 Run on a cadence the user controls: the agent advocates an **unattended** machine schedule (`cron`/`launchd`
@@ -93,9 +107,11 @@ Five canonical layers describe *how the system is built*, bottom-up.
 ### deterministic-core
 The pinned contracts for the non-judgment work the skills must not improvise: the registry schema + write
 rules, the workspace-discovery precedence, the scheduling marker, and the `jobs.jsonl` operations
-(known-ids / append / fold). They are defined once — as the recipes in
+(the known-ids check, the event append, and working out current state). They are defined once — as the recipes in
 [job-search-runbook](skills/job-search-runbook/SKILL.md) and as the POSIX shell scripts under
-[skills/job-search-runbook/scripts/](skills/job-search-runbook/scripts/) — and the host agent runs them with its native tools.
+[skills/job-search-runbook/scripts/](skills/job-search-runbook/scripts/),
+[skills/job-search-run/scripts/](skills/job-search-run/scripts/) and
+[skills/job-search/scripts/](skills/job-search/scripts/) — and the host agent runs them with its native tools.
 
 ### shared-references
 The single source of truth for every runtime contract, in two files:
@@ -150,10 +166,17 @@ every skill can reach the two reference skills; the contracts are identical acro
 Install steps are in [README.md](README.md).
 
 **Headless run flow.** A scheduled pass runs [job-search-run](skills/job-search-run/SKILL.md): free preflight
-gates (CLI present, config, auth, brief, service status), then one metered search per enabled query, dedup via
-the known-ids operation ([skills/job-search-run/scripts/dedup.sh](skills/job-search-run/scripts/dedup.sh)), qualitative
-judgment per new posting, detail reads for the promising
-ones, and finally a persisted run record plus a digest. A run that a gate stops still closes: it writes a
+gates (CLI present, config, auth, brief, service status), then one metered search per enabled query. Every
+response goes through `record-api-response.sh`, which appends the events it implies and drops the rows a run
+has already judged. The summary scan judges every row it can judge from the row itself, through
+`record-judgment.sh`, and puts every other row on the read list with `queue-detail-read.sh`.
+`list-detail-read-queue.sh` prints that list — one line per posting queued and not yet judged — so what is
+left to read is read back out of the log rather than carried in the session; each line becomes a detail
+read, and its verdict comes back through `record-judgment.sh`. At close,
+`run-counts.sh` and `run-matches.sh` read the log this run wrote and produce the digest's numbers and the
+postings it names, so the run record and the digest cannot disagree and neither is composed from memory of
+the run. Every script named here is under
+[skills/job-search-run/scripts/](skills/job-search-run/scripts/). A run that a gate stops still closes: it writes a
 record with `close_state: blocked` and `run_health: degraded`, and a digest whose body says what stopped it
 and what fixes it, so the next home view surfaces both. Detail and failure modes are in
 [docs/product-specs/index.md](docs/product-specs/index.md) and
