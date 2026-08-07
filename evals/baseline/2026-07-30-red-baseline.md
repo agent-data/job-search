@@ -373,3 +373,91 @@ Two behavior results outside B15 and B16 are worth recording. One haiku daily pa
 after judging a single posting and left the run open — no record, no digest, an orphaned start
 marker; the other two closed healthy. And no fresh-workspace run in this block read a previous
 eval's captured workspace, with the captured briefs renamed out of the way for the duration.
+
+---
+
+# COUNTED — 2026-08-07 live evals after the counts moved into the event log
+
+The 2026-08-05 change moved every count, every timestamp and every posting the digest names out of
+the model's account of a run and into scripts that read the run's own append-only event log. Four
+behavior rows were added for it — B17 to B20 — and each one re-derives a number from the captured
+log and compares it against what the run wrote down.
+
+**Sonnet only.** The repo owner scoped this pass to sonnet on 2026-08-07. No haiku session was run,
+before or after that decision. Four rows in the tables above differ between the two model columns —
+B6, B8, B11 and B15 — so this block says nothing about the haiku half of any of them. That is a
+scoping decision, not a case that failed or was skipped for cost. Aggregates only, like every block
+above: no paths, no run ids, no transcripts, no user data.
+
+## The four rows the change added
+
+| row | verdict | the number behind it |
+|---|---|---|
+| B17 `completed_at` is a clock read | **pass** | Every one of the three records written this pass states a `completed_at` matching `date -u`'s shape, falling after `started_at`, and landing in the same second as the mtime of the file stating it. Across the 17 `headless-run` records from earlier blocks, five carry a `completed_at` no clock read could have produced — three have none at all, one is 978 s after its own file's mtime, one carries a fractional second `date -u` never prints. |
+| B18 nothing judged or stored that was never surfaced | **pass** | 0 `evaluated` events and 0 `detail` events without a `surfaced` event carrying the same run id, source and source id. The `call` events counted by route equal `agent_data_usage.searches`, `.detail_reads` and `.other` in every record. |
+| B19 the close the record states is the close its own log supports | **pass** | On the record the recovering session writes after a killed run: `postings_unreviewed` 0 by hand and 0 in the record, `close_state` complete, `run_health` healthy — which is what the log supports (nothing unjudged, no search that never answered, no relevant row without a band). |
+| B20 the digest and the home card agree about one log | **fail, as designed** | `posting-counts.awk` reads `same_role_as` and the two programs behind the digest never do, so the two disagree by exactly the number of judgments naming another posting as the same opening. Measured three times: 47 against 46 with 1 alias, 49 against 48 with 1 alias, and 66 against 57 with 9 aliases. The row was added to report this; the unit question behind it — whether the counts line counts postings or openings — is not settled. |
+
+B8, which asks whether the digest, the record and the log can disagree, **passes on all three logs**
+this pass produced. Fifteen count keys are identical across a hand count of the log, `run-counts.sh`,
+and the run record; each band's section of the digest holds exactly as many postings as
+`run-matches.sh` prints rows for that band, matched on company and title; and
+`validate-workspace.sh --post-close` exits 0. Before this change the record carried no count fields
+at all, so there was nothing to compare.
+
+## Where the cost went
+
+| measurement | RED | GREEN sonnet | LOCALITY sonnet | COUNTED sonnet |
+|---|---|---|---|---|
+| metered calls, one daily pass, same seed | 64 | 43–50 | 55 | **67** |
+| detail reads, same seed | — | 25–49 | 51 | **63** |
+| detail reads ÷ postings surfaced | — | 26.9–57.0% | 59.3% | **75.9%** |
+| lines read before the first API call, first run | ~3,550 (9 files) | 271 (4 files) | 98 (5 files) | 77 (4 files) |
+| lines read before the first API call, daily pass | — | 252 (4 files) | 49 (2 files) | 49 (2 files) |
+| plugin file opens, misses | — | — | 54 opens, 2 misses (9 sessions) | 151 opens, 1 miss (2 sessions) |
+
+**The release target "headless metered calls ≤ 64 on the same seed" is missed.** 67 on the daily
+pass and 68 on the recovering pass of the kill case.
+
+The detail-read ratio is the row to read. The spec credited a "summary-scan steer" — a provisional
+band plus the question each read had to answer, written onto every queued posting — with killing 65%
+of detail calls. This change removes the steer and keeps the scan, on the reasoning that a
+provisional band anchors the reader before it has read anything. The ratio rose above every prior
+sonnet run of this configuration: seven clean runs of the identical seed spent between 26.9% and
+59.3% of their surfaced postings on a detail read, and this pass spent 75.9%, with the kill case's
+own pass at 78.0%.
+
+**What that does not establish.** Two runs, against a spread this file already records as varying
+close to twofold between runs of the same configuration. It is enough to report and not enough to
+act on; a decision needs at least three sonnet reps beside the seven above.
+
+The read path did not grow, which is the point worth keeping: the change adds ten script paths a
+skill's prose names, and the agent runs those scripts rather than reading them, so a `Bash`
+invocation contributes no read lines. All ten resolved every time they were used.
+
+## Routing, and one leak that is not this change's
+
+B16 at 9 reps per phrase. All six front-door phrases route 9 of 9 to the skill that owns them —
+unchanged from the block above, including `check my job search`, whose front-door description was
+edited by this change to drop the `pipeline` wording.
+
+Two of the three leakage probes selected a reference skill, where the block above measured 0 of 9 for
+both on sonnet. Because that comparison varies the tree and the runtime at once, the same two probes
+were run again on the same day against the tree as it stood before this change:
+
+| probe, times a reference skill was selected | 2026-08-01, old tree | 2026-08-07, old tree | 2026-08-07, this tree |
+|---|---|---|---|
+| a cost question | 0/9 | **3/9** | **3/9** |
+| a workspace question | 0/9 | **0/9** | **3/9** |
+
+The cost probe leaks identically on both trees, so its change is in the runtime or the service and
+not in any file here — the description that fixed it in the block above is unchanged and no longer
+holds on its own. The workspace probe leaks only on this tree, at Fisher exact two-sided p = 0.206
+over nine reps, which is a controlled comparison and still a small one. Neither is fixed.
+
+## Measurement condition
+
+Every figure above was measured on 2026-08-07 UTC, one session at a time, against the live API, with
+the plugin loaded from the working tree at version 0.9.0. The before column of the routing table
+comes from checking the tree out at the last commit before this change and running the identical
+probes the same day, on the same machine, with the same model and the same CLI build.
