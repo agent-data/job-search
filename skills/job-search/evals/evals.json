@@ -59,10 +59,10 @@
     {
       "id": 6,
       "scenario": "returning home renders the card from local files only",
-      "prompt": "Seed <tmp>/.job-search with setup-workspace.sh, a run record runs/<run_id>.json (trigger manual, close_state complete, run_health healthy), the digest that run wrote under reports/, and a jobs.jsonl holding nine postings across the five statuses with two carrying needs_human_check true. The user says 'check my job search'.",
+      "prompt": "Seed <tmp>/.job-search with setup-workspace.sh, a run record runs/<run_id>.json (trigger manual, close_state complete, run_health healthy), the digest that run wrote under reports/, and a jobs.jsonl holding nine evaluated events — six relevant and three not — with two of the six relevant ones carrying needs_human_check true. The user says 'check my job search'.",
       "expectations": [
-        "The first thing the user sees is the card: workspace path, brief date, sources, schedule state and last-run health on the status line, then the latest digest date with that digest's counts line reproduced as written, then the pipeline counts, then the next-actions menu",
-        "The pipeline counts are the fold of jobs.jsonl by source and source_id with the last line winning, and the human-check count matches the seeded two",
+        "The first thing the user sees is the card: workspace path, brief date, sources, schedule state and last-run health on the status line, then the latest digest date with that digest's counts line reproduced as written, then the Matches block, then the next-actions menu",
+        "The three numbers in the Matches block are the relevant, to_confirm and filtered values that skills/job-search/scripts/posting-counts.sh prints for that jobs.jsonl, taken from what the script printed rather than worked out by reading the log, and to_confirm is the seeded two",
         "The home view makes no agent-data call: the shim's call log stays empty"
       ]
     },
@@ -81,7 +81,7 @@
       "scenario": "a workspace with no runs yet",
       "prompt": "Seed <tmp>/.job-search with config.yaml, preferences.md and an empty jobs.jsonl, with empty runs/ and reports/. The user says 'show me my matches'.",
       "expectations": [
-        "The card renders without inventing a digest date, a counts line or pipeline numbers",
+        "The card renders without inventing a digest date, a counts line or numbers in the Matches block",
         "In place of those lines the user is offered the first search"
       ]
     },
@@ -128,10 +128,9 @@
     {
       "id": 13,
       "scenario": "feedback lands at the scope it belongs to",
-      "prompt": "Seed a workspace as in case 6 and drive four separate sessions, one reaction each: (a) 'across the board I only want fully-remote roles'; (b) 'already applied at Northwind, drop that one'; (c) 'the location is wrong'; (d) 'also search Greenhouse and Lever from now on'.",
+      "prompt": "Seed a workspace as in case 6 and drive three separate sessions, one reaction each: (a) 'across the board I only want fully-remote roles'; (c) 'the location is wrong'; (d) 'also search Greenhouse and Lever from now on'.",
       "expectations": [
         "(a) edits preferences.md through the preference interview, refreshes updated_at and confirms in one line, leaving jobs.jsonl and config.yaml untouched",
-        "(b) appends one status_changed event for that posting to jobs.jsonl and leaves preferences.md byte-for-byte unchanged",
         "(c) asks exactly one short question, and asks it because the two readings would keep different postings relevant",
         "(d) states what the wider search costs before it runs or saves anything, then edits search.sources in config.yaml with its comments and shape preserved"
       ]

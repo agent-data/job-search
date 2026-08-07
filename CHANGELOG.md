@@ -4,6 +4,29 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+- **The home card says what the filtering found.** Where it used to show a Pipeline block counting
+  postings by status, it now shows a **Matches** block: how many relevant postings the search found,
+  how many of those need your confirmation, and how many were filtered out. A posting needs your
+  confirmation when the search could not settle one of your must-haves from the posting itself: it
+  keeps the posting rather than rejecting it and flags it, so those are the ones worth reading first.
+  The three numbers come from `skills/job-search/scripts/posting-counts.sh <workspace>/jobs.jsonl`,
+  which prints `relevant`, `to_confirm` and `filtered`, one `key=value` per line — run it yourself
+  and you get the same numbers the card shows.
+
+### Removed
+- **Per-posting status tracking.** Saying "mark that one applied" no longer records anything: a
+  posting is either relevant, needing confirmation, or filtered out, and there are no further states
+  it moves through. The `status` field is gone from every job event the search writes, and the
+  separate event that a status change used to append is gone with it. You do not need to change
+  anything: a posting is still never shown twice, because a run skips any posting that already
+  carries a judgment, and that never depended on status. An existing `jobs.jsonl` keeps every line
+  it has, and the removed field is ignored where it appears. Tracking applications is still wanted,
+  but as its own thing rather than a field on a job posting — what this pack does right now is work
+  out which postings are worth reading.
+
 ## [0.8.0] — 2026-07-31
 
 ### Changed

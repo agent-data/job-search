@@ -234,8 +234,10 @@ the written `preferences.md` has the prose sections and **no numbers**.
 ### T4.1 Second `job-search` visit shows home (not onboarding) — 🤖
 Say **"/job-search:job-search"** again (or "check my job search").
 **Expected:** **no onboarding**; shows a status line (workspace · brief age · schedule on/off + frequency ·
-last run health), the latest digest summary (date + counts), a pipeline snapshot (counts by status +
-`needs_human_check` to review), and conversational quick-actions.
+last run health), the latest digest summary (date + counts), a **Matches** block reading
+`<n> relevant postings found · <k> need your confirmation · <f> filtered out`, and conversational
+quick-actions. The three numbers are the `relevant`, `to_confirm` and `filtered` values that
+`skills/job-search/scripts/posting-counts.sh <workspace>/jobs.jsonl` prints.
 **Result:** ⬜
 
 ### T4.2 Add a query conversationally — 🤖
@@ -279,12 +281,6 @@ crontab -l 2>/dev/null | grep -c job-search-run     # 0 — your real crontab is
 Say: **"update my preferences"** → it re-invokes the interview and rewrites `preferences.md` (new `created_at`).
 **Result:** ⬜
 
-### T4.6 Mark a job's status — 🤖
-After a run has populated `jobs.jsonl`, say: **"mark the <company> role as interested."**
-**Verify (👤):** `tail -1 "$JSOS_TEST/.job-search/jobs.jsonl"` → a single-line `status_changed` event for that
-posting's `source_id` with `"status":"interested"`; the home pipeline count reflects it.
-**Result:** ⬜
-
 ### T4.7 Conversational robustness — the interface IS the product — 🤖
 The config interface is natural language, so test more than one phrasing per action. For each cell, send the
 phrasing and record whether Claude makes the **right** edit — or asks **one** clarifying question when genuinely
@@ -294,13 +290,16 @@ ambiguous. It must never silently do the wrong thing; **`version: 2` stays; no s
 |---|---|---|---|---|
 | Frequency | "add an ML query **and** make it hourly" | "stop pulling so often" | — | "make it evry day" |
 | Query | (multi-intent above) | "also keep an eye out for staff roles" | "I don't want the onsite ones" | "ad a querey for data eng" |
-| Status | "mark Acme applied and Beta rejected" | "I'm into the Acme one" | "I'm not interested in Beta" | — |
+| Preferences | "make it fully remote **and** drop anything under $180K" | "I keep seeing crypto roles" | "I don't want contract work" | "make it fully remoet" |
 
-**Expected, per cell:** correct `config.yaml`/`jobs.jsonl` edit **or** one targeted clarifying question
+**Expected, per cell:** correct `config.yaml`/`preferences.md` edit **or** one targeted clarifying question
 (e.g. "by 'so often' do you mean hourly→daily?"); multi-intent applies **both** changes; negative phrasings
-**exclude** (add an exclusion / mark not-interested), never add the thing. `version: 2` preserved throughout.
-**Verify (👤):** `cat "$JSOS_TEST/.job-search/config.yaml"` after the multi-intent + typo rows; fold the state
-after the status row.
+**exclude** (add an exclusion to the query, or a dealbreaker to the brief), never add the thing.
+`version: 2` preserved throughout. A preference that holds across postings goes to `preferences.md`
+through `job-preference-interview`, never to `jobs.jsonl` — only a run appends to that log.
+**Verify (👤):** `cat "$JSOS_TEST/.job-search/config.yaml"` after the multi-intent + typo rows;
+`grep updated_at "$JSOS_TEST/.job-search/preferences.md"` after the preferences row — it refreshes, and
+the new constraint reads in the brief's prose.
 **Result:** ⬜
 
 ### T4.8 Home failure-states — don't bury problems — 🤖 + 👤
@@ -672,7 +671,7 @@ cp "$JSOS/skills/job-search/templates/config.example.yaml" "$T6/job-search/confi
 sed -i.bak -e 's/^version: 2/version: 1/' \
   "$T6/job-search/config.yaml"; rm -f "$T6/job-search/config.yaml.bak"   # an older workspace's config
 printf 'SENTINEL-PREFS\n' > "$T6/job-search/preferences.md"
-printf '{"event":"evaluated","source_id":"SENTINEL-JOB","status":"new"}\n' > "$T6/job-search/jobs.jsonl"
+printf '{"event":"evaluated","source":"linkedin","source_id":"SENTINEL-JOB","relevant":true}\n' > "$T6/job-search/jobs.jsonl"
 shasum -a 256 "$T6/job-search/"{preferences.md,jobs.jsonl,config.yaml}     # record
 ```
 Launch Claude with `JOBSEARCH_OS_HOME="$T6"` (no registry yet) and say **"/job-search:job-search"**.
@@ -912,7 +911,7 @@ entries carry a date mark; the first-Ashby-pass footnote is present.
 - ⬜ Isolation pre-flight passes; canonical persona set before any LIVE test (§0.2, §0.4)
 - ⬜ First-run `/job-search:job-search` onboards end-to-end and shows **real live matches**; TTFV recorded < ~5 min (T2.1)
 - ⬜ Interview produces a **prose** brief; the 0–100 rubric is gone; import + rubric→prose work (§3)
-- ⬜ Returning `/job-search:job-search` shows home incl. **failure-states** (no-runs, blocked, stale-brief); **all config changes work conversationally** — add/**edit**/**remove** query, frequency, schedule off, prefs, status — and survive **phrasing variety** (§4)
+- ⬜ Returning `/job-search:job-search` shows home incl. **failure-states** (no-runs, blocked, stale-brief); **all config changes work conversationally** — add/**edit**/**remove** query, frequency, schedule off, prefs — and survive **phrasing variety** (§4)
 - ⬜ **Headless + live** run (the cron path) writes a correct digest; live run **dedups** on re-run; **headless** first-run with no workspace says how to set one up and exits 0 with no `runs/` record; a run that stops early writes `close_state: blocked` with `run_health: degraded`, naming what stopped it so the home view surfaces it (process exits 0) (§5)
 - ⬜ Relevance is **qualitative** (relevant + weak/moderate/strong + reasoning); dealbreakers reject; unknowns flag, never reject (§6)
 - ⬜ Every blocked path **closes** — a `close_state: blocked` record plus a digest naming the cause and the fix in plain words, no leftovers — for no-auth, no-CLI, no-workspace, empty brief, spent allowance, and service down; and the paths that stop short of blocking (repeated outage, stale detail links, flaky sources, many promising postings, zero results, a malformed query, a failed detail read, a run that died mid-flight) each behave as their row says (§7)
