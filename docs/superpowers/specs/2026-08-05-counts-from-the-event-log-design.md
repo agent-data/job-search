@@ -87,17 +87,34 @@ line for a `source` + `source_id`. Four new event types join the `evaluated` one
 
 There is no `status_changed` event. It was removed on 2026-08-07 along with the `status` field, by
 `docs/superpowers/plans/2026-08-07-remove-status-changed.md`. That removal is what lets the state
-rule above be one sentence: `evaluated` is the only posting event a state reader looks at, and it
-carries every field on every line.
+rule above be one sentence: `evaluated` is the only posting event a state reader looks at, and a
+posting carries at most one of them, so there is nothing to choose between.
+
+Both append paths refuse a second `evaluated` event for a `(source, source_id)` that already has
+one. `event-log-append.sh:19-20` states the rule and `:60-72` enforces it; `record-judgment.sh:17`
+says "Exit 0: recorded, or this posting already carries exactly this judgment", and `:156-195` is
+where a retry and a conflicting verdict are told apart. Measured 2026-08-07 by running each script
+twice over a temp log:
+piping a second `evaluated` event with a different verdict to `event-log-append.sh` exits 0 and
+leaves one `evaluated` line; calling `record-judgment.sh` again with the same verdict exits 0 with
+"already carries this verdict — nothing written", and with a different verdict exits 1 with "already
+has a judgment in run R, and it is not the line this call would write". One `evaluated` line either
+way.
+
+Do not reason from the event's field set instead. An `evaluated` event does not carry every field
+on every line: `record-judgment.awk:59-60` writes `same_role_as` and `posted_at_extracted` only when
+they are non-empty.
 
 The state rule opening this section read "the last line for a `source` + `source_id` wins" until
 2026-08-07, and it was wrong when it was written. The rule has been last-write-wins per field since
 `docs/design-docs/2026-06-05-os-design.md:168` — "Current state = fold events by `source_id`
 (last-write-wins per field)" — and `docs/RELIABILITY.md:53` has said the same since 2026-06-07
 (`git log --date=short -L 53,53:docs/RELIABILITY.md` names `3569eba 2026-06-07` as the last commit
-to touch it). Those are the only two files that state it: `grep -rn last-write-wins --include='*.md' .`
-on 2026-08-07, ignoring `evals/results/`, finds it nowhere else but the exec-plans, this spec, and
-the plan it belongs to.
+to touch it). `grep -rn last-write-wins --include='*.md' .` on 2026-08-07, ignoring `evals/results/`,
+finds those two and nothing else but exec-plans, this spec, and the plan it belongs to — but that
+scan matches a phrase, not a rule, and it misses `skills/job-search-runbook/SKILL.md:54`, which
+states the same rule as "read them in order, and the last line to carry a field states that field's
+current value". So three files carry the rule and the scan finds two.
 
 The two rules give different answers. On a log holding an `evaluated` event with `needs_human_check`
 true followed by a `status_changed` event carrying `applied`, the shipped per-field code prints
@@ -337,9 +354,10 @@ The `RELIABILITY.md:53` row carries the whole line, not the substring the scan m
 was built by scanning for the word "fold", and until 2026-08-07 that row read "computed by folding"
 — which stops one character before "(last-write-wins per field)", the qualifier that states the
 rule, because a substring match does not carry what follows it. The rewrite written against the
-truncated quote said "current state is the last line for each dedup key", the opposite rule, and
-`RELIABILITY.md` is the one knowledge-base doc that carries the per-field rule (see §3). Read the
-whole line before rewriting one, and quote the whole line in an inventory like this.
+truncated quote said "current state is the last line for each dedup key", the opposite rule. Read
+the whole line before rewriting one, and quote the whole line in an inventory like this. And do not
+take this table's own silence as proof a term is written nowhere else — §3 shows where the phrase
+scan behind it misses a shipped file.
 
 `evals/baseline/2026-07-30-red-baseline.md:178` ("the close state's presence and spelling") is
 literal — it means whether `complete` is spelled correctly — and stays.

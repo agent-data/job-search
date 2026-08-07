@@ -6,7 +6,11 @@
 
 **Goal:** Remove the `status_changed` event type and the `status` field from the product, and replace the home card's Pipeline line with counts that say what the filtering did.
 
-**Architecture:** `status_changed` is the only event type carrying a strict subset of a posting's fields, and the only way a posting's status ever leaves `new` — `record-judgment.awk:57` hardcodes `"status":"new"` on every judgment it writes. Removing it makes `evaluated` the only event a state reader looks at, so a posting's current state is simply its last `evaluated` line, and the per-field-versus-per-line question that this plan's parent got wrong in five places stops existing. `status` becomes a constant nothing reads, so it goes too.
+**Architecture:** `status_changed` is the only way a posting's status ever leaves `new` — `record-judgment.awk:57` hardcodes `"status":"new"` on every judgment it writes. Removing it makes `evaluated` the only event a state reader looks at, and a posting carries at most one `evaluated` event, so its current state is that one line and the per-field-versus-per-line question that this plan's parent got wrong in five places stops existing. `status` becomes a constant nothing reads, so it goes too.
+
+A posting carries at most one `evaluated` event because both append paths refuse a second one for a `(source, source_id)` that already has one: `event-log-append.sh:19-20` states the rule and `:60-72` enforces it, and `record-judgment.sh:17` reads "Exit 0: recorded, or this posting already carries exactly this judgment", with the retry-versus-conflict decision at `:156-195`. Measured 2026-08-07 by running each script twice over a temp log under an absolute path. Piping a second `evaluated` event with a different verdict to `event-log-append.sh` exits 0 and leaves one `evaluated` line. Calling `record-judgment.sh` again with the same verdict exits 0 and prints "linkedin:a already carries this verdict — nothing written"; with a different verdict it exits 1 and prints "linkedin:a already has a judgment in run R, and it is not the line this call would write". The log holds one `evaluated` line in every case.
+
+Do not reason from the event's field set instead. An `evaluated` event does **not** carry every field on every line: `record-judgment.awk:59-60` writes `same_role_as` and `posted_at_extracted` only when they are non-empty.
 
 **Tech Stack:** POSIX `sh` and `awk` only in shipped scripts — no `jq`, no Python, no bash-isms. `awk -f event-field.awk -f prog.awk`, because POSIX awk forbids mixing `-f` with inline program text.
 
@@ -156,7 +160,11 @@ The name changes because "pipeline" is the removed concept. If `posting-counts` 
   k = jval($0, "source") SUBSEP jval($0, "source_id")
   seen[k] = 1
 
-  # A posting judged again in a later run takes the later verdict.
+  # In any log the product writes, these three assignments never overwrite anything: a posting has
+  # at most one evaluated line, because event-log-append.sh and record-judgment.sh both refuse a
+  # second evaluated event for a (source, source_id) that already has one. Assigning rather than
+  # testing first keeps this loop the same shape as run-counts.awk's and costs nothing; a
+  # hand-edited log with two judgments for one posting would take the later line.
   rel[k]   = jval($0, "relevant")
   human[k] = jval($0, "needs_human_check")
   if (jval($0, "same_role_as") != "") alias[k] = 1
@@ -195,7 +203,11 @@ These were verified to be the only three that fail when the handling is removed:
 
 - [ ] **Step 4: Rewrite the nine surviving tests against the new keys**
 
-Rename each to name the script and the behavior, keeping every existing assertion that still applies. Keep `test_two_postings_that_would_share_a_pipe_joined_key_are_counted_separately` — it is the sole killer of the pipe-joined-key mutant and the only thing pinning `SUBSEP`. Rename `test_the_last_line_for_a_posting_wins` to `test_the_last_evaluated_line_for_a_posting_wins` and rewrite its log so the second line is a second `evaluated` event with a different `relevant` value, which is the behavior the new name claims.
+Rename each to name the script and the behavior, keeping every existing assertion that still applies. Keep `test_two_postings_that_would_share_a_pipe_joined_key_are_counted_separately` — it is the sole killer of the pipe-joined-key mutant and the only thing pinning `SUBSEP`.
+
+`test_the_last_line_for_a_posting_wins` needs different handling. Its log is a judgment followed by a `status_changed`, and the obvious repair — make the second line another `evaluated` event — would pin a shape the product cannot produce. Both append paths refuse a second `evaluated` event for a `(source, source_id)` that already has one; the Architecture paragraph above names the lines and the commands that measured it. So do not name a test after a rule no run exercises: `test_the_last_evaluated_line_for_a_posting_wins` claims one.
+
+Either drop the test, or keep it as a reader test over a hand-written log and name it for that — `test_a_hand_written_log_with_two_judgments_for_one_posting_takes_the_later_line` says what it does. If you keep it, its docstring must say that only a hand-written or hand-edited log reaches this case, so the next reader knows the assertion pins the awk's behavior and not the product's. Say which you chose in the report.
 
 Add one test the old suite had no case for: **a posting judged not relevant lands in `filtered`, not in `relevant`**, asserting all three numbers on a log holding one relevant and one not-relevant judgment.
 
