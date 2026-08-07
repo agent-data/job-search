@@ -428,6 +428,6 @@ git commit -m "test(evals): grade the home card on what the filtering found"
 
 ## What the parent plan does after this lands
 
-Its execution resumes at Task 13. Task 13 is unaffected — its Step 1 already names only `call`, `surfaced`, `queued`, `detail` and `evaluated`. Task 14 loses its Step 3 (Task 1 Step 3 above deletes it) and its Step 1 is done by Task 4 above. Task 16 keeps its rewrite table minus the rows this plan owns, and gains `TESTING.md:284` which was on no task's file list. Task 17 Step 4's home-view assertion is done by Task 5 above.
+Its execution resumes at Task 13. Task 13 is unaffected — its Step 1 already names only `call`, `surfaced`, `queued`, `detail` and `evaluated`. Task 14 loses its Step 3 (Task 1 Step 3 above deletes it) and its Step 1 is done by Task 4 above. Task 16 keeps its rewrite table minus the rows this plan owns. It no longer gains `TESTING.md:284`: that line was the verify step of scenario T4.6, which Task 5 of this plan deleted whole, and `:284` now falls inside T4.7. Task 16 instead gains `TESTING.md:93`, `:104` and `:922`, which state the suite size as 429 where `python3 -m pytest tests/ -q --collect-only` gives 937. Task 17 Step 4's home-view assertion is done by Task 5 above.
 
 Task 12 of the parent plan, committed at `7e32a3f`, is superseded in part by Task 4 above and stays otherwise as written.
