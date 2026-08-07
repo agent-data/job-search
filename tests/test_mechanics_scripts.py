@@ -46,9 +46,10 @@ MATCHES = RUN_SCRIPTS / "run-matches.sh"
 OPEN_RUN = RUNBOOK_SCRIPTS / "open-run.sh"
 CLOSE_RUN = RUNBOOK_SCRIPTS / "close-run.sh"
 CLEAR_RUN = RUNBOOK_SCRIPTS / "clear-run.sh"
+PIPELINE = SEARCH_SCRIPTS / "pipeline-counts.sh"
 
 ALL_SCRIPTS = [DEDUP, APPEND, SCHEDULE, DISCOVERY, VALIDATE, RECORD_API, QUEUE, LIST_QUEUE,
-               JUDGE, COUNTS, MATCHES, OPEN_RUN, CLOSE_RUN, CLEAR_RUN]
+               JUDGE, COUNTS, MATCHES, OPEN_RUN, CLOSE_RUN, CLEAR_RUN, PIPELINE]
 
 
 # A contract-valid single-line `evaluated` event, in the shape
@@ -4637,6 +4638,186 @@ def test_closing_and_clearing_a_run_run_under_dash(tmp_workspace):
     c = run_script(CLEAR_RUN, tmp_workspace, o["run_id"], shell="dash")
     assert c.returncode == 0, c.stderr
     assert not (tmp_workspace / "runs" / (".started-" + o["run_id"])).exists()
+
+
+# ----------------------------------------------------------------------- pipeline-counts.sh
+
+def pipeline(jobs, shell="sh"):
+    """Run `pipeline-counts.sh` and return its result and its key/value lines as a dict.
+
+    The split takes the first `=` only, matching `counts` above, so a value carrying one keeps it.
+    """
+    r = run_script(PIPELINE, jobs, shell=shell)
+    return r, dict(l.split("=", 1) for l in r.stdout.splitlines() if "=" in l)
+
+
+def ev(source_id, **kw):
+    """One `evaluated` line, in the field set `record-judgment.awk` writes.
+
+    The default is the shape a run writes for a posting it kept: relevant, banded, no open question,
+    and `status` `new` — which `record-judgment.awk:57` writes on every judgment, a rejection
+    included. Each case overrides only what it is about.
+    """
+    d = {"event": "evaluated", "source": "linkedin", "source_id": source_id,
+         "relevant": True, "match": "strong", "needs_human_check": False, "status": "new"}
+    d.update(kw)
+    return json.dumps(d)
+
+
+def test_the_last_line_for_a_posting_wins(tmp_path):
+    """A posting counted under its first line stays `new` after the user says they applied: the
+    judgment and the reaction are two lines for one posting, and the reaction is the later one.
+
+    Counted under the first line instead, this log reads new=1 applied=0 — the home card telling
+    someone they have not applied to a job they told it they applied to.
+    """
+    jobs = tmp_path / "jobs.jsonl"
+    jobs.write_text(ev("a") + "\n" +
+                    '{"event":"status_changed","source":"linkedin","source_id":"a",'
+                    '"status":"applied"}\n')
+    r, p = pipeline(jobs)
+    assert r.returncode == 0, r.stderr
+    assert p["applied"] == "1" and p["new"] == "0"
+
+
+def test_a_posting_judged_not_relevant_is_not_in_the_pipeline(tmp_path):
+    """`record-judgment.awk:57` writes `"status":"new"` on every judgment, a rejection included, so
+    counting by status alone puts every posting a run threw out into `new`.
+
+    A run now writes an `evaluated` line for every posting it surfaced rather than for the handful
+    it read in full, so that count would be dominated by rejects. Two postings here, one kept and
+    one rejected: the kept one is the only thing in any count, which the total pins as well as the
+    `new` line does.
+    """
+    jobs = tmp_path / "jobs.jsonl"
+    jobs.write_text(ev("a") + "\n" + ev("b", relevant=False, match=None) + "\n")
+    _, p = pipeline(jobs)
+    assert p["new"] == "1"
+    assert sum(int(v) for v in p.values()) == 1
+
+
+def test_a_rejected_posting_the_user_reacts_to_enters_the_pipeline(tmp_path):
+    """The user can react to a posting the run rejected — `job-search/SKILL.md:161`, "already
+    applied there" — and that reaction is the more recent and better-informed answer.
+
+    A relevance filter with no reaction check drops this posting from every count, so the home card
+    would show nothing for a job the user has applied to.
+    """
+    jobs = tmp_path / "jobs.jsonl"
+    jobs.write_text(ev("b", relevant=False, match=None) + "\n" +
+                    '{"event":"status_changed","source":"linkedin","source_id":"b",'
+                    '"status":"applied"}\n')
+    _, p = pipeline(jobs)
+    assert p["applied"] == "1" and p["new"] == "0"
+
+
+def test_surfaced_rows_without_a_judgment_are_not_in_the_pipeline(tmp_path):
+    """A posting a search returned and nothing has judged is not in any state yet, and a `call`
+    event is about a request rather than a posting and carries no `source_id` at all. A log holding
+    only those lines prints six zeros.
+
+    Two lines keep them out and either one is enough on its own, which is why this case pins the
+    pair rather than one of them. Measured on 2026-08-07 against `pipeline-counts.awk`: with the
+    event-type filter removed this case still passes, with the relevance check in the END block
+    removed it still passes, and with both removed it reports new=1 for a posting nobody has judged.
+    """
+    jobs = tmp_path / "jobs.jsonl"
+    jobs.write_text(
+        '{"event":"surfaced","source":"linkedin","source_id":"a"}\n'
+        '{"event":"call","route":"search-jobs","ok":true}\n'
+        '{"event":"queued","source":"linkedin","source_id":"a"}\n')
+    _, p = pipeline(jobs)
+    assert p["new"] == "0" and p["applied"] == "0"
+
+
+def test_to_confirm_counts_pipeline_judgments_needing_a_human(tmp_path):
+    """`(<k> to confirm)` sits on the Pipeline line of the home card, so it counts over the same
+    postings the numbers beside it count. A rejected posting whose judgment set
+    `needs_human_check` is not one of them.
+
+    Three postings: one kept with an open question, one kept without, one rejected with an open
+    question. Counting the open question on the rejected one would put a 3 in `to_confirm`
+    over a Pipeline line that names 2 postings.
+    """
+    jobs = tmp_path / "jobs.jsonl"
+    jobs.write_text(ev("a", needs_human_check=True) + "\n" +
+                    ev("b", match="weak") + "\n" +
+                    ev("c", relevant=False, match=None, needs_human_check=True) + "\n")
+    _, p = pipeline(jobs)
+    assert p["to_confirm"] == "1" and p["new"] == "2"
+
+
+def test_a_second_posting_for_the_same_role_is_counted_once(tmp_path):
+    """One opening reached by two queries gets an `evaluated` line each, and the second names the
+    first in `same_role_as` — `job-search-run/SKILL.md:90`. It is the same job, so it is one entry
+    in the pipeline.
+
+    Counted separately, the home card reports two jobs where the user has one to apply to.
+    """
+    jobs = tmp_path / "jobs.jsonl"
+    jobs.write_text(ev("a", source="ashby") + "\n" +
+                    ev("b", source="ashby", same_role_as="ashby:a") + "\n")
+    _, p = pipeline(jobs)
+    assert p["new"] == "1"
+
+
+def test_an_empty_log_prints_zeroes(tmp_path):
+    """A workspace set up and never run has an empty `jobs.jsonl`, and the home card is rendered
+    from it. Every key is printed at zero rather than left out, so the caller reads six numbers
+    instead of deciding for itself what a missing key means."""
+    jobs = tmp_path / "jobs.jsonl"
+    jobs.write_text("")
+    r, p = pipeline(jobs)
+    assert r.returncode == 0
+    assert p == {"new": "0", "interested": "0", "applied": "0",
+                 "rejected": "0", "archived": "0", "to_confirm": "0"}
+
+
+def test_a_judgment_written_without_a_status_counts_as_new(tmp_path):
+    """`record-judgment.awk:57` puts `"status":"new"` on every judgment it writes, but that is not
+    the only way an `evaluated` event reaches the log: `event-log-append.sh` takes one written by
+    hand on a host with no runtime, and it checks `source`, `source_id` and `same_role_as` — never
+    `status`. Such a posting is at the funnel's starting state, so it counts under `new`.
+
+    Without the default it lands under the empty-string key instead, which no `printf` here prints:
+    the posting is in the pipeline and in none of the six numbers, so the five status counts stop
+    summing to the postings behind them.
+    """
+    jobs = tmp_path / "jobs.jsonl"
+    jobs.write_text(json.dumps({"event": "evaluated", "source": "linkedin", "source_id": "a",
+                                "relevant": True, "match": "strong",
+                                "needs_human_check": False}) + "\n")
+    r, p = pipeline(jobs)
+    assert r.returncode == 0, r.stderr
+    assert p["new"] == "1"
+    assert sum(int(v) for v in p.values()) == 1
+
+
+def test_pipeline_counts_for_a_log_that_is_not_there_exit_two_and_print_nothing(tmp_path):
+    """A workspace whose log is missing is not a workspace with an empty pipeline. Printing six
+    zeros would show an empty home card for a path typed wrong, and the user would read it as
+    having no jobs rather than as a broken workspace. `run-counts.sh` refuses the same way, at
+    `test_counts_for_a_log_that_is_not_there_exit_two_and_print_nothing`."""
+    r, p = pipeline(tmp_path / "absent.jsonl")
+    assert r.returncode == 2
+    assert p == {}
+    assert "no such file" in r.stderr
+
+
+@pytest.mark.skipif(not shutil.which("dash"), reason="dash is not installed here")
+def test_the_pipeline_counts_run_under_dash(tmp_path):
+    """`/bin/sh` is bash on the machine this was written on and dash on the CI runner, and a
+    construct that works under one and not the other reaches CI as a script that cannot run at all.
+    `sh -n` and `dash -n` do not catch it: measured on 2026-08-07 with this script's `[ -f "$jobs" ]`
+    written `[[ -f "$jobs" ]]`, both syntax checks passed, every case above passed, and this one
+    failed — dash finds no `[[` command, so the `||` branch runs and the script exits 2 on a log
+    that is there.
+    """
+    jobs = tmp_path / "jobs.jsonl"
+    jobs.write_text(ev("a") + "\n" + ev("b", relevant=False, match=None) + "\n")
+    r, p = pipeline(jobs, shell="dash")
+    assert r.returncode == 0, r.stderr
+    assert p["new"] == "1"
 
 
 # ------------------------------------------------------------------- POSIX portability
