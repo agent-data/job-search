@@ -3915,6 +3915,12 @@ This step was added on 2026-08-06, during Task 8. No task in the original plan u
 
 **`CHANGELOG.md`.** There is no entry for this change; the last is `[0.8.0] — 2026-07-31`. Write one in the file's existing Keep a Changelog shape, saying what changed for someone using the pack: a run's digest now counts from the event log it writes rather than from the agent's memory of the run, and the scripts that make that possible. Do not invent a version number or a date — leave the heading as `## [Unreleased]` unless the repo already carries one.
 
+**The version bump, which no task owned and which blocks the merge.** `scripts/check_release_integrity.py --check-version-bump --base main` fails today, measured on 2026-08-07:
+
+> runtime surface changed without a forward version bump in `.claude-plugin/plugin.json` (base 0.8.0, current 0.8.0)
+
+and it names 21 changed runtime files across `skills/job-search-run/scripts/`, `skills/job-search-run/templates/` and `skills/job-search-runbook/scripts/`. Bump the version forward, and bump it in every manifest rather than one — `check_release_integrity.py` also enforces version-sync across seven manifests, six JSON plus the Hermes `plugin.yaml`. Run `--check-version-sync` and `--check-version-bump --base main` and confirm both pass. Once the version is chosen, use it as the CHANGELOG heading instead of `## [Unreleased]`.
+
 - [ ] **Step 7: Run the gates**
 
 Run: `python3 scripts/doc_lint.py --root . && python3 scripts/philosophy_guard.py --root . && python3 -m pytest -q`
