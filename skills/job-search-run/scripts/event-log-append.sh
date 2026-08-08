@@ -64,13 +64,28 @@ if [ "$evtype" = evaluated ]; then
   # event type matters — a posting is recorded as `surfaced` before it is judged, and without it
   # that first event would make the judgment look like a duplicate and drop it.
   #
-  # The event-type match tolerates whitespace around the colon, like every other check in this
-  # script, because this is the path a host writing an event by hand comes through and a hand-written
-  # event may carry `"event": "evaluated"`. A plain `grep -F '"event":"evaluated"'` would not find
-  # that line, and the second copy of it would be appended.
-  if [ -f "$jobs" ] && grep -E '"event"[[:space:]]*:[[:space:]]*"evaluated"' "$jobs" 2>/dev/null \
-       | grep -E '"source"[[:space:]]*:[[:space:]]*"'"$src"'"' \
-       | grep -o '"source_id"[[:space:]]*:[[:space:]]*"[^"]*"' | cut -d'"' -f4 \
+  # The source name comes off the event this script was handed, and it must not reach a match as a
+  # pattern. Read as one, `a.c` matched a line whose source is `axc`: the check took that line's
+  # source_id, decided this posting was already judged, and dropped the judgment for `a.c` at exit 0
+  # with nothing on stderr. And `[x` opened a bracket expression grep never closed, so grep printed
+  # `brackets ([ ]) not balanced`, exited 2 and matched nothing, and a second judgment for a posting
+  # that already had one was appended. The two cases are held by
+  # test_a_source_whose_name_holds_a_regex_metacharacter_is_matched_literally and
+  # test_a_source_whose_name_holds_an_unbalanced_bracket_does_not_break_the_duplicate_check in
+  # tests/test_mechanics_scripts.py.
+  #
+  # So the matches below are `grep -F`, which takes a fixed string and reads no pattern at all. That
+  # leaves them with no whitespace tolerance of their own, and the `sed` puts it back ahead of them
+  # instead of inside them: it closes up the spaces and tabs on either side of every colon that sits
+  # between a quoted key and a quoted value, so a hand-written `"event": "evaluated"` or
+  # `"source" : "ashby"` reaches the matches in the compact form they are written in. That covers
+  # every field matched here, because all three are quoted strings; a colon whose value is not
+  # quoted, as in `"posted_at": null`, is left alone and no match here reads one. The `sed` rewrites
+  # only the copy going through the pipe — the log on disk is not touched.
+  if [ -f "$jobs" ] && sed 's/"[[:space:]]*:[[:space:]]*"/":"/g' "$jobs" 2>/dev/null \
+       | grep -F '"event":"evaluated"' \
+       | grep -F '"source":"'"$src"'"' \
+       | grep -o '"source_id":"[^"]*"' | cut -d'"' -f4 \
        | grep -qxF "$sid"; then
     exit 0
   fi

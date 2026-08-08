@@ -1,7 +1,7 @@
 # posting-counts.awk — see posting-counts.sh.
 #
 # A posting is keyed by its source and its source_id joined with SUBSEP, the 0x1c byte, the way
-# run-counts.awk:14-16 keys one. That byte cannot reach a value: json-scan.awk refuses a raw
+# run-counts.awk keys one. That byte cannot reach a value: json-scan.awk refuses a raw
 # control character inside a string, and jval leaves the escape that spells it as the six
 # characters it is written with. Joining with a printable byte instead would give two postings one
 # key: with a pipe, source `a` with source_id `b|c` and source `a|b` with source_id `c` both come
@@ -27,11 +27,19 @@
   k = jval($0, "source") SUBSEP jval($0, "source_id")
   seen[k] = 1
 
-  # In any log the product writes, these three assignments never overwrite anything: a posting has
-  # at most one evaluated line, because event-log-append.sh and record-judgment.sh both refuse a
-  # second evaluated event for a (source, source_id) that already has one. Assigning rather than
-  # testing first keeps this loop the same shape as run-counts.awk's and costs nothing; a
-  # hand-edited log with two judgments for one posting would take the later line.
+  # In any log the product writes, these three assignments never overwrite anything, because both
+  # scripts that append an evaluated event refuse a second one for a (source, source_id) that
+  # already carries one, whichever run recorded that first judgment. event-log-append.sh skips its
+  # append and exits 0. record-judgment.sh exits 0 when the judgment offered is the line already in
+  # the log, and 1 when it is anything else — an earlier run's judgment included, since that line
+  # names a different run — and writes nothing either way. Two tests hold the pair, and this runs
+  # both of them and gives `2 passed`:
+  #   python3 -m pytest -q \
+  #     tests/test_mechanics_scripts.py::test_event_log_append_is_idempotent_on_source_and_source_id \
+  #     tests/test_mechanics_scripts.py::test_a_judgment_from_an_earlier_run_blocks_a_contradictory_one_in_this_run
+  #
+  # Assigning rather than testing first keeps this loop the same shape as run-counts.awk's and costs
+  # nothing; a hand-edited log with two judgments for one posting would take the later line.
   #
   # same_role_as is assigned like the other two rather than being set once and left. Written
   # `if (jval($0, "same_role_as") != "") alias[k] = 1`, a posting named as a duplicate on its first

@@ -163,6 +163,34 @@ def test_dedup_reads_a_judgment_whose_event_key_carries_a_space(tmp_path):
     assert r.stdout.split() == ["xyz-999"], r.stdout
 
 
+def test_a_source_whose_name_holds_a_regex_metacharacter_matches_only_that_source(tmp_path):
+    """The source dedup.sh is given reaches the known-ids match as text, not as a pattern.
+
+    Spliced into `grep -E` it was a pattern, and `a.c` matched a line whose source is `axc`. The
+    known set for `a.c` then held 111, a posting `a.c` has never had judged, and the run never saw
+    it. Measured 2026-08-08 on a log of one `evaluated` event for source `axc`:
+    `grep -E '"source"[[:space:]]*:[[:space:]]*"a.c"'` prints that line and
+    `grep -F '"source":"a.c"'` prints nothing.
+    """
+    jobs = tmp_path / "jobs.jsonl"
+    jobs.write_text(evaluated("axc", "111") + "\n")
+    r = run_sh(DEDUP, [str(jobs), "a.c"], input_text="111\n222\n")
+    assert r.returncode == 0, r.stderr
+    assert r.stdout.split() == ["111", "222"], r.stdout
+
+
+def test_a_source_whose_name_holds_an_unbalanced_bracket_still_has_a_known_set(tmp_path):
+    """`[x` opens a bracket expression that is never closed. `grep -E` prints
+    `brackets ([ ]) not balanced`, exits 2 and matches nothing, so the known set came back empty
+    and every posting this source had already judged was offered to the run again.
+    """
+    jobs = tmp_path / "jobs.jsonl"
+    jobs.write_text(evaluated("[x", "111") + "\n")
+    r = run_sh(DEDUP, [str(jobs), "[x"], input_text="111\n222\n")
+    assert r.returncode == 0, r.stderr
+    assert r.stdout.split() == ["222"], r.stdout
+
+
 # ------------------------------------------------------------------- event-log append
 
 def _count_source_id(path, source_id):
@@ -276,6 +304,33 @@ def test_a_hand_written_evaluated_event_with_spaces_is_still_deduped(tmp_path):
         r = subprocess.run(["sh", str(APPEND), str(jobs)], input=ev, capture_output=True, text=True)
         assert r.returncode == 0, r.stderr
     assert len(lines(jobs)) == 1
+
+
+def test_a_source_whose_name_holds_a_regex_metacharacter_is_matched_literally(tmp_path):
+    """The source name comes off the event and reaches the idempotency check as text.
+
+    Spliced into `grep -E` it was a pattern: for source `a.c` the check matched a line whose source
+    is `axc`, read 111 off it, decided this posting already carried a judgment, and dropped the
+    judgment for `a.c` with nothing on stderr and exit 0.
+    """
+    jobs = tmp_path / "jobs.jsonl"
+    jobs.write_text(evaluated("axc", "111") + "\n")
+    r = run_sh(APPEND, [str(jobs)], input_text=evaluated("a.c", "111"))
+    assert r.returncode == 0, r.stderr
+    assert [(e["source"], e["source_id"]) for e in lines(jobs)] == [("axc", "111"), ("a.c", "111")]
+
+
+def test_a_source_whose_name_holds_an_unbalanced_bracket_does_not_break_the_duplicate_check(tmp_path):
+    """`[x` opens a bracket expression that is never closed, so `grep -E` prints
+    `brackets ([ ]) not balanced`, exits 2 and matches nothing. The idempotency check then found no
+    earlier judgment and appended a second one for a posting that already had one, at exit 0.
+    """
+    jobs = tmp_path / "jobs.jsonl"
+    ev = evaluated("[x", "111")
+    for _ in range(2):
+        r = run_sh(APPEND, [str(jobs)], input_text=ev)
+        assert r.returncode == 0, r.stderr
+    assert len(lines(jobs)) == 1, jobs.read_text()
 
 
 # ----------------------------------------------------------------- schedule-line
@@ -2048,6 +2103,60 @@ def test_a_judgment_written_with_spaces_after_its_colons_still_blocks_a_second_o
     assert r.returncode == 1, r.stdout + r.stderr
     assert "recorded:" in r.stderr and "offered:" in r.stderr, r.stderr
     assert len(lines(jobs)) == before, jobs.read_text()
+
+
+def test_a_judgment_from_an_earlier_run_blocks_a_contradictory_one_in_this_run(tmp_path):
+    """The already-judged lookup is not scoped to a run, so a verdict an earlier run recorded stops
+    this run recording a second one for the same posting.
+
+    Measured 2026-08-08 with the lookup still scoped to a run: this call exited 0 and left two
+    `evaluated` lines for one posting, and `run-matches.sh` then reported the later verdict.
+
+    The run the refusal names is the one on the recorded judgment, which is the entry the caller has
+    to go and read. Naming the calling run instead sends them to a log entry that is not there.
+    """
+    jobs = seeded_jobs(tmp_path, "search.ashby.json")
+    row = first_surfaced(jobs)
+    earlier = "2026-01-01T00-00-00Z"
+    prior = ('{"event":"evaluated","run_id":"%s","source":"%s","source_id":"%s",'
+             '"detail_read":true,"relevant":true,"match":"strong","ts":"2026-01-01T00:00:00Z"}'
+             % (earlier, row["source"], row["source_id"]))
+    a = run_sh(APPEND, [str(jobs)], input_text=prior)
+    assert a.returncode == 0, a.stderr
+    before = jobs.read_text()
+
+    r = run_script(JUDGE, *judge_args(jobs, row, detail_read="true", relevant="false",
+                                      reasoning="Changed my mind."))
+    assert r.returncode == 1, r.stdout + r.stderr
+    said = r.stderr.splitlines()[0]
+    assert earlier in said, said
+    assert RID not in said, said
+    assert jobs.read_text() == before
+    assert len([e for e in lines(jobs) if e["event"] == "evaluated"]) == 1
+
+
+def test_a_prior_judgment_that_names_no_run_is_refused_without_naming_one(tmp_path):
+    """`event-log-append.sh` requires a `source_id`, and a `source` on an `evaluated` event; it
+    requires no `run_id`, so a judgment written by hand can carry none. The refusal reads the run
+    off the recorded judgment, so here there is nothing to read, and the message says that rather
+    than printing an empty run id or the calling run's.
+    """
+    jobs = seeded_jobs(tmp_path, "search.ashby.json")
+    row = first_surfaced(jobs)
+    prior = ('{"event":"evaluated","source":"%s","source_id":"%s","detail_read":true,'
+             '"relevant":true,"match":"strong","ts":"2026-01-01T00:00:00Z"}'
+             % (row["source"], row["source_id"]))
+    a = run_sh(APPEND, [str(jobs)], input_text=prior)
+    assert a.returncode == 0, a.stderr
+    before = jobs.read_text()
+
+    r = run_script(JUDGE, *judge_args(jobs, row, detail_read="true", relevant="false",
+                                      reasoning="Changed my mind."))
+    assert r.returncode == 1, r.stdout + r.stderr
+    said = r.stderr.splitlines()[0]
+    assert "names no run" in said, said
+    assert RID not in said, said
+    assert jobs.read_text() == before
 
 
 def test_the_refusal_does_not_claim_two_verdicts_differ_when_they_are_the_same(tmp_path):

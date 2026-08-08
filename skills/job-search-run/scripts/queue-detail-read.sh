@@ -55,17 +55,6 @@ reject_id --ts "$ts"
 # The queue lists postings this run can fetch and judge, so every entry names one this run
 # surfaced. Same four-grep chain, matching the same quoted forms, as the surfaced check in
 # record-api-response.sh.
-#
-# grep -F matches a substring, so a source_id that is a prefix of another posting's would match the
-# longer one: "source_id":"abc" is found on a line carrying "source_id":"abcd". Nothing in the
-# committed fixtures can reach it. Measured over tests/fixtures/api-responses/*.json: 25 ashby
-# source_ids, all 10 characters, and 25 linkedin ones, all 13, giving no prefix pair within either
-# source and none across the two either; neither source name is a prefix of the other; and "source"
-# is matched before "source_id" on the same line, so a posting of another source cannot satisfy the
-# chain. record-api-response.sh matches the same way in its surfaced and already-stored checks.
-# Anchoring on the following comma here alone would make the two scripts disagree about what counts
-# as the same posting, which is worse than a hazard neither can currently hit — change both
-# together or neither.
 grep -F '"event":"surfaced"' "$jobs" \
   | grep -F "\"run_id\":\"$run_id\"" \
   | grep -F "\"source\":\"$source\"" \
