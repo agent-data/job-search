@@ -135,12 +135,12 @@ awk -f "$here/event-field.awk" -f "$here/record-judgment.awk" \
     -v posted_extracted="$posted_extracted" -v ts="$ts" > "$line"
 judgestatus=$?
 
-# Both the status and the file, the way record-api-response.sh checks both at :220. An awk that
-# died before printing leaves this file empty; one that failed partway through the line leaves part
-# of an event in it. Appending that part is worse than appending nothing: it ends without a newline,
-# so the next event written to the log is joined onto it and the log loses two events rather than
-# one. Measured against a shimmed awk that prints half an event and exits 2 — with only the file
-# checked, the script exits 0 and the truncated line lands.
+# Both the status and the file, the way record-api-response.sh checks both after building its
+# detail event and again after building its rows. An awk that died before printing leaves this file
+# empty; one that failed partway through the line leaves part of an event in it. Appending that part
+# is worse than appending nothing: the log gains a line no JSON reader can parse, and the judgment it
+# was meant to record is not in the log at all. Measured against a shimmed awk that prints half an
+# event and exits 2 — with only the file checked, the script exits 0 and the truncated line lands.
 if [ "$judgestatus" -ne 0 ] || [ ! -s "$line" ]; then
   die 'building the event failed — nothing written'
 fi
@@ -194,5 +194,12 @@ if [ -n "$prev" ]; then
   printf 'record-judgment:   offered:  %s\n' "$b" >&2
   exit 1
 fi
+
+# End the last line before appending, so this judgment is not written onto the last line of a log
+# that ends without a newline. The joined line is read as the event above it, so the judgment is lost
+# and every count the run reports is worked out without it. What `tail -c1 | wc -l` answers, why
+# `[ -s ]` comes first, and the measurement under sh, dash and bash are written out at
+# event-log-append.sh, above its own append.
+if [ -s "$jobs" ] && [ "$(tail -c1 "$jobs" | wc -l)" -eq 0 ]; then printf '\n' >> "$jobs"; fi
 
 cat "$line" >> "$jobs"

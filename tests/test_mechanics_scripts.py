@@ -4846,6 +4846,210 @@ def test_the_posting_counts_run_under_dash(tmp_path):
     assert p == {"relevant": "1", "to_confirm": "0", "filtered": "1"}
 
 
+# ------------------------------------------- appending onto a log that ends mid-line
+
+# One `surfaced` event of this run, compact, in the shape record-api-response.sh writes and every
+# lookup greps for. The tests below write it as the whole file, so the log they hand an appender
+# ends without a trailing newline — the state a hand edit, a truncated copy, or an editor that does
+# not end its files with one leaves behind.
+def unterminated_surfaced(source="linkedin", source_id="100"):
+    return (
+        '{"event":"surfaced","run_id":"%s","query_id":"q","source":"%s","source_id":"%s",'
+        '"posting_id_at_seen":"jp_%s","source_url":"https://example.invalid/%s",'
+        '"title":"Staff Engineer","company_name":"Acme","location_display":"Remote, USA",'
+        '"salary_display":null,"employment_type":null,"department_name":null,"team_name":null,'
+        '"is_remote":true,"workplace_type":null,"posted_at":"2026-08-01T00:00:00Z",'
+        '"detail_available":true,"ts":"2026-08-08T10:00:10Z"}'
+        % (RID, source, source_id, source_id, source_id)
+    )
+
+
+def physical_lines(jobs):
+    """Every line of the log, blank ones included and none of them parsed.
+
+    `lines()` drops the blank lines and parses the rest, which hides both breaks this section is
+    about: two events joined onto one physical line, and a blank line at the top of the log.
+    """
+    return jobs.read_text(encoding="utf-8").splitlines()
+
+
+def test_a_hand_written_event_appended_onto_an_unterminated_line_gets_its_own_line(tmp_path):
+    """event-log-append.sh — the standalone path a host takes when it writes an event itself.
+
+    Every field reader takes a key's first occurrence, so an event appended onto the last line of a
+    log that ends mid-line is read as the earlier event and lost. Measured 2026-08-08 on a posting
+    that had just been judged relevant, with the judgment joined onto its surfaced event:
+    `sh run-counts.sh <log> R` gave `postings_reviewed=0 postings_unreviewed=1`,
+    `sh run-matches.sh <log> R strong` printed no rows, and `sh posting-counts.sh <log>` gave
+    `relevant=0 to_confirm=0 filtered=0`.
+    """
+    jobs = tmp_path / "jobs.jsonl"
+    jobs.write_text(unterminated_surfaced(), encoding="utf-8")
+    r = run_sh(APPEND, [str(jobs)], input_text=evaluated("linkedin", "100") + "\n")
+    assert r.returncode == 0, r.stderr
+    rows = physical_lines(jobs)
+    assert len(rows) == 2, rows
+    assert json.loads(rows[0])["event"] == "surfaced"
+    assert json.loads(rows[1])["event"] == "evaluated"
+
+
+def test_a_queued_event_appended_onto_an_unterminated_line_gets_its_own_line(tmp_path):
+    """queue-detail-read.sh — the event is built in awk and the redirect appends it.
+
+    Joined onto the surfaced event, the queued event never reaches the list a reader works from.
+    Measured 2026-08-08: `sh queue-detail-read.sh <log> --run-id R --source linkedin --source-id
+    100` exited 0 leaving one physical line, and `sh list-detail-read-queue.sh <log> R` then printed
+    nothing at exit 0 for the posting it had just queued.
+    """
+    jobs = tmp_path / "jobs.jsonl"
+    jobs.write_text(unterminated_surfaced(), encoding="utf-8")
+    r = run_script(QUEUE, jobs, "--run-id", RID, "--source", "linkedin", "--source-id", "100")
+    assert r.returncode == 0, r.stderr
+    rows = physical_lines(jobs)
+    assert len(rows) == 2, rows
+    assert json.loads(rows[0])["event"] == "surfaced"
+    assert json.loads(rows[1])["event"] == "queued"
+
+
+def test_a_call_event_appended_onto_an_unterminated_line_gets_its_own_line(tmp_path):
+    """record-api-response.sh's `emit_call`, driven on an error body so the call event is the only
+    thing the script writes and nothing else can be what puts a second line in the log.
+
+    A run's metered-call count is worked out from these events, so a joined one is a call the run
+    stops counting.
+    """
+    jobs = tmp_path / "jobs.jsonl"
+    jobs.write_text(unterminated_surfaced(), encoding="utf-8")
+    r = run_script(RECORD_API, RID, jobs, FIXTURES / "detail.error.json", "--route", "get-posting")
+    assert r.returncode == 1, r.stdout + r.stderr
+    rows = physical_lines(jobs)
+    assert len(rows) == 2, rows
+    assert json.loads(rows[0])["event"] == "surfaced"
+    assert json.loads(rows[1])["event"] == "call"
+
+
+def test_a_detail_event_appended_onto_an_unterminated_line_gets_its_own_line(tmp_path):
+    """record-api-response.sh's get-posting path, which appends the stored posting with `cat`.
+
+    The three expected lines are the seeded surfaced event, the call event, and the detail event,
+    in that order — the script emits the call before it appends the posting. The stored text is what
+    `evaluate-job-fit` reads, so a detail event joined onto the line above it is a posting the
+    reader never sees.
+    """
+    body = json.loads((FIXTURES / "detail.ashby.json").read_text())["data"]
+    jobs = tmp_path / "jobs.jsonl"
+    jobs.write_text(unterminated_surfaced(body["source"], body["source_id"]), encoding="utf-8")
+    r = record_detail(jobs, "detail.ashby.json")
+    assert r.returncode == 0, r.stderr
+    rows = physical_lines(jobs)
+    assert len(rows) == 3, rows
+    assert [json.loads(l)["event"] for l in rows] == ["surfaced", "call", "detail"]
+
+
+def test_surfaced_rows_appended_onto_an_unterminated_line_get_their_own_lines(tmp_path):
+    """record-api-response.sh's search path, which appends the kept rows with `cat`.
+
+    The response is written here with two rows rather than taken from a fixture, so the four lines
+    expected below are counted by hand: the seeded event, the call event, and one surfaced event per
+    row. The seeded posting carries source_id 999, which neither row does, so nothing is skipped as
+    already surfaced.
+    """
+    body = tmp_path / "search.json"
+    body.write_text(json.dumps({
+        "data": {
+            "query": {"id": "q"},
+            "results": [
+                {"source": "linkedin", "source_id": "100", "id": "jp_100",
+                 "source_url": "https://example.invalid/100", "title": "One",
+                 "company_name": "Acme", "location_display": "Remote, USA"},
+                {"source": "linkedin", "source_id": "200", "id": "jp_200",
+                 "source_url": "https://example.invalid/200", "title": "Two",
+                 "company_name": "Acme", "location_display": "Austin, TX"},
+            ]},
+        "meta": {"request_id": "req_1"}}), encoding="utf-8")
+    jobs = tmp_path / "jobs.jsonl"
+    jobs.write_text(unterminated_surfaced(source_id="999"), encoding="utf-8")
+    r = run_script(RECORD_API, RID, jobs, body, "--route", "search-jobs", "--query-id", "q")
+    assert r.returncode == 0, r.stderr
+    rows = physical_lines(jobs)
+    assert len(rows) == 4, rows
+    assert [json.loads(l)["event"] for l in rows] == ["surfaced", "call", "surfaced", "surfaced"]
+    assert [json.loads(rows[i])["source_id"] for i in (0, 2, 3)] == ["999", "100", "200"]
+
+
+def test_a_judgment_appended_onto_an_unterminated_line_gets_its_own_line(tmp_path):
+    """record-judgment.sh — the appender the defect was found on.
+
+    The counts are asserted as well as the line count, because a wrong number in front of the user
+    is what the joined line produces: one posting surfaced, judged relevant with a strong match, so
+    the run reviewed 1 of the 1 it surfaced and 1 of them is a strong match.
+    """
+    jobs = tmp_path / "jobs.jsonl"
+    jobs.write_text(unterminated_surfaced(), encoding="utf-8")
+    r = run_script(JUDGE, jobs, "--run-id", RID, "--source", "linkedin", "--source-id", "100",
+                   "--detail-read", "false", "--relevant", "true", "--match", "strong",
+                   "--needs-human-check", "false", "--reasoning", "fits")
+    assert r.returncode == 0, r.stderr
+    rows = physical_lines(jobs)
+    assert len(rows) == 2, rows
+    assert json.loads(rows[0])["event"] == "surfaced"
+    assert json.loads(rows[1])["event"] == "evaluated"
+    _, c = counts(jobs)
+    assert c["postings_surfaced"] == "1"
+    assert c["postings_reviewed"] == "1"
+    assert c["postings_unreviewed"] == "0"
+    assert c["match_strong"] == "1"
+
+
+@pytest.mark.skipif(not shutil.which("dash"), reason="dash is not installed here")
+def test_the_judgment_gets_its_own_line_under_dash_too(tmp_path):
+    """The guard reads `wc -l`, whose output carries leading spaces under BSD `wc` and none under
+    GNU, and compares it with `-eq`. Measured 2026-08-08 on this machine, `tail -c1 <file> | wc -l`
+    prints `       0` for a file that ends mid-line, and `[ "       0" -eq 0 ]` is true under `sh`,
+    `dash` and `bash` alike — but the comparison is the kind a strict shell can refuse, so one
+    appender is driven end to end under `dash` here.
+    """
+    jobs = tmp_path / "jobs.jsonl"
+    jobs.write_text(unterminated_surfaced(), encoding="utf-8")
+    r = run_script(JUDGE, jobs, "--run-id", RID, "--source", "linkedin", "--source-id", "100",
+                   "--detail-read", "false", "--relevant", "true", "--match", "strong",
+                   "--reasoning", "fits", shell="dash")
+    assert r.returncode == 0, r.stderr
+    rows = physical_lines(jobs)
+    assert len(rows) == 2, rows
+    assert json.loads(rows[1])["event"] == "evaluated"
+
+
+def test_a_hand_written_event_appended_onto_an_empty_log_writes_no_blank_first_line(tmp_path):
+    """A log with no bytes in it must not gain a blank line above its first event.
+
+    This is what the `[ -s "$jobs" ]` half of the guard holds: without it, ending the last line of
+    an empty file writes a newline into a file that has no line to end. Measured 2026-08-08, a
+    leading blank line changes no number today — `run-counts.sh` and `posting-counts.sh` print the
+    same values with and without one — so what this holds is the shape the log is documented to
+    have, one JSON object per physical line, and not a count.
+    """
+    jobs = tmp_path / "jobs.jsonl"
+    jobs.write_text("", encoding="utf-8")
+    r = run_sh(APPEND, [str(jobs)], input_text=evaluated("linkedin", "100") + "\n")
+    assert r.returncode == 0, r.stderr
+    rows = physical_lines(jobs)
+    assert len(rows) == 1, rows
+    assert json.loads(rows[0])["event"] == "evaluated"
+
+
+def test_a_call_event_appended_onto_a_log_the_script_just_created_writes_no_blank_first_line(tmp_path):
+    """record-api-response.sh creates the log itself when it is not there, so it meets an empty file
+    on the first call of every new run — the same case as above, reached the way a run reaches it."""
+    jobs = tmp_path / "jobs.jsonl"
+    assert not jobs.exists()
+    r = run_script(RECORD_API, RID, jobs, FIXTURES / "detail.error.json", "--route", "get-posting")
+    assert r.returncode == 1, r.stdout + r.stderr
+    rows = physical_lines(jobs)
+    assert len(rows) == 1, rows
+    assert json.loads(rows[0])["event"] == "call"
+
+
 # ------------------------------------------------------------------- POSIX portability
 
 def test_scripts_pass_posix_syntax_check():

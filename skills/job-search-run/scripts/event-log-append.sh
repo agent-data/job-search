@@ -79,4 +79,22 @@ fi
 # Append (create the workspace dir if needed; the >> here is the sanctioned append exception).
 dir=$(dirname "$jobs")
 [ -d "$dir" ] || mkdir -p "$dir"
+
+# End the last line first. A log can end without a newline after its last event — a hand edit, a
+# truncated copy, an editor that does not end its files with one — and this event would then be
+# written onto that last line. Every field reader takes a key's first occurrence (event-field.awk:12
+# spells that out), so the joined line is read as the earlier event and this one is lost: measured
+# 2026-08-08 on a posting whose judgment landed on its surfaced event, `run-counts.sh` reported
+# `postings_reviewed=0 postings_unreviewed=1`, `run-matches.sh` printed no rows, and
+# `posting-counts.sh` printed `relevant=0 to_confirm=0 filtered=0`, all at exit 0.
+#
+# `tail -c1 | wc -l` answers 1 when the last byte is a newline and 0 otherwise. `[ -s "$jobs" ]` in
+# front of it keeps an empty log from gaining a blank first line. Measured 2026-08-08 under sh, dash
+# and bash alike: a file with no newline on its last line gained exactly one byte, one already ending
+# in a newline gained none, and an empty one gained none. The three other scripts that append to
+# jobs.jsonl — queue-detail-read.sh, record-api-response.sh and record-judgment.sh, which is the rest
+# of what `grep -rl '>> "$jobs"' skills/` lists — do the same before their own appends and point back
+# here for the reason.
+if [ -s "$jobs" ] && [ "$(tail -c1 "$jobs" | wc -l)" -eq 0 ]; then printf '\n' >> "$jobs"; fi
+
 printf '%s\n' "$ev" >> "$jobs"

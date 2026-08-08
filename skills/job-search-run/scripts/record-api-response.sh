@@ -133,8 +133,26 @@ trap 'rm -f "$scan" "$new" "$bad" "$keep" "$bad.count"' EXIT INT HUP TERM
 
 ts=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 
+# End the last line of the log, so the event a caller is about to append is not written onto the last
+# line of a log that ends without a newline. Every field reader takes a key's first occurrence, so a
+# joined line is read as the earlier event and the appended one is lost. What `tail -c1 | wc -l`
+# answers, why `[ -s ]` comes first, and the measurement under sh, dash and bash are written out at
+# event-log-append.sh, above its own append.
+#
+# This script appends in three places and calls this before each of them. Only the call inside
+# `emit_call` can find a log that ends without a newline today, because every path here emits the
+# call event before it appends anything else, and the `print` in awk ends the line it writes.
+# Measured 2026-08-08 by deleting one call at a time and running
+# `python3 -m pytest tests/test_mechanics_scripts.py`: deleting the one in `emit_call` fails 3 tests,
+# and deleting either of the other two leaves all 458 passing. Those two are here so each append
+# stands on its own if that order ever changes.
+end_last_line() {
+  if [ -s "$jobs" ] && [ "$(tail -c1 "$jobs" | wc -l)" -eq 0 ]; then printf '\n' >> "$jobs"; fi
+}
+
 # One `call` event per attempt. Defined before anything can fail, so a failure still leaves it.
 emit_call() {
+  end_last_line
   RAR_QUERY=$query_id RAR_REQ=${req:-} RAR_CODE=${code:-} \
   awk -v run_id="$run_id" -v ts="$ts" -v route="$route" -v source="$1" \
       -v ok="$2" -v returned="$3" -v newrows="$4" -v retryable="${retryable:-}" '
@@ -312,6 +330,7 @@ if [ "$route" = get-posting ]; then
   fi
 
   emit_call "$dsrc" true 1 1
+  end_last_line
   cat "$new" >> "$jobs"
   printf 'record-api-response.sh: stored %s:%s\n' "$dsrc" "$dsid" >&2
   exit 0
@@ -453,6 +472,6 @@ fi
 
 kept=$(wc -l < "$keep" | tr -d ' ')
 emit_call "$src" true "$returned" "$kept"
-[ "$kept" -gt 0 ] && cat "$keep" >> "$jobs"
+[ "$kept" -gt 0 ] && { end_last_line; cat "$keep" >> "$jobs"; }
 printf 'record-api-response.sh: %s rows appended, %s rows in the response\n' "$kept" "$returned" >&2
 exit 0
