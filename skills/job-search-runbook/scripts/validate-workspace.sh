@@ -66,13 +66,15 @@ fi
 #
 # The digits are written out one by one rather than as `[0-9]`, because a range inside a bracket
 # expression is decided by the collation order the locale sets and a list of ten characters is not.
-# close-run.sh records the measurement — `grep -n 'digits are written out' close-run.sh`: under
-# LC_ALL=ar_SA.UTF-8 in sh and bash, `[0-9]` matched a run id spelled in Arabic-Indic digits. Which
-# shell reads this file decides whether that matters here — measured on 2026-08-07, bash under that
+# close-run.sh records the measurement — `grep -n 'digits are written out'
+# skills/job-search-runbook/scripts/close-run.sh`: under LC_ALL=ar_SA.UTF-8 in sh and bash,
+# `[0-9]` matched a run id spelled in Arabic-Indic digits. Which shell reads this file decides
+# whether that matters here — measured on 2026-08-07, bash under that
 # locale matched them and dash refused them, on macOS and on Debian alike, and `/bin/sh` is bash on
 # one and dash on the other. close-run.sh and clear-run.sh each carry the same glob — `grep -n
-# '0123456789' close-run.sh clear-run.sh` — and tests/test_mechanics_scripts.py drives one table of
-# run ids through all three and requires the same verdict for each.
+# '0123456789' skills/job-search-runbook/scripts/close-run.sh
+# skills/job-search-runbook/scripts/clear-run.sh` — and tests/test_mechanics_scripts.py drives one
+# table of run ids through all three and requires the same verdict for each.
 RUN_ID_GLOB='[0123456789][0123456789][0123456789][0123456789]-[0123456789][0123456789]-[0123456789][0123456789]T[0123456789][0123456789]-[0123456789][0123456789]-[0123456789][0123456789]Z'
 # Run-record timestamps are UTC with a trailing Z. An offset such as +00:00 names the same instant
 # but fails: with one written form, comparing two timestamps is a plain string compare. This one

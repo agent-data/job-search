@@ -168,11 +168,16 @@ posting as the same opening — measured 2026-08-07 on a four-line log, two `sur
 All three scripts read the field now:
 
 ```bash
-grep -c same_role_as skills/job-search/scripts/posting-counts.awk \
+grep -l '"same_role_as"' skills/job-search/scripts/posting-counts.awk \
   skills/job-search-run/scripts/run-counts.awk skills/job-search-run/scripts/run-matches.awk
 ```
 
-prints 2, 3 and 3. The unit the counts line is in is settled and written down in
+names all three. It lists the files that match rather than counting the lines that do, so it says
+what this paragraph claims — each of the three reads the field as a key — and it does not go stale
+when one of them gains a comment mentioning the field. Run against the same three files at
+`2ef79a3`, it names only `posting-counts.awk`.
+
+The unit the counts line is in is settled and written down in
 `run-counts.sh`'s header: a posting whose judgment names another is counted under
 `duplicates_of_another` and in no band, so the three bands count openings while `postings_surfaced`,
 `postings_reviewed` and `postings_unreviewed` still count postings. `run-matches.sh` gives such a

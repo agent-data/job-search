@@ -586,8 +586,8 @@ def test_whitespace_around_the_colon_does_not_hide_a_field(line):
     """`event-log-append.sh` accepts every one of these — its field checks all read
     `"key"[[:space:]]*:[[:space:]]*` — so an event written by hand arrives in these shapes. A
     `match` read as `" \\"strong\\""` equals none of the three band names `run-counts.awk`'s END
-    block tests for — `grep -n 'b == "strong"' run-counts.awk`: measured 2026-08-07 against a copy
-    of `event-field.awk` outside the repository with
+    block tests for — `grep -n 'b == "strong"' skills/job-search-run/scripts/run-counts.awk`:
+    measured 2026-08-07 against a copy of `event-field.awk` outside the repository with
     the post-colon `_jskipws` call in `_jafter` dropped, a log carrying `"match" : "strong"` gave
     `match_strong=0` and the line `INVALID relevant-row-without-a-band=1`, exit 1, under
     /usr/bin/awk and mawk."""
@@ -2835,12 +2835,34 @@ def test_a_judgment_naming_no_row_here_is_still_one_opening(tmp_path, alias):
     assert out[0][10] == ""
 
 
+def a_third_city(jobs, like, source_id, location):
+    """Append a `surfaced` row for the opening `like` belongs to, in a city it has no row for.
+
+    `search.linkedin.json` holds two rows for the Northwind Labs opening and no third, so the third
+    city is written here rather than taken from the fixture. It carries that opening's company and
+    title, which is what makes it the same opening, and `record-judgment.sh` copies the display
+    fields off it the way it does for a row a search returned. The line is written in the compact
+    form the writers produce, because `record-judgment.sh` finds a surfaced row with `grep -F` on
+    `"source_id":"<id>"` and a space after the colon would miss it.
+    """
+    row = {"event": "surfaced", "run_id": RID, "source": like["source"], "source_id": source_id,
+           "title": like["title"], "company_name": like["company_name"],
+           "location_display": location, "source_url": like.get("source_url"),
+           "posted_at": like.get("posted_at")}
+    jobs.write_text(jobs.read_text() + json.dumps(row, separators=(",", ":")) + "\n")
+    return row
+
+
 def test_every_other_place_the_opening_was_posted_rides_on_its_row(tmp_path):
     """One opening posted in three places puts two locations on one row, joined with `; `.
 
+    All three rows carry one company and one title — the two the fixture holds plus a third city
+    written by `a_third_city` — so the case is the shape `dedup.sh --near` groups rather than three
+    unrelated postings pointed at each other.
+
     The separator is a semicolon rather than a comma because a location carries commas of its own:
-    the two here are `San Francisco, CA` and `San Francisco Bay Area`, and comma-joining them would
-    give `San Francisco, CA,San Francisco Bay Area`, which no reader can split back into two places.
+    the two joined here are `San Francisco, CA` and `Austin, TX`, and comma-joining them would give
+    `San Francisco, CA,Austin, TX`, which no reader can split back into two places.
     `record-judgment.sh` takes `--dealbreakers` and `--unknowns` as semicolon-separated lists for
     the same reason.
 
@@ -2848,8 +2870,8 @@ def test_every_other_place_the_opening_was_posted_rides_on_its_row(tmp_path):
     lists a band in, so two hosts reading one log print the same row.
     """
     jobs, read, other = seed_two_cities(tmp_path)
-    rows = [e for e in lines(jobs) if e["event"] == "surfaced"]
-    third = next(r for r in rows if r["source_id"] == "linkedin-0007")
+    third = a_third_city(jobs, read, "linkedin-9003", "Austin, TX")
+    assert third["company_name"] == read["company_name"] and third["title"] == read["title"]
     judge_all(jobs, [third], detail_read="false", relevant="true", match="strong",
               reasoning="Fits the brief.",
               same_role_as="%s:%s" % (read["source"], read["source_id"]))
@@ -2934,6 +2956,11 @@ def test_a_later_judgment_naming_no_other_posting_takes_it_out_of_the_duplicates
 
     The second judgment is written straight to the log because `record-judgment.sh` refuses a second
     judgment for a posting this run already judged.
+
+    Both readers are run and compared. `posting-counts.awk` used to set its alias flag once and
+    never clear it, so on this log the digest reported two openings over two rows while the home
+    card reported one — the disagreement this pair of scripts exists to remove, in a narrower shape.
+    Asserting the `run-counts.sh` side alone is what let that through.
     """
     jobs, read, other = seed_two_cities(tmp_path)
     jobs.write_text(jobs.read_text() +
@@ -2947,6 +2974,89 @@ def test_a_later_judgment_naming_no_other_posting_takes_it_out_of_the_duplicates
     _, out = matches(jobs)
     assert [o[0] for o in out] == ["strong", "weak"], out
     assert [o[10] for o in out] == ["", ""], out
+    r, p = postings(jobs)
+    assert r.returncode == 0, r.stderr
+    assert int(p["relevant"]) == len(out) == 2
+    assert int(c["match_strong"]) + int(c["match_moderate"]) + int(c["match_weak"]) \
+        == int(p["relevant"])
+
+
+def test_an_alias_carrying_no_location_adds_nothing_to_the_column(tmp_path):
+    """A posting is still the same opening as another when its row came back without a location, so
+    it is still counted under `duplicates_of_another` and still gets no row — there is just nothing
+    to put on the row it names.
+
+    `record-api-response.sh` writes `null` for a field a row does not carry and
+    `record-judgment.awk` copies it, so `null` is a shape the product produces. Joined rather than
+    skipped it reaches the digest as `also posted in null; Boston, MA`, and an empty value reaches
+    it as `also posted in ; Boston, MA`. Both are asserted, because the two arrive as different
+    values from `jval` — the four characters `null` and the empty string.
+    """
+    jobs = seeded_jobs(tmp_path, "search.linkedin.json")
+    rows = [e for e in lines(jobs) if e["event"] == "surfaced"]
+    read, blank, nulled, kept = rows[0], rows[1], rows[2], rows[3]
+    judge_all(jobs, [read], detail_read="true", relevant="true", match="strong", reasoning="Fits.")
+    alias = "%s:%s" % (read["source"], read["source_id"])
+    for row, location in ((blank, '""'), (nulled, "null")):
+        jobs.write_text(jobs.read_text() +
+            '{"event":"evaluated","run_id":"%s","source":"%s","source_id":"%s",'
+            '"location_display":%s,"detail_read":false,"relevant":true,"match":"strong",'
+            '"same_role_as":"%s"}\n'
+            % (RID, row["source"], row["source_id"], location, alias))
+    judge_all(jobs, [kept], detail_read="false", relevant="true", match="strong",
+              reasoning="Fits.", same_role_as=alias)
+    _, c = counts(jobs)
+    assert c["match_strong"] == "1"
+    assert c["duplicates_of_another"] == "3"
+    _, out = matches(jobs)
+    assert len(out) == 1, out
+    assert out[0][10] == kept["location_display"]
+
+
+# `source_id`s that carry a colon, which is why the pair is split at the first one. A greenhouse id
+# is written `<board>:<number>`; these two are the shape of one company's board with two postings on
+# it. No committed fixture has a greenhouse response, so the two `surfaced` events are written by
+# hand and the judgments go through `record-judgment.sh`, which is what reads `--same-role-as`.
+GH_READ = "acme:7310605"
+GH_OTHER = "acme:7310606"
+
+
+def seed_two_greenhouse_rows(tmp_path):
+    jobs = tmp_path / "jobs.jsonl"
+    jobs.write_text("".join(
+        '{"event":"surfaced","run_id":"%s","source":"greenhouse","source_id":"%s",'
+        '"title":"Director, FP&A","company_name":"Acme","location_display":"%s",'
+        '"source_url":"https://boards.greenhouse.io/acme/jobs/%s","posted_at":"2026-08-01"}\n'
+        % (RID, sid, city, sid.split(":")[1])
+        for sid, city in ((GH_READ, "Austin, TX"), (GH_OTHER, "Boston, MA"))))
+    return jobs
+
+
+def test_a_source_id_carrying_a_colon_resolves_to_the_posting_it_names(tmp_path):
+    """`same_role_as` is `<source>:<source_id>` split at the FIRST colon, because a source_id can
+    hold one of its own.
+
+    Split at the last colon instead and `greenhouse:acme:7310605` names source `greenhouse:acme`
+    with source_id `7310605`, which no posting in the log has. Nothing about the counts moves — the
+    duplicate is still a duplicate and the row is still one row — so the only thing that changes is
+    that the other city silently disappears from every greenhouse duplicate. That is what this case
+    is here to catch.
+    """
+    jobs = seed_two_greenhouse_rows(tmp_path)
+    run_script(JUDGE, jobs, "--run-id", RID, "--source", "greenhouse", "--source-id", GH_READ,
+               "--detail-read", "true", "--relevant", "true", "--match", "strong",
+               "--reasoning", "Fits.")
+    r = run_script(JUDGE, jobs, "--run-id", RID, "--source", "greenhouse", "--source-id", GH_OTHER,
+                   "--detail-read", "false", "--relevant", "true", "--match", "strong",
+                   "--reasoning", "Fits.", "--same-role-as", "greenhouse:" + GH_READ)
+    assert r.returncode == 0, r.stderr
+    _, c = counts(jobs)
+    assert c["match_strong"] == "1"
+    assert c["duplicates_of_another"] == "1"
+    _, out = matches(jobs)
+    assert len(out) == 1, out
+    assert out[0][2] == GH_READ
+    assert out[0][10] == "Boston, MA"
 
 
 def test_another_runs_events_do_not_enter_these_counts(tmp_path):
@@ -3159,7 +3269,8 @@ def test_a_judgment_for_a_posting_this_run_never_surfaced_is_not_listed(tmp_path
 def test_one_posting_judged_twice_in_a_run_is_listed_once_with_the_later_verdict(tmp_path):
     """One row per posting, carrying the last judgment this run recorded — the rule
     `run-counts.awk` counts by on its own `evaluated` branch, `grep -n 'The last judgment'
-    run-counts.awk`, which is what keeps the listing and the counts the same length.
+    skills/job-search-run/scripts/run-counts.awk`, which is what keeps the listing and the
+    counts the same length.
 
     `record-judgment.sh` writes nothing for a posting this run has already judged, so both events
     are written here directly.
@@ -3182,7 +3293,8 @@ def test_a_relevant_row_with_no_band_is_not_listed(tmp_path):
 
     The row count is asserted against `postings_reviewed` less the unbanded rows and less the
     postings that are the same opening as another, which is the relation `run-matches.sh`'s header
-    states — `grep -n 'row count is' run-matches.sh`.
+    states — `grep -n 'row count is'
+    skills/job-search-run/scripts/run-matches.sh`.
     """
     jobs = seeded_jobs(tmp_path, "search.linkedin.json")
     row = first_surfaced(jobs)
@@ -3206,10 +3318,12 @@ def test_a_relevant_row_carrying_the_filtered_band_is_not_listed(tmp_path):
 
     The row count is asserted against `postings_reviewed` less the unbanded rows and less the
     postings that are the same opening as another, which is the relation `run-matches.sh`'s header
-    states — `grep -n 'row count is' run-matches.sh`.
+    states — `grep -n 'row count is'
+    skills/job-search-run/scripts/run-matches.sh`.
 
     `record-judgment.sh` takes only strong, moderate or weak on a relevant row — `grep -n 'needs
-    --match' record-judgment.sh` — so the event is appended to the log here directly.
+    --match' skills/job-search-run/scripts/record-judgment.sh` — so the event is appended to the log
+    here directly.
     """
     jobs = seeded_jobs(tmp_path, "search.linkedin.json")
     rows = [e for e in lines(jobs) if e["event"] == "surfaced"]

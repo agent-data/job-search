@@ -15,9 +15,11 @@
 # counted — a company posting one opening in several cities gets one row back per city, the run
 # reads one of them, and the judgment on each of the others names the row that was read in
 # same_role_as. Such a posting is counted here and in no band, on the same test posting-counts.sh
-# uses for the home view — whether the field is there, never on what it names — so the digest and
-# the home card report one opening once. run-matches.sh gives it no row and puts its location on the
-# row it names; the rule for a value naming no such row is written out there.
+# uses for the home view — whether the field is there, never on what it names — and both read it off
+# the posting's last judgment, so a posting re-judged without the field goes back into its band on
+# both screens at once. That is what makes the digest and the home card report one opening once.
+# run-matches.sh gives such a posting no row and puts its location on the row it names; the rule for
+# a value naming no such row is written out there.
 #
 # postings_reviewed still counts postings. It pairs with postings_unreviewed against
 # postings_surfaced and says how much work the run did, and judging the second posting of one

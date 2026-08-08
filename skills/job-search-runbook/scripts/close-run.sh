@@ -35,7 +35,8 @@
 #
 #   a finding — status 1 with `INVALID relevant-row-without-a-band=<n>` on the last line. Its END
 #     block prints every count line first and that line last — `grep -n 'printf .postings_surfaced'
-#     run-counts.awk` comes before `grep -n 'printf .INVALID' run-counts.awk` — so seeing it last
+#     skills/job-search-run/scripts/run-counts.awk` gives a lower line number than `grep -n
+#     'printf .INVALID' skills/job-search-run/scripts/run-counts.awk` — so seeing it last
 #     means the whole count set reached stdout. Measured against a two-line log of that shape —
 #     one surfaced posting, one judgment relevant with match null: eighteen count lines, then the
 #     INVALID line, status 1. The record is written, the finding goes to stderr, and the run closes
@@ -63,8 +64,8 @@
 # Exit 1: nothing written; stderr names what contradicts the close.
 #
 # A missing operand is the exception the caller sees a shell-picked code for, the way
-# run-counts.sh's own header records — `grep -n 'missing operand' run-counts.sh`: measured at
-# 1 under sh and bash and 2 under dash.
+# run-counts.sh's own header records — `grep -n 'missing operand'
+# skills/job-search-run/scripts/run-counts.sh`: measured at 1 under sh and bash and 2 under dash.
 set -u
 
 ws=${1:?usage: close-run.sh <workspace> <run_id> --trigger T --close-state S}
@@ -101,9 +102,9 @@ esac
 #
 # A run id that traverses nothing is refused too, and for a second reason. validate-workspace.sh
 # reads a file in runs/ as a run record only when its whole name matches the same rule — `grep -n
-# 'case .id in' validate-workspace.sh` — so a record named anything else is skipped by every check
-# the workspace has: measured, a workspace holding runs/not-a-run-id.json gets no line about it at
-# all.
+# 'case .id in' skills/job-search-runbook/scripts/validate-workspace.sh` — so a record named
+# anything else is skipped by every check the workspace has: measured, a workspace holding
+# runs/not-a-run-id.json gets no line about it at all.
 #
 # The check is a `case` glob rather than a grep on the value. POSIX pattern matching compares the
 # whole word and has no notion of lines, while `printf '%s\n' "$run_id" | grep -qE ...` exits 0 when
@@ -156,8 +157,8 @@ esac
 # LC_ALL=en_US.UTF-8 in dash with mawk, which is the pair Ubuntu CI runs. That file is not valid
 # UTF-8, so nothing that reads a run record can parse it. BSD awk is the only thing that stops it,
 # dying with a multibyte conversion failure that the build check below catches — `grep -n
-# 'buildstatus' close-run.sh`. The same check is in three scripts under job-search-run/scripts, so
-# widening it is a change to four files, not one.
+# 'building the record failed' skills/job-search-runbook/scripts/close-run.sh`. The same check is in
+# three scripts under job-search-run/scripts, so widening it is a change to four files, not one.
 reject_id() {
   case $2 in
     *[[:cntrl:]]*) die "$1 may hold no control character" ;;
@@ -232,10 +233,10 @@ lostids=$(get searches_never_succeeded_ids)
 # and let a complete close write a record over postings nobody judged.
 #
 # The digits are written out one by one here for the reason measured above — `grep -n 'digits are
-# written out' close-run.sh` finds both places — and negating the bracket expression with `!` does
-# not change it: a range is still decided by the collation order the locale sets. Measured on
-# 2026-08-06 with the Arabic-Indic ٢, `*[!0-9]*` called it a number under LC_ALL=ar_SA.UTF-8 in sh
-# and in bash, and not a number under LC_ALL=C, under
+# written out' skills/job-search-runbook/scripts/close-run.sh` finds both places — and negating
+# the bracket expression with `!` does not change it: a range is still decided by the collation
+# order the locale sets. Measured on 2026-08-06 with the Arabic-Indic ٢, `*[!0-9]*` called it a
+# number under LC_ALL=ar_SA.UTF-8 in sh and in bash, and not a number under LC_ALL=C, under
 # LC_ALL=en_US.UTF-8 and in dash; `*[!0123456789]*` called it not a number in all nine combinations
 # and still called 23 a number in all nine. End to end with `[!0-9]` in these two lines and a
 # run-counts.sh shimmed to print postings_unreviewed=٢: under LC_ALL=ar_SA.UTF-8 in sh, close-run.sh

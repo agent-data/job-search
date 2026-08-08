@@ -991,9 +991,9 @@ def test_the_record_the_review_measured_names_every_field_it_states_nothing_for(
     log has, and the sum of an empty block against the 2 postings the record says it surfaced.
 
     `bands-do-not-sum-to-reviewed` deliberately stays quiet. The reason is written once, at the
-    guard that implements it — `grep -n 'a decision, not a precaution' validate-workspace.sh`. This
-    case is what holds the decision: it asserts the whole finding list, so adding the zeros fails
-    here.
+    guard that implements it — `grep -n 'a decision, not a precaution'
+    skills/job-search-runbook/scripts/validate-workspace.sh`. This case is what holds the
+    decision: it asserts the whole finding list, so adding the zeros fails here.
     """
     seed_log(tmp_workspace)
     write_run(tmp_workspace, full_record(matches={}, by_source={}))

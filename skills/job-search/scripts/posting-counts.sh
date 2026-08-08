@@ -29,15 +29,16 @@
 # `.claude-plugin/plugin.json` names no path at all, and INSTALL_FOR_HERMES.md:206 checks
 # `skills/job-search-runbook/scripts/workspace-discovery.sh` under the installed plugin.
 # close-run.sh carries the same paragraph about its own walk to run-counts.sh — `grep -n 'ships as
-# one directory' close-run.sh`; change the two together.
+# one directory' skills/job-search-runbook/scripts/close-run.sh`; change the two together.
 #
 # Exit 0: the three counts printed. Exit 2: nothing printed — no log at that path. Any other status
 # is awk failing partway, which leaves part of the key set on stdout: read these counts after
 # checking the status, never because stdout has lines in it.
 #
 # A missing operand is the exception the caller sees a shell-picked code for, the way
-# run-counts.sh's own header records — `grep -n 'missing operand' run-counts.sh`: measured on
-# 2026-08-07 at 1 under sh and bash and 2 under dash.
+# run-counts.sh's own header records — `grep -n 'missing operand'
+# skills/job-search-run/scripts/run-counts.sh`: measured on 2026-08-07 at 1 under sh and bash and
+# 2 under dash.
 set -u
 
 here=$(dirname "$0")

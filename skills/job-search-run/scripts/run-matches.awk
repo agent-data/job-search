@@ -47,9 +47,9 @@ BEGIN {
   k = jval($0, "source") SUBSEP jval($0, "source_id")
   if (ev == "surfaced") { mine[k] = 1; next }
   # The last judgment this run recorded for a posting wins, which is the rule run-counts.awk counts
-  # by on its own `evaluated` branch — `grep -n 'The last judgment' run-counts.awk`. The posting
-  # keeps the place its first judgment gave it, so a re-judged posting does not jump to the end of
-  # its band.
+  # by on its own `evaluated` branch — `grep -n 'The last judgment'
+  # skills/job-search-run/scripts/run-counts.awk`. The posting keeps the place its first
+  # judgment gave it, so a re-judged posting does not jump to the end of its band.
   if (!(k in seen)) { seen[k] = 1; n++; order[n] = k }
   judgment[k] = $0
 }
@@ -73,6 +73,13 @@ END {
     if (p == 0) continue
     t = substr(rl, 1, p - 1) SUBSEP substr(rl, p + 1)
     loc = jval(judgment[k], "location_display")
+    # A row that came back without a location has nothing to add to the column. record-api-response
+    # writes null for a field a row does not carry and record-judgment copies it, so an absent
+    # location arrives here as the four characters `null` and an empty one as the empty string.
+    # Joined rather than skipped, the two reach the digest as `also posted in null; Boston, MA` and
+    # `also posted in ; Boston, MA`. A location whose text really is `null` is skipped too; jval
+    # gives the same four characters either way, and no live row has ever carried it.
+    if (loc == "" || loc == "null") continue
     # The test is a statement of its own, not `also[t] = (t in also) ? also[t] "; " loc : loc`.
     # Measured on a log holding one opening posted in two cities: mawk 1.3.4 creates the element for
     # the left-hand side before it evaluates the right, so `t in also` was already true on the first
@@ -91,10 +98,10 @@ END {
       if (jval(l, "relevant") == "true") {
         band = jval(l, "match")
         # The three bands a judgment carries, tested one by one the way run-counts.awk's END block
-        # tests them — `grep -n 'b == "strong"' run-counts.awk` — so the two scripts call the same
-        # rows unbanded. `filtered` is not among them: it is what a row judged not relevant gets, so
-        # a relevant row carrying the string `filtered` is a row with no band, not a filtered-out
-        # posting.
+        # tests them — `grep -n 'b == "strong"' skills/job-search-run/scripts/run-counts.awk` — so
+        # the two scripts call the same rows unbanded. `filtered` is not among them: it is what a
+        # row judged not relevant gets, so a relevant row carrying the string `filtered` is a row
+        # with no band, not a filtered-out posting.
         if (band != "strong" && band != "moderate" && band != "weak") continue
       } else band = "filtered"
       if (rank[band] != b) continue

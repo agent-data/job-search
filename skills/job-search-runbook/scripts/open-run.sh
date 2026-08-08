@@ -30,8 +30,8 @@
 #         opened this same second, or the started-marker could not be written.
 #
 # A missing operand is the exception the caller sees a shell-picked code for, the way
-# run-counts.sh's own header records — `grep -n 'missing operand' run-counts.sh`: measured at
-# 1 under sh and bash and 2 under dash.
+# run-counts.sh's own header records — `grep -n 'missing operand'
+# skills/job-search-run/scripts/run-counts.sh`: measured at 1 under sh and bash and 2 under dash.
 set -u
 
 ws=${1:?usage: open-run.sh <workspace>}
