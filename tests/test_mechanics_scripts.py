@@ -191,6 +191,48 @@ def test_a_source_whose_name_holds_an_unbalanced_bracket_still_has_a_known_set(t
     assert r.stdout.split() == ["222"], r.stdout
 
 
+def test_a_judgment_whose_colons_carry_tabs_is_read_by_both_dedup_paths(tmp_path):
+    """Both scripts close up `[[:space:]]` around the colon, not a literal space, and both comments
+    say "spaces and tabs". This is what holds the tab half of that claim: with `[[:space:]]`
+    narrowed to a literal space in both `sed`s, `python3 -m pytest tests/test_mechanics_scripts.py
+    -q` gives 1 failed, and the one failure is this case.
+
+    dedup.sh has to find the judgment, so the posting is not offered to the next run as new, and
+    event-log-append.sh has to find it too, so a second copy is not appended.
+    """
+    jobs = tmp_path / "jobs.jsonl"
+    ev = ('{"event":\t"evaluated","run_id":"R","source"\t:\t"ashby","source_id"\t: "abc-123",'
+          '"relevant":true,"match":"strong"}')
+    jobs.write_text(ev + "\n")
+    d = run_sh(DEDUP, [str(jobs), "ashby"], input_text="abc-123\nxyz-999\n")
+    assert d.returncode == 0, d.stderr
+    assert d.stdout.split() == ["xyz-999"], d.stdout
+    a = run_sh(APPEND, [str(jobs)], input_text=ev)
+    assert a.returncode == 0, a.stderr
+    assert len(lines(jobs)) == 1, jobs.read_text()
+
+
+def test_a_value_ending_in_an_escaped_quote_before_a_colon_is_still_deduped(tmp_path):
+    """The `sed` closes up a colon that has a quote on both sides, which is a rule about the
+    characters on the line rather than about JSON, so it also fires inside a string value when an
+    escaped quote sits to the left of the colon and the value's closing quote to the right. Measured
+    2026-08-08: `"reasoning":"he said \\"source\\" : "` comes out as
+    `"reasoning":"he said \\"source\\":"`.
+
+    Nothing about the outcome changes, and this is the case that says so: the judgment is still
+    found on such a line, and the log on disk still holds the reasoning as it was written, because
+    the `sed` rewrites only the copy going through the pipe.
+    """
+    jobs = tmp_path / "jobs.jsonl"
+    ev = ('{"event":"evaluated","run_id":"R","source":"ashby","source_id":"abc-123",'
+          '"relevant":true,"match":"strong","reasoning":"he said \\"source\\" : "}')
+    jobs.write_text(ev + "\n")
+    r = run_sh(DEDUP, [str(jobs), "ashby"], input_text="abc-123\nxyz-999\n")
+    assert r.returncode == 0, r.stderr
+    assert r.stdout.split() == ["xyz-999"], r.stdout
+    assert lines(jobs)[0]["reasoning"] == 'he said "source" : ', jobs.read_text()
+
+
 # ------------------------------------------------------------------- event-log append
 
 def _count_source_id(path, source_id):
@@ -330,6 +372,28 @@ def test_a_source_whose_name_holds_an_unbalanced_bracket_does_not_break_the_dupl
     for _ in range(2):
         r = run_sh(APPEND, [str(jobs)], input_text=ev)
         assert r.returncode == 0, r.stderr
+    assert len(lines(jobs)) == 1, jobs.read_text()
+
+
+def test_a_source_id_that_looks_like_an_option_is_read_as_a_value(tmp_path):
+    """The source_id reaches the last grep of the idempotency check as an argument of its own, so
+    one starting with `-` was read as an option rather than as the text to match. Measured
+    2026-08-08: `printf 'x\\n' | grep -qxF "-v"` exits 2 and prints grep's usage text, and the same
+    command with `--` in front of the value exits 1. Through the script that meant the check found
+    no earlier judgment, a second `evaluated` event for the same posting was appended, and the usage
+    text reached the caller's stderr.
+
+    Nothing reaches this today — no committed source_id starts with `-`, and this gives 0:
+    `git ls-files -z | xargs -0 grep -rhoE '"source_id"[[:space:]]*:[[:space:]]*"[^"]*"'
+    | cut -d'"' -f4 | sort -u | grep -c '^-'`. It is kept because it is the same defect as the two
+    cases above: a value read as something other than the data it is.
+    """
+    jobs = tmp_path / "jobs.jsonl"
+    ev = evaluated("ashby", "-v")
+    for _ in range(2):
+        r = run_sh(APPEND, [str(jobs)], input_text=ev)
+        assert r.returncode == 0, r.stderr
+        assert "usage" not in r.stderr.lower(), r.stderr
     assert len(lines(jobs)) == 1, jobs.read_text()
 
 

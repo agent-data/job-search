@@ -143,7 +143,7 @@ band  source  source_id  title  company_name  location_display  source_url  need
 | `skills/job-search-run/scripts/record-api-response.sh` + `dedup-surfaced.awk` | one agent-data response → the events it implies |
 | `skills/job-search-run/scripts/queue-detail-read.sh` | mark one posting as one to read in full |
 | `skills/job-search-run/scripts/list-detail-read-queue.sh` + `.awk` | print the queued, not-yet-judged postings |
-| `skills/job-search-run/scripts/record-judgment.sh` + `record-judgment.awk` + `find-judgment.awk` | record one posting's judgment; `find-judgment.awk` reads back the judgment this run already recorded for the posting, so a retry and a conflicting verdict can be told apart |
+| `skills/job-search-run/scripts/record-judgment.sh` + `record-judgment.awk` + `find-judgment.awk` | record one posting's judgment; `find-judgment.awk` reads back the judgment the posting already carries, recorded by this run or by an earlier one, so a retry and a conflicting verdict can be told apart |
 | `skills/job-search-run/scripts/run-counts.sh` + `run-counts.awk` | this run's numbers, from the log |
 | `skills/job-search-run/scripts/run-matches.sh` + `run-matches.awk` | the postings this run judged, for the digest |
 | `skills/job-search-run/scripts/dedup.sh` | *(modify)* known set keys on `evaluated` events only |

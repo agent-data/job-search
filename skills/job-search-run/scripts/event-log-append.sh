@@ -64,29 +64,43 @@ if [ "$evtype" = evaluated ]; then
   # event type matters — a posting is recorded as `surfaced` before it is judged, and without it
   # that first event would make the judgment look like a duplicate and drop it.
   #
-  # The source name comes off the event this script was handed, and it must not reach a match as a
-  # pattern. Read as one, `a.c` matched a line whose source is `axc`: the check took that line's
-  # source_id, decided this posting was already judged, and dropped the judgment for `a.c` at exit 0
-  # with nothing on stderr. And `[x` opened a bracket expression grep never closed, so grep printed
-  # `brackets ([ ]) not balanced`, exited 2 and matched nothing, and a second judgment for a posting
-  # that already had one was appended. The two cases are held by
-  # test_a_source_whose_name_holds_a_regex_metacharacter_is_matched_literally and
+  # The source name comes off the event this script was handed, so grep has to match it as text
+  # rather than read it as a search pattern. Read as a pattern, `a.c` matched a line whose source is
+  # `axc`: the check took that line's source_id, decided this posting was already judged, and
+  # dropped the judgment for `a.c` at exit 0 with nothing on stderr. And `[x` opened a bracket
+  # expression grep never closed, so grep printed `brackets ([ ]) not balanced`, exited 2 and matched
+  # nothing, and a second judgment for a posting that already had one was appended. The two cases are
+  # held by test_a_source_whose_name_holds_a_regex_metacharacter_is_matched_literally and
   # test_a_source_whose_name_holds_an_unbalanced_bracket_does_not_break_the_duplicate_check in
   # tests/test_mechanics_scripts.py.
   #
+  # The source_id is a value too, and the last grep takes it as an argument of its own, where a
+  # value starting with `-` is read as an option instead: `printf 'x\n' | grep -qxF "-v"` exits 2 and
+  # prints grep's usage text, so the check found no earlier judgment and a second `evaluated` event
+  # went into the log. `--` ends grep's options, and the same command with it exits 1.
+  # test_a_source_id_that_looks_like_an_option_is_read_as_a_value holds it.
+  #
   # So the matches below are `grep -F`, which takes a fixed string and reads no pattern at all. That
   # leaves them with no whitespace tolerance of their own, and the `sed` puts it back ahead of them
-  # instead of inside them: it closes up the spaces and tabs on either side of every colon that sits
-  # between a quoted key and a quoted value, so a hand-written `"event": "evaluated"` or
-  # `"source" : "ashby"` reaches the matches in the compact form they are written in. That covers
-  # every field matched here, because all three are quoted strings; a colon whose value is not
-  # quoted, as in `"posted_at": null`, is left alone and no match here reads one. The `sed` rewrites
-  # only the copy going through the pipe — the log on disk is not touched.
+  # instead of inside them: it closes up the spaces and tabs on either side of a colon that has a
+  # quote on both sides, so a hand-written `"event": "evaluated"` or `"source" : "ashby"` reaches the
+  # matches in the compact form they are written in.
+  #
+  # That rule is about quotes and colons on the line, not about JSON, so it also rewrites a colon
+  # inside a string value when an escaped quote sits to its left and the value's closing quote to its
+  # right: `"reasoning":"he said \"source\" : "` comes out as `"reasoning":"he said \"source\":"`.
+  # No match outcome changes, for two reasons. The `sed` rewrites only the copy going through the
+  # pipe, so the log on disk keeps the line as it was written. And the three matches below see
+  # exactly the text the `grep -E` they replaced saw: the only way to reach `"event":"evaluated"`
+  # through this rewrite is from `"event"` then spaces, a colon, spaces, then `"evaluated"`, which is
+  # what that pattern matched. What the `sed` leaves alone is a colon without a quote on both sides,
+  # as in `"posted_at": null` — and no match below reads a value that is not a quoted string.
+  # test_a_value_ending_in_an_escaped_quote_before_a_colon_is_still_deduped holds the rewritten case.
   if [ -f "$jobs" ] && sed 's/"[[:space:]]*:[[:space:]]*"/":"/g' "$jobs" 2>/dev/null \
        | grep -F '"event":"evaluated"' \
        | grep -F '"source":"'"$src"'"' \
        | grep -o '"source_id":"[^"]*"' | cut -d'"' -f4 \
-       | grep -qxF "$sid"; then
+       | grep -qxF -- "$sid"; then
     exit 0
   fi
 fi

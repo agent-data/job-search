@@ -12,10 +12,10 @@
 #
 # The lookup is not scoped to a run. A posting judged in an earlier run keeps that judgment: by the
 # time a later run sees it the user has already read it and applied or passed on it, or the earlier
-# run judged it outside the brief, so a second verdict answers a question nobody asked again. What a
-# second verdict does do is put a second `evaluated` line in the log for one posting, and the two
-# readers then report different things about it — posting-counts.awk filters on no run and reports
-# the later verdict, run-counts.awk reports whichever verdict belongs to the run it was asked about.
+# run judged it outside the brief, so nobody is waiting on a second verdict. What a second verdict
+# does do is put a second `evaluated` line in the log for one posting, and the two readers then
+# report different things about it — posting-counts.awk filters on no run and reports the later
+# verdict, run-counts.awk reports whichever verdict belongs to the run it was asked about.
 # Measured 2026-08-08 on a log holding one posting judged `strong` in RUN-A and not relevant in
 # RUN-B: posting-counts.sh printed `relevant=0 filtered=1`, run-counts.sh printed `match_strong=1`
 # for RUN-A and `filtered_out=1` for RUN-B.

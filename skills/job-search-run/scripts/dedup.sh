@@ -64,22 +64,29 @@ trap 'rm -f "$known"' EXIT INT HUP TERM
 # it — nothing in this file reads a run id. A posting a stopped run surfaced and never judged is NOT
 # known: the next run has to offer it again.
 #
-# The source is the caller's second argument, and it must not reach a match as a pattern. Read as
-# one, `a.c` matched a line whose source is `axc`, so 111 came back as already known for a source
-# that has never judged it and the run never saw that posting; and `[x` opened a bracket expression
-# grep never closed, so grep exited 2 and matched nothing, the known set came back empty, and every
-# posting this source had judged was offered again. The two cases are held by
-# test_a_source_whose_name_holds_a_regex_metacharacter_matches_only_that_source and
-# test_a_source_whose_name_holds_an_unbalanced_bracket_still_has_a_known_set in
+# The source is the caller's second argument, so grep has to match it as text rather than read it as
+# a search pattern. Read as a pattern, `a.c` matched a line whose source is `axc`, so 111 came back
+# as already known for a source that has never judged it and the run never saw that posting; and
+# `[x` opened a bracket expression grep never closed, so grep exited 2 and matched nothing, the
+# known set came back empty, and every posting this source had judged was offered again. The two
+# cases are held by test_a_source_whose_name_holds_a_regex_metacharacter_matches_only_that_source
+# and test_a_source_whose_name_holds_an_unbalanced_bracket_still_has_a_known_set in
 # tests/test_mechanics_scripts.py.
 #
 # So the matches below are `grep -F`, which takes a fixed string and reads no pattern at all, and
 # the `sed` ahead of them carries the whitespace tolerance they no longer have: it closes up the
-# spaces and tabs on either side of every colon that sits between a quoted key and a quoted value,
-# so a hand-written `"event": "evaluated"` is still read as a judgment and a posting whose judgment
-# it names is not offered to the next run as new. It rewrites only the copy going through the pipe.
-# event-log-append.sh matches the same three fields the same way, above its own append, and its
-# comment there says what the pair does and does not tolerate.
+# spaces and tabs on either side of a colon that has a quote on both sides, so a hand-written
+# `"event": "evaluated"` is still read as a judgment and a posting whose judgment it names is not
+# offered to the next run as new.
+#
+# That rule is about quotes and colons on the line, not about JSON, so it also rewrites a colon
+# inside a string value when an escaped quote sits to its left and the value's closing quote to its
+# right: `"reasoning":"he said \"source\" : "` comes out as `"reasoning":"he said \"source\":"`. No
+# match outcome changes, and event-log-append.sh's comment above its own append writes out why. The
+# short version: the `sed` rewrites only the copy going through the pipe, and the only way to reach
+# `"event":"evaluated"` through the rewrite is from `"event"` then spaces, a colon, spaces, then
+# `"evaluated"` — which is what the `grep -E` this replaced matched. event-log-append.sh matches the
+# same three fields the same way.
 sed 's/"[[:space:]]*:[[:space:]]*"/":"/g' "$jobs" 2>/dev/null \
   | grep -F '"event":"evaluated"' \
   | grep -F '"source":"'"$src"'"' \
