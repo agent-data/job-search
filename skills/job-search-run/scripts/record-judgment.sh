@@ -187,10 +187,9 @@ if [ -n "$prev" ]; then
   # The sed keys on the compact `,"ts":"`, so what the recorded line shows below depends on how its
   # own ts was written: a hand-written prior whose ts colon carries a space keeps its timestamp in
   # what is printed, and one whose ts colon is compact loses it, whatever the rest of the line looks
-  # like. tests/test_mechanics_scripts.py:2039-2041, in
-  # test_a_judgment_written_with_spaces_after_its_colons_still_blocks_a_second_one, commits a prior
-  # of the second kind — a space after its first four colons and none after `ts` — and its recorded
-  # line prints with no ts.
+  # like. test_a_judgment_written_with_spaces_after_its_colons_still_blocks_a_second_one, in
+  # tests/test_mechanics_scripts.py, commits a prior of the second kind — a space after its first
+  # four colons and none after `ts` — and its recorded line prints with no ts.
   printf 'record-judgment: %s:%s already has a judgment in run %s, and it is not the line this call would write — nothing written\n' \
     "$source" "$source_id" "$run_id" >&2
   printf 'record-judgment:   recorded: %s\n' "$a" >&2
@@ -200,7 +199,7 @@ fi
 
 # End the last line before appending, so this judgment is not written onto the last line of a log
 # that ends without a newline. The joined line is read as the event above it, so the judgment is lost
-# and every count the run reports is worked out without it. What `tail -c1 | wc -l` answers, why
+# and every count the run reports is worked out without it. What `tail -c1 | wc -l` prints, why
 # `[ -s ]` comes first, and the measurement under sh, dash and bash are written out at
 # event-log-append.sh, above its own append.
 if [ -s "$jobs" ] && [ "$(tail -c1 "$jobs" | wc -l)" -eq 0 ]; then printf '\n' >> "$jobs"; fi

@@ -4875,9 +4875,9 @@ def physical_lines(jobs):
     return jobs.read_text(encoding="utf-8").splitlines()
 
 
-# A `call` event cut off partway through, the way an awk that died mid-line leaves one: no closing
-# brace and no newline after it. `awk_shim` writes the spill inside a single-quoted shell string, so
-# this carries no apostrophe.
+# A `call` event that stops partway through a field name: no closing brace, and no newline after it.
+# That is what an awk leaves on stdout when it dies in the middle of printing a line. `awk_shim`
+# writes the spill inside a single-quoted shell string, so this carries no apostrophe.
 HALF_CALL = '{"event":"call","run_id":"%s","ts":"2026-08-08T10:00:00Z","route":' % RID
 
 
@@ -4964,10 +4964,9 @@ def test_a_detail_event_appended_onto_an_unterminated_line_gets_its_own_line(tmp
 
     The three expected lines are the seeded surfaced event, the call event, and the detail event, in
     that order — the script emits the call before it appends the posting. The guard this case holds
-    is therefore the one inside `emit_call`, which is the guard that runs against the seeded line;
-    measured
-    2026-08-08, deleting that one fails this case and deleting the one before the detail `cat` does
-    not. The `cat` guard has its own case at
+    is therefore the one inside `emit_call`, which is the guard that runs against the seeded line.
+    Measured 2026-08-08: deleting that one fails this case, and deleting the one before the detail
+    `cat` does not. The `cat` guard has its own case at
     `test_a_detail_event_is_not_appended_onto_a_half_written_call_event`.
     """
     body = json.loads((FIXTURES / "detail.ashby.json").read_text())["data"]
@@ -5005,12 +5004,13 @@ def test_a_detail_event_is_not_appended_onto_a_half_written_call_event(tmp_path)
     """The `end_last_line` before the detail `cat` — the guard that catches a call event this script
     only half wrote.
 
-    `record-api-response.sh` sets `-u` and not `-e` (`grep -n '^set ' ` on it gives one line, 36),
-    and no call site checks what `emit_call` returned, so an awk that died partway through the call
-    event leaves a fragment with no newline after it and the script appends the posting anyway. The
-    shim replaces only the awk whose argv holds `RAR_QUERY`, which is `emit_call`'s
-    program and no other: `grep -n RAR_QUERY skills/job-search-run/scripts/*.sh` gives :156, an
-    environment assignment, and :176, inside that program.
+    `record-api-response.sh` sets `-u` and never `-e` — `grep -n '^set ' ` on it gives a single line
+    — and no call site checks what `emit_call` returned, so an awk that died partway through the
+    call event leaves a fragment with no newline after it and the script appends the posting anyway.
+    The shim replaces only the awk whose argv holds `RAR_QUERY`:
+    `grep -n RAR_QUERY skills/job-search-run/scripts/*.sh` gives two lines, the environment
+    assignment and the reference inside `emit_call`'s program, so the marker selects that awk and no
+    other.
 
     The seeded log ends with a newline, so the guard inside `emit_call` has nothing to do and the
     only line ending without one is the fragment the shim writes. Measured 2026-08-08 with this
@@ -5037,9 +5037,8 @@ def test_the_first_surfaced_row_is_not_appended_onto_a_half_written_call_event(t
 
     The row that joins onto the fragment is the first one, so the count and the ids are both asserted
     — a test on the count alone would still pass with row 100 inside line 1 rather than on its own.
-    Measured
-    2026-08-08 with this guard deleted: three physical lines, and `"source_id":"100"` reachable only
-    inside the fragment line.
+    Measured 2026-08-08 with this guard deleted: three physical lines, and `"source_id":"100"`
+    reachable only inside the fragment line.
     """
     body = two_row_search_body(tmp_path)
     jobs = tmp_path / "jobs.jsonl"

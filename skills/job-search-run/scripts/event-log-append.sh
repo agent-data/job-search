@@ -82,9 +82,10 @@ dir=$(dirname "$jobs")
 
 # End the last line first. A log can end without a newline after its last event — a hand edit, a
 # truncated copy, an editor that does not end its files with one — and this event would then be
-# written onto that last line. Every field reader takes a key's first occurrence (event-field.awk:12
-# spells that out), so the joined line is read as the earlier event and this one is lost: measured
-# 2026-08-08 on a posting whose judgment landed on its surfaced event, `run-counts.sh` reported
+# written onto that last line. Every field reader takes a key's first occurrence — the header of
+# event-field.awk states it, in the sentence ending "the first occurrence wins" — so the joined line
+# is read as the earlier event and this one is lost: measured 2026-08-08 on a posting whose judgment
+# landed on its surfaced event, `run-counts.sh` reported
 # `postings_reviewed=0 postings_unreviewed=1`, `run-matches.sh` printed no rows, and
 # `posting-counts.sh` printed `relevant=0 to_confirm=0 filtered=0`, all at exit 0.
 #
