@@ -88,13 +88,14 @@ dir=$(dirname "$jobs")
 # `postings_reviewed=0 postings_unreviewed=1`, `run-matches.sh` printed no rows, and
 # `posting-counts.sh` printed `relevant=0 to_confirm=0 filtered=0`, all at exit 0.
 #
-# `tail -c1 | wc -l` answers 1 when the last byte is a newline and 0 otherwise. `[ -s "$jobs" ]` in
-# front of it keeps an empty log from gaining a blank first line. Measured 2026-08-08 under sh, dash
-# and bash alike: a file with no newline on its last line gained exactly one byte, one already ending
-# in a newline gained none, and an empty one gained none. The three other scripts that append to
-# jobs.jsonl — queue-detail-read.sh, record-api-response.sh and record-judgment.sh, which is the rest
-# of what `grep -rl '>> "$jobs"' skills/` lists — do the same before their own appends and point back
-# here for the reason.
+# `tail -c1 | wc -l` prints 1 when the last byte is a newline and 0 when it is not. `[ -s "$jobs" ]`
+# in front of it leaves an empty log alone: without that test this writes a newline into a file that
+# holds no line at all, putting a blank line above the first event. Measured 2026-08-08 under sh,
+# dash and bash alike: a file with no newline on its last line grew by exactly one byte, one already
+# ending in a newline was left at its own size, and so was an empty one. The three other scripts that
+# append to jobs.jsonl — queue-detail-read.sh, record-api-response.sh and record-judgment.sh, which
+# is the rest of what `grep -rl '>> "$jobs"' skills/` lists — do the same before their own appends
+# and point back here for the reason.
 if [ -s "$jobs" ] && [ "$(tail -c1 "$jobs" | wc -l)" -eq 0 ]; then printf '\n' >> "$jobs"; fi
 
 printf '%s\n' "$ev" >> "$jobs"

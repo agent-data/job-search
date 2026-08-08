@@ -136,16 +136,21 @@ ts=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 # End the last line of the log, so the event a caller is about to append is not written onto the last
 # line of a log that ends without a newline. Every field reader takes a key's first occurrence, so a
 # joined line is read as the earlier event and the appended one is lost. What `tail -c1 | wc -l`
-# answers, why `[ -s ]` comes first, and the measurement under sh, dash and bash are written out at
+# prints, why `[ -s ]` comes first, and the measurement under sh, dash and bash are written out at
 # event-log-append.sh, above its own append.
 #
-# This script appends in three places and calls this before each of them. Only the call inside
-# `emit_call` can find a log that ends without a newline today, because every path here emits the
-# call event before it appends anything else, and the `print` in awk ends the line it writes.
-# Measured 2026-08-08 by deleting one call at a time and running
-# `python3 -m pytest tests/test_mechanics_scripts.py`: deleting the one in `emit_call` fails 3 tests,
-# and deleting either of the other two leaves all 458 passing. Those two are here so each append
-# stands on its own if that order ever changes.
+# This script appends in three places and calls this before each of them. The call inside `emit_call`
+# is the one that runs against a log some other writer left ending without a newline. The two
+# before the `cat` appends run against one this script left that way itself: it sets `-u` and never
+# `-e` (`grep -n '^set ' ` on this file gives a single line), and no call site checks what
+# `emit_call` returned, so an awk that died partway through the call event leaves a fragment with no
+# newline after it and the script appends the posting or the rows anyway. Measured 2026-08-08
+# against an awk shimmed to write half a call event and exit 2 — with the call before the detail
+# `cat` deleted, the detail event landed on the end of that fragment, and with the one before the
+# rows `cat` deleted, the first surfaced row did. Their cases are
+# test_a_detail_event_is_not_appended_onto_a_half_written_call_event and
+# test_the_first_surfaced_row_is_not_appended_onto_a_half_written_call_event, in
+# tests/test_mechanics_scripts.py.
 end_last_line() {
   if [ -s "$jobs" ] && [ "$(tail -c1 "$jobs" | wc -l)" -eq 0 ]; then printf '\n' >> "$jobs"; fi
 }

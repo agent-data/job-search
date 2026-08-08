@@ -89,7 +89,7 @@ fi
 # that ends without a newline. Joined onto the event above it, the queued event never reaches the
 # list a reader works from: measured 2026-08-08, this script exited 0 leaving one physical line, and
 # `list-detail-read-queue.sh` then printed no rows at all for a posting it had just recorded as
-# queued. What `tail -c1 | wc -l` answers, why `[ -s ]` comes first, and the measurement under sh,
+# queued. What `tail -c1 | wc -l` prints, why `[ -s ]` comes first, and the measurement under sh,
 # dash and bash are written out at event-log-append.sh, above its own append.
 if [ -s "$jobs" ] && [ "$(tail -c1 "$jobs" | wc -l)" -eq 0 ]; then printf '\n' >> "$jobs"; fi
 

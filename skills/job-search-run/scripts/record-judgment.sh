@@ -138,9 +138,10 @@ judgestatus=$?
 # Both the status and the file, the way record-api-response.sh checks both after building its
 # detail event and again after building its rows. An awk that died before printing leaves this file
 # empty; one that failed partway through the line leaves part of an event in it. Appending that part
-# is worse than appending nothing: the log gains a line no JSON reader can parse, and the judgment it
-# was meant to record is not in the log at all. Measured against a shimmed awk that prints half an
-# event and exits 2 — with only the file checked, the script exits 0 and the truncated line lands.
+# is worse than appending nothing: the log then holds a line no JSON reader can parse, and the
+# judgment it was meant to record is not in the log at all. Measured against a shimmed awk that
+# prints half an event and exits 2 — with only the file checked, the script exits 0 and the truncated
+# line lands.
 if [ "$judgestatus" -ne 0 ] || [ ! -s "$line" ]; then
   die 'building the event failed — nothing written'
 fi
@@ -186,8 +187,10 @@ if [ -n "$prev" ]; then
   # The sed keys on the compact `,"ts":"`, so what the recorded line shows below depends on how its
   # own ts was written: a hand-written prior whose ts colon carries a space keeps its timestamp in
   # what is printed, and one whose ts colon is compact loses it, whatever the rest of the line looks
-  # like. tests/test_mechanics_scripts.py:1993-1995 commits a prior of the second kind — every
-  # other colon spaced, the ts colon compact — and its recorded line prints with no ts.
+  # like. tests/test_mechanics_scripts.py:2039-2041, in
+  # test_a_judgment_written_with_spaces_after_its_colons_still_blocks_a_second_one, commits a prior
+  # of the second kind — a space after its first four colons and none after `ts` — and its recorded
+  # line prints with no ts.
   printf 'record-judgment: %s:%s already has a judgment in run %s, and it is not the line this call would write — nothing written\n' \
     "$source" "$source_id" "$run_id" >&2
   printf 'record-judgment:   recorded: %s\n' "$a" >&2

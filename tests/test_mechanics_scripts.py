@@ -4846,12 +4846,12 @@ def test_the_posting_counts_run_under_dash(tmp_path):
     assert p == {"relevant": "1", "to_confirm": "0", "filtered": "1"}
 
 
-# ------------------------------------------- appending onto a log that ends mid-line
+# ------------------------------ appending onto a log that ends without a newline
 
 # One `surfaced` event of this run, compact, in the shape record-api-response.sh writes and every
-# lookup greps for. The tests below write it as the whole file, so the log they hand an appender
-# ends without a trailing newline — the state a hand edit, a truncated copy, or an editor that does
-# not end its files with one leaves behind.
+# lookup greps for. The tests below write it as the whole file, so the log they hand an appender ends
+# without a newline after its last event. A hand edit, a truncated copy, or an editor that does not
+# end its files with one all produce that.
 def unterminated_surfaced(source="linkedin", source_id="100"):
     return (
         '{"event":"surfaced","run_id":"%s","query_id":"q","source":"%s","source_id":"%s",'
@@ -4867,10 +4867,41 @@ def unterminated_surfaced(source="linkedin", source_id="100"):
 def physical_lines(jobs):
     """Every line of the log, blank ones included and none of them parsed.
 
-    `lines()` drops the blank lines and parses the rest, which hides both breaks this section is
-    about: two events joined onto one physical line, and a blank line at the top of the log.
+    `lines()` drops the blank lines and parses the rest, and neither suits this section. A blank
+    first line is missing from what it returns, so a test using it counts the same number of lines
+    either way; and two events joined onto one line raise a JSONDecodeError out of the helper instead
+    of failing on the line count these tests assert.
     """
     return jobs.read_text(encoding="utf-8").splitlines()
+
+
+# A `call` event cut off partway through, the way an awk that died mid-line leaves one: no closing
+# brace and no newline after it. `awk_shim` writes the spill inside a single-quoted shell string, so
+# this carries no apostrophe.
+HALF_CALL = '{"event":"call","run_id":"%s","ts":"2026-08-08T10:00:00Z","route":' % RID
+
+
+def two_row_search_body(tmp_path):
+    """A search response written here rather than taken from a fixture, so the line counts the two
+    search cases assert are counted by hand: two rows, source_ids 100 and 200.
+
+    Each row carries the four fields the row builder requires — source, source_id, id and source_url
+    — plus the three the surfaced event displays.
+    """
+    body = tmp_path / "search.json"
+    body.write_text(json.dumps({
+        "data": {
+            "query": {"id": "q"},
+            "results": [
+                {"source": "linkedin", "source_id": "100", "id": "jp_100",
+                 "source_url": "https://example.invalid/100", "title": "One",
+                 "company_name": "Acme", "location_display": "Remote, USA"},
+                {"source": "linkedin", "source_id": "200", "id": "jp_200",
+                 "source_url": "https://example.invalid/200", "title": "Two",
+                 "company_name": "Acme", "location_display": "Austin, TX"},
+            ]},
+        "meta": {"request_id": "req_1"}}), encoding="utf-8")
+    return body
 
 
 def test_a_hand_written_event_appended_onto_an_unterminated_line_gets_its_own_line(tmp_path):
@@ -4929,12 +4960,15 @@ def test_a_call_event_appended_onto_an_unterminated_line_gets_its_own_line(tmp_p
 
 
 def test_a_detail_event_appended_onto_an_unterminated_line_gets_its_own_line(tmp_path):
-    """record-api-response.sh's get-posting path, which appends the stored posting with `cat`.
+    """record-api-response.sh's get-posting path, driven whole on a log that ends without a newline.
 
-    The three expected lines are the seeded surfaced event, the call event, and the detail event,
-    in that order — the script emits the call before it appends the posting. The stored text is what
-    `evaluate-job-fit` reads, so a detail event joined onto the line above it is a posting the
-    reader never sees.
+    The three expected lines are the seeded surfaced event, the call event, and the detail event, in
+    that order — the script emits the call before it appends the posting. The guard this case holds
+    is therefore the one inside `emit_call`, which is the guard that runs against the seeded line;
+    measured
+    2026-08-08, deleting that one fails this case and deleting the one before the detail `cat` does
+    not. The `cat` guard has its own case at
+    `test_a_detail_event_is_not_appended_onto_a_half_written_call_event`.
     """
     body = json.loads((FIXTURES / "detail.ashby.json").read_text())["data"]
     jobs = tmp_path / "jobs.jsonl"
@@ -4947,26 +4981,16 @@ def test_a_detail_event_appended_onto_an_unterminated_line_gets_its_own_line(tmp
 
 
 def test_surfaced_rows_appended_onto_an_unterminated_line_get_their_own_lines(tmp_path):
-    """record-api-response.sh's search path, which appends the kept rows with `cat`.
+    """record-api-response.sh's search path, driven whole on a log that ends without a newline.
 
     The response is written here with two rows rather than taken from a fixture, so the four lines
     expected below are counted by hand: the seeded event, the call event, and one surfaced event per
     row. The seeded posting carries source_id 999, which neither row does, so nothing is skipped as
-    already surfaced.
+    already surfaced. As on the detail path above, the guard this case holds is the one inside
+    `emit_call`; the guard before the rows `cat` has its own case at
+    `test_the_first_surfaced_row_is_not_appended_onto_a_half_written_call_event`.
     """
-    body = tmp_path / "search.json"
-    body.write_text(json.dumps({
-        "data": {
-            "query": {"id": "q"},
-            "results": [
-                {"source": "linkedin", "source_id": "100", "id": "jp_100",
-                 "source_url": "https://example.invalid/100", "title": "One",
-                 "company_name": "Acme", "location_display": "Remote, USA"},
-                {"source": "linkedin", "source_id": "200", "id": "jp_200",
-                 "source_url": "https://example.invalid/200", "title": "Two",
-                 "company_name": "Acme", "location_display": "Austin, TX"},
-            ]},
-        "meta": {"request_id": "req_1"}}), encoding="utf-8")
+    body = two_row_search_body(tmp_path)
     jobs = tmp_path / "jobs.jsonl"
     jobs.write_text(unterminated_surfaced(source_id="999"), encoding="utf-8")
     r = run_script(RECORD_API, RID, jobs, body, "--route", "search-jobs", "--query-id", "q")
@@ -4975,6 +4999,59 @@ def test_surfaced_rows_appended_onto_an_unterminated_line_get_their_own_lines(tm
     assert len(rows) == 4, rows
     assert [json.loads(l)["event"] for l in rows] == ["surfaced", "call", "surfaced", "surfaced"]
     assert [json.loads(rows[i])["source_id"] for i in (0, 2, 3)] == ["999", "100", "200"]
+
+
+def test_a_detail_event_is_not_appended_onto_a_half_written_call_event(tmp_path):
+    """The `end_last_line` before the detail `cat` — the guard that catches a call event this script
+    only half wrote.
+
+    `record-api-response.sh` sets `-u` and not `-e` (`grep -n '^set ' ` on it gives one line, 36),
+    and no call site checks what `emit_call` returned, so an awk that died partway through the call
+    event leaves a fragment with no newline after it and the script appends the posting anyway. The
+    shim replaces only the awk whose argv holds `RAR_QUERY`, which is `emit_call`'s
+    program and no other: `grep -n RAR_QUERY skills/job-search-run/scripts/*.sh` gives :156, an
+    environment assignment, and :176, inside that program.
+
+    The seeded log ends with a newline, so the guard inside `emit_call` has nothing to do and the
+    only line ending without one is the fragment the shim writes. Measured 2026-08-08 with this
+    guard deleted: two physical lines, the detail event written onto the end of the fragment, and the
+    stored posting then unreachable to every reader. The exit code below is what the script does
+    today rather than a decision this case defends — a failed call event does not stop it.
+    """
+    body = json.loads((FIXTURES / "detail.ashby.json").read_text())["data"]
+    jobs = tmp_path / "jobs.jsonl"
+    jobs.write_text(unterminated_surfaced(body["source"], body["source_id"]) + "\n",
+                    encoding="utf-8")
+    r = run_script(RECORD_API, RID, jobs, FIXTURES / "detail.ashby.json", "--route", "get-posting",
+                   env=awk_shim(tmp_path, "RAR_QUERY", HALF_CALL))
+    assert r.returncode == 0, r.stdout + r.stderr
+    rows = physical_lines(jobs)
+    assert len(rows) == 3, rows
+    assert json.loads(rows[0])["event"] == "surfaced"
+    assert rows[1] == HALF_CALL                       # the fragment, whole and on its own line
+    assert json.loads(rows[2])["event"] == "detail"
+
+
+def test_the_first_surfaced_row_is_not_appended_onto_a_half_written_call_event(tmp_path):
+    """The `end_last_line` before the rows `cat`, reached the same way as the detail one above.
+
+    The row that joins onto the fragment is the first one, so the count and the ids are both asserted
+    — a test on the count alone would still pass with row 100 inside line 1 rather than on its own.
+    Measured
+    2026-08-08 with this guard deleted: three physical lines, and `"source_id":"100"` reachable only
+    inside the fragment line.
+    """
+    body = two_row_search_body(tmp_path)
+    jobs = tmp_path / "jobs.jsonl"
+    jobs.write_text(unterminated_surfaced(source_id="999") + "\n", encoding="utf-8")
+    r = run_script(RECORD_API, RID, jobs, body, "--route", "search-jobs", "--query-id", "q",
+                   env=awk_shim(tmp_path, "RAR_QUERY", HALF_CALL))
+    assert r.returncode == 0, r.stdout + r.stderr
+    rows = physical_lines(jobs)
+    assert len(rows) == 4, rows
+    assert json.loads(rows[0])["source_id"] == "999"
+    assert rows[1] == HALF_CALL                       # the fragment, whole and on its own line
+    assert [json.loads(rows[i])["source_id"] for i in (2, 3)] == ["100", "200"]
 
 
 def test_a_judgment_appended_onto_an_unterminated_line_gets_its_own_line(tmp_path):
