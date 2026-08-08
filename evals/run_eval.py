@@ -10,8 +10,10 @@ into evals/results/<ts>-<name>-<model>/ and restores the stash. Runner pattern p
 the 2026-07-30 census evals: Popen + readline loop + timeout kill.
 
 A case that exercises the recurring job installs a real scheduler entry, and that entry outlives
-the session, so the run also lists the machine's scheduler entries before and after and reports
-FAILED while a new one is still installed. The scheduler comment below has the detail.
+the session, so the run also lists the machine's scheduler entries before and after and names every
+one that survived. A case that declares `expects_scheduler_entry` is allowed one entry per class it
+declares; every other case, and anything beyond what was declared, reports FAILED. The scheduler
+comment below has the detail.
 """
 import argparse, collections, glob, json, os, re, shutil, signal, subprocess, sys, threading, time
 
@@ -39,9 +41,57 @@ ALLOWED = "Bash,Read,Write,Edit,Glob,Grep,Skill,Task,AskUserQuestion,TodoWrite"
 # both hold entries this harness did not create, this machine's own among them, and a removal
 # driven by a before/after difference would delete those too.
 #
+# A case whose behavior under test is the recurring job passes only by leaving the job installed:
+# the product keeps it when the canary lands. A status that is red on every correct run carries no
+# information, and training the operator to ignore it is how the 2026-08-07 entry survived in the
+# first place. So a case file may declare `expects_scheduler_entry`, naming the classes it expects
+# to leave one entry in. One entry in a declared class is named and reported like any other and does
+# not fail the run; a second entry in that class, or any entry in a class the case did not declare,
+# still does, and so do entries in launchd and cron at the same time — SCHEDULER_MECHANISMS below
+# says why. A case that declares nothing fails on any new entry at all.
+#
 # Each probe reads an environment variable before falling back to this machine's scheduler, so
 # tests/test_eval_harness.py points all three at a directory and two scripts it wrote itself and
 # never installs, loads or removes anything.
+#
+# Both launchd classes fail on a new entry, because neither sees what the other sees. A loaded job
+# does not have to leave a plist in ~/Library/LaunchAgents: `launchctl bootstrap` takes paths to
+# plists anywhere on disk, and the 18-line entry that says so prints with
+#   man launchctl | col -b | sed -n '/bootstrap | bootout domain-target/,/enable | disable/p'
+# So a job bootstrapped from a plist written into the eval's own project directory runs and is
+# listed while that directory stays empty. Measured on this macOS host, read-only, from a bash shell
+# (the third and fourth need process substitution):
+#   launchctl list | awk 'NR>1{print $NF}' | sort -u | wc -l                -> 492 loaded labels
+#   ls -1 ~/Library/LaunchAgents | sed 's/\.plist$//' | sort -u | wc -l     ->   8 plists there
+#   comm -12 <(launchctl list | awk 'NR>1{print $NF}' | sort -u) \
+#            <(ls -1 ~/Library/LaunchAgents | sed 's/\.plist$//' | sort -u) | wc -l
+#                                                                          ->   6 in both
+#   comm -23 <(launchctl list | awk 'NR>1{print $NF}' | sort -u) \
+#            <(ls -1 ~/Library/LaunchAgents /Library/LaunchAgents /Library/LaunchDaemons \
+#                    /System/Library/LaunchAgents /System/Library/LaunchDaemons 2>/dev/null \
+#              | sed 's/\.plist$//' | sort -u) | wc -l                      ->  94 loaded, no plist
+#                                                                                anywhere standard
+# So 486 loaded jobs have no plist in ~/Library/LaunchAgents, 2 plists in it are not loaded, and 94
+# loaded jobs have no plist in any of the five standard directories. Neither class contains the
+# other, so dropping either would leave an install unwatched.
+#
+# The remaining worry was churn: this machine starts jobs of its own, and a label that appeared for
+# an unrelated reason would fail an eval that installed nothing. Sampled every 20 seconds across
+# 1583 seconds — longer than the 1500-second timeout_s in evals/cases/schedule.yaml — while this
+# repo's test suite ran several times on the same machine:
+#   for i in $(seq 1 80); do launchctl list | awk 'NR>1{print $NF}' | sort -u; \
+#       ls -1 ~/Library/LaunchAgents; sleep 20; done | sort | uniq -c | awk '$1 != 80'
+# printed nothing, so every entry was present in all 80 samples: the same 492 labels and the same 8
+# plists throughout, nothing appearing and nothing going away in 26 minutes. Nil churn over a
+# session-length window, so nothing here is filtered and all three classes fail on a new entry.
+# Rerun that loop if a run ever fails naming an entry nobody installed.
+SCHEDULER_CLASSES = ("launchd-plists", "launchd-loaded", "cron")
+# One recurring job is installed through one mechanism, and a launchd install shows up in both
+# launchd classes at once — a plist file and a loaded label for the same job. So the allowance a
+# case declares is one entry per class, plus this: the classes holding new entries must all belong
+# to one mechanism. Entries in launchd and in cron together are two jobs, whatever the case
+# declared.
+SCHEDULER_MECHANISMS = {"launchd-plists": "launchd", "launchd-loaded": "launchd", "cron": "cron"}
 LAUNCH_AGENTS_ENV = "JOBSEARCH_EVAL_LAUNCH_AGENTS_DIR"
 LAUNCHCTL_ENV = "JOBSEARCH_EVAL_LAUNCHCTL"
 CRONTAB_ENV = "JOBSEARCH_EVAL_CRONTAB"
@@ -131,22 +181,58 @@ def snapshot_schedulers(env=None):
     return snap
 
 
+def declared_classes(case, case_name):
+    """The scheduler classes a case declares it expects to leave one entry in, from the case file's
+    `expects_scheduler_entry`. Returns (classes, error); error is None when the declaration is well
+    formed, and a message to exit on when it is not.
+
+    A case declares this when installing a recurring job is the behavior under test and the product
+    is meant to keep it: `evals/cases/schedule.yaml` is the one that does. Everything else leaves
+    the field out and fails on any surviving entry.
+    """
+    expected = case.get("expects_scheduler_entry")
+    if expected is None:
+        return [], None
+    if not isinstance(expected, list) or not expected:
+        return [], ("case %s: expects_scheduler_entry must be a non-empty list of scheduler "
+                    "classes, one of %s" % (case_name, list(SCHEDULER_CLASSES)))
+    unknown = [name for name in expected if name not in SCHEDULER_CLASSES]
+    if unknown:
+        return [], ("case %s: expects_scheduler_entry names %s, which this harness does not list. "
+                    "The classes it lists are %s."
+                    % (case_name, unknown, list(SCHEDULER_CLASSES)))
+    return list(expected), None
+
+
 def scheduler_report(verdict, listed):
-    """The lines the operator reads: what was checked, and what to do about anything found."""
-    if verdict["ok"]:
-        return ["scheduler check: no new entry in %s. A recurring job installed by the host's own "
-                "command is in none of those classes, so this check would not see one."
-                % ", ".join(listed)]
+    """The lines the operator reads: what appeared, whether the case declared it, and what to do."""
     lines = []
+    declared = verdict["expected_classes"]
     if verdict["new"]:
         lines.append("scheduler check: these entries appeared while the session ran and are still "
                      "installed:")
         for name, entries in sorted(verdict["new"].items()):
             for entry in entries:
-                lines.append("  %-15s %s" % (name, entry))
+                mark = ""
+                if declared:
+                    mark = ("  [unexpected]" if entry in verdict["unexpected"].get(name, ())
+                            else "  [expected]")
+                lines.append("  %-15s %s%s" % (name, entry, mark))
         lines.append("Remove each one the way it was installed — a launchd job unloaded and its "
-                     "plist file removed, a cron line deleted — then rerun. Entries this machine "
-                     "installed for its own reasons appear here too; leave those alone.")
+                     "plist file removed, a cron line deleted. Entries this machine installed for "
+                     "its own reasons appear here too; leave those alone.")
+        if declared:
+            lines.append("The case declares that it installs a recurring job, so one entry in %s is "
+                         "expected and does not fail the run. A second entry in one of those, any "
+                         "entry outside them, or entries in launchd and cron at once — two jobs, "
+                         "not one — does." % ", ".join(declared))
+        if verdict["unexpected"]:
+            lines.append("This run is FAILED for the entries above that the case did not declare. "
+                         "Remove them and rerun.")
+    else:
+        lines.append("scheduler check: no new entry in %s. A recurring job installed by the host's "
+                     "own command is in none of those classes, so this check would not see one."
+                     % ", ".join(listed))
     for name, why in sorted(verdict["probe_failed"].items()):
         lines.append("scheduler check: cannot list %s — %s. This run cannot say whether the session "
                      "left a recurring job installed." % (name, why))
@@ -156,30 +242,60 @@ def scheduler_report(verdict, listed):
     return lines
 
 
-def scheduler_verdict(before, after):
+def scheduler_verdict(before, after, expected=()):
     """Compare two snapshots and say whether the machine came back the way the session found it.
 
-    Not ok when an entry that was not there before is there now, when a probe failed, or when no
-    class could be listed at all — a run that looked nowhere cannot report a clean machine. Entries
-    are counted rather than set-compared, so a second copy of a cron line already in the crontab is
-    a new entry too.
+    `expected` names the classes the case declares it expects to leave one entry in. One new entry
+    in a declared class is expected: it is still listed and still named, and it does not fail the
+    run. A second entry in that class, and any entry in a class the case did not declare, is
+    unexpected and does fail — as do new entries in launchd and in cron at the same time, which are
+    two recurring jobs rather than the one the case declared. A case that declares nothing fails on
+    any new entry at all.
+
+    Also not ok when a probe failed, or when no class could be listed — a run that looked nowhere
+    cannot report a clean machine. Entries are counted rather than set-compared, so a second copy of
+    a cron line already in the crontab is a new entry too.
     """
     new = {}
     for name, entries in after["entries"].items():
         added = collections.Counter(entries) - collections.Counter(before["entries"].get(name, []))
         if added:
             new[name] = sorted(added.elements())
+    unexpected = {name: entries for name, entries in new.items()
+                  if not (name in expected and len(entries) == 1)}
+    if not unexpected and len({SCHEDULER_MECHANISMS[name] for name in new}) > 1:
+        unexpected = dict(new)  # launchd and cron together are two jobs; which one was meant is
+                                # not something this harness can tell, so all of them are named
     listed = sorted(after["entries"])
     verdict = {
         "new": new,
+        "unexpected": unexpected,
+        "expected_classes": list(expected),
         "probe_failed": dict(after["failed"]),
         "not_on_this_machine": dict(after["absent"]),
         "counts": {name: len(entries) for name, entries in sorted(after["entries"].items())},
         "not_probed": NOT_PROBED,
-        "ok": not new and not after["failed"] and bool(listed),
+        "ok": not unexpected and not after["failed"] and bool(listed),
     }
     verdict["report"] = scheduler_report(verdict, listed)
     return verdict
+
+
+def opening_scheduler_refusal():
+    """The check both runners make before spawning anything: returns (snapshot, refusal), where
+    refusal is None when every probe worked and a message to exit on when one did not.
+
+    Comparing the opening snapshot with itself finds no new entry by construction, so what this
+    settles is whether the probes work at all — before a run spends a session's time and calls.
+    """
+    start = snapshot_schedulers()
+    opening = scheduler_verdict(start, start)
+    if opening["ok"]:
+        return start, None
+    return start, ("refusing to run: this harness lists the machine's scheduler entries before and "
+                   "after the session, so that a job the session installs cannot survive the run "
+                   "unreported. That listing does not work on this machine:\n"
+                   + "\n".join(opening["report"]))
 
 
 def run_ok(sessions, verdict):
@@ -290,15 +406,9 @@ def main():
                  "another eval run is in progress (runs are one at a time). If it holds your "
                  "real workspace, move it back to %s; otherwise remove it. Then rerun."
                  % (leftovers[0], WORKSPACE))
-    start = snapshot_schedulers()
-    # Comparing the opening snapshot with itself finds no new entry by construction, so what this
-    # settles is whether the probes work at all — before the run spends a session's time and calls.
-    opening = scheduler_verdict(start, start)
-    if not opening["ok"]:
-        sys.exit("refusing to run: this harness lists the machine's scheduler entries before and "
-                 "after the session, so that a job the session installs cannot survive the run "
-                 "unreported. That listing does not work on this machine:\n"
-                 + "\n".join(opening["report"]))
+    start, refusal = opening_scheduler_refusal()
+    if refusal:
+        sys.exit(refusal)
     # PyYAML is imported here rather than at module level because CI installs pytest and nothing
     # else, and tests/test_eval_harness.py imports this module to exercise the scheduler check.
     import yaml
@@ -306,6 +416,9 @@ def main():
         case = yaml.safe_load(f)
     if args.model not in case["models"]:
         sys.exit("case %s does not list model %s" % (args.case, args.model))
+    expected, bad_declaration = declared_classes(case, args.case)
+    if bad_declaration:
+        sys.exit(bad_declaration)
     kill_regex = args.kill_after_event or case.get("kill_after_event")
 
     prompt = case["prompt"]
@@ -344,7 +457,7 @@ def main():
         if stash:
             shutil.move(stash, WORKSPACE)
 
-    verdict = scheduler_verdict(start, snapshot_schedulers())
+    verdict = scheduler_verdict(start, snapshot_schedulers(), expected)
     ok = run_ok(sessions, verdict)
     with open(os.path.join(run_dir, "result.json"), "w") as f:
         json.dump({"case": args.case, "model": args.model, "started_utc": ts,

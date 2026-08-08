@@ -15,14 +15,20 @@ is after the routing decision and before the skill can start working, so a probe
 calls. Reps are run phrase-major inside each rep so that any drift in service conditions
 lands on every phrase alike.
 
-Writes `routing.json` with the selected skill per session and the per-phrase rate.
+The same scheduler check `evals/run_eval.py` makes runs here too. A phrase is killed before the
+skill it routed to can install anything, so this runner is far less likely to leave a job behind
+than a graded case is — but "less likely" is not "cannot", and a routing probe that reported success
+while a job it never looked at was installed would be the same defect. This runner does not read
+`expects_scheduler_entry`, so any surviving entry fails the run.
+
+Writes `routing.json` with the selected skill per session, the per-phrase rate, and the scheduler
+verdict. Exits non-zero when that verdict is not ok.
 """
 import argparse, glob, json, os, shutil, sys, time
 
-import yaml
-
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from run_eval import EVALS_DIR, WORKSPACE, run_session  # noqa: E402
+from run_eval import (EVALS_DIR, WORKSPACE, opening_scheduler_refusal,  # noqa: E402
+                      run_session, scheduler_verdict, snapshot_schedulers)
 
 
 def first_skill(transcript):
@@ -65,6 +71,12 @@ def main():
     leftovers = sorted(glob.glob(WORKSPACE + ".stash-*"))
     if leftovers:
         sys.exit("refusing to run: %s exists — restore or remove it first." % leftovers[0])
+    start, refusal = opening_scheduler_refusal()
+    if refusal:
+        sys.exit(refusal)
+    # PyYAML is imported here rather than at module level for the reason evals/run_eval.py gives:
+    # CI installs pytest and nothing else, and tests/test_eval_harness.py imports this module.
+    import yaml
     with open(os.path.join(EVALS_DIR, "cases", "triggering.yaml")) as f:
         case = yaml.safe_load(f)
     if args.model not in case["models"]:
@@ -123,15 +135,21 @@ def main():
                                                for k in sorted(
                                                    {str(s["selected"]) if s["selected"] is None
                                                     else s["selected"] for s in mine})}}
+    verdict = scheduler_verdict(start, snapshot_schedulers())
     any_t = glob.glob(os.path.join(run_dir, "*", "transcript.jsonl"))
     out = {"case": "triggering", "model": args.model, "label": args.label, "started_utc": ts,
            "reps": reps, "job_search_skills_loaded": loaded_skills(any_t[0]) if any_t else [],
-           "rates": rates, "sessions": sessions}
+           "rates": rates, "sessions": sessions, "scheduler": verdict, "ok": verdict["ok"]}
     with open(os.path.join(run_dir, "routing.json"), "w") as f:
         json.dump(out, f, indent=1)
     print("\ntriggering %s %s: %s" % (args.model, args.label or "-", json.dumps(
         {k: "%d/%d" % (v["hit"], v["of"]) for k, v in rates.items()})))
+    for line in verdict["report"]:
+        print(line)
     print("results in %s" % run_dir)
+    # routing.json's `ok` and this exit status are the same value, so a routing run cannot report
+    # success while a job it did not look at is still installed.
+    sys.exit(0 if verdict["ok"] else 1)
 
 
 if __name__ == "__main__":

@@ -9,6 +9,7 @@ run whose session left a scheduled job installed on the machine, in the last sec
 """
 import json
 import pathlib
+import re
 import subprocess
 import sys
 from importlib import util as _util
@@ -789,11 +790,18 @@ def test_crown_jewel_judgment_scenarios_are_marked_stochastic():
 # reported ok. run_eval now lists the machine's scheduler entries before and after the session and
 # fails the run while a new one is still installed.
 #
+# A case whose behavior under test is the recurring job passes by leaving the job installed, so a
+# case file may declare `expects_scheduler_entry` and be allowed one entry per class it names. That
+# declaration is covered here too: one entry in a declared class is still named and does not fail,
+# a second one in that class does, and so does anything outside the declared classes.
+#
 # Every test below points all three of run_eval's probes at a directory and two scripts it wrote
 # itself, so nothing here installs, loads or removes a scheduler entry on the machine running the
 # suite, and nothing here reads the machine's own launchd or crontab.
 # ---------------------------------------------------------------------------
 RUN_EVAL = ROOT / "evals" / "run_eval.py"
+RUN_TRIGGERING = ROOT / "evals" / "run_triggering.py"
+SCHEDULE_CASE = ROOT / "evals" / "cases" / "schedule.yaml"
 
 
 def _load_run_eval():
@@ -1016,3 +1024,189 @@ def test_result_json_and_the_exit_status_come_from_one_value(tmp_path):
     assert run_eval.run_ok([{"rc": 1, "wall_s": 1.0, "timeout_killed": False,
                              "event_killed": False}], clean) is False
     assert run_eval.run_ok([], clean) is False
+
+
+def test_every_class_the_snapshot_produces_is_named_in_scheduler_classes(tmp_path):
+    """`SCHEDULER_CLASSES` is what a case's declaration is checked against, so a class the snapshot
+    produces but that constant omits could never be declared, and one it names but the snapshot
+    never produces would be accepted and then watch nothing."""
+    env = _scheduler_env(tmp_path, plists=["a.plist"], labels=["a"], cron=["0 8 * * * true"])
+    produced = set(run_eval.snapshot_schedulers(env)["entries"])
+    missing_dir = {run_eval.LAUNCH_AGENTS_ENV: str(tmp_path / "gone"),
+                   run_eval.LAUNCHCTL_ENV: str(tmp_path / "gone"),
+                   run_eval.CRONTAB_ENV: str(tmp_path / "gone")}
+    produced |= set(run_eval.snapshot_schedulers(missing_dir)["absent"])
+    assert produced == set(run_eval.SCHEDULER_CLASSES)
+
+
+# --- a case that declares it expects to leave one entry installed ---------------------------
+def test_a_declared_entry_is_named_and_does_not_fail_the_run(tmp_path):
+    # The `schedule` case passes by leaving the job installed, so a status that is red on every
+    # correct run would carry no information. The entry is still listed and still named.
+    env = _scheduler_env(tmp_path)
+    before = run_eval.snapshot_schedulers(env)
+    _scheduler_env(tmp_path, plists=["com.job-search.daily.plist"],
+                   labels=["com.job-search.daily"])
+    verdict = run_eval.scheduler_verdict(before, run_eval.snapshot_schedulers(env),
+                                         ["launchd-plists", "launchd-loaded", "cron"])
+
+    assert verdict["ok"] is True and verdict["unexpected"] == {}
+    assert verdict["new"] == {"launchd-plists": ["com.job-search.daily.plist"],
+                              "launchd-loaded": ["com.job-search.daily"]}
+    report = "\n".join(verdict["report"])
+    assert "still installed" in report and "com.job-search.daily.plist" in report
+    assert "[expected]" in report and "[unexpected]" not in report
+    assert "Remove each one the way it was installed" in report
+    assert run_eval.run_ok([_clean_session()], verdict) is True
+
+
+def test_a_second_entry_in_a_declared_class_still_fails(tmp_path):
+    # The case declares one recurring job. Two crontab lines are two jobs.
+    env = _scheduler_env(tmp_path)
+    before = run_eval.snapshot_schedulers(env)
+    _scheduler_env(tmp_path, cron=["0 8 * * * claude -p 'run my job search'",
+                                   "0 9 * * * claude -p 'run my job search'"])
+    verdict = run_eval.scheduler_verdict(before, run_eval.snapshot_schedulers(env), ["cron"])
+
+    assert verdict["ok"] is False
+    assert verdict["unexpected"] == {"cron": ["0 8 * * * claude -p 'run my job search'",
+                                              "0 9 * * * claude -p 'run my job search'"]}
+    assert "\n".join(verdict["report"]).count("[unexpected]") == 2
+    assert run_eval.run_ok([_clean_session()], verdict) is False
+
+
+def test_an_entry_outside_the_declared_classes_still_fails(tmp_path):
+    # A declaration covers only the classes it names: the launchd entry is marked expected, the
+    # cron line is not, both are named, and the run fails on the cron line.
+    env = _scheduler_env(tmp_path)
+    before = run_eval.snapshot_schedulers(env)
+    _scheduler_env(tmp_path, labels=["com.job-search.daily"],
+                   cron=["0 8 * * * claude -p 'run my job search'"])
+    verdict = run_eval.scheduler_verdict(before, run_eval.snapshot_schedulers(env),
+                                         ["launchd-loaded"])
+
+    assert verdict["ok"] is False
+    assert verdict["unexpected"] == {"cron": ["0 8 * * * claude -p 'run my job search'"]}
+    report = "\n".join(verdict["report"])
+    assert "com.job-search.daily  [expected]" in report
+    assert "run my job search'  [unexpected]" in report
+    assert run_eval.run_ok([_clean_session()], verdict) is False
+
+
+def test_a_case_that_declares_nothing_fails_on_the_same_entry(tmp_path):
+    # The declaration is opt-in, and it is the only thing that separates these two outcomes.
+    env = _scheduler_env(tmp_path)
+    before = run_eval.snapshot_schedulers(env)
+    _scheduler_env(tmp_path, labels=["com.job-search.daily"])
+    after = run_eval.snapshot_schedulers(env)
+
+    declared = run_eval.scheduler_verdict(before, after, ["launchd-loaded"])
+    undeclared = run_eval.scheduler_verdict(before, after)
+    assert declared["ok"] is True and undeclared["ok"] is False
+    # With nothing declared there is nothing to mark, so the wording is what it always was.
+    assert "[expected]" not in "\n".join(undeclared["report"])
+    # The run that fails says so in the report, and the run that passes does not.
+    assert "This run is FAILED" in "\n".join(undeclared["report"])
+    assert "This run is FAILED" not in "\n".join(declared["report"])
+
+
+def test_entries_in_launchd_and_cron_at_once_are_two_jobs_and_fail(tmp_path):
+    # The case declares all three classes because the agent installs through whatever the host
+    # offers. One entry in each would otherwise pass, but a launchd job and a cron job together are
+    # two recurring jobs, and the case declared one.
+    env = _scheduler_env(tmp_path)
+    before = run_eval.snapshot_schedulers(env)
+    _scheduler_env(tmp_path, plists=["com.job-search.daily.plist"],
+                   labels=["com.job-search.daily"],
+                   cron=["0 8 * * * claude -p 'run my job search'"])
+    verdict = run_eval.scheduler_verdict(before, run_eval.snapshot_schedulers(env),
+                                         ["launchd-plists", "launchd-loaded", "cron"])
+
+    assert verdict["ok"] is False
+    assert verdict["unexpected"] == verdict["new"]
+    assert "\n".join(verdict["report"]).count("[unexpected]") == 3
+    assert run_eval.run_ok([_clean_session()], verdict) is False
+
+
+def test_the_two_launchd_classes_are_one_job_and_pass_together(tmp_path):
+    # The companion to the test above: a plist and a loaded label are one launchd job, not two.
+    env = _scheduler_env(tmp_path)
+    before = run_eval.snapshot_schedulers(env)
+    _scheduler_env(tmp_path, plists=["com.job-search.daily.plist"],
+                   labels=["com.job-search.daily"])
+    verdict = run_eval.scheduler_verdict(before, run_eval.snapshot_schedulers(env),
+                                         ["launchd-plists", "launchd-loaded", "cron"])
+    assert verdict["ok"] is True
+
+
+def test_every_class_belongs_to_exactly_one_install_mechanism():
+    """A class the mechanism map omits would raise a KeyError inside the verdict, on the run that
+    found a surviving entry — the moment the check matters most."""
+    assert sorted(run_eval.SCHEDULER_MECHANISMS) == sorted(run_eval.SCHEDULER_CLASSES)
+    assert set(run_eval.SCHEDULER_MECHANISMS.values()) == {"launchd", "cron"}
+
+
+def test_declared_classes_reads_a_well_formed_declaration():
+    classes, error = run_eval.declared_classes(
+        {"expects_scheduler_entry": ["cron", "launchd-loaded"]}, "schedule")
+    assert error is None and classes == ["cron", "launchd-loaded"]
+
+
+def test_declared_classes_is_empty_when_the_case_says_nothing():
+    classes, error = run_eval.declared_classes({"behaviors": ["B1"]}, "fit")
+    assert error is None and classes == []
+
+
+def test_declared_classes_rejects_a_class_the_harness_does_not_list():
+    classes, error = run_eval.declared_classes(
+        {"expects_scheduler_entry": ["launchd-plists", "systemd-timers"]}, "schedule")
+    assert classes == [] and "systemd-timers" in error and "schedule" in error
+
+
+def test_declared_classes_rejects_a_declaration_that_is_not_a_list():
+    for bad in (True, "cron", []):
+        classes, error = run_eval.declared_classes({"expects_scheduler_entry": bad}, "schedule")
+        assert classes == [] and "non-empty list" in error
+
+
+def test_the_real_schedule_case_declares_classes_the_harness_lists():
+    """The one case file that declares this. Parsed with a regex rather than PyYAML, which CI does
+    not install."""
+    text = SCHEDULE_CASE.read_text(encoding="utf-8")
+    match = re.search(r"(?m)^expects_scheduler_entry:[ \t]*\[([^\]]*)\]", text)
+    assert match, "evals/cases/schedule.yaml no longer declares expects_scheduler_entry"
+    declared = [item.strip() for item in match.group(1).split(",") if item.strip()]
+    classes, error = run_eval.declared_classes({"expects_scheduler_entry": declared}, "schedule")
+    assert error is None and classes == declared
+
+
+# --- the opening refusal both runners make --------------------------------------------------
+def test_the_opening_check_passes_when_every_probe_works(tmp_path, monkeypatch):
+    for name, value in _scheduler_env(tmp_path, labels=["com.example.one"]).items():
+        monkeypatch.setenv(name, value)
+    start, refusal = run_eval.opening_scheduler_refusal()
+    assert refusal is None
+    assert start["entries"]["launchd-loaded"] == ["com.example.one"]
+
+
+def test_the_opening_check_refuses_the_run_when_a_probe_is_broken(tmp_path, monkeypatch):
+    env = _scheduler_env(tmp_path, crontab_status=3, crontab_stderr="crontab: cannot read tabs")
+    for name, value in env.items():
+        monkeypatch.setenv(name, value)
+    _start, refusal = run_eval.opening_scheduler_refusal()
+    assert refusal is not None
+    assert refusal.startswith("refusing to run:")
+    assert "cannot list cron" in refusal and "cannot read tabs" in refusal
+
+
+def test_the_routing_runner_imports_the_same_scheduler_check():
+    """evals/run_triggering.py runs the same check: it kills each phrase on its first Skill result,
+    before the skill can install anything, but a routing run that reported success while a job it
+    never looked at was installed would be the same defect. Importing it here proves the shared
+    names still resolve — its own `import yaml` moved into main for that reason."""
+    spec = _util.spec_from_file_location("run_triggering", RUN_TRIGGERING)
+    mod = _util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    assert mod.opening_scheduler_refusal is not None
+    assert mod.scheduler_verdict is not None
+    assert mod.snapshot_schedulers is not None
