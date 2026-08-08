@@ -1,10 +1,11 @@
 """Unit tests for scripts/eval_harness.py — the eval-scenario validator + the live-harness
-support math (rep aggregation, control-delta).
+support math (rep aggregation, control-delta) — and for the scheduler check in evals/run_eval.py.
 
-Two jobs: (1) prove the REAL five evals.json are coherent, carry a discovery scenario each,
+Three jobs: (1) prove the REAL five evals.json are coherent, carry a discovery scenario each,
 mark the named judgment-heavy scenarios stochastic with a control arm, and hold no pack-authored `gpt-5*`
 literal from the pinned regression family; (2) unit-test the deterministic helpers the off-CI live harness
-feeds observed pass/fail into (aggregate_reps / control_delta).
+feeds observed pass/fail into (aggregate_reps / control_delta); (3) prove `evals/run_eval.py` fails a
+run whose session left a scheduled job installed on the machine, in the last section of this file.
 """
 import json
 import pathlib
@@ -777,3 +778,241 @@ def test_crown_jewel_judgment_scenarios_are_marked_stochastic():
         c = e.get("control")
         assert isinstance(c, dict) and all(c.get(k) for k in ("arm", "strip", "expectation")), \
             f"{skill}#{sid} missing a no-guidance control arm"
+
+
+# ---------------------------------------------------------------------------
+# evals/run_eval.py: a scheduled job must not outlive the session that installed it
+#
+# On 2026-08-07 the `schedule` case installed a real launchd job. launchd starts its job outside
+# the child's process group, so run_eval's teardown SIGKILL never reached it; it fired after the
+# harness had moved the owner's real ~/.job-search back and wrote into it, and the run was still
+# reported ok. run_eval now lists the machine's scheduler entries before and after the session and
+# fails the run while a new one is still installed.
+#
+# Every test below points all three of run_eval's probes at a directory and two scripts it wrote
+# itself, so nothing here installs, loads or removes a scheduler entry on the machine running the
+# suite, and nothing here reads the machine's own launchd or crontab.
+# ---------------------------------------------------------------------------
+RUN_EVAL = ROOT / "evals" / "run_eval.py"
+
+
+def _load_run_eval():
+    """Import evals/run_eval.py by path. It imports only the standard library at module level —
+    PyYAML is imported inside its main() — so this works in CI, which installs pytest and nothing
+    else."""
+    spec = _util.spec_from_file_location("run_eval", RUN_EVAL)
+    mod = _util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+run_eval = _load_run_eval()
+
+
+def _write_stub(path, stdout="", stderr="", status=0):
+    """A stand-in scheduler command: prints fixed text on each stream and exits with a fixed
+    status. It never talks to launchd or cron."""
+    if stdout and not stdout.endswith("\n"):
+        stdout += "\n"
+    if stderr and not stderr.endswith("\n"):
+        stderr += "\n"
+    path.write_text("#!/bin/sh\ncat <<'OUT'\n%sOUT\ncat >&2 <<'ERR'\n%sERR\nexit %d\n"
+                    % (stdout, stderr, status), encoding="utf-8")
+    path.chmod(0o755)
+
+
+def _launchctl_list_output(labels):
+    """What `launchctl list` prints: a header row that names no job, then one row per loaded job."""
+    return "PID\tStatus\tLabel\n" + "".join("-\t0\t%s\n" % label for label in labels)
+
+
+def _scheduler_env(tmp_path, plists=(), labels=(), cron=(), crontab_status=0, crontab_stderr="",
+                   launchctl_status=0, launchctl_stderr="", agents_dir=True):
+    """Point all three of run_eval's scheduler probes at things this test wrote: a LaunchAgents
+    directory, a `launchctl list` stand-in and a `crontab -l` stand-in.
+
+    Called a second time with the same tmp_path it rewrites all three, which is how a test says
+    what the session left behind. `agents_dir=False` removes the directory, for the machine that
+    has no launchd at all.
+    """
+    agents = tmp_path / "LaunchAgents"
+    if agents_dir:
+        agents.mkdir(exist_ok=True)
+        for existing in agents.iterdir():
+            existing.unlink()
+        for name in plists:
+            (agents / name).write_text("<plist/>\n", encoding="utf-8")
+    elif agents.is_dir():
+        for existing in agents.iterdir():
+            existing.unlink()
+        agents.rmdir()
+    stubs = tmp_path / "stubs"
+    stubs.mkdir(exist_ok=True)
+    _write_stub(stubs / "launchctl", stdout=_launchctl_list_output(labels),
+                stderr=launchctl_stderr, status=launchctl_status)
+    _write_stub(stubs / "crontab", stdout="".join(line + "\n" for line in cron),
+                stderr=crontab_stderr, status=crontab_status)
+    return {run_eval.LAUNCH_AGENTS_ENV: str(agents),
+            run_eval.LAUNCHCTL_ENV: str(stubs / "launchctl"),
+            run_eval.CRONTAB_ENV: str(stubs / "crontab")}
+
+
+def _clean_session():
+    """One session that ended the way a graded run wants: exit 0, neither kill fired."""
+    return {"rc": 0, "wall_s": 12.0, "timeout_killed": False, "event_killed": False}
+
+
+def test_scheduler_snapshot_lists_every_class_from_its_own_probe(tmp_path):
+    env = _scheduler_env(tmp_path, plists=["com.example.one.plist"],
+                         labels=["com.apple.something", "com.example.one"],
+                         cron=["# a comment schedules nothing", "0 8 * * * /usr/bin/true", ""])
+    snap = run_eval.snapshot_schedulers(env)
+    assert snap == {
+        "entries": {"launchd-plists": ["com.example.one.plist"],
+                    "launchd-loaded": ["com.apple.something", "com.example.one"],
+                    "cron": ["0 8 * * * /usr/bin/true"]},
+        "absent": {}, "failed": {}}
+
+
+def test_teardown_fails_when_a_launchd_job_outlives_the_session(tmp_path):
+    # This is the 2026-08-07 defect: the recurring-job flow installs a launchd job, launchd starts
+    # it outside the child's process group, and it is still installed when the session is over.
+    env = _scheduler_env(tmp_path, plists=["homebrew.mxcl.postgresql.plist"],
+                         labels=["homebrew.mxcl.postgresql"])
+    before = run_eval.snapshot_schedulers(env)
+    _scheduler_env(tmp_path, plists=["homebrew.mxcl.postgresql.plist", "com.job-search.daily.plist"],
+                   labels=["homebrew.mxcl.postgresql", "com.job-search.daily"])
+    verdict = run_eval.scheduler_verdict(before, run_eval.snapshot_schedulers(env))
+
+    assert verdict["ok"] is False
+    assert verdict["new"] == {"launchd-plists": ["com.job-search.daily.plist"],
+                              "launchd-loaded": ["com.job-search.daily"]}
+    report = "\n".join(verdict["report"])
+    assert "com.job-search.daily.plist" in report and "com.job-search.daily" in report
+    assert "still installed" in report
+    assert run_eval.run_ok([_clean_session()], verdict) is False
+
+
+def test_teardown_fails_when_a_cron_line_outlives_the_session(tmp_path):
+    env = _scheduler_env(tmp_path, cron=["0 3 * * * /usr/bin/backup"])
+    before = run_eval.snapshot_schedulers(env)
+    _scheduler_env(tmp_path, cron=["0 3 * * * /usr/bin/backup",
+                                   "0 8 * * * claude -p 'run my job search'"])
+    verdict = run_eval.scheduler_verdict(before, run_eval.snapshot_schedulers(env))
+
+    assert verdict["ok"] is False
+    assert verdict["new"] == {"cron": ["0 8 * * * claude -p 'run my job search'"]}
+    assert any("run my job search" in line for line in verdict["report"])
+    assert run_eval.run_ok([_clean_session()], verdict) is False
+
+
+def test_a_second_copy_of_a_cron_line_already_there_is_a_new_entry(tmp_path):
+    # Entries are counted, not set-compared: a duplicate of a line already in the crontab is
+    # another installed job, and a set comparison would report the machine unchanged.
+    env = _scheduler_env(tmp_path, cron=["0 8 * * * claude -p 'run my job search'"])
+    before = run_eval.snapshot_schedulers(env)
+    _scheduler_env(tmp_path, cron=["0 8 * * * claude -p 'run my job search'",
+                                   "0 8 * * * claude -p 'run my job search'"])
+    verdict = run_eval.scheduler_verdict(before, run_eval.snapshot_schedulers(env))
+
+    assert verdict["ok"] is False
+    assert verdict["new"] == {"cron": ["0 8 * * * claude -p 'run my job search'"]}
+
+
+def test_a_launch_agents_directory_the_session_created_is_all_new(tmp_path):
+    # A machine that had no LaunchAgents directory until the session wrote a job into it: the
+    # class was absent before, so everything listed afterwards is new.
+    env = _scheduler_env(tmp_path, agents_dir=False)
+    before = run_eval.snapshot_schedulers(env)
+    assert "launchd-plists" in before["absent"] and "launchd-plists" not in before["entries"]
+
+    _scheduler_env(tmp_path, plists=["com.job-search.daily.plist"])
+    verdict = run_eval.scheduler_verdict(before, run_eval.snapshot_schedulers(env))
+    assert verdict["ok"] is False
+    assert verdict["new"] == {"launchd-plists": ["com.job-search.daily.plist"]}
+
+
+def test_teardown_reports_ok_when_the_machine_comes_back_the_way_it_was_found(tmp_path):
+    env = _scheduler_env(tmp_path, plists=["com.google.keystone.agent.plist"],
+                         labels=["com.google.keystone.agent"], cron=["0 3 * * * /usr/bin/backup"])
+    before = run_eval.snapshot_schedulers(env)
+    verdict = run_eval.scheduler_verdict(before, run_eval.snapshot_schedulers(env))
+
+    assert verdict["ok"] is True and verdict["new"] == {}
+    assert verdict["counts"] == {"cron": 1, "launchd-loaded": 1, "launchd-plists": 1}
+    report = "\n".join(verdict["report"])
+    assert "cron, launchd-loaded, launchd-plists" in report
+    # The install no probe can list is named on every run, so a reader is never left assuming the
+    # check covered a job the host's own command installed.
+    assert "installed by the host's own command" in report
+    assert run_eval.run_ok([_clean_session()], verdict) is True
+
+
+def test_teardown_fails_loudly_when_a_probe_cannot_list_its_class(tmp_path):
+    # The probe is on the machine and did not produce a listing. Nothing new was detected, which
+    # is exactly the silent pass that let a job reach a real workspace, so this fails instead.
+    env = _scheduler_env(tmp_path)
+    before = run_eval.snapshot_schedulers(env)
+    _scheduler_env(tmp_path, crontab_status=3, crontab_stderr="crontab: cannot read /var/at/tabs")
+    after = run_eval.snapshot_schedulers(env)
+    verdict = run_eval.scheduler_verdict(before, after)
+
+    assert after["failed"]["cron"].startswith(str(tmp_path / "stubs" / "crontab"))
+    assert verdict["new"] == {} and verdict["ok"] is False
+    report = "\n".join(verdict["report"])
+    assert "cannot list cron" in report and "cannot read /var/at/tabs" in report
+    assert run_eval.run_ok([_clean_session()], verdict) is False
+
+
+def test_an_empty_crontab_is_a_listing_rather_than_a_failed_probe(tmp_path):
+    # Measured on this repo's macOS host: `crontab -l` exits 1 and prints
+    # `crontab: no crontab for <user>` on stderr when the user has none. That is an empty crontab,
+    # and treating it as a broken probe would fail every run on a machine with no cron jobs.
+    env = _scheduler_env(tmp_path, crontab_status=1, crontab_stderr="crontab: no crontab for tester")
+    snap = run_eval.snapshot_schedulers(env)
+
+    assert snap["entries"]["cron"] == [] and snap["failed"] == {}
+    assert run_eval.scheduler_verdict(snap, snap)["ok"] is True
+
+
+def test_a_scheduler_command_this_machine_does_not_have_is_not_a_failed_probe(tmp_path):
+    # launchd runs only on macOS and a machine with no `crontab` command has no user crontab, so a
+    # missing command means the class cannot hold an entry — not that the probe broke.
+    env = {run_eval.LAUNCH_AGENTS_ENV: str(tmp_path / "no-such-dir"),
+           run_eval.LAUNCHCTL_ENV: str(tmp_path / "no-such-launchctl"),
+           run_eval.CRONTAB_ENV: str(tmp_path / "no-such-crontab")}
+    snap = run_eval.snapshot_schedulers(env)
+
+    assert snap["failed"] == {}
+    assert sorted(snap["absent"]) == ["cron", "launchd-loaded", "launchd-plists"]
+
+
+def test_teardown_fails_when_no_scheduler_class_can_be_listed_at_all(tmp_path):
+    # Nothing was enumerated, so the run looked nowhere. Reporting ok here would claim a clean
+    # machine on the strength of no evidence.
+    env = {run_eval.LAUNCH_AGENTS_ENV: str(tmp_path / "no-such-dir"),
+           run_eval.LAUNCHCTL_ENV: str(tmp_path / "no-such-launchctl"),
+           run_eval.CRONTAB_ENV: str(tmp_path / "no-such-crontab")}
+    snap = run_eval.snapshot_schedulers(env)
+    verdict = run_eval.scheduler_verdict(snap, snap)
+
+    assert verdict["ok"] is False
+    assert any("looked nowhere" in line for line in verdict["report"])
+    assert run_eval.run_ok([_clean_session()], verdict) is False
+
+
+def test_result_json_and_the_exit_status_come_from_one_value(tmp_path):
+    """`run_ok` is the only thing main writes into `result.json`'s `ok` and the only thing it exits
+    on, so a run whose sessions all returned 0 is still not ok while a job it found is installed."""
+    env = _scheduler_env(tmp_path)
+    before = run_eval.snapshot_schedulers(env)
+    clean = run_eval.scheduler_verdict(before, run_eval.snapshot_schedulers(env))
+    _scheduler_env(tmp_path, labels=["com.job-search.daily"])
+    survived = run_eval.scheduler_verdict(before, run_eval.snapshot_schedulers(env))
+
+    assert run_eval.run_ok([_clean_session()], clean) is True
+    assert run_eval.run_ok([_clean_session()], survived) is False
+    # The session failures the runner already graded stay graded, whatever the scheduler says.
+    assert run_eval.run_ok([{"rc": 1, "wall_s": 1.0, "timeout_killed": False,
+                             "event_killed": False}], clean) is False
+    assert run_eval.run_ok([], clean) is False
