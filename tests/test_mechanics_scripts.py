@@ -2987,24 +2987,31 @@ def test_an_alias_carrying_no_location_adds_nothing_to_the_column(tmp_path):
     to put on the row it names.
 
     `record-api-response.sh` writes `null` for a field a row does not carry and
-    `record-judgment.awk` copies it, so `null` is a shape the product produces. Joined rather than
-    skipped it reaches the digest as `also posted in null; Boston, MA`, and an empty value reaches
-    it as `also posted in ; Boston, MA`. Both are asserted, because the two arrive as different
-    values from `jval` — the four characters `null` and the empty string.
+    `record-judgment.awk` copies it, so `null` is a shape the product produces. The empty string is
+    the other, and the two arrive as different values from `jval` — the four characters `null` and
+    nothing at all — so the log carries one of each. Joined rather than skipped they reach the
+    digest as `also posted in ; null; Austin, TX`, which is what deleting the skip prints here.
+
+    Four rows of one Northwind Labs opening: the one the fixture holds, plus three written by
+    `a_third_city`, so this is one opening posted in four places and not four companies pointed at
+    each other. Every judgment goes through `record-judgment.sh`, which copies `location_display`
+    off the surfaced row, so the empty and the null reach the reader the way a run would produce
+    them rather than being written onto the event by hand.
     """
     jobs = seeded_jobs(tmp_path, "search.linkedin.json")
     rows = [e for e in lines(jobs) if e["event"] == "surfaced"]
-    read, blank, nulled, kept = rows[0], rows[1], rows[2], rows[3]
+    read = next(r for r in rows if r["source_id"] == "linkedin-0002")
     judge_all(jobs, [read], detail_read="true", relevant="true", match="strong", reasoning="Fits.")
+    blank = a_third_city(jobs, read, "linkedin-9001", "")
+    nulled = a_third_city(jobs, read, "linkedin-9002", None)
+    kept = a_third_city(jobs, read, "linkedin-9003", "Austin, TX")
     alias = "%s:%s" % (read["source"], read["source_id"])
-    for row, location in ((blank, '""'), (nulled, "null")):
-        jobs.write_text(jobs.read_text() +
-            '{"event":"evaluated","run_id":"%s","source":"%s","source_id":"%s",'
-            '"location_display":%s,"detail_read":false,"relevant":true,"match":"strong",'
-            '"same_role_as":"%s"}\n'
-            % (RID, row["source"], row["source_id"], location, alias))
-    judge_all(jobs, [kept], detail_read="false", relevant="true", match="strong",
-              reasoning="Fits.", same_role_as=alias)
+    for row in (blank, nulled, kept):
+        judge_all(jobs, [row], detail_read="false", relevant="true", match="strong",
+                  reasoning="Fits.", same_role_as=alias)
+    judged = {e["source_id"]: e for e in lines(jobs) if e["event"] == "evaluated"}
+    assert judged["linkedin-9001"]["location_display"] == ""
+    assert judged["linkedin-9002"]["location_display"] is None
     _, c = counts(jobs)
     assert c["match_strong"] == "1"
     assert c["duplicates_of_another"] == "3"
@@ -3700,10 +3707,9 @@ def path_without_a_digest_command(tmp_path):
     list: each of these changes what the run prints or its status, and `wc` and `cat` change
     nothing. Four of them need a workspace of the right shape before they run at all — `grep`,
     `head` and `cut` read a run record's fields, all three in `validate-workspace.sh`'s
-    `json_str`, and `sort` prints the findings — so on a clean workspace with no run record neither
-    script runs any
-    of the four. That is why the case below writes a record, and a broken one, rather than reusing
-    `tmp_workspace` as it comes.
+    `json_str`, and `sort` prints the findings — so on a clean workspace with no run record
+    neither script runs any of the four. That is why the case below writes a record, and a broken
+    one, rather than reusing `tmp_workspace` as it comes.
 
     The twelve cover the paths these cases drive, which is `open-run.sh` and the validator without
     `--post-close`. `--post-close` on a workspace holding that run's record reaches `sed`, `touch`
@@ -4458,8 +4464,7 @@ AR_DIGIT_RUN_ID = "٢٠٢٦-٠٧-٣٠T١٥-٠٤-٠٢Z"
 # The empty string is deliberately not here. The `${2:?}` that takes the run id in `close-run.sh`
 # and in `clear-run.sh` refuses it before the format check ever runs, and the code that picks the
 # status is the shell's, so it is 1 under sh and 2 under dash. A case for it would pass with the
-# format check deleted and
-# would be red under one of the two shells the suite runs.
+# format check deleted and would be red under one of the two shells the suite runs.
 BAD_RUN_IDS = [
     "../elsewhere/pwned",
     "../../victim",
@@ -4752,8 +4757,7 @@ def test_a_real_run_id_still_closes_under_a_collating_locale(tmp_workspace):
 # asserted below rather than counted by eye. They are shape probes rather than instants: the globs
 # and `validate-workspace.sh`'s `RUN_ID_GLOB` both check that a run id is twenty characters in the
 # documented arrangement, not that it names a real time. `tests/test_validate_workspace.py` drives
-# the same
-# ten through the validator's copy, which these cases do not reach.
+# the same ten through the validator's copy, which these cases do not reach.
 #
 # The suite settled nothing about this before. Measured on 2026-08-06 at commit `1d1dc40` by
 # dropping `8` from the first bracket of `close-run.sh`'s glob and running the module with

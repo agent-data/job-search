@@ -142,6 +142,11 @@ and they get no line of their own; the other places that opening was posted arri
 `also_posted` column of the line that is listed, joined with `; `. Say those places on that line
 rather than dropping them — the user is choosing where to apply.
 
+One of those postings adds nothing to that column: one whose row came back with no location. It is
+still counted under `duplicates_of_another`, so that number can be higher than the number of places
+`also_posted` names, and a line whose column is empty is a line to write without an `also posted in`
+of its own.
+
 The file takes this shape, with this run's numbers and matches in place of the placeholders:
 
 ```

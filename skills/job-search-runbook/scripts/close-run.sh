@@ -157,8 +157,9 @@ esac
 # LC_ALL=en_US.UTF-8 in dash with mawk, which is the pair Ubuntu CI runs. That file is not valid
 # UTF-8, so nothing that reads a run record can parse it. BSD awk is the only thing that stops it,
 # dying with a multibyte conversion failure that the build check below catches — `grep -n
-# 'building the record failed' skills/job-search-runbook/scripts/close-run.sh`. The same check is in
-# three scripts under job-search-run/scripts, so widening it is a change to four files, not one.
+# '^if .*buildstatus' skills/job-search-runbook/scripts/close-run.sh`, one line, anchored at the
+# start of the line so it finds the statement and not this comment. The same check is in three
+# scripts under job-search-run/scripts, so widening it is a change to four files, not one.
 reject_id() {
   case $2 in
     *[[:cntrl:]]*) die "$1 may hold no control character" ;;
@@ -233,10 +234,11 @@ lostids=$(get searches_never_succeeded_ids)
 # and let a complete close write a record over postings nobody judged.
 #
 # The digits are written out one by one here for the reason measured above — `grep -n 'digits are
-# written out' skills/job-search-runbook/scripts/close-run.sh` finds both places — and negating
-# the bracket expression with `!` does not change it: a range is still decided by the collation
-# order the locale sets. Measured on 2026-08-06 with the Arabic-Indic ٢, `*[!0-9]*` called it a
-# number under LC_ALL=ar_SA.UTF-8 in sh and in bash, and not a number under LC_ALL=C, under
+# written out' skills/job-search-runbook/scripts/close-run.sh` prints two lines, the paragraph up
+# there and this one — and negating the bracket expression with `!` does not change it: a range is
+# still decided by the collation order the locale sets. Measured on 2026-08-06 with the
+# Arabic-Indic ٢, `*[!0-9]*` called it a number under LC_ALL=ar_SA.UTF-8 in sh and in bash, and
+# not a number under LC_ALL=C, under
 # LC_ALL=en_US.UTF-8 and in dash; `*[!0123456789]*` called it not a number in all nine combinations
 # and still called 23 a number in all nine. End to end with `[!0-9]` in these two lines and a
 # run-counts.sh shimmed to print postings_unreviewed=٢: under LC_ALL=ar_SA.UTF-8 in sh, close-run.sh

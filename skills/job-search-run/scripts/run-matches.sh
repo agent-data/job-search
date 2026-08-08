@@ -27,6 +27,12 @@
 # `San Francisco Bay Area` joined with a comma read as four places rather than two. The column is
 # printed on every row whether or not anything names it, so the number of columns never varies.
 #
+# One of those postings adds nothing to the column: one whose row came back with no location, which
+# reaches this script as an empty location_display or as the four characters `null`. It is still
+# counted under duplicates_of_another and still gets no row of its own — there is just no place to
+# name. So the column can name fewer places than duplicates_of_another counts, and on a run where
+# every duplicate came back without a location it is empty on every row.
+#
 # The value is read as <source>:<source_id> split at the FIRST colon, because a source_id can hold
 # one — a greenhouse id is written <board>:<number>. A value that names no row here — an id no
 # search of this run turned up, or a value not written as a pair — changes no count and prints no

@@ -36,11 +36,10 @@ run_id=${2:?usage: clear-run.sh <workspace> <run_id>}
 # through on the strength of a single well-formed line. `case` compares the whole word.
 #
 # The digits are written out one by one rather than as `[0-9]`, for the reason close-run.sh measures
-# — `grep -n 'digits are written out' skills/job-search-runbook/scripts/close-run.sh`: a range
-# inside a bracket expression is decided by the collation order the locale sets, so `[0-9]`
-# matched a run
-# id spelled in Arabic-Indic digits under LC_ALL=ar_SA.UTF-8. A list of ten characters is not a
-# range and no locale changes it.
+# — `grep -n 'a range inside a bracket' skills/job-search-runbook/scripts/close-run.sh`, one
+# line: a range inside a bracket expression is decided by the collation order the locale sets, so
+# `[0-9]` matched a run id spelled in Arabic-Indic digits under LC_ALL=ar_SA.UTF-8. A list of ten
+# characters is not a range and no locale changes it.
 #
 # validate-workspace.sh states the same rule in the same notation — `grep -n RUN_ID_GLOB=
 # skills/job-search-runbook/scripts/validate-workspace.sh` — and uses it both to decide whether a

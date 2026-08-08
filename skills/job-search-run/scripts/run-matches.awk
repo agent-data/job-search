@@ -76,9 +76,10 @@ END {
     # A row that came back without a location has nothing to add to the column. record-api-response
     # writes null for a field a row does not carry and record-judgment copies it, so an absent
     # location arrives here as the four characters `null` and an empty one as the empty string.
-    # Joined rather than skipped, the two reach the digest as `also posted in null; Boston, MA` and
-    # `also posted in ; Boston, MA`. A location whose text really is `null` is skipped too; jval
-    # gives the same four characters either way, and no live row has ever carried it.
+    # Joined rather than skipped, the two reach the digest as `also posted in ; null; Austin, TX`.
+    # A location whose text really is the word `null` is skipped along with them: jval returns the
+    # same four characters for a JSON null and for that string, so nothing here can tell the two
+    # apart.
     if (loc == "" || loc == "null") continue
     # The test is a statement of its own, not `also[t] = (t in also) ? also[t] "; " loc : loc`.
     # Measured on a log holding one opening posted in two cities: mawk 1.3.4 creates the element for
