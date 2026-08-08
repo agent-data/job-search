@@ -15,7 +15,8 @@ one that survived. A case that declares `expects_scheduler_entry` is allowed one
 declares; every other case, and anything beyond what was declared, reports FAILED. The scheduler
 comment below has the detail.
 """
-import argparse, collections, glob, json, os, re, shutil, signal, subprocess, sys, threading, time
+import argparse, collections, glob, json, os, re, shutil, signal, subprocess, sys
+import threading, time, traceback
 
 EVALS_DIR = os.path.dirname(os.path.abspath(__file__))
 WORKSPACE = os.path.join(os.path.expanduser("~"), ".job-search")
@@ -42,7 +43,7 @@ ALLOWED = "Bash,Read,Write,Edit,Glob,Grep,Skill,Task,AskUserQuestion,TodoWrite"
 # driven by a before/after difference would delete those too.
 #
 # A case whose behavior under test is the recurring job passes only by leaving the job installed:
-# the product keeps it when the canary lands. A status that is red on every correct run carries no
+# the product keeps it when the canary succeeds. A status that is red on every correct run carries no
 # information, and training the operator to ignore it is how the 2026-08-07 entry survived in the
 # first place. So a case file may declare `expects_scheduler_entry`, naming the classes it expects
 # to leave one entry in. One entry in a declared class is named and reported like any other and does
@@ -91,6 +92,12 @@ SCHEDULER_CLASSES = ("launchd-plists", "launchd-loaded", "cron")
 # case declares is one entry per class, plus this: the classes holding new entries must all belong
 # to one mechanism. Entries in launchd and in cron together are two jobs, whatever the case
 # declared.
+#
+# What the per-class allowance does NOT check is that a new plist and a new label are the same job.
+# A plist for one job and a loaded label for another pass as one launchd install. Checking it would
+# mean matching the plist's filename against the label, and a plist's filename does not have to
+# match the Label inside it, so that check would fail correct runs. Both entries are printed by
+# name, which is where an operator sees two names that do not go together.
 SCHEDULER_MECHANISMS = {"launchd-plists": "launchd", "launchd-loaded": "launchd", "cron": "cron"}
 LAUNCH_AGENTS_ENV = "JOBSEARCH_EVAL_LAUNCH_AGENTS_DIR"
 LAUNCHCTL_ENV = "JOBSEARCH_EVAL_LAUNCHCTL"
@@ -100,8 +107,10 @@ CRONTAB_ENV = "JOBSEARCH_EVAL_CRONTAB"
 # The third of those, the host's own recurring-job command, is not launchd and not cron, so none of
 # the probes above would list what it installs. Every run says so rather than leaving a reader to
 # assume the check covered it.
-NOT_PROBED = ("recurring jobs installed by the host's own command, which are in none of the classes "
-              "this harness lists")
+NOT_PROBED = "recurring jobs installed by the host's own command, which are neither launchd nor cron"
+# A probe that never returns would hang the teardown, so each command gets a deadline. Named here so
+# a test can shorten it rather than wait a minute.
+PROBE_TIMEOUT_S = 60
 
 
 def _command_lines(argv, empty_marker=None):
@@ -114,7 +123,7 @@ def _command_lines(argv, empty_marker=None):
     so. On an account with no crontab, `crontab -l; echo "rc=$?"` prints that line and `rc=1`.
     """
     try:
-        proc = subprocess.run(argv, capture_output=True, text=True, timeout=60)
+        proc = subprocess.run(argv, capture_output=True, text=True, timeout=PROBE_TIMEOUT_S)
     except FileNotFoundError:
         return None, "%s is not on this machine" % argv[0], None
     except (OSError, subprocess.TimeoutExpired) as err:
@@ -159,12 +168,21 @@ def snapshot_schedulers(env=None):
 
     agents = env.get(LAUNCH_AGENTS_ENV) or os.path.join(
         os.path.expanduser("~"), "Library", "LaunchAgents")
-    if not os.path.isdir(agents):
+    # os.path.isdir answers False both when nothing is there and when the path cannot be reached at
+    # all, so it used to record an unreadable directory as absent — a class that could not be read,
+    # passing as a class that holds nothing. os.stat separates the two: only FileNotFoundError means
+    # the directory is not there. Measured on a directory whose parent is mode 000, and on a path
+    # that is a file rather than a directory: both now land in `failed`.
+    try:
+        os.stat(agents)
+    except FileNotFoundError:
         snap["absent"]["launchd-plists"] = "%s does not exist" % agents
+    except OSError as err:
+        snap["failed"]["launchd-plists"] = "cannot reach %s: %s" % (agents, err)
     else:
         try:
             snap["entries"]["launchd-plists"] = sorted(os.listdir(agents))
-        except OSError as err:
+        except OSError as err:  # a file rather than a directory, or a directory that cannot be read
             snap["failed"]["launchd-plists"] = "cannot list %s: %s" % (agents, err)
 
     for name, argv, parse, empty_marker in (
@@ -223,22 +241,19 @@ def scheduler_report(verdict, listed):
                      "its own reasons appear here too; leave those alone.")
         if declared:
             lines.append("The case declares that it installs a recurring job, so one entry in %s is "
-                         "expected and does not fail the run. A second entry in one of those, any "
-                         "entry outside them, or entries in launchd and cron at once — two jobs, "
-                         "not one — does." % ", ".join(declared))
-        if verdict["unexpected"]:
-            lines.append("This run is FAILED for the entries above that the case did not declare. "
-                         "Remove them and rerun.")
-    else:
-        lines.append("scheduler check: no new entry in %s. A recurring job installed by the host's "
-                     "own command is in none of those classes, so this check would not see one."
-                     % ", ".join(listed))
+                         "expected and does not fail the run." % ", ".join(declared))
+        if verdict["reasons"]:
+            lines.append("This run is FAILED: %s. Remove what is named above and rerun."
+                         % "; ".join(verdict["reasons"]))
+    elif listed:
+        lines.append("scheduler check: no new entry in %s." % ", ".join(listed))
     for name, why in sorted(verdict["probe_failed"].items()):
         lines.append("scheduler check: cannot list %s — %s. This run cannot say whether the session "
                      "left a recurring job installed." % (name, why))
     if not listed:
-        lines.append("scheduler check: no scheduler class could be listed on this machine, so this "
-                     "run looked nowhere and cannot report the machine clean.")
+        lines.append("scheduler check: no scheduler class could be listed on this machine. Nothing "
+                     "was checked, so this run cannot report the machine clean.")
+    lines.append("scheduler check: not covered — %s." % NOT_PROBED)
     return lines
 
 
@@ -252,25 +267,48 @@ def scheduler_verdict(before, after, expected=()):
     two recurring jobs rather than the one the case declared. A case that declares nothing fails on
     any new entry at all.
 
-    Also not ok when a probe failed, or when no class could be listed — a run that looked nowhere
+    Also not ok when a probe failed, or when no class could be listed: a run that checked nothing
     cannot report a clean machine. Entries are counted rather than set-compared, so a second copy of
     a cron line already in the crontab is a new entry too.
     """
+    declared = list(expected)
     new = {}
     for name, entries in after["entries"].items():
         added = collections.Counter(entries) - collections.Counter(before["entries"].get(name, []))
         if added:
             new[name] = sorted(added.elements())
-    unexpected = {name: entries for name, entries in new.items()
-                  if not (name in expected and len(entries) == 1)}
-    if not unexpected and len({SCHEDULER_MECHANISMS[name] for name in new}) > 1:
-        unexpected = dict(new)  # launchd and cron together are two jobs; which one was meant is
-                                # not something this harness can tell, so all of them are named
+
+    undeclared = sorted(name for name in new if name not in declared)
+    over_allowance = sorted(name for name in new if name in declared and len(new[name]) > 1)
+    unexpected = {name: new[name] for name in undeclared + over_allowance}
+    # launchd and cron together are two jobs; which one was meant is not something this harness can
+    # tell, so every entry is named. Only asked when nothing else already failed, because an entry
+    # in an undeclared class is the more precise thing to report.
+    two_mechanisms = not unexpected and len({SCHEDULER_MECHANISMS[name] for name in new}) > 1
+    if two_mechanisms:
+        unexpected = dict(new)
+
+    # One clause per cause, each naming the class it is about, so the printed sentence says why this
+    # particular run failed rather than a reason that fits only one of the paths.
+    reasons = []
+    for name in undeclared:
+        if declared:
+            reasons.append("%s is not one of the classes the case declares (%s)"
+                           % (name, ", ".join(declared)))
+        else:
+            reasons.append("%s held a new entry and the case declares none" % name)
+    for name in over_allowance:
+        reasons.append("%s held %d new entries and the case declares one" % (name, len(new[name])))
+    if two_mechanisms:
+        reasons.append("new entries appeared in launchd and in cron, which are two recurring jobs "
+                       "and not the one the case declares")
+
     listed = sorted(after["entries"])
     verdict = {
         "new": new,
         "unexpected": unexpected,
-        "expected_classes": list(expected),
+        "reasons": reasons,
+        "expected_classes": declared,
         "probe_failed": dict(after["failed"]),
         "not_on_this_machine": dict(after["absent"]),
         "counts": {name: len(entries) for name, entries in sorted(after["entries"].items())},
@@ -420,6 +458,13 @@ def main():
     if bad_declaration:
         sys.exit(bad_declaration)
     kill_regex = args.kill_after_event or case.get("kill_after_event")
+    # A precondition, so it is settled before the workspace is stashed: an exit here leaves nothing
+    # to put back, and nothing inside the run block below exits.
+    seed = None
+    if case["workspace"] == "seeded":
+        seed = os.path.join(EVALS_DIR, "seeds", args.case)
+        if not os.path.isdir(seed):
+            sys.exit("case %s declares workspace: seeded but %s is missing" % (args.case, seed))
 
     prompt = case["prompt"]
     if "{live_posting}" in prompt:
@@ -435,12 +480,9 @@ def main():
     if os.path.exists(WORKSPACE):
         stash = WORKSPACE + ".stash-" + ts
         shutil.move(WORKSPACE, stash)
-    sessions = []
+    sessions, aborted = [], None
     try:
-        if case["workspace"] == "seeded":
-            seed = os.path.join(EVALS_DIR, "seeds", args.case)
-            if not os.path.isdir(seed):
-                sys.exit("case %s declares workspace: seeded but %s is missing" % (args.case, seed))
+        if seed:
             shutil.copytree(seed, WORKSPACE)
         runs = [(prompt, kill_regex)]
         if case.get("followup_prompt"):
@@ -450,6 +492,13 @@ def main():
                 with open(transcript, "a") as f:
                     f.write(json.dumps({"t": None, "runner": "followup-session-start"}) + "\n")
             sessions.append(run_session(p, args.model, project, transcript, case["timeout_s"], kr))
+    except (Exception, KeyboardInterrupt):
+        # Ctrl-C during a 25-minute run is the likely one. The scheduler comparison below still has
+        # to run and still has to name what the session installed, so the abort is recorded and
+        # reported rather than ending the program in a traceback here. SystemExit is left alone: the
+        # arguments and the case file are checked before this block, and an exit raised inside it is
+        # a deliberate one that has already said what it means.
+        aborted = traceback.format_exc()
     finally:
         captured = os.path.exists(WORKSPACE)
         if captured:
@@ -458,15 +507,17 @@ def main():
             shutil.move(stash, WORKSPACE)
 
     verdict = scheduler_verdict(start, snapshot_schedulers(), expected)
-    ok = run_ok(sessions, verdict)
+    ok = aborted is None and run_ok(sessions, verdict)
     with open(os.path.join(run_dir, "result.json"), "w") as f:
         json.dump({"case": args.case, "model": args.model, "started_utc": ts,
                    "behaviors": case["behaviors"], "kill_regex": kill_regex,
                    "sessions": sessions, "workspace_captured": captured,
-                   "scheduler": verdict, "ok": ok},
+                   "aborted": aborted, "scheduler": verdict, "ok": ok},
                   f, indent=1)
     for line in verdict["report"]:
         print(line)
+    if aborted:
+        print(aborted, file=sys.stderr)
     print("%s: %s (results in %s)" % (args.case, "ok" if ok else "FAILED", run_dir))
     sys.exit(0 if ok else 1)
 

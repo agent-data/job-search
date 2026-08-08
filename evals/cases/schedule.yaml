@@ -10,7 +10,7 @@
 # `evals/run_eval.py` now lists the machine's scheduler entries before and after the session and
 # names each one that survived. Remove what it names the way it was installed.
 #
-# This case passes by leaving the job installed — the product keeps it when the canary lands — so it
+# This case passes by leaving the job installed — the product keeps it when the canary succeeds — so it
 # declares that below rather than reporting FAILED on every correct run. The agent installs through
 # whatever the host offers, which is why all three classes are named: a launchd install shows up as
 # a loaded label, and as a plist file too when the agent wrote one into the LaunchAgents directory,

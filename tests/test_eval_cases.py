@@ -19,6 +19,7 @@ and these five fields are all flat top-level keys.
 """
 import pathlib
 import re
+from importlib import util as _util
 
 import pytest
 
@@ -26,6 +27,16 @@ ROOT = pathlib.Path(__file__).resolve().parents[1]
 EVALS = ROOT / "evals"
 BEHAVIORS = EVALS / "behaviors.md"
 CASES_DIR = EVALS / "cases"
+
+
+def _run_eval():
+    """`evals/run_eval.py`, imported by path for the one list this file cannot hold itself: the
+    scheduler classes a case may declare. It imports only the standard library at module level, so
+    this adds no dependency to a file that deliberately has none."""
+    spec = _util.spec_from_file_location("run_eval", EVALS / "run_eval.py")
+    mod = _util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
 
 REQUIRED_HEADER_FIELDS = ("behaviors", "workspace", "timeout_s", "models")
 # Exactly one of these says how the case supplies what it sends.
@@ -145,6 +156,22 @@ def test_case_header_values_are_in_range(case):
     assert (prompt.group(1) or "").strip() in {"|", ">"} or (prompt.group(1) or "").strip(), (
         f"{case}: prompt must carry text or open a block scalar"
     )
+
+
+@pytest.mark.parametrize("case", [path.name for path in _case_paths()])
+def test_case_scheduler_declaration_names_classes_the_runner_lists(case):
+    """A case that installs a recurring job may declare `expects_scheduler_entry`, and `run_eval.py`
+    then allows one surviving entry per class named. A misspelled class name is the dangerous
+    mistake: the runner refuses to start on it, but only for the case actually being run, so this
+    checks every case file at once.
+    """
+    text = (CASES_DIR / case).read_text(encoding="utf-8")
+    if not re.search(r"(?m)^expects_scheduler_entry:", text):
+        return
+    declared = _flow_list(text, "expects_scheduler_entry")
+    classes, error = _run_eval().declared_classes({"expects_scheduler_entry": declared}, case)
+    assert error is None, error
+    assert classes == declared
 
 
 @pytest.mark.parametrize("case", [path.name for path in _case_paths()])

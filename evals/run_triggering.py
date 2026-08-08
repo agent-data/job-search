@@ -24,7 +24,7 @@ while a job it never looked at was installed would be the same defect. This runn
 Writes `routing.json` with the selected skill per session, the per-phrase rate, and the scheduler
 verdict. Exits non-zero when that verdict is not ok.
 """
-import argparse, glob, json, os, shutil, sys, time
+import argparse, glob, json, os, shutil, sys, time, traceback
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from run_eval import (EVALS_DIR, WORKSPACE, opening_scheduler_refusal,  # noqa: E402
@@ -96,7 +96,7 @@ def main():
     if os.path.exists(WORKSPACE):
         stash = WORKSPACE + ".stash-" + ts
         shutil.move(WORKSPACE, stash)
-    sessions = []
+    sessions, aborted = [], None
     try:
         for rep in range(1, reps + 1):
             for ph in phrases:
@@ -118,6 +118,10 @@ def main():
                       % (ph["id"], rep, args.model, sel or "NO SKILL", res["wall_s"]))
                 if os.path.exists(WORKSPACE):
                     shutil.rmtree(WORKSPACE)
+    except (Exception, KeyboardInterrupt):
+        # Same reason evals/run_eval.py gives: the scheduler comparison below still has to name what
+        # a phrase installed, so an abort is recorded and reported instead of ending in a traceback.
+        aborted = traceback.format_exc()
     finally:
         if os.path.exists(WORKSPACE):
             shutil.rmtree(WORKSPACE)
@@ -135,21 +139,29 @@ def main():
                                                for k in sorted(
                                                    {str(s["selected"]) if s["selected"] is None
                                                     else s["selected"] for s in mine})}}
+    # This runner passes no declaration: no phrase is meant to leave a scheduler entry behind, so
+    # any new one is unexpected.
     verdict = scheduler_verdict(start, snapshot_schedulers())
     any_t = glob.glob(os.path.join(run_dir, "*", "transcript.jsonl"))
+    ok = aborted is None and verdict["ok"]
+    # `ok` here says one thing only: the machine's scheduler entries came back the way this run found
+    # them, and the run reached the end. It says nothing about routing — how each phrase routed is in
+    # `rates`, which a reader grades, and a phrase reaching the wrong skill leaves `ok` true.
     out = {"case": "triggering", "model": args.model, "label": args.label, "started_utc": ts,
            "reps": reps, "job_search_skills_loaded": loaded_skills(any_t[0]) if any_t else [],
-           "rates": rates, "sessions": sessions, "scheduler": verdict, "ok": verdict["ok"]}
+           "rates": rates, "sessions": sessions, "aborted": aborted, "scheduler": verdict, "ok": ok}
     with open(os.path.join(run_dir, "routing.json"), "w") as f:
         json.dump(out, f, indent=1)
     print("\ntriggering %s %s: %s" % (args.model, args.label or "-", json.dumps(
         {k: "%d/%d" % (v["hit"], v["of"]) for k, v in rates.items()})))
     for line in verdict["report"]:
         print(line)
+    if aborted:
+        print(aborted, file=sys.stderr)
     print("results in %s" % run_dir)
     # routing.json's `ok` and this exit status are the same value, so a routing run cannot report
     # success while a job it did not look at is still installed.
-    sys.exit(0 if verdict["ok"] else 1)
+    sys.exit(0 if ok else 1)
 
 
 if __name__ == "__main__":
