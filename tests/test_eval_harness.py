@@ -1174,6 +1174,94 @@ def test_every_class_belongs_to_exactly_one_install_mechanism():
     assert set(run_eval.SCHEDULER_MECHANISMS.values()) == {"launchd", "cron"}
 
 
+# --- the whole printed block, line for line -------------------------------------------------
+#
+# The FAILED line was pinned on its own in an earlier round, and the sentence directly above it then
+# drifted into contradicting it: an operator read "one entry ... does not fail the run" one line
+# above "This run is FAILED". Nothing caught that, because nothing held the rest of the block. These
+# three assert every line of it, in order.
+APPEARED = "scheduler check: these entries appeared while the session ran and are still installed:"
+REMOVAL = ("Remove each one the way it was installed — a launchd job unloaded and its plist file "
+           "removed, a cron line deleted. Entries this machine installed for its own reasons "
+           "appear here too; leave those alone.")
+NOT_COVERED = ("scheduler check: not covered — recurring jobs installed by the host's own command, "
+               "which are neither launchd nor cron.")
+
+
+def test_the_whole_block_a_declared_run_prints_when_it_passes(tmp_path):
+    env = _scheduler_env(tmp_path)
+    before = run_eval.snapshot_schedulers(env)
+    _scheduler_env(tmp_path, plists=["com.job-search.daily.plist"],
+                   labels=["com.job-search.daily"])
+    verdict = run_eval.scheduler_verdict(before, run_eval.snapshot_schedulers(env),
+                                         ["launchd-plists", "launchd-loaded", "cron"])
+    assert verdict["ok"] is True
+    assert verdict["report"] == [
+        APPEARED,
+        "  launchd-loaded  com.job-search.daily  [expected]",
+        "  launchd-plists  com.job-search.daily.plist  [expected]",
+        REMOVAL,
+        "The case declares one entry in launchd-plists, launchd-loaded, cron, so nothing here "
+        "fails the run.",
+        NOT_COVERED,
+    ]
+
+
+def test_the_whole_block_a_declared_run_prints_when_two_mechanisms_appear(tmp_path):
+    # The path the contradiction appeared on: every entry was declared, and the run still fails.
+    env = _scheduler_env(tmp_path)
+    before = run_eval.snapshot_schedulers(env)
+    _scheduler_env(tmp_path, labels=["com.job-search.daily"], cron=["0 8 * * * a-command"])
+    verdict = run_eval.scheduler_verdict(before, run_eval.snapshot_schedulers(env),
+                                         ["launchd-plists", "launchd-loaded", "cron"])
+    assert verdict["ok"] is False
+    assert verdict["report"] == [
+        APPEARED,
+        "  cron            0 8 * * * a-command  [unexpected]",
+        "  launchd-loaded  com.job-search.daily  [unexpected]",
+        REMOVAL,
+        "The case declares one entry in launchd-plists, launchd-loaded, cron.",
+        "This run is FAILED: new entries appeared in launchd and in cron, which are two recurring "
+        "jobs and not the one the case declares. Remove what is named above and rerun.",
+        NOT_COVERED,
+    ]
+    # No line may claim that nothing fails the run while another says it failed.
+    assert not any("does not fail the run" in line or "nothing here fails the run" in line
+                   for line in verdict["report"])
+
+
+def test_the_whole_block_a_case_that_declares_nothing_prints(tmp_path):
+    env = _scheduler_env(tmp_path)
+    before = run_eval.snapshot_schedulers(env)
+    _scheduler_env(tmp_path, labels=["com.job-search.daily"])
+    verdict = run_eval.scheduler_verdict(before, run_eval.snapshot_schedulers(env))
+    assert verdict["report"] == [
+        APPEARED,
+        "  launchd-loaded  com.job-search.daily",
+        REMOVAL,
+        "This run is FAILED: launchd-loaded held a new entry and the case declares none. Remove "
+        "what is named above and rerun.",
+        NOT_COVERED,
+    ]
+
+
+def test_two_causes_at_once_are_both_given_as_reasons(tmp_path):
+    # One class outside the declaration and one over its allowance, in the same run.
+    env = _scheduler_env(tmp_path)
+    before = run_eval.snapshot_schedulers(env)
+    _scheduler_env(tmp_path, labels=["com.job-search.daily"],
+                   cron=["0 8 * * * first", "0 9 * * * second"])
+    verdict = run_eval.scheduler_verdict(before, run_eval.snapshot_schedulers(env), ["cron"])
+
+    assert verdict["reasons"] == [
+        "launchd-loaded is not one of the classes the case declares (cron)",
+        "cron held 2 new entries and the case declares one",
+    ]
+    assert ("This run is FAILED: launchd-loaded is not one of the classes the case declares (cron); "
+            "cron held 2 new entries and the case declares one. Remove what is named above and "
+            "rerun.") in verdict["report"]
+
+
 def test_declared_classes_reads_a_well_formed_declaration():
     classes, error = run_eval.declared_classes(
         {"expects_scheduler_entry": ["cron", "launchd-loaded"]}, "schedule")
@@ -1296,6 +1384,15 @@ def test_a_probe_that_does_not_finish_in_time_fails_loudly(tmp_path, monkeypatch
 # run_session are redirected under tmp_path, so no session is spawned and ~/.job-search is never
 # read, written or moved.
 # ---------------------------------------------------------------------------
+class _MainRun:
+    """What one driven main() produced: its exit status, the JSON it wrote, both output streams, the
+    prompts the stand-in session received, and the workspace path it was pointed at."""
+
+    def __init__(self, code, result, stdout, stderr, prompts, workspace):
+        self.code, self.result, self.stdout, self.stderr = code, result, stdout, stderr
+        self.prompts, self.workspace = prompts, workspace
+
+
 class _FakeYaml:
     """Stands in for PyYAML inside main(). CI installs pytest and nothing else, and what main
     branches on is the case dict rather than how it was parsed — the case file is still opened and
@@ -1329,8 +1426,9 @@ def _drive_main(module, tmp_path, monkeypatch, capsys, *, case, argv, sessions=(
     for name in ("demo", "triggering"):
         (evals_dir / "cases" / (name + ".yaml")).write_text("# read by the stand-in parser\n",
                                                             encoding="utf-8")
+    workspace = tmp_path / "workspace"
     monkeypatch.setattr(module, "EVALS_DIR", str(evals_dir))
-    monkeypatch.setattr(module, "WORKSPACE", str(tmp_path / "workspace"))
+    monkeypatch.setattr(module, "WORKSPACE", str(workspace))
     monkeypatch.setitem(sys.modules, "yaml", _FakeYaml(case))
 
     prompts, queue = [], list(sessions)
@@ -1351,10 +1449,11 @@ def _drive_main(module, tmp_path, monkeypatch, capsys, *, case, argv, sessions=(
 
     with pytest.raises(SystemExit) as exit_info:
         module.main()
-    stdout = capsys.readouterr().out
+    captured = capsys.readouterr()
     written = sorted((evals_dir / "results").glob("*/" + results_file))
     payload = json.loads(written[0].read_text(encoding="utf-8")) if written else None
-    return exit_info.value.code, payload, stdout, prompts
+    return _MainRun(exit_info.value.code, payload, captured.out, captured.err, prompts,
+                    pathlib.Path(workspace))
 
 
 def _drive_run_eval(tmp_path, monkeypatch, capsys, **kw):
@@ -1370,15 +1469,15 @@ def test_main_reports_failed_when_a_job_outlives_a_session_that_returned_zero(
     env = _scheduler_env(tmp_path)
     install = lambda: _scheduler_env(tmp_path, plists=["com.job-search.daily.plist"],
                                      labels=["com.job-search.daily"])
-    code, result, stdout, prompts = _drive_run_eval(
-        tmp_path, monkeypatch, capsys, case=_a_case(), env=env, during_session=install)
+    run = _drive_run_eval(tmp_path, monkeypatch, capsys, case=_a_case(), env=env,
+                          during_session=install)
 
-    assert prompts == ["Keep this running daily."]
-    assert result["sessions"] == [_clean_session()]          # nothing wrong with the session
-    assert result["ok"] is False and code == 1               # and the run still fails
-    assert result["scheduler"]["new"] == {"launchd-plists": ["com.job-search.daily.plist"],
-                                          "launchd-loaded": ["com.job-search.daily"]}
-    assert "com.job-search.daily.plist" in stdout and "FAILED" in stdout
+    assert run.prompts == ["Keep this running daily."]
+    assert run.result["sessions"] == [_clean_session()]      # nothing wrong with the session
+    assert run.result["ok"] is False and run.code == 1       # and the run still fails
+    assert run.result["scheduler"]["new"] == {"launchd-plists": ["com.job-search.daily.plist"],
+                                              "launchd-loaded": ["com.job-search.daily"]}
+    assert "com.job-search.daily.plist" in run.stdout and "FAILED" in run.stdout
 
 
 def test_main_reports_ok_when_the_case_declares_the_entry_it_installs(
@@ -1387,13 +1486,14 @@ def test_main_reports_ok_when_the_case_declares_the_entry_it_installs(
     install = lambda: _scheduler_env(tmp_path, plists=["com.job-search.daily.plist"],
                                      labels=["com.job-search.daily"])
     case = _a_case(expects_scheduler_entry=["launchd-plists", "launchd-loaded", "cron"])
-    code, result, stdout, _ = _drive_run_eval(
-        tmp_path, monkeypatch, capsys, case=case, env=env, during_session=install)
+    run = _drive_run_eval(tmp_path, monkeypatch, capsys, case=case, env=env,
+                          during_session=install)
 
-    assert result["ok"] is True and code == 0
-    assert result["scheduler"]["expected_classes"] == ["launchd-plists", "launchd-loaded", "cron"]
+    assert run.result["ok"] is True and run.code == 0
+    assert run.result["scheduler"]["expected_classes"] == [
+        "launchd-plists", "launchd-loaded", "cron"]
     # Declared does not mean unmentioned: the operator still has to remove it.
-    assert "com.job-search.daily.plist" in stdout and "[expected]" in stdout
+    assert "com.job-search.daily.plist" in run.stdout and "[expected]" in run.stdout
 
 
 def test_main_carries_the_declaration_into_the_verdict_rather_than_only_validating_it(
@@ -1402,41 +1502,40 @@ def test_main_carries_the_declaration_into_the_verdict_rather_than_only_validati
     passes and the one that declares nothing fails. A declaration that were validated and then
     dropped on the way to the verdict would fail both."""
     install = lambda: _scheduler_env(tmp_path, labels=["com.job-search.daily"])
-    declared_code, declared, _, _ = _drive_run_eval(
+    declared = _drive_run_eval(
         tmp_path, monkeypatch, capsys, env=_scheduler_env(tmp_path), during_session=install,
         case=_a_case(expects_scheduler_entry=["launchd-loaded"]))
-    assert declared_code == 0 and declared["ok"] is True
+    assert declared.code == 0 and declared.result["ok"] is True
 
-    silent_code, silent, _, _ = _drive_run_eval(
+    silent = _drive_run_eval(
         tmp_path / "second", monkeypatch, capsys, env=_scheduler_env(tmp_path / "second"),
         during_session=lambda: _scheduler_env(tmp_path / "second",
                                               labels=["com.job-search.daily"]),
         case=_a_case())
-    assert silent_code == 1 and silent["ok"] is False
+    assert silent.code == 1 and silent.result["ok"] is False
 
 
 def test_main_refuses_a_case_whose_declaration_names_a_class_the_harness_does_not_list(
         tmp_path, monkeypatch, capsys):
-    code, result, _stdout, prompts = _drive_run_eval(
-        tmp_path, monkeypatch, capsys, env=_scheduler_env(tmp_path),
-        case=_a_case(expects_scheduler_entry=["systemd-timers"]))
+    run = _drive_run_eval(tmp_path, monkeypatch, capsys, env=_scheduler_env(tmp_path),
+                          case=_a_case(expects_scheduler_entry=["systemd-timers"]))
 
-    assert prompts == [], "the run must stop before spawning a session"
-    assert result is None, "and before writing a result"
-    assert "systemd-timers" in str(code)
+    assert run.prompts == [], "the run must stop before spawning a session"
+    assert run.result is None, "and before writing a result"
+    assert "systemd-timers" in str(run.code)
 
 
 def test_main_exit_status_and_result_json_ok_agree_on_both_outcomes(
         tmp_path, monkeypatch, capsys):
-    clean_code, clean, _, _ = _drive_run_eval(
-        tmp_path, monkeypatch, capsys, case=_a_case(), env=_scheduler_env(tmp_path))
-    assert (clean_code, clean["ok"]) == (0, True)
+    clean = _drive_run_eval(tmp_path, monkeypatch, capsys, case=_a_case(),
+                            env=_scheduler_env(tmp_path))
+    assert (clean.code, clean.result["ok"]) == (0, True)
 
     second = tmp_path / "second"
-    dirty_code, dirty, _, _ = _drive_run_eval(
+    dirty = _drive_run_eval(
         second, monkeypatch, capsys, case=_a_case(), env=_scheduler_env(second),
         during_session=lambda: _scheduler_env(second, labels=["com.job-search.daily"]))
-    assert (dirty_code, dirty["ok"]) == (1, False)
+    assert (dirty.code, dirty.result["ok"]) == (1, False)
 
 
 def test_main_names_what_survived_when_the_session_is_aborted(tmp_path, monkeypatch, capsys):
@@ -1445,30 +1544,32 @@ def test_main_names_what_survived_when_the_session_is_aborted(tmp_path, monkeypa
     here as an ordinary exception; the Ctrl-C shape is the test below."""
     env = _scheduler_env(tmp_path)
     install = lambda: _scheduler_env(tmp_path, labels=["com.job-search.daily"])
-    code, result, stdout, _ = _drive_run_eval(
-        tmp_path, monkeypatch, capsys, case=_a_case(), env=env, during_session=install,
-        session_error=RuntimeError("the session died"))
+    run = _drive_run_eval(tmp_path, monkeypatch, capsys, case=_a_case(), env=env,
+                          during_session=install,
+                          session_error=RuntimeError("the session died"))
 
-    assert code == 1 and result["ok"] is False
-    assert "the session died" in result["aborted"]
-    assert result["scheduler"]["new"] == {"launchd-loaded": ["com.job-search.daily"]}
-    assert "com.job-search.daily" in stdout
+    assert run.code == 1 and run.result["ok"] is False
+    assert "the session died" in run.result["aborted"]
+    assert run.result["scheduler"]["new"] == {"launchd-loaded": ["com.job-search.daily"]}
+    assert "com.job-search.daily" in run.stdout
+    # The traceback reaches the operator too, on the stream that carries errors.
+    assert "RuntimeError: the session died" in run.stderr
 
 
 def test_main_fails_an_aborted_run_whose_completed_sessions_all_returned_zero(
         tmp_path, monkeypatch, capsys):
     """The first session finished cleanly and the follow-up was interrupted. The sessions that did
     finish grade fine, so only the abort itself can fail this run."""
-    code, result, _stdout, prompts = _drive_run_eval(
+    run = _drive_run_eval(
         tmp_path, monkeypatch, capsys, env=_scheduler_env(tmp_path),
         case=_a_case(followup_prompt="and once more"),
         session_error=RuntimeError("the follow-up died"), error_on_call=2)
 
-    assert prompts == ["Keep this running daily.", "and once more"]
-    assert result["sessions"] == [_clean_session()]      # every session that finished returned 0
-    assert result["scheduler"]["new"] == {}              # and the machine came back unchanged
-    assert "the follow-up died" in result["aborted"]
-    assert code == 1 and result["ok"] is False           # the abort alone fails it
+    assert run.prompts == ["Keep this running daily.", "and once more"]
+    assert run.result["sessions"] == [_clean_session()]  # every session that finished returned 0
+    assert run.result["scheduler"]["new"] == {}          # and the machine came back unchanged
+    assert "the follow-up died" in run.result["aborted"]
+    assert run.code == 1 and run.result["ok"] is False   # the abort alone fails it
 
 
 def test_main_treats_a_keyboard_interrupt_as_an_abort_rather_than_a_crash(
@@ -1476,22 +1577,22 @@ def test_main_treats_a_keyboard_interrupt_as_an_abort_rather_than_a_crash(
     # Ctrl-C is the likeliest abort of a 25-minute run, and it is not an Exception, so it needs
     # naming in its own right. Kept last of the abort tests: a mutation that lets it escape stops
     # the pytest session, and the two above are the ones that then report by name.
-    code, result, _stdout, _ = _drive_run_eval(
+    run = _drive_run_eval(
         tmp_path, monkeypatch, capsys, case=_a_case(), env=_scheduler_env(tmp_path),
         during_session=lambda: _scheduler_env(tmp_path, labels=["com.job-search.daily"]),
         session_error=KeyboardInterrupt())
 
-    assert code == 1 and result["ok"] is False
-    assert "KeyboardInterrupt" in result["aborted"]
-    assert result["scheduler"]["new"] == {"launchd-loaded": ["com.job-search.daily"]}
+    assert run.code == 1 and run.result["ok"] is False
+    assert "KeyboardInterrupt" in run.result["aborted"]
+    assert run.result["scheduler"]["new"] == {"launchd-loaded": ["com.job-search.daily"]}
 
 
 def test_main_reports_a_clean_machine_without_naming_any_entry(tmp_path, monkeypatch, capsys):
-    code, result, stdout, _ = _drive_run_eval(
-        tmp_path, monkeypatch, capsys, case=_a_case(), env=_scheduler_env(tmp_path))
-    assert code == 0 and result["ok"] is True and result["scheduler"]["new"] == {}
-    assert "no new entry in cron, launchd-loaded, launchd-plists" in stdout
-    assert "not covered" in stdout
+    run = _drive_run_eval(tmp_path, monkeypatch, capsys, case=_a_case(),
+                          env=_scheduler_env(tmp_path))
+    assert run.code == 0 and run.result["ok"] is True and run.result["scheduler"]["new"] == {}
+    assert "no new entry in cron, launchd-loaded, launchd-plists" in run.stdout
+    assert "not covered" in run.stdout
 
 
 # --- the routing runner's main() ---------------------------------------------------------------
@@ -1512,11 +1613,11 @@ def _drive_run_triggering(tmp_path, monkeypatch, capsys, **kw):
 
 def test_the_routing_runner_exits_zero_and_reports_ok_on_a_clean_machine(
         tmp_path, monkeypatch, capsys):
-    code, routing, stdout, prompts = _drive_run_triggering(
-        tmp_path, monkeypatch, capsys, case=_a_triggering_case(), env=_scheduler_env(tmp_path))
-    assert code == 0 and routing["ok"] is True
-    assert prompts == ["keep this running daily"]
-    assert "no new entry in" in stdout
+    run = _drive_run_triggering(tmp_path, monkeypatch, capsys, case=_a_triggering_case(),
+                                env=_scheduler_env(tmp_path))
+    assert run.code == 0 and run.result["ok"] is True
+    assert run.prompts == ["keep this running daily"]
+    assert "no new entry in" in run.stdout
 
 
 def test_the_routing_runner_fails_when_a_phrase_leaves_a_job_installed(
@@ -1524,23 +1625,128 @@ def test_the_routing_runner_fails_when_a_phrase_leaves_a_job_installed(
     """A phrase is killed on its first Skill result, before the skill can install anything — but a
     routing run that reported success while a job it never looked at was installed would be this
     incident again."""
-    code, routing, stdout, _ = _drive_run_triggering(
+    run = _drive_run_triggering(
         tmp_path, monkeypatch, capsys, case=_a_triggering_case(), env=_scheduler_env(tmp_path),
         during_session=lambda: _scheduler_env(tmp_path, labels=["com.job-search.daily"]))
 
-    assert code == 1 and routing["ok"] is False
-    assert routing["scheduler"]["new"] == {"launchd-loaded": ["com.job-search.daily"]}
-    assert "com.job-search.daily" in stdout
+    assert run.code == 1 and run.result["ok"] is False
+    assert run.result["scheduler"]["new"] == {"launchd-loaded": ["com.job-search.daily"]}
+    assert "com.job-search.daily" in run.stdout
 
 
 def test_the_routing_runner_declares_no_scheduler_entry_of_its_own(
         tmp_path, monkeypatch, capsys):
     # It never reads `expects_scheduler_entry`, so it cannot grant itself the allowance the
     # `schedule` case has, whatever a case file says.
-    code, routing, _stdout, _ = _drive_run_triggering(
+    run = _drive_run_triggering(
         tmp_path, monkeypatch, capsys, env=_scheduler_env(tmp_path),
         case=_a_triggering_case(expects_scheduler_entry=["launchd-loaded"]),
         during_session=lambda: _scheduler_env(tmp_path, labels=["com.job-search.daily"]))
 
-    assert routing["scheduler"]["expected_classes"] == []
-    assert code == 1 and routing["ok"] is False
+    assert run.result["scheduler"]["expected_classes"] == []
+    assert run.code == 1 and run.result["ok"] is False
+
+
+def test_the_routing_runner_names_what_survived_when_a_phrase_is_aborted(
+        tmp_path, monkeypatch, capsys):
+    # The routing runner's half of the abort path: its comparison used to sit after the try/finally
+    # too, so an abort ended in a traceback with no routing.json and nothing named.
+    run = _drive_run_triggering(
+        tmp_path, monkeypatch, capsys, case=_a_triggering_case(), env=_scheduler_env(tmp_path),
+        during_session=lambda: _scheduler_env(tmp_path, labels=["com.job-search.daily"]),
+        session_error=RuntimeError("the phrase died"))
+
+    assert run.code == 1 and run.result["ok"] is False
+    assert "the phrase died" in run.result["aborted"]
+    assert run.result["scheduler"]["new"] == {"launchd-loaded": ["com.job-search.daily"]}
+    assert "com.job-search.daily" in run.stdout
+    assert "RuntimeError: the phrase died" in run.stderr
+
+
+def test_the_routing_runner_fails_an_aborted_run_that_left_the_machine_unchanged(
+        tmp_path, monkeypatch, capsys):
+    # Nothing survived, so the scheduler verdict is ok on its own; only the abort can fail this.
+    run = _drive_run_triggering(
+        tmp_path, monkeypatch, capsys, case=_a_triggering_case(), env=_scheduler_env(tmp_path),
+        session_error=RuntimeError("the phrase died"))
+
+    assert run.result["scheduler"]["ok"] is True and run.result["scheduler"]["new"] == {}
+    assert run.code == 1 and run.result["ok"] is False
+
+
+# --- the seeded-workspace precondition, moved above the run block -----------------------------
+def test_main_stops_before_spawning_when_a_seeded_case_has_no_seed_directory(
+        tmp_path, monkeypatch, capsys):
+    run = _drive_run_eval(tmp_path, monkeypatch, capsys, env=_scheduler_env(tmp_path),
+                          case=_a_case(workspace="seeded"))
+
+    assert run.prompts == [], "the run must stop before spawning a session"
+    assert run.result is None
+    assert "workspace: seeded" in str(run.code) and "is missing" in str(run.code)
+
+
+def test_main_seeds_the_workspace_and_captures_what_the_session_left(
+        tmp_path, monkeypatch, capsys):
+    seed = tmp_path / "evals" / "seeds" / "demo"
+    seed.mkdir(parents=True)
+    (seed / "config.yaml").write_text("version: 2\n", encoding="utf-8")
+    run = _drive_run_eval(tmp_path, monkeypatch, capsys, env=_scheduler_env(tmp_path),
+                          case=_a_case(workspace="seeded"))
+
+    assert run.prompts == ["Keep this running daily."]
+    assert run.code == 0 and run.result["workspace_captured"] is True
+    captured = sorted((tmp_path / "evals" / "results").glob("*/workspace/config.yaml"))
+    assert len(captured) == 1 and captured[0].read_text(encoding="utf-8") == "version: 2\n"
+
+
+# --- the line that puts the real workspace back -----------------------------------------------
+#
+# On 2026-08-07 this restore is what moved the owner's real ~/.job-search back into the path of the
+# job that survived the session. Both runners can have it deleted with the rest of the suite green,
+# so both are held here. The workspace is a stand-in under tmp_path; nothing goes near the real one.
+def test_main_puts_the_stashed_workspace_back(tmp_path, monkeypatch, capsys):
+    existing = tmp_path / "workspace"
+    (existing / "runs").mkdir(parents=True)
+    (existing / "jobs.jsonl").write_text('{"event": "evaluated"}\n', encoding="utf-8")
+    seed = tmp_path / "evals" / "seeds" / "demo"
+    seed.mkdir(parents=True)
+    (seed / "config.yaml").write_text("version: 2\n", encoding="utf-8")
+
+    run = _drive_run_eval(tmp_path, monkeypatch, capsys, env=_scheduler_env(tmp_path),
+                          case=_a_case(workspace="seeded"))
+
+    assert run.code == 0
+    # The seeded workspace the session used was captured into the run directory...
+    captured = sorted((tmp_path / "evals" / "results").glob("*/workspace/config.yaml"))
+    assert len(captured) == 1
+    # ...and what was there before the run is back where it was, whole.
+    assert (run.workspace / "jobs.jsonl").read_text(encoding="utf-8") == '{"event": "evaluated"}\n'
+    assert (run.workspace / "runs").is_dir()
+    assert sorted(p.name for p in tmp_path.glob("workspace.stash-*")) == [], "no stash left behind"
+
+
+def test_main_puts_the_stashed_workspace_back_even_when_the_session_is_aborted(
+        tmp_path, monkeypatch, capsys):
+    existing = tmp_path / "workspace"
+    existing.mkdir()
+    (existing / "jobs.jsonl").write_text('{"event": "evaluated"}\n', encoding="utf-8")
+
+    run = _drive_run_eval(tmp_path, monkeypatch, capsys, env=_scheduler_env(tmp_path),
+                          case=_a_case(), session_error=RuntimeError("the session died"))
+
+    assert run.code == 1
+    assert (run.workspace / "jobs.jsonl").read_text(encoding="utf-8") == '{"event": "evaluated"}\n'
+    assert sorted(p.name for p in tmp_path.glob("workspace.stash-*")) == []
+
+
+def test_the_routing_runner_puts_the_stashed_workspace_back(tmp_path, monkeypatch, capsys):
+    existing = tmp_path / "workspace"
+    existing.mkdir()
+    (existing / "jobs.jsonl").write_text('{"event": "evaluated"}\n', encoding="utf-8")
+
+    run = _drive_run_triggering(tmp_path, monkeypatch, capsys, case=_a_triggering_case(),
+                                env=_scheduler_env(tmp_path))
+
+    assert run.code == 0
+    assert (run.workspace / "jobs.jsonl").read_text(encoding="utf-8") == '{"event": "evaluated"}\n'
+    assert sorted(p.name for p in tmp_path.glob("workspace.stash-*")) == []

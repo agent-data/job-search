@@ -240,8 +240,12 @@ def scheduler_report(verdict, listed):
                      "plist file removed, a cron line deleted. Entries this machine installed for "
                      "its own reasons appear here too; leave those alone.")
         if declared:
-            lines.append("The case declares that it installs a recurring job, so one entry in %s is "
-                         "expected and does not fail the run." % ", ".join(declared))
+            # States the declaration itself, which is true whatever the outcome. Saying that one
+            # entry "does not fail the run" was true only on the paths where nothing failed, and on
+            # the launchd-and-cron path it sat one line above "This run is FAILED".
+            lines.append("The case declares one entry in %s%s" % (
+                ", ".join(declared),
+                "." if verdict["reasons"] else ", so nothing here fails the run."))
         if verdict["reasons"]:
             lines.append("This run is FAILED: %s. Remove what is named above and rerun."
                          % "; ".join(verdict["reasons"]))
@@ -282,8 +286,8 @@ def scheduler_verdict(before, after, expected=()):
     over_allowance = sorted(name for name in new if name in declared and len(new[name]) > 1)
     unexpected = {name: new[name] for name in undeclared + over_allowance}
     # launchd and cron together are two jobs; which one was meant is not something this harness can
-    # tell, so every entry is named. Only asked when nothing else already failed, because an entry
-    # in an undeclared class is the more precise thing to report.
+    # tell, so every entry is named. This runs only when nothing else has already failed, because an
+    # entry in an undeclared class is the more precise thing to report.
     two_mechanisms = not unexpected and len({SCHEDULER_MECHANISMS[name] for name in new}) > 1
     if two_mechanisms:
         unexpected = dict(new)
@@ -495,9 +499,9 @@ def main():
     except (Exception, KeyboardInterrupt):
         # Ctrl-C during a 25-minute run is the likely one. The scheduler comparison below still has
         # to run and still has to name what the session installed, so the abort is recorded and
-        # reported rather than ending the program in a traceback here. SystemExit is left alone: the
-        # arguments and the case file are checked before this block, and an exit raised inside it is
-        # a deliberate one that has already said what it means.
+        # reported rather than ending the program in a traceback here. SystemExit is not caught: the
+        # arguments, the case file and the seed directory are all checked before this block, so an
+        # exit raised inside it carries a message of its own.
         aborted = traceback.format_exc()
     finally:
         captured = os.path.exists(WORKSPACE)
