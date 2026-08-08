@@ -90,7 +90,7 @@ in `-p` commands anyway so the skill is invoked deterministically.
 ```bash
 cd "$JSOS" && python3 -m pytest -q
 ```
-**Expected:** `937 passed` **and `0 failed`** — treat **`0 failed`** as the real gate. The count moves in both
+**Expected:** `1037 passed` **and `0 failed`** — treat **`0 failed`** as the real gate. The count moves in both
 directions: it grows when tests are added, and it fell three times as the 2026-07-30 overhaul landed. First
 688 → 547, when the documentation-prose suites were retired. Then, on 2026-07-31, **554 → 377 → 374 → 372**:
 554 was the measured count once tasks 5–10 had added their own tests; deleting the shared reference corpus and
@@ -111,9 +111,15 @@ back out brought their own unit tests with them (**+498**, most of it in `test_m
 went from 28 tests to 439); the home view's counter added the last of those scripts (**+10**); making that
 counter report a posting none of its count lines accounted for added two (**+2**); and replacing the home
 card's status counts with what the filtering found took out the two cases that existed only for a status
-(**−2**). Each figure is
+(**−2**). It then grew four more times as the fixes from the 2026-08-08 whole-branch review landed, one
+step per fix: **937 → 948 → 967 → 976 → 1037**. Guarding every append site against a log that ends without
+a newline added eleven (**+11**); counting an opening found in two cities once, and naming the other places
+on the row that survives, added nineteen (**+19**); matching a source name as text rather than as a search
+pattern, and dropping `find-judgment.awk`'s run scope, added nine (**+9**); and making the eval harness
+refuse to report success while a scheduled job it did not remove is still installed added sixty-one
+(**+61**, most of it in `test_eval_harness.py`, which went from 62 tests to 116). Each figure is
 `python3 -m pytest tests/ -q --collect-only` at that commit — `b3ac24d`, `9523321`, `08baee7`, `8e849eb`,
-`7d6fbba`. Update the number here whenever it changes. Covers the doc linter, the philosophy guard,
+`7d6fbba`, `faa3645`, `f785765`, `0e5f40b`, `2cd027e`. Update the number here whenever it changes. Covers the doc linter, the philosophy guard,
 the release-integrity checks, the scripted-mechanics unit tests, the workspace validator
 (`test_validate_workspace.py`), the eval-case lint (`test_eval_cases.py`), the **eval-scenario validator +
 harness math** (`test_eval_harness.py`), and the fake-shim self-tests (incl. the `bad-query` scenario behind
@@ -927,7 +933,7 @@ entries carry a date mark; the first-Ashby-pass footnote is present.
 - ⬜ Scheduling correct (the composed `/loop <interval>` matches the pinned table per frequency; `/loop` sets `mechanism:loop`; **zero-Python user path** proven with python3 masked) (§9)
 - ⬜ **No numeric scores/weights, budget config, or invented charge** in files or unsolicited chat; accurate calls-first usage context is labeled, and users control frequency, sources, and review depth (§10)
 - ⬜ Docs match reality (install commands, error table, sample digest) (§11)
-- ⬜ Full regression green: `pytest` (**937**; gate on `0 failed`) + the eval structural gate (`eval_harness.py`) + the five eval suites (**51** scenarios) (§0.3, §12)
+- ⬜ Full regression green: `pytest` (**1037**; gate on `0 failed`) + the eval structural gate (`eval_harness.py`) + the five eval suites (**51** scenarios) (§0.3, §12)
 - ⬜ Planned config slash-command tests are marked **N/A (pending build)**, not green (§13)
 - ⬜ Multi-source: live Ashby/Greenhouse/Lever rows; shim multi-source run shows per-source counts + first-pass footnote; one source down never blanks the run (§14)
 
@@ -974,14 +980,15 @@ python3 evals/run_triggering.py --model haiku --reps 9 --phrases cost-probe,cli-
 ```
 
 Each session is killed the moment its first `Skill` call returns, so a routing probe spends no API
-calls. It writes `routing.json` with the skill each session selected and the per-phrase rate.
+calls. It writes `routing.json` with the skill each session selected, the per-phrase rate, and the
+scheduler check described below.
 
 The runner spawns a real `claude -p` session against the **live** Job Postings API (no mocks)
 and writes `evals/results/<ts>-<case>-<model>/` containing:
 
 - `transcript.jsonl` — every stream-json line stamped with elapsed wall-clock seconds
 - `workspace/` — the `~/.job-search` the session produced
-- `result.json` — timings, exit codes, and the case's behavior rows
+- `result.json` — timings, exit codes, the case's behavior rows, and the scheduler check
 
 Results stay local (`evals/results/.gitignore`); only aggregate numbers are committed, in
 `evals/baseline/2026-07-30-red-baseline.md` — the pre-overhaul RED numbers that B14 compares
@@ -1003,4 +1010,15 @@ Notes for running:
   `--kill-after-event`) to terminate the child right after the first matching tool call
   completes, then drives a follow-up session in the same workspace.
 - `schedule` installs a real scheduler entry (cron/launchd/host-native) as part of the
-  canary; remove it after grading.
+  canary, and a launchd job outlives the session: launchd starts it outside the child's
+  process group, so the SIGKILL that ends the session never reaches it. On 2026-08-07 one
+  fired after the harness had moved the real `~/.job-search` back and wrote into it.
+- Both runners now list the machine's scheduler entries before and after the session and
+  name every new one that is still installed, in `result.json` (or `routing.json`) and on
+  stdout. Remove what they name, the way it was installed, before the next run.
+- A case may declare `expects_scheduler_entry`, naming the classes it legitimately leaves an
+  entry in. `schedule.yaml` declares all three, because the product keeps the job when the
+  canary passes. One entry per declared class is named and does not fail the run; a second
+  entry in a declared class, an entry in a class the case did not declare, or entries in
+  launchd and cron at once — which is two recurring jobs, not the one declared — all fail it.
+  A case that declares nothing fails on any new entry.
