@@ -132,9 +132,15 @@ run. The numbers come from this skill's `scripts/run-counts.sh <workspace>/jobs.
 which prints one `key=value` per line; the postings come from
 `scripts/run-matches.sh <workspace>/jobs.jsonl <run_id>`, which prints one tab-separated line per
 posting this run judged — band, source, source_id, title, company_name, location_display,
-source_url, needs_human_check, posted_at, reasoning — strong first, then moderate, weak, and the
-ones judged not relevant. Render each section from the lines carrying its band, so a heading that
-says three strong is followed by the three lines whose band is strong.
+source_url, needs_human_check, posted_at, reasoning, also_posted — strong first, then moderate,
+weak, and the ones judged not relevant. Render each section from the lines carrying its band, so a
+heading that says three strong is followed by the three lines whose band is strong.
+
+An opening the run found in more than one place counts once and is listed once. The postings whose
+judgment named another in `--same-role-as` are counted under `duplicates_of_another` and in no band,
+and they get no line of their own; the other places that opening was posted arrive in the
+`also_posted` column of the line that is listed, joined with `; `. Say those places on that line
+rather than dropping them — the user is choosing where to apply.
 
 The file takes this shape, with this run's numbers and matches in place of the placeholders:
 
@@ -148,6 +154,7 @@ Agent-data usage: 9 metered calls this run
 ## Strong matches
 - **<title>** — <company> — <location> · <Source>
   <one line of reasoning>.  [view](<source_url>)
+  also posted in <the also_posted column, on a posting whose column is not empty>
   ⚠ confirm: <the open question, from the reasoning of a posting whose needs_human_check reads true>
 
 ## Moderate matches

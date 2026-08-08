@@ -16,9 +16,10 @@
 # gets judged from its summary row.
 #
 # The fourth term is what carries the unbanded row into the record. Such a row is counted in
-# postings_reviewed and in neither matches nor filtered_out, so the record does not add up:
-# measured on 2026-08-07, one unbanded row among two reviewed postings gives
-# match_strong + match_moderate + match_weak + filtered_out = 1 against postings_reviewed = 2, this
+# postings_reviewed and in none of the five keys that add up to it — the three bands, filtered_out
+# and duplicates_of_another — so the record does not add up. Measured on a log of two surfaced
+# postings, one judged strong and one relevant with match null: match_strong + match_moderate +
+# match_weak + filtered_out + duplicates_of_another = 1 against postings_reviewed = 2, this
 # script writes the record and prints run_health=degraded at exit 0, and
 # validate-workspace.sh --post-close then reports
 # `INVALID runs/<run_id>.json bands-do-not-sum-to-reviewed 1 vs 2` at exit 1. run_health is what
@@ -33,10 +34,12 @@
 # run-counts.sh has two ways of exiting non-zero and they mean different things:
 #
 #   a finding — status 1 with `INVALID relevant-row-without-a-band=<n>` on the last line. Its END
-#     block prints that line after every count line (run-counts.awk:88-104 then :105-108), so
-#     seeing it last means the whole count set reached stdout. Measured on 2026-08-06 against a
-#     two-line log of that shape: seventeen count lines, then the INVALID line, status 1. The
-#     record is written, the finding goes to stderr, and the run closes degraded.
+#     block prints every count line first and that line last — `grep -n 'printf .postings_surfaced'
+#     run-counts.awk` comes before `grep -n 'printf .INVALID' run-counts.awk` — so seeing it last
+#     means the whole count set reached stdout. Measured against a two-line log of that shape —
+#     one surfaced posting, one judgment relevant with match null: eighteen count lines, then the
+#     INVALID line, status 1. The record is written, the finding goes to stderr, and the run closes
+#     degraded.
 #   a failure — any other non-zero status. Status 2 is no log at that path, and run-counts.sh runs
 #     its awk with `exec`, so an awk that stops partway hands back its own status having already
 #     written part of the key set to stdout. Reading keys off that would put numbers in the record
@@ -47,7 +50,7 @@
 # settled for a broken workspace: a run opens anyway so that it can close with a record.
 #
 # A third case shows up in neither status: a reader that exits 0 having left a key out. An absent
-# key reaches awk's `printf "%d"` as 0, so the thirteen keys this record is built from are checked
+# key reaches awk's `printf "%d"` as 0, so the fourteen keys this record is built from are checked
 # for presence before anything is written.
 #
 # `../../job-search-run/scripts` is where run-counts.sh lives, and the walk out of this skill and
@@ -60,7 +63,8 @@
 # Exit 1: nothing written; stderr names what contradicts the close.
 #
 # A missing operand is the exception the caller sees a shell-picked code for, the way
-# run-counts.sh:28-29 records: measured at 1 under sh and bash and 2 under dash.
+# run-counts.sh's own header records — `grep -n 'missing operand' run-counts.sh`: measured at
+# 1 under sh and bash and 2 under dash.
 set -u
 
 ws=${1:?usage: close-run.sh <workspace> <run_id> --trigger T --close-state S}
@@ -95,10 +99,11 @@ esac
 # --close-state complete` printed run_health=healthy, exited 0, and left the record at ws/pwned.json
 # with runs/ empty.
 #
-# A run id that traverses nothing is refused too, and for a second reason. validate-workspace.sh:293
-# reads a file in runs/ as a run record only when its whole name matches the same rule, so a record
-# named anything else is skipped by every check the workspace has: measured, a workspace holding
-# runs/not-a-run-id.json gets no line about it at all.
+# A run id that traverses nothing is refused too, and for a second reason. validate-workspace.sh
+# reads a file in runs/ as a run record only when its whole name matches the same rule — `grep -n
+# 'case .id in' validate-workspace.sh` — so a record named anything else is skipped by every check
+# the workspace has: measured, a workspace holding runs/not-a-run-id.json gets no line about it at
+# all.
 #
 # The check is a `case` glob rather than a grep on the value. POSIX pattern matching compares the
 # whole word and has no notion of lines, while `printf '%s\n' "$run_id" | grep -qE ...` exits 0 when
@@ -116,8 +121,9 @@ esac
 # named in digits that validate-workspace.sh refuses — the invisible record the whole check exists
 # to prevent.
 #
-# Writing the format out here rather than sharing one statement of it with validate-workspace.sh:75
-# is the trade this makes: one guard per script, against three files stating the same rule.
+# Writing the format out here rather than sharing one statement of it with validate-workspace.sh's
+# RUN_ID_GLOB is the trade this makes: one guard per script, against three files stating the same
+# rule.
 # tests/test_mechanics_scripts.py drives all three over one table of run ids, under two locales, and
 # requires the same verdict for each. That table is where a divergence gets caught; it is not a
 # proof that none is left, because three copies that drifted together would survive it. What pins
@@ -149,8 +155,9 @@ esac
 # wrote runs/<run_id>.json under LC_ALL=C in both shells with both awks, and under
 # LC_ALL=en_US.UTF-8 in dash with mawk, which is the pair Ubuntu CI runs. That file is not valid
 # UTF-8, so nothing that reads a run record can parse it. BSD awk is the only thing that stops it,
-# dying with a multibyte conversion failure that :343 catches. The same check is in three scripts
-# under job-search-run/scripts, so widening it is a change to four files, not one.
+# dying with a multibyte conversion failure that the build check below catches — `grep -n
+# 'buildstatus' close-run.sh`. The same check is in three scripts under job-search-run/scripts, so
+# widening it is a change to four files, not one.
 reject_id() {
   case $2 in
     *[[:cntrl:]]*) die "$1 may hold no control character" ;;
@@ -185,16 +192,16 @@ if [ "$counts_status" -ne 0 ]; then
       # for the operator and nothing here reads it.
       unbanded=yes
       printf 'close-run: run-counts.sh reported: %s\n' "$last" >&2
-      printf 'close-run:   a relevant row with no band is counted in postings_reviewed and in neither matches nor filtered_out, so the record would not add up — this run closes degraded\n' >&2 ;;
+      printf 'close-run:   a relevant row with no band is counted in postings_reviewed and in none of matches, filtered_out and duplicates_of_another, so the record would not add up — this run closes degraded\n' >&2 ;;
     *)
       die "run-counts.sh exited $counts_status, so this run's numbers are not known — nothing written, the marker and the scratch are untouched" ;;
   esac
 fi
 
-# The thirteen keys the record and the two checks below are built from. by_source_* is not among
+# The fourteen keys the record and the two checks below are built from. by_source_* is not among
 # them: a run that surfaced nothing prints none.
 for key in postings_surfaced postings_reviewed postings_unreviewed postings_detail_read \
-           match_strong match_moderate match_weak filtered_out \
+           match_strong match_moderate match_weak filtered_out duplicates_of_another \
            calls_searches calls_detail_reads calls_other calls_total_metered \
            searches_never_succeeded; do
   printf '%s\n' "$counts" | grep -q "^$key=" || \
@@ -224,10 +231,11 @@ lostids=$(get searches_never_succeeded_ids)
 # combinations. An unreadable postings_unreviewed would therefore read as no posting left unjudged
 # and let a complete close write a record over postings nobody judged.
 #
-# The digits are written out one by one here for the reason measured at :110-117, and negating the
-# bracket expression with `!` does not change it: a range is still decided by the collation order
-# the locale sets. Measured on 2026-08-06 with the Arabic-Indic ٢, `*[!0-9]*` called it a number
-# under LC_ALL=ar_SA.UTF-8 in sh and in bash, and not a number under LC_ALL=C, under
+# The digits are written out one by one here for the reason measured above — `grep -n 'digits are
+# written out' close-run.sh` finds both places — and negating the bracket expression with `!` does
+# not change it: a range is still decided by the collation order the locale sets. Measured on
+# 2026-08-06 with the Arabic-Indic ٢, `*[!0-9]*` called it a number under LC_ALL=ar_SA.UTF-8 in sh
+# and in bash, and not a number under LC_ALL=C, under
 # LC_ALL=en_US.UTF-8 and in dash; `*[!0123456789]*` called it not a number in all nine combinations
 # and still called 23 a number in all nine. End to end with `[!0-9]` in these two lines and a
 # run-counts.sh shimmed to print postings_unreviewed=٢: under LC_ALL=ar_SA.UTF-8 in sh, close-run.sh
@@ -321,6 +329,7 @@ awk -v run_id="$run_id" -v trigger="$trigger" -v sched="$scheduler_id" \
     printf "  \"matches\": { \"strong\": %d, \"moderate\": %d, \"weak\": %d },\n",
            c["match_strong"], c["match_moderate"], c["match_weak"]
     printf "  \"filtered_out\": %d,\n", c["filtered_out"]
+    printf "  \"duplicates_of_another\": %d,\n", c["duplicates_of_another"]
     printf "  \"by_source\": {"
     for (i = 1; i <= nsrc; i++) {
       if (i > 1) printf ","

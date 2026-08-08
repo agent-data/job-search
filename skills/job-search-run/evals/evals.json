@@ -49,7 +49,8 @@
       "expectations": [
         "Runs the candidates through dedup.sh --near and reads exactly one of the four in full",
         "The three collapsed rows each get an evaluated event carrying the same judgment, detail_read false, and same_role_as naming the row that was read",
-        "The digest lists that opening once"
+        "The digest lists that opening once, and its line says the other three places it was posted",
+        "run-counts.sh puts the three collapsed rows under duplicates_of_another and in no band, and the record carries that number"
       ]
     },
     {

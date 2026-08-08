@@ -20,8 +20,15 @@
 # never exchange keys, so that is a maintainability point rather than a correctness one.
 #
 # The row set is the one run-counts.awk counts as reviewed — a posting this run surfaced and this
-# run judged — less the relevant rows carrying no band, which the paragraph below covers. A
-# judgment carrying an id no search of this run turned up is in neither.
+# run judged — less two kinds of row the two paragraphs below cover: a posting that is the same
+# opening as another, and a relevant row carrying no band. A judgment carrying an id no search of
+# this run turned up is in none of them.
+#
+# A posting whose judgment carries same_role_as is the same opening as another posting, so it gets
+# no row of its own and its location goes on the row of the posting it names. run-counts.awk counts
+# it under duplicates_of_another and in no band, on the same test — whether the field is there,
+# never on what it names — so the count above a band and the rows under it stay equal. The rule for
+# a value that names no row here is written out in run-matches.sh.
 #
 # A relevant row carrying no band is left out here and reported by run-counts.sh, which is the
 # script that owns that finding and exits 1 on it. A relevant row's band is one of strong, moderate
@@ -39,34 +46,64 @@ BEGIN {
   if (ev != "surfaced" && ev != "evaluated") next
   k = jval($0, "source") SUBSEP jval($0, "source_id")
   if (ev == "surfaced") { mine[k] = 1; next }
-  # The last judgment this run recorded for a posting wins, which is the rule run-counts.awk:57-60
-  # counts by. The posting keeps the place its first judgment gave it, so a re-judged posting does
-  # not jump to the end of its band.
+  # The last judgment this run recorded for a posting wins, which is the rule run-counts.awk counts
+  # by on its own `evaluated` branch — `grep -n 'The last judgment' run-counts.awk`. The posting
+  # keeps the place its first judgment gave it, so a re-judged posting does not jump to the end of
+  # its band.
   if (!(k in seen)) { seen[k] = 1; n++; order[n] = k }
   judgment[k] = $0
 }
 
 END {
+  # This first walk works out which postings are the same opening as another, and where else that
+  # opening was posted. It runs before any row is printed, so a row carries the locations of
+  # postings judged after it as well as of postings judged before it.
+  #
+  # The value is read as <source>:<source_id> split at the FIRST colon, because a source_id can hold
+  # one: a greenhouse id is written <board>:<number>, so same_role_as:"greenhouse:acme:7310605" is
+  # source greenhouse and source_id acme:7310605. Splitting at the last colon would build a key no
+  # posting in the log has.
+  for (i = 1; i <= n; i++) {
+    k = order[i]
+    if (!(k in mine)) continue
+    rl = jval(judgment[k], "same_role_as")
+    if (rl == "") continue
+    dup[k] = 1
+    p = index(rl, ":")
+    if (p == 0) continue
+    t = substr(rl, 1, p - 1) SUBSEP substr(rl, p + 1)
+    loc = jval(judgment[k], "location_display")
+    # The test is a statement of its own, not `also[t] = (t in also) ? also[t] "; " loc : loc`.
+    # Measured on a log holding one opening posted in two cities: mawk 1.3.4 creates the element for
+    # the left-hand side before it evaluates the right, so `t in also` was already true on the first
+    # location and the column came out `; San Francisco, CA`, while BSD awk 20200816 printed
+    # `San Francisco, CA` — one log, and a different column under each awk.
+    if (t in also) also[t] = also[t] "; " loc
+    else           also[t] = loc
+  }
+
   for (b = 1; b <= 4; b++) {
     for (i = 1; i <= n; i++) {
       k = order[i]
       if (!(k in mine)) continue
+      if (k in dup) continue
       l = judgment[k]
       if (jval(l, "relevant") == "true") {
         band = jval(l, "match")
-        # The three bands a judgment carries, tested one by one the way run-counts.awk:71-77 tests
-        # them, so the two scripts call the same rows unbanded. `filtered` is not among them: it is
-        # what a row judged not relevant gets, so a relevant row carrying the string `filtered` is
-        # a row with no band, not a filtered-out posting.
+        # The three bands a judgment carries, tested one by one the way run-counts.awk's END block
+        # tests them — `grep -n 'b == "strong"' run-counts.awk` — so the two scripts call the same
+        # rows unbanded. `filtered` is not among them: it is what a row judged not relevant gets, so
+        # a relevant row carrying the string `filtered` is a row with no band, not a filtered-out
+        # posting.
         if (band != "strong" && band != "moderate" && band != "weak") continue
       } else band = "filtered"
       if (rank[band] != b) continue
-      printf "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n",
+      printf "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n",
         band,
         jval(l, "source"), jval(l, "source_id"),
         jval(l, "title"), jval(l, "company_name"), jval(l, "location_display"),
         jval(l, "source_url"), jval(l, "needs_human_check"),
-        jval(l, "posted_at"), jval(l, "reasoning")
+        jval(l, "posted_at"), jval(l, "reasoning"), also[k]
     }
   }
 }

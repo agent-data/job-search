@@ -10,6 +10,20 @@
 # a year from now as they are at close: a later run judging a posting this one left unjudged does
 # not reach back and change what this run did.
 #
+# Five keys add up to postings_reviewed: match_strong, match_moderate, match_weak, filtered_out and
+# duplicates_of_another. The fifth counts the postings that are the same opening as one already
+# counted — a company posting one opening in several cities gets one row back per city, the run
+# reads one of them, and the judgment on each of the others names the row that was read in
+# same_role_as. Such a posting is counted here and in no band, on the same test posting-counts.sh
+# uses for the home view — whether the field is there, never on what it names — so the digest and
+# the home card report one opening once. run-matches.sh gives it no row and puts its location on the
+# row it names; the rule for a value naming no such row is written out there.
+#
+# postings_reviewed still counts postings. It pairs with postings_unreviewed against
+# postings_surfaced and says how much work the run did, and judging the second posting of one
+# opening is work the run did. That is why the duplicate gets a key of its own rather than being
+# dropped from every number: the sum has to name every posting the run reviewed.
+#
 # The calls_* keys count `call` events, so retries, repeats and failures are in them without anyone
 # reporting them. Four of them carry the numbers the run record's `agent_data_usage` block holds:
 # searches, detail_reads, other and total_metered. searches_never_succeeded groups the search calls

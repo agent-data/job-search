@@ -125,7 +125,8 @@ def full_record(run_id=RUN_ID, **overrides):
     two `surfaced` events, so `postings_surfaced` 2; both carry an `evaluated` event, so
     `postings_reviewed` 2 and `postings_unreviewed` 0; one `detail` event, so
     `postings_detail_read` 1; one judgment relevant with band `strong` and one not relevant, so
-    `matches` 1/0/0 and `filtered_out` 1; both postings came from `linkedin`, so `by_source` 2.
+    `matches` 1/0/0 and `filtered_out` 1; neither judgment names the other in `same_role_as`, so
+    `duplicates_of_another` 0; both postings came from `linkedin`, so `by_source` 2.
     `test_the_seeded_log_holds_the_numbers_these_cases_assume` asserts that reading against
     `run-counts.sh` so no case here rests on the two agreeing by accident.
     """
@@ -135,6 +136,7 @@ def full_record(run_id=RUN_ID, **overrides):
         "postings_detail_read": 1,
         "matches": {"strong": 1, "moderate": 0, "weak": 0},
         "filtered_out": 1,
+        "duplicates_of_another": 0,
         "by_source": {"linkedin": 2},
     })
     record.update(overrides)
@@ -162,6 +164,30 @@ def seed_log(workspace, run_id=RUN_ID, rows_new=2):
     """Two postings surfaced by one search, one a strong match and one filtered out."""
     rows = [SEED_LOG_ROWS[0] % (run_id, rows_new)] + [r % run_id for r in SEED_LOG_ROWS[1:]]
     (workspace / "jobs.jsonl").write_text("\n".join(rows) + "\n", encoding="utf-8")
+
+
+# `seed_log`'s six rows with b's judgment naming a as the same opening. Read off by hand: two
+# postings surfaced and both judged, so `postings_surfaced` 2, `postings_reviewed` 2 and
+# `postings_unreviewed` 0; a is strong and b is the same opening as a, so `matches` 1/0/0,
+# `filtered_out` 0 and `duplicates_of_another` 1.
+DUPLICATE_LOG_ROWS = SEED_LOG_ROWS[:5] + [
+    '{"event":"evaluated","run_id":"%s","source":"linkedin","source_id":"b",'
+    '"detail_read":false,"relevant":true,"match":"strong","same_role_as":"linkedin:a"}',
+]
+
+
+def seed_log_with_a_duplicate(workspace, run_id=RUN_ID):
+    """One opening surfaced twice: b's judgment names a, so the run found one opening in two rows."""
+    rows = [DUPLICATE_LOG_ROWS[0] % (run_id, 2)] + [r % run_id for r in DUPLICATE_LOG_ROWS[1:]]
+    (workspace / "jobs.jsonl").write_text("\n".join(rows) + "\n", encoding="utf-8")
+
+
+def duplicate_record(run_id=RUN_ID, **overrides):
+    """The record `seed_log_with_a_duplicate`'s rows add up to."""
+    fields = {"matches": {"strong": 1, "moderate": 0, "weak": 0},
+              "filtered_out": 0, "duplicates_of_another": 1}
+    fields.update(overrides)
+    return full_record(run_id, **fields)
 
 
 def run_validator(workspace, *args, shell="sh", env=None, cwd=None):
@@ -593,6 +619,7 @@ def test_the_seeded_log_holds_the_numbers_these_cases_assume(tmp_workspace):
     assert counts["match_moderate"] == "0"
     assert counts["match_weak"] == "0"
     assert counts["filtered_out"] == "1"
+    assert counts["duplicates_of_another"] == "0"
     assert counts["by_source_linkedin"] == "2"
     assert counts["rows_new_total"] == "2"
 
@@ -605,7 +632,8 @@ def test_a_record_without_the_count_fields_fails(tmp_workspace):
     r = run_validator(tmp_workspace, "--post-close", RUN_ID)
     assert r.returncode != 0
     for field in ("postings_surfaced", "postings_reviewed", "postings_unreviewed",
-                  "postings_detail_read", "filtered_out", "matches", "by_source"):
+                  "postings_detail_read", "filtered_out", "duplicates_of_another",
+                  "matches", "by_source"):
         assert "INVALID runs/%s.json missing-key %s" % (RUN_ID, field) in r.stdout, r.stdout
 
 
@@ -614,6 +642,59 @@ def test_counts_matching_the_log_pass(tmp_workspace):
     write_run(tmp_workspace, full_record())
     r = run_validator(tmp_workspace, "--post-close", RUN_ID)
     assert r.returncode == 0, r.stdout + r.stderr
+
+
+def test_the_seeded_duplicate_log_holds_the_numbers_these_cases_assume(tmp_workspace):
+    """The same pinning `test_the_seeded_log_holds_the_numbers_these_cases_assume` does, for the log
+    holding one opening surfaced twice. The expected values are read off the six rows by hand — see
+    `DUPLICATE_LOG_ROWS` — and compared against `run-counts.sh`, the reader the validator calls."""
+    seed_log_with_a_duplicate(tmp_workspace)
+    r = subprocess.run(["sh", str(RUN_COUNTS), str(tmp_workspace / "jobs.jsonl"), RUN_ID],
+                       capture_output=True, text=True)
+    assert r.returncode == 0, r.stdout + r.stderr
+    counts = dict(l.split("=", 1) for l in r.stdout.splitlines())
+    assert counts["postings_reviewed"] == "2"
+    assert counts["match_strong"] == "1"
+    assert counts["filtered_out"] == "0"
+    assert counts["duplicates_of_another"] == "1"
+
+
+def test_a_record_carrying_the_duplicate_matches_the_log(tmp_workspace):
+    """One opening surfaced twice: one band, one duplicate, and 1 + 0 + 0 + 0 + 1 against the 2
+    postings the run reviewed."""
+    seed_log_with_a_duplicate(tmp_workspace)
+    write_run(tmp_workspace, duplicate_record())
+    r = run_validator(tmp_workspace, "--post-close", RUN_ID)
+    assert r.returncode == 0, r.stdout + r.stderr
+
+
+def test_a_record_that_counts_the_duplicate_as_a_second_match_is_reported(tmp_workspace):
+    """The record this change removes: the same opening counted in a band twice and nothing under
+    `duplicates_of_another`. Its own arithmetic holds — 2 + 0 + 0 + 0 + 0 against 2 reviewed — so
+    only the comparison against the log can see it, on two fields at once."""
+    seed_log_with_a_duplicate(tmp_workspace)
+    write_run(tmp_workspace, duplicate_record(matches={"strong": 2, "moderate": 0, "weak": 0},
+                                              duplicates_of_another=0))
+    r = run_validator(tmp_workspace, "--post-close", RUN_ID)
+    assert r.returncode == 1, r.stdout + r.stderr
+    assert [l.split(" ", 2)[2] for l in findings(r)] == [
+        "counts-disagree-with-log duplicates_of_another 0 vs 1",
+        "counts-disagree-with-log matches.strong 2 vs 1",
+    ], r.stdout
+
+
+def test_a_record_that_drops_the_duplicate_from_every_key_does_not_sum(tmp_workspace):
+    """A record that left the duplicate out of the bands and out of `duplicates_of_another` too:
+    the count of postings it reviewed is one above what its keys name, which the sum sees with no
+    log at all. The log comparison names the field as well, so both halves report it."""
+    seed_log_with_a_duplicate(tmp_workspace)
+    write_run(tmp_workspace, duplicate_record(duplicates_of_another=0))
+    r = run_validator(tmp_workspace, "--post-close", RUN_ID)
+    assert r.returncode == 1, r.stdout + r.stderr
+    assert [l.split(" ", 2)[2] for l in findings(r)] == [
+        "bands-do-not-sum-to-reviewed 1 vs 2",
+        "counts-disagree-with-log duplicates_of_another 0 vs 1",
+    ], r.stdout
 
 
 def test_a_count_that_disagrees_with_the_log_fails(tmp_workspace):
@@ -631,6 +712,7 @@ def test_a_count_that_disagrees_with_the_log_fails(tmp_workspace):
     ("postings_unreviewed", 3, 0),
     ("postings_detail_read", 2, 1),
     ("filtered_out", 0, 1),
+    ("duplicates_of_another", 4, 0),
 ])
 def test_every_top_level_count_is_compared_against_the_log(tmp_workspace, field, written, in_log):
     """One case per compared field, because a loop that dropped a field would still pass a case
@@ -851,7 +933,8 @@ def test_the_shipped_run_record_template_holds_up(tmp_workspace):
     zeros."""
     body = json.loads(RECORD_TEMPLATE.read_text(encoding="utf-8"))
     assert body["matches"] == {"strong": 3, "moderate": 6, "weak": 2}
-    assert body["filtered_out"] == 39
+    assert body["filtered_out"] == 37
+    assert body["duplicates_of_another"] == 2
     assert body["postings_reviewed"] == 50
     assert body["postings_unreviewed"] == 0
     assert body["postings_surfaced"] == 50
@@ -908,8 +991,9 @@ def test_the_record_the_review_measured_names_every_field_it_states_nothing_for(
     log has, and the sum of an empty block against the 2 postings the record says it surfaced.
 
     `bands-do-not-sum-to-reviewed` deliberately stays quiet. The reason is written once, at the
-    guard that implements it, `validate-workspace.sh:399-403`. This case is what holds the decision:
-    it asserts the whole finding list, so adding the zeros fails here.
+    guard that implements it — `grep -n 'a decision, not a precaution' validate-workspace.sh`. This
+    case is what holds the decision: it asserts the whole finding list, so adding the zeros fails
+    here.
     """
     seed_log(tmp_workspace)
     write_run(tmp_workspace, full_record(matches={}, by_source={}))

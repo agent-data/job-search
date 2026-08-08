@@ -105,10 +105,11 @@ Two reads of the captured `jobs.jsonl`, both counted by hand, so neither expecta
 the script it is checking:
 
 - Every `evaluated` event and every `detail` event carrying this `run_id` has a `surfaced` event
-  with the same `run_id`, `source` and `source_id`. `run-counts.awk:63-66` walks only the postings
-  the run surfaced, so a judgment with no `surfaced` event behind it lands in no number the run
-  reports — the row goes into the log, the digest says nothing about it, and nothing prints a
-  warning.
+  with the same `run_id`, `source` and `source_id`. `run-counts.awk`'s END block walks only the
+  postings the run surfaced — `grep -n 'Only the postings this run surfaced'
+  skills/job-search-run/scripts/run-counts.awk` — so a judgment with no `surfaced` event behind it
+  lands in no number the run reports: the row goes into the log, the digest says nothing about it,
+  and nothing prints a warning.
 - The `call` events for this `run_id`, counted by route, are `agent_data_usage.searches`,
   `.detail_reads` and `.other` in `runs/<run_id>.json`, and the `detail` events counted the same
   way are its `postings_detail_read`.
@@ -151,32 +152,30 @@ same postings.
 
 - No row `skills/job-search-run/scripts/run-matches.sh` prints for the run belongs to a posting
   whose `evaluated` event carries `same_role_as`. A judgment carrying that field is the same opening
-  as a row already in the listing, and `skills/job-search-run/evals/evals.json:48`, in the scenario
-  for one opening posted in several cities, expects the digest to list that opening once.
+  as a row already in the listing, and the scenario for one opening posted in several cities in
+  `skills/job-search-run/evals/evals.json` expects the digest to list that opening once.
 - `match_strong` plus `match_moderate` plus `match_weak` from
   `skills/job-search-run/scripts/run-counts.sh` equals `relevant` from
   `skills/job-search/scripts/posting-counts.sh`, and `filtered_out` equals `filtered`, over that
   same log.
 
-**This row fails today. Reporting that is what it was added for.** `posting-counts.awk` reads
-`same_role_as` and the two scripts behind the digest never do:
+**This row failed by design until 2026-08-08.** `posting-counts.awk` read `same_role_as` and the two
+scripts behind the digest never did, so the two disagreed by the number of judgments naming another
+posting as the same opening — measured 2026-08-07 on a four-line log, two `surfaced` events then two
+`evaluated` events whose second names the first: `run-counts.sh` printed `match_strong=2`,
+`run-matches.sh` printed two rows for the one opening, and `posting-counts.sh` printed `relevant=1`.
+
+All three scripts read the field now:
 
 ```bash
 grep -c same_role_as skills/job-search/scripts/posting-counts.awk \
   skills/job-search-run/scripts/run-counts.awk skills/job-search-run/scripts/run-matches.awk
 ```
 
-prints 2, 0 and 0. Measured on 2026-08-07 on a four-line log — two `surfaced` events, then two
-`evaluated` events whose second names the first in `same_role_as` — `run-counts.sh` printed
-`match_strong=2`, `run-matches.sh` printed two rows for the one opening, and `posting-counts.sh`
-printed `relevant=1`.
-
-The listing half is settled: the digest shows one opening once, so `run-matches.awk` printing one
-row per posting is the side to change. The counts half is not settled, and this row does not decide
-it. `job-search-run/SKILL.md` defines the counts line on postings — it opens with
-`postings_surfaced` — while `posting-counts.sh`'s own header says `relevant` plus `filtered` is
-the number of openings judged rather than the number of postings judged. Two units, each written
-down, and nothing says which one the user should be shown. Changing the listing without settling
-the unit would leave a digest whose heading says three strong above two rows, which
-`run-matches.sh`'s header rules out. Settle the unit first; until then this row is where the
-disagreement gets reported.
+prints 2, 3 and 3. The unit the counts line is in is settled and written down in
+`run-counts.sh`'s header: a posting whose judgment names another is counted under
+`duplicates_of_another` and in no band, so the three bands count openings while `postings_surfaced`,
+`postings_reviewed` and `postings_unreviewed` still count postings. `run-matches.sh` gives such a
+posting no row and puts its `location_display` on the row it names, so the count above a band and
+the rows under it stay equal. On the same four-line log the three scripts now print
+`match_strong=1`, one row carrying the second city, and `relevant=1`.

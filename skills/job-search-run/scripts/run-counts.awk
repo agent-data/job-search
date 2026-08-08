@@ -55,8 +55,12 @@
   }
   if (ev == "detail") { hasdetail[k] = 1; next }
   if (ev == "evaluated") {
-    # The last judgment this run recorded for a posting wins.
+    # The last judgment this run recorded for a posting wins. same_role_as is assigned rather than
+    # tested first, so a re-judgment carrying no same_role_as clears the value the earlier judgment
+    # set: record-judgment.awk writes the field only when it is given one, so the later line carries
+    # no such field and jval reads it as an empty string.
     rel[k] = jval($0, "relevant"); band[k] = jval($0, "match"); judged[k] = 1
+    alias[k] = jval($0, "same_role_as")
   }
 }
 
@@ -68,6 +72,12 @@ END {
     if (k in hasdetail) detailread++
     if (!(k in judged)) { unreviewed++; continue }
     reviewed++
+    # One opening posted in two cities comes back as two rows, and the judgment on the second names
+    # the first in same_role_as. It is the same opening, so it is counted here and in no band. The
+    # band it carries is not read at all, which is why an unbanded duplicate is not reported below:
+    # the unbanded finding exists because such a row is counted in postings_reviewed and in none of
+    # the keys that add up to it, and a duplicate is counted in duplicates_of_another.
+    if (alias[k] != "") { duplicates++; continue }
     if (rel[k] == "true") {
       b = band[k]
       if (b == "strong")        strong++
@@ -93,6 +103,7 @@ END {
   printf "match_moderate=%d\n",       moderate+0
   printf "match_weak=%d\n",           weak+0
   printf "filtered_out=%d\n",         filtered+0
+  printf "duplicates_of_another=%d\n", duplicates+0
   for (i = 1; i <= nsrc; i++) printf "by_source_%s=%d\n", srcorder[i], bysrc[srcorder[i]]
   printf "calls_searches=%d\n",       searches+0
   printf "calls_detail_reads=%d\n",   detailcalls+0

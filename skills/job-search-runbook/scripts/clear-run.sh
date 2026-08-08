@@ -15,7 +15,8 @@
 # Exit 0: cleared. Exit 1: nothing removed; stderr names why.
 #
 # A missing operand is the exception the caller sees a shell-picked code for, the way
-# run-counts.sh:28-29 records: measured at 1 under sh and bash and 2 under dash.
+# run-counts.sh's own header records — `grep -n 'missing operand' run-counts.sh`: measured at
+# 1 under sh and bash and 2 under dash.
 set -u
 
 ws=${1:?usage: clear-run.sh <workspace> <run_id>}
@@ -29,19 +30,21 @@ run_id=${2:?usage: clear-run.sh <workspace> <run_id>}
 # with its contents. Both preconditions are needed: `rm -rf` removes nothing when a directory along
 # the path is absent, and the record check stops the run before either rm without that file.
 #
-# A `case` glob rather than a grep on the value, for the reason written out at close-run.sh:103-108:
-# a grep on `printf '%s\n' "$run_id"` exits 0 when any one line matches, so a run id carrying a
-# newline got through on the strength of a single well-formed line. `case` compares the whole word.
+# A `case` glob rather than a grep on the value, for the reason close-run.sh writes out — `grep -n
+# 'case. glob rather than a grep' close-run.sh`: a grep on `printf '%s\n' "$run_id"` exits 0 when
+# any one line matches, so a run id carrying a newline got through on the strength of a single
+# well-formed line. `case` compares the whole word.
 #
-# The digits are written out one by one rather than as `[0-9]`, for the reason measured at
-# close-run.sh:110-117: a range inside a bracket expression is decided by the collation order the
-# locale sets, so `[0-9]` matched a run id spelled in Arabic-Indic digits under LC_ALL=ar_SA.UTF-8.
-# A list of ten characters is not a range and no locale changes it.
+# The digits are written out one by one rather than as `[0-9]`, for the reason close-run.sh measures
+# — `grep -n 'digits are written out' close-run.sh`: a range inside a bracket expression is decided
+# by the collation order the locale sets, so `[0-9]` matched a run id spelled in Arabic-Indic digits
+# under LC_ALL=ar_SA.UTF-8. A list of ten characters is not a range and no locale changes it.
 #
-# validate-workspace.sh:75 states the same rule in the same notation, and uses it both to decide
-# whether a file in runs/ is a run record at all and to check the run id --post-close is given. The
-# three copies are driven over one table of run ids in tests/test_mechanics_scripts.py, under two
-# locales, and must give the same verdict for each.
+# validate-workspace.sh states the same rule in the same notation — `grep -n RUN_ID_GLOB=
+# validate-workspace.sh` — and uses it both to decide whether a file in runs/ is a run record at
+# all and to check the run id --post-close is given. The three copies are driven over one table of
+# run ids in tests/test_mechanics_scripts.py, under two locales, and must give the same verdict for
+# each.
 case $run_id in
   [0123456789][0123456789][0123456789][0123456789]-[0123456789][0123456789]-[0123456789][0123456789]T[0123456789][0123456789]-[0123456789][0123456789]-[0123456789][0123456789]Z) ;;
   *)

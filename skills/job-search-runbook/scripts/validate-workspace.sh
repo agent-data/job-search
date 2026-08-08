@@ -66,11 +66,12 @@ fi
 #
 # The digits are written out one by one rather than as `[0-9]`, because a range inside a bracket
 # expression is decided by the collation order the locale sets and a list of ten characters is not.
-# close-run.sh:110-117 records the measurement: under LC_ALL=ar_SA.UTF-8 in sh and bash, `[0-9]`
-# matched a run id spelled in Arabic-Indic digits. Which shell reads this file decides whether that
-# matters here — measured on 2026-08-07, bash under that locale matched them and dash refused them,
-# on macOS and on Debian alike, and `/bin/sh` is bash on one and dash on the other. The same glob is
-# in close-run.sh:126 and clear-run.sh:46, and tests/test_mechanics_scripts.py drives one table of
+# close-run.sh records the measurement — `grep -n 'digits are written out' close-run.sh`: under
+# LC_ALL=ar_SA.UTF-8 in sh and bash, `[0-9]` matched a run id spelled in Arabic-Indic digits. Which
+# shell reads this file decides whether that matters here — measured on 2026-08-07, bash under that
+# locale matched them and dash refused them, on macOS and on Debian alike, and `/bin/sh` is bash on
+# one and dash on the other. close-run.sh and clear-run.sh each carry the same glob — `grep -n
+# '0123456789' close-run.sh clear-run.sh` — and tests/test_mechanics_scripts.py drives one table of
 # run ids through all three and requires the same verdict for each.
 RUN_ID_GLOB='[0123456789][0123456789][0123456789][0123456789]-[0123456789][0123456789]-[0123456789][0123456789]T[0123456789][0123456789]-[0123456789][0123456789]-[0123456789][0123456789]Z'
 # Run-record timestamps are UTC with a trailing Z. An offset such as +00:00 names the same instant
@@ -355,7 +356,7 @@ if [ -n "$POST_CLOSE" ]; then
     # fields existed is named field by field rather than reported once, so a caller sees the whole
     # set to add.
     for field in postings_surfaced postings_reviewed postings_unreviewed postings_detail_read \
-                 filtered_out; do
+                 filtered_out duplicates_of_another; do
       [ -n "$(json_num "$record" "$field")" ] || invalid "$rel" "missing-key $field"
     done
 
@@ -387,6 +388,7 @@ if [ -n "$POST_CLOSE" ]; then
     reviewed=$(json_num "$record" postings_reviewed)
     unreviewed=$(json_num "$record" postings_unreviewed)
     filtered=$(json_num "$record" filtered_out)
+    dups=$(json_num "$record" duplicates_of_another)
     s=$(objval strong "$matchnums")
     m=$(objval moderate "$matchnums")
     w=$(objval weak "$matchnums")
@@ -400,10 +402,15 @@ if [ -n "$POST_CLOSE" ]; then
     # with `[ -z "$s" ] && s=0`. A record whose matches block states no band gets one missing-key
     # line naming each band, above, and that is the whole report about it. Reading the absent bands
     # as zero here would add arithmetic over numbers the record never stated — 0 + 0 + 0 + 1 against
-    # 2 reviewed — which says the same thing again and does not say which band to add.
-    if [ -n "$reviewed" ] && [ -n "$filtered" ] && [ -n "$s" ] && [ -n "$m" ] && [ -n "$w" ]; then
-      [ $((s + m + w + filtered)) -eq "$reviewed" ] || \
-        invalid "$rel" "bands-do-not-sum-to-reviewed $((s + m + w + filtered)) vs $reviewed"
+    # 2 reviewed — which says the same thing again and does not say which band to add. The same
+    # holds for duplicates_of_another, which is in the sum because a posting that is the same
+    # opening as another is counted in postings_reviewed and in no band: run-counts.sh counts it
+    # there and the record carries the number.
+    if [ -n "$reviewed" ] && [ -n "$filtered" ] && [ -n "$dups" ] \
+       && [ -n "$s" ] && [ -n "$m" ] && [ -n "$w" ]; then
+      [ $((s + m + w + filtered + dups)) -eq "$reviewed" ] || \
+        invalid "$rel" \
+          "bands-do-not-sum-to-reviewed $((s + m + w + filtered + dups)) vs $reviewed"
     fi
     if [ -n "$surfaced" ] && [ -n "$reviewed" ] && [ -n "$unreviewed" ]; then
       [ $((reviewed + unreviewed)) -eq "$surfaced" ] || \
@@ -433,7 +440,7 @@ if [ -n "$POST_CLOSE" ]; then
     if [ -n "$counts" ]; then
       logval() { printf '%s\n' "$counts" | grep "^$1=" | cut -d= -f2-; }
       for field in postings_surfaced postings_reviewed postings_unreviewed \
-                   postings_detail_read filtered_out; do
+                   postings_detail_read filtered_out duplicates_of_another; do
         want=$(logval "$field"); got=$(json_num "$record" "$field")
         [ -z "$want" ] || [ -z "$got" ] || [ "$want" = "$got" ] || \
           invalid "$rel" "counts-disagree-with-log $field $got vs $want"

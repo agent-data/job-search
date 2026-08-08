@@ -12,7 +12,8 @@
   "postings_unreviewed": 0,
   "postings_detail_read": 12,
   "matches": { "strong": 3, "moderate": 6, "weak": 2 },
-  "filtered_out": 39,
+  "filtered_out": 37,
+  "duplicates_of_another": 2,
   "by_source": { "linkedin": 25, "ashby": 25 },
   "agent_data_usage": {
     "searches": 4,

@@ -585,8 +585,9 @@ def test_an_absent_key_is_empty():
 def test_whitespace_around_the_colon_does_not_hide_a_field(line):
     """`event-log-append.sh` accepts every one of these — its field checks all read
     `"key"[[:space:]]*:[[:space:]]*` — so an event written by hand arrives in these shapes. A
-    `match` read as `" \\"strong\\""` equals none of the three band names `run-counts.awk:73-76`
-    tests for: measured 2026-08-07 against a copy of `event-field.awk` outside the repository with
+    `match` read as `" \\"strong\\""` equals none of the three band names `run-counts.awk`'s END
+    block tests for — `grep -n 'b == "strong"' run-counts.awk`: measured 2026-08-07 against a copy
+    of `event-field.awk` outside the repository with
     the post-colon `_jskipws` call in `_jafter` dropped, a log carrying `"match" : "strong"` gave
     `match_strong=0` and the line `INVALID relevant-row-without-a-band=1`, exit 1, under
     /usr/bin/awk and mawk."""
@@ -2705,6 +2706,249 @@ def test_a_relevant_row_with_no_band_is_reported_as_invalid(tmp_path):
     assert "relevant-row-without-a-band=1" in r.stdout
 
 
+# ------------------------------------------------ one opening posted in more than one city
+#
+# `search.linkedin.json` holds two rows for one Northwind Labs opening, `Director, FP&A` in Palo
+# Alto, CA and the same title and company in San Francisco, CA:
+#
+#   python3 -c 'import json,collections;
+#     f="tests/fixtures/api-responses/search.linkedin.json";
+#     d=json.loads(open(f).read())["data"]["results"];
+#     print([(r["source_id"], r["location_display"]) for r in d
+#            if (r["company_name"], r["title"]) == ("Northwind Labs", "Director, FP&A")])'
+#
+# prints the two ids and the two cities. That pair is what `dedup.sh --near` groups — one company,
+# one title once the location parenthetical is stripped and both are lowercased — and what
+# `--same-role-as` was added to record. The cases below reach the pair through `seed_two_cities`,
+# which asserts the company, the title and the two cities off the log rather than trusting the
+# fixture to keep its rows in one order.
+
+
+def seed_two_cities(tmp_path, alias=None):
+    """A log in which one opening was read in one city and named again in the other.
+
+    Returns the log, the row that was read, and the row that names it. The second judgment carries
+    `--detail-read false` and the first one's verdict, which is what `job-search-run/SKILL.md` says
+    to record for a posting `dedup.sh --near` left out. `alias` replaces what that judgment names,
+    for the cases where the value resolves to no row.
+    """
+    jobs = seeded_jobs(tmp_path, "search.linkedin.json")
+    rows = [e for e in lines(jobs) if e["event"] == "surfaced"]
+    read = next(r for r in rows if r["source_id"] == "linkedin-0002")
+    other = next(r for r in rows if r["source_id"] == "linkedin-0023")
+    assert read["company_name"] == other["company_name"], (read, other)
+    assert read["title"] == other["title"], (read, other)
+    assert read["location_display"] != other["location_display"], read["location_display"]
+    if alias is None:
+        alias = "%s:%s" % (read["source"], read["source_id"])
+    judge_all(jobs, [read], detail_read="true", relevant="true", match="strong",
+              reasoning="Fits the brief.")
+    judge_all(jobs, [other], detail_read="false", relevant="true", match="strong",
+              reasoning="Fits the brief.", same_role_as=alias)
+    return jobs, read, other
+
+
+def test_one_opening_posted_twice_is_one_match_and_one_duplicate(tmp_path):
+    """A run that finds the same opening in two cities reports one match, not two, and says how
+    many postings it set aside rather than dropping the second one out of every number — the digest
+    and the home card have to agree about how many openings the run found.
+
+    `postings_reviewed` still counts postings. It pairs with `postings_unreviewed` against
+    `postings_surfaced` and says how much work the run did, and judging the second posting was work
+    the run did even though it found no second opening. That is why the duplicate needs a key of its
+    own: without one, the four band keys would have to add up to a number that counts a posting none
+    of them holds.
+    """
+    jobs, _, _ = seed_two_cities(tmp_path)
+    r, c = counts(jobs)
+    assert r.returncode == 0, r.stderr
+    assert c["match_strong"] == "1"
+    assert c["duplicates_of_another"] == "1"
+    assert c["postings_reviewed"] == "2"
+    assert (int(c["match_strong"]) + int(c["match_moderate"]) + int(c["match_weak"])
+            + int(c["filtered_out"]) + int(c["duplicates_of_another"])) \
+        == int(c["postings_reviewed"])
+
+
+def test_the_duplicate_location_rides_on_the_row_that_survives(tmp_path):
+    """The other city is information the user wants, so it goes on the surviving row instead of
+    being dropped along with the posting that named it."""
+    jobs, read, other = seed_two_cities(tmp_path)
+    r, out = matches(jobs)
+    assert r.returncode == 0, r.stderr
+    assert len(out) == 1, out
+    assert out[0][2] == read["source_id"]
+    assert out[0][5] == read["location_display"]
+    assert out[0][10] == other["location_display"]
+
+
+def test_the_digest_count_equals_the_rows_it_lists(tmp_path):
+    """The heading and the list under it are read together, so a count above a shorter list is the
+    defect these two scripts exist to keep out of the digest.
+
+    The one opening is asserted as well as the equality. The two agreed before this change too —
+    measured on this log, `match_strong=2` above two rows — so the equality on its own passes the
+    digest that shows one job twice.
+    """
+    jobs, _, _ = seed_two_cities(tmp_path)
+    _, c = counts(jobs)
+    _, out = matches(jobs)
+    assert int(c["match_strong"]) == len([o for o in out if o[0] == "strong"]) == 1
+
+
+def test_the_digest_and_the_home_card_report_the_same_opening_count(tmp_path):
+    """`run-counts.sh` reads one run's events and `posting-counts.sh` reads the whole file, and this
+    log holds one run, so the two are reading the same postings. Over those postings the three bands
+    add up to `relevant` and `filtered_out` equals `filtered`. That is the agreement the digest and
+    the home card are read against each other for.
+    """
+    jobs, _, _ = seed_two_cities(tmp_path)
+    _, c = counts(jobs)
+    r, p = postings(jobs)
+    assert r.returncode == 0, r.stderr
+    assert int(c["match_strong"]) + int(c["match_moderate"]) + int(c["match_weak"]) \
+        == int(p["relevant"])
+    assert int(c["filtered_out"]) == int(p["filtered"])
+
+
+@pytest.mark.parametrize("alias", ["linkedin:no-such-posting", "the same job"],
+                         ids=["an-id-no-search-turned-up", "not-written-as-a-pair"])
+def test_a_judgment_naming_no_row_here_is_still_one_opening(tmp_path, alias):
+    """The rule is on the field, not on what it names: a judgment carrying `same_role_as` is the
+    same opening as another posting, so it is counted under `duplicates_of_another` and gets no row,
+    whatever the value says. `posting-counts.sh` counts it the same way, on the same test, which is
+    what keeps the two screens agreeing for a value neither of them can resolve.
+
+    The location has nowhere to ride and is not printed. Giving the posting its own row instead
+    would print the same opening twice whenever the value is a typo for a posting already listed,
+    and nothing here can tell that apart from a value naming a posting that really is elsewhere.
+    """
+    jobs, read, _ = seed_two_cities(tmp_path, alias=alias)
+    _, c = counts(jobs)
+    assert c["match_strong"] == "1"
+    assert c["duplicates_of_another"] == "1"
+    _, p = postings(jobs)
+    assert p["relevant"] == "1"
+    _, out = matches(jobs)
+    assert len(out) == 1, out
+    assert out[0][2] == read["source_id"]
+    assert out[0][10] == ""
+
+
+def test_every_other_place_the_opening_was_posted_rides_on_its_row(tmp_path):
+    """One opening posted in three places puts two locations on one row, joined with `; `.
+
+    The separator is a semicolon rather than a comma because a location carries commas of its own:
+    the two here are `San Francisco, CA` and `San Francisco Bay Area`, and comma-joining them would
+    give `San Francisco, CA,San Francisco Bay Area`, which no reader can split back into two places.
+    `record-judgment.sh` takes `--dealbreakers` and `--unknowns` as semicolon-separated lists for
+    the same reason.
+
+    The order is the order the run judged the two postings in, which is the order `run-matches.awk`
+    lists a band in, so two hosts reading one log print the same row.
+    """
+    jobs, read, other = seed_two_cities(tmp_path)
+    rows = [e for e in lines(jobs) if e["event"] == "surfaced"]
+    third = next(r for r in rows if r["source_id"] == "linkedin-0007")
+    judge_all(jobs, [third], detail_read="false", relevant="true", match="strong",
+              reasoning="Fits the brief.",
+              same_role_as="%s:%s" % (read["source"], read["source_id"]))
+    _, c = counts(jobs)
+    assert c["match_strong"] == "1"
+    assert c["duplicates_of_another"] == "2"
+    assert c["postings_reviewed"] == "3"
+    _, out = matches(jobs)
+    assert len(out) == 1, out
+    assert out[0][10] == "%s; %s" % (other["location_display"], third["location_display"])
+
+
+def test_a_row_no_other_posting_names_carries_an_empty_last_column(tmp_path):
+    """Every row carries the same number of columns whether or not anything names it, so a caller
+    splitting on tabs reads the same fields for every row."""
+    jobs = seeded_jobs(tmp_path, "search.linkedin.json")
+    rows = [e for e in lines(jobs) if e["event"] == "surfaced"]
+    judge_all(jobs, rows[:2], detail_read="true", relevant="true", match="strong",
+              reasoning="Fits.")
+    r, out = matches(jobs)
+    assert r.returncode == 0, r.stderr
+    assert [len(o) for o in out] == [11, 11], out
+    assert [o[10] for o in out] == ["", ""]
+
+
+def test_a_duplicate_of_a_filtered_posting_is_a_duplicate_rather_than_a_filtered_row(tmp_path):
+    """A judgment naming another posting copies that posting's verdict, so an alias of a posting the
+    run threw out is itself not relevant. It is still one opening seen twice, so it is counted under
+    `duplicates_of_another` and not under `filtered_out` — which is how `posting-counts.sh` counts
+    it, under neither `relevant` nor `filtered`.
+    """
+    jobs = seeded_jobs(tmp_path, "search.linkedin.json")
+    rows = [e for e in lines(jobs) if e["event"] == "surfaced"]
+    read, other = rows[0], rows[1]
+    judge_all(jobs, [read], detail_read="true", relevant="false", reasoning="On-site only.")
+    judge_all(jobs, [other], detail_read="false", relevant="false", reasoning="On-site only.",
+              same_role_as="%s:%s" % (read["source"], read["source_id"]))
+    _, c = counts(jobs)
+    assert c["filtered_out"] == "1"
+    assert c["duplicates_of_another"] == "1"
+    _, p = postings(jobs)
+    assert p["filtered"] == "1"
+    _, out = matches(jobs)
+    assert len(out) == 1, out
+    assert out[0][0] == "filtered"
+    assert out[0][10] == other["location_display"]
+
+
+def test_two_postings_naming_each_other_leave_no_row_and_are_both_duplicates(tmp_path):
+    """Two judgments each naming the other is the one shape where the rule costs the user a row:
+    both postings are the same opening as something else, so both are counted under
+    `duplicates_of_another`, neither is in a band, and neither location has a row to ride on.
+
+    It is pinned here because it is the case a reader will ask about. The counts still add up and
+    the home card still agrees — `posting-counts.sh` drops both as well — so the two screens say the
+    same thing rather than one of them showing an opening the other does not.
+    """
+    jobs = seeded_jobs(tmp_path, "search.linkedin.json")
+    rows = [e for e in lines(jobs) if e["event"] == "surfaced"]
+    a, b = rows[0], rows[1]
+    judge_all(jobs, [a], detail_read="true", relevant="true", match="strong", reasoning="Fits.",
+              same_role_as="%s:%s" % (b["source"], b["source_id"]))
+    judge_all(jobs, [b], detail_read="false", relevant="true", match="strong", reasoning="Fits.",
+              same_role_as="%s:%s" % (a["source"], a["source_id"]))
+    r, c = counts(jobs)
+    assert r.returncode == 0, r.stderr
+    assert c["match_strong"] == "0"
+    assert c["duplicates_of_another"] == "2"
+    assert c["postings_reviewed"] == "2"
+    _, p = postings(jobs)
+    assert p["relevant"] == "0"
+    r, out = matches(jobs)
+    assert r.returncode == 0, r.stderr
+    assert out == []
+
+
+def test_a_later_judgment_naming_no_other_posting_takes_it_out_of_the_duplicates(tmp_path):
+    """The last judgment this run recorded for a posting wins, and `record-judgment.awk` writes
+    `same_role_as` only when it is given one, so a re-judgment without the flag carries no such
+    field. The posting is back in its band and back in the listing rather than staying a duplicate
+    off a value the log no longer holds.
+
+    The second judgment is written straight to the log because `record-judgment.sh` refuses a second
+    judgment for a posting this run already judged.
+    """
+    jobs, read, other = seed_two_cities(tmp_path)
+    jobs.write_text(jobs.read_text() +
+        '{"event":"evaluated","run_id":"%s","source":"%s","source_id":"%s",'
+        '"location_display":"%s","detail_read":true,"relevant":true,"match":"weak"}\n'
+        % (RID, other["source"], other["source_id"], other["location_display"]))
+    _, c = counts(jobs)
+    assert c["match_strong"] == "1"
+    assert c["match_weak"] == "1"
+    assert c["duplicates_of_another"] == "0"
+    _, out = matches(jobs)
+    assert [o[0] for o in out] == ["strong", "weak"], out
+    assert [o[10] for o in out] == ["", ""], out
+
+
 def test_another_runs_events_do_not_enter_these_counts(tmp_path):
     """The same postings surfaced by two runs in one log. Each run counts its own events.
 
@@ -2803,12 +3047,13 @@ def test_a_row_carries_what_the_digest_prints(tmp_path):
                                   needs_human_check="true",
                                   reasoning="Remote within the US and the range clears the floor."))
     _, out = matches(jobs)
-    band, source, sid, title, company, loc, url, nhc, posted, reasoning = out[0]
+    band, source, sid, title, company, loc, url, nhc, posted, reasoning, also = out[0]
     assert (band, source, sid) == ("strong", row["source"], row["source_id"])
     assert (title, company, url) == (row["title"], row["company_name"], row["source_url"])
     assert loc == row["location_display"]
     assert nhc == "true"
     assert reasoning.startswith("Remote within the US")
+    assert also == ""          # no other posting names this one as the same opening
 
 
 def test_reasoning_with_a_newline_stays_on_one_line(tmp_path):
@@ -2818,7 +3063,7 @@ def test_reasoning_with_a_newline_stays_on_one_line(tmp_path):
                                   reasoning="First line.\nSecond line."))
     r, out = matches(jobs)
     assert len(r.stdout.splitlines()) == 1
-    assert len(out[0]) == 10
+    assert len(out[0]) == 11
     assert "First line." in out[0][9] and "Second line." in out[0][9]
 
 
@@ -2872,7 +3117,7 @@ def test_the_listing_and_the_counts_agree(tmp_path):
     assert tally.get("moderate", 0) == int(c["match_moderate"])
     assert tally.get("weak", 0) == int(c["match_weak"])
     assert tally.get("filtered", 0) == int(c["filtered_out"])
-    assert len(out) == int(c["postings_reviewed"])
+    assert len(out) == int(c["postings_reviewed"]) - int(c["duplicates_of_another"])
 
 
 def test_one_bands_postings_come_out_in_the_order_they_were_judged(tmp_path):
@@ -2913,8 +3158,8 @@ def test_a_judgment_for_a_posting_this_run_never_surfaced_is_not_listed(tmp_path
 
 def test_one_posting_judged_twice_in_a_run_is_listed_once_with_the_later_verdict(tmp_path):
     """One row per posting, carrying the last judgment this run recorded — the rule
-    `run-counts.awk`:57-60 counts by, which is what keeps the listing and the counts the same
-    length.
+    `run-counts.awk` counts by on its own `evaluated` branch, `grep -n 'The last judgment'
+    run-counts.awk`, which is what keeps the listing and the counts the same length.
 
     `record-judgment.sh` writes nothing for a posting this run has already judged, so both events
     are written here directly.
@@ -2935,8 +3180,9 @@ def test_a_relevant_row_with_no_band_is_not_listed(tmp_path):
     `INVALID relevant-row-without-a-band` and exits 1. Here the row is left out rather than put
     under a band nobody wrote, so no digest can name a strong match the log never called strong.
 
-    The row count is asserted against `postings_reviewed` less the unbanded rows, which is the
-    relation `run-matches.sh`:21-28 states.
+    The row count is asserted against `postings_reviewed` less the unbanded rows and less the
+    postings that are the same opening as another, which is the relation `run-matches.sh`'s header
+    states — `grep -n 'row count is' run-matches.sh`.
     """
     jobs = seeded_jobs(tmp_path, "search.linkedin.json")
     row = first_surfaced(jobs)
@@ -2949,20 +3195,21 @@ def test_a_relevant_row_with_no_band_is_not_listed(tmp_path):
     assert out == []
     _, c = counts(jobs)
     unbanded = int(c["INVALID relevant-row-without-a-band"])
-    assert len(out) == int(c["postings_reviewed"]) - unbanded
+    assert len(out) == int(c["postings_reviewed"]) - unbanded - int(c["duplicates_of_another"])
 
 
 def test_a_relevant_row_carrying_the_filtered_band_is_not_listed(tmp_path):
     """`filtered` is what a row judged not relevant gets, not a value a judgment carries, so a
-    relevant row holding the string is a row with no band — the same row
-    `run-counts.awk`:71-77 counts as relevant-row-without-a-band and leaves out of `filtered_out`.
-    Listing it would put a posting under a heading whose count is one lower.
+    relevant row holding the string is a row with no band — the same row `run-counts.awk`'s END
+    block counts as relevant-row-without-a-band and leaves out of `filtered_out`. Listing it would
+    put a posting under a heading whose count is one lower.
 
-    The row count is asserted against `postings_reviewed` less the unbanded rows, which is the
-    relation `run-matches.sh`:21-28 states.
+    The row count is asserted against `postings_reviewed` less the unbanded rows and less the
+    postings that are the same opening as another, which is the relation `run-matches.sh`'s header
+    states — `grep -n 'row count is' run-matches.sh`.
 
-    `record-judgment.sh`:84-88 takes only strong, moderate or weak on a relevant row, so the event
-    is appended to the log here directly.
+    `record-judgment.sh` takes only strong, moderate or weak on a relevant row — `grep -n 'needs
+    --match' record-judgment.sh` — so the event is appended to the log here directly.
     """
     jobs = seeded_jobs(tmp_path, "search.linkedin.json")
     rows = [e for e in lines(jobs) if e["event"] == "surfaced"]
@@ -2976,11 +3223,11 @@ def test_a_relevant_row_carrying_the_filtered_band_is_not_listed(tmp_path):
     assert [o[0] for o in out] == ["strong"]
     assert c["filtered_out"] == "0"
     unbanded = int(c["INVALID relevant-row-without-a-band"])
-    assert len(out) == int(c["postings_reviewed"]) - unbanded
+    assert len(out) == int(c["postings_reviewed"]) - unbanded - int(c["duplicates_of_another"])
 
 
-def test_a_tab_in_the_reasoning_does_not_add_an_eleventh_column(tmp_path):
-    """A row is ten tab-separated columns, so a tab inside the free text would put an eleventh one
+def test_a_tab_in_the_reasoning_does_not_add_a_twelfth_column(tmp_path):
+    """A row is eleven tab-separated columns, so a tab inside the free text would put a twelfth one
     there and shift every column after it. `jval` maps a tab, a newline and a CR to a space;
     resolving the escapes here instead of calling it is what would break this.
 
@@ -2995,7 +3242,7 @@ def test_a_tab_in_the_reasoning_does_not_add_an_eleventh_column(tmp_path):
                                   reasoning=HOSTILE))
     r, out = matches(jobs)
     assert len(r.stdout.splitlines()) == 1
-    assert len(out[0]) == 10
+    assert len(out[0]) == 11
     assert out[0][9] == HOSTILE.replace("\t", " ").replace("\n", " ")
 
 
@@ -3260,7 +3507,7 @@ def test_a_marker_that_cannot_be_written_is_reported_in_this_scripts_own_words(t
     Measured with `runs/` at mode 500: `: > runs/.started-x || { …; exit 9; }` is caught by the
     `||` under bash, but dash aborts on the redirection before the `||` runs, so this script's
     message never prints and the caller gets dash's instead. The status is 2 either way —
-    `open-run.sh:91` exits 2 there too — so the message is the whole difference, and the message is
+    `open-run.sh` exits 2 there too — so the message is the whole difference, and the message is
     what this case asserts. `shell="dash"` is named rather than left at `sh` because `/bin/sh` is
     bash on the machine where this was measured and dash on the CI runner: under bash it would pass
     whichever of the two wrote the marker.
@@ -3338,8 +3585,9 @@ def path_without_a_digest_command(tmp_path):
     The twelve were measured by dropping one at a time and comparing the whole run against the full
     list: each of these changes what the run prints or its status, and `wc` and `cat` change
     nothing. Four of them need a workspace of the right shape before they run at all — `grep`,
-    `head` and `cut` read a run record's fields, all three on `validate-workspace.sh:106`, and
-    `sort` prints the findings — so on a clean workspace with no run record neither script runs any
+    `head` and `cut` read a run record's fields, all three in `validate-workspace.sh`'s
+    `json_str`, and `sort` prints the findings — so on a clean workspace with no run record neither
+    script runs any
     of the four. That is why the case below writes a record, and a broken one, rather than reusing
     `tmp_workspace` as it comes.
 
@@ -3351,8 +3599,8 @@ def path_without_a_digest_command(tmp_path):
     `sh` is on the list but no case here proves it. Dropping it raises `FileNotFoundError` from
     `run_script` instead, because `subprocess.run(["sh", …], env=e)` resolves the interpreter
     through this same PATH, so the harness fails before the script runs. Run with an absolute
-    interpreter and no `sh` on PATH, the script reports `line 126: sh: command not found` — that is
-    `open-run.sh:126`, the `validate-workspace.sh` call — which is what puts `sh` on the list.
+    interpreter and no `sh` on PATH, the script reports `sh: command not found` at the line that
+    runs `validate-workspace.sh`, which is what puts `sh` on the list.
     """
     d = tmp_path / "no-digest-bin"
     d.mkdir(exist_ok=True)
@@ -3414,8 +3662,9 @@ def test_a_present_brief_with_no_way_to_digest_it_is_not_called_missing(tmp_work
 @pytest.mark.skipif(not shutil.which("dash"), reason="dash is not installed here")
 def test_opening_a_run_runs_under_dash(tmp_workspace):
     """One of the three shipped scripts that run another shipped script rather than an awk program —
-    `command grep -rn '\\.sh"' skills/*/scripts/*.sh` returns three lines, `open-run.sh:126`,
-    `close-run.sh:175` and `validate-workspace.sh:431` — so it is run end to end under strict dash:
+    `command grep -rn '\\.sh"' skills/*/scripts/*.sh` returns three lines, one each in
+    `open-run.sh`, `close-run.sh` and `validate-workspace.sh` — so it is run end to end under
+    strict dash:
     `${1:?}`, `command -v`, the `printf ''` that writes the marker and the `sh` call on
     `validate-workspace.sh` are none of them exercised by `dash -n`. `close-run.sh` gets the same
     treatment at `test_closing_and_clearing_a_run_run_under_dash`, and `validate-workspace.sh` at
@@ -3453,29 +3702,35 @@ def record_of(ws, run_id):
 RECORD_FIELDS = {
     "run_id", "trigger", "scheduler_id", "brief_revision", "close_state", "run_health",
     "sources", "queries", "postings_surfaced", "postings_reviewed", "postings_unreviewed",
-    "postings_detail_read", "matches", "filtered_out", "by_source", "agent_data_usage",
-    "started_at", "completed_at",
+    "postings_detail_read", "matches", "filtered_out", "duplicates_of_another", "by_source",
+    "agent_data_usage", "started_at", "completed_at",
 }
 
 # One count set the tests below hand to the reader, in the order and spelling `run-counts.sh`
 # prints. Every numeric value is different from every other, so a field that reads the wrong key
-# lands on a number that cannot be the right one. The 17 numbers are 1, 2, 3, 4, 5, 6, 7, 8, 9, 11,
-# 12, 14, 19, 21, 23, 26, 30 — the distinctness is asserted below rather than left to be read off.
+# lands on a number that cannot be the right one. The 18 numbers are 1, 2, 3, 4, 5, 6, 7, 8, 9, 10,
+# 11, 12, 14, 21, 26, 29, 33, 40 — the distinctness is asserted below rather than left to be read
+# off.
 #
-# Every relation the record asserts holds: 2 + 4 + 5 + 12 = 23 reviewed, 23 + 7 = 30 surfaced,
-# 19 + 11 = 30 by source, 6 + 14 + 1 = 21 metered. `rows_new_total` is the one number deliberately
+# Every relation the record asserts holds: 2 + 4 + 5 + 12 + 10 = 33 reviewed, 33 + 7 = 40 surfaced,
+# 29 + 11 = 40 by source, 6 + 14 + 1 = 21 metered. `rows_new_total` is the one number deliberately
 # off what a real log would carry — a real log holds it equal to `postings_surfaced`, and that is
 # exactly why nothing could separate the two if it were written that way here.
+#
+# `duplicates_of_another` is 10 rather than 0 for the same reason no other key is 0: an absent key
+# reaches `printf "%d"` as 0, so a record that never read this key would carry the right number and
+# the cases below would pass over a reader that dropped it.
 WHOLE_COUNT_SET = (
-    "postings_surfaced=30\n"
-    "postings_reviewed=23\n"
+    "postings_surfaced=40\n"
+    "postings_reviewed=33\n"
     "postings_unreviewed=7\n"
     "postings_detail_read=9\n"
     "match_strong=2\n"
     "match_moderate=4\n"
     "match_weak=5\n"
     "filtered_out=12\n"
-    "by_source_linkedin=19\n"
+    "duplicates_of_another=10\n"
+    "by_source_linkedin=29\n"
     "by_source_ashby=11\n"
     "calls_searches=6\n"
     "calls_detail_reads=14\n"
@@ -3498,12 +3753,12 @@ def test_the_hand_written_count_set_gives_every_key_a_different_number():
     """
     values = [l.split("=", 1) for l in WHOLE_COUNT_SET.splitlines()]
     numbers = [v for _, v in values if v.isdigit()]
-    assert len(numbers) == 17, values
-    assert len(set(numbers)) == 17, sorted(numbers)
+    assert len(numbers) == 18, values
+    assert len(set(numbers)) == 18, sorted(numbers)
     c = dict(values)
     n = {k: int(v) for k, v in c.items() if v.isdigit()}
     assert n["match_strong"] + n["match_moderate"] + n["match_weak"] + n["filtered_out"] \
-        == n["postings_reviewed"]
+        + n["duplicates_of_another"] == n["postings_reviewed"]
     assert n["postings_reviewed"] + n["postings_unreviewed"] == n["postings_surfaced"]
     assert n["by_source_linkedin"] + n["by_source_ashby"] == n["postings_surfaced"]
     assert n["calls_searches"] + n["calls_detail_reads"] + n["calls_other"] \
@@ -3567,19 +3822,21 @@ def test_the_record_reads_each_count_into_the_field_that_names_it(tmp_workspace,
               env=awk_shim(tmp_path, "run-counts.awk", WHOLE_COUNT_SET, status=0, stderr=""))
     assert r.returncode == 0, r.stdout + r.stderr
     rec = record_of(tmp_workspace, o["run_id"])
-    assert rec["postings_surfaced"] == 30
-    assert rec["postings_reviewed"] == 23
+    assert rec["postings_surfaced"] == 40
+    assert rec["postings_reviewed"] == 33
     assert rec["postings_unreviewed"] == 7
     assert rec["postings_detail_read"] == 9
     assert rec["matches"] == {"strong": 2, "moderate": 4, "weak": 5}
     assert rec["filtered_out"] == 12
-    assert rec["by_source"] == {"linkedin": 19, "ashby": 11}
+    assert rec["duplicates_of_another"] == 10
+    assert rec["by_source"] == {"linkedin": 29, "ashby": 11}
     assert rec["agent_data_usage"] == {"searches": 6, "detail_reads": 14, "other": 1,
                                        "total_metered": 21}
 
 
 @pytest.mark.parametrize("absent", ["postings_unreviewed", "searches_never_succeeded",
-                                    "calls_detail_reads", "match_moderate"])
+                                    "calls_detail_reads", "match_moderate",
+                                    "duplicates_of_another"])
 def test_a_count_the_record_needs_but_never_arrived_stops_the_close(tmp_workspace, tmp_path,
                                                                     absent):
     """A reader that exits 0 with a key left out is the one case the exit status cannot report. An
@@ -3587,7 +3844,7 @@ def test_a_count_the_record_needs_but_never_arrived_stops_the_close(tmp_workspac
     would carry a number no log supports and `run_health` would come out healthy off a count that
     was never taken — which is the failure `searches_never_succeeded` was added to catch.
 
-    Four keys rather than one: two the shell branches on and two only the record reads.
+    Five keys rather than one: two the shell branches on and three only the record reads.
 
     The close is `interrupted` here and in the two cases below it, so the only thing in the script
     that can produce exit 1 is the check under test. `WHOLE_COUNT_SET` carries a non-zero
@@ -4084,9 +4341,10 @@ AR_DIGIT_RUN_ID = "٢٠٢٦-٠٧-٣٠T١٥-٠٤-٠٢Z"
 # Run ids no `open-run.sh` can mint. The first two walk out of `runs/`; the next two carry a
 # character an identifier may not hold; the rest traverse nothing and are still not run ids.
 #
-# The empty string is deliberately not here. `${2:?}` at `close-run.sh:67` and `clear-run.sh:22`
-# refuses it before the format check ever runs, and the code that picks the status is the shell's,
-# so it is 1 under sh and 2 under dash. A case for it would pass with the format check deleted and
+# The empty string is deliberately not here. The `${2:?}` that takes the run id in `close-run.sh`
+# and in `clear-run.sh` refuses it before the format check ever runs, and the code that picks the
+# status is the shell's, so it is 1 under sh and 2 under dash. A case for it would pass with the
+# format check deleted and
 # would be red under one of the two shells the suite runs.
 BAD_RUN_IDS = [
     "../elsewhere/pwned",
@@ -4177,7 +4435,7 @@ def test_a_run_id_that_is_not_a_run_id_is_refused_by_the_close(tmp_workspace, ba
     record lands in there, so that command needs no directory made first. A run that reports itself
     complete and healthy while its record is somewhere no reader looks is worse than one that fails.
 
-    The ids that traverse nothing are here for a second reason: `validate-workspace.sh:293` reads a
+    The ids that traverse nothing are here for a second reason: `validate-workspace.sh` reads a
     file in `runs/` as a run record only when its whole name matches the same rule, so a record
     named anything else is skipped by every check the workspace has — measured, a workspace holding
     `runs/not-a-run-id.json` gets no line about it at all — and `started_at` would carry the run id
@@ -4378,8 +4636,9 @@ def test_a_real_run_id_still_closes_under_a_collating_locale(tmp_workspace):
 # Ten run ids, each carrying one digit in all fourteen digit positions of the format. Between them
 # they cover every position-and-digit pair either `case` glob can be wrong about — 14 × 10 = 140,
 # asserted below rather than counted by eye. They are shape probes rather than instants: the globs
-# and `validate-workspace.sh:75` both check that a run id is twenty characters in the documented
-# arrangement, not that it names a real time. `tests/test_validate_workspace.py` drives the same
+# and `validate-workspace.sh`'s `RUN_ID_GLOB` both check that a run id is twenty characters in the
+# documented arrangement, not that it names a real time. `tests/test_validate_workspace.py` drives
+# the same
 # ten through the validator's copy, which these cases do not reach.
 #
 # The suite settled nothing about this before. Measured on 2026-08-06 at commit `1d1dc40` by
@@ -4524,7 +4783,7 @@ def test_a_count_carrying_every_digit_still_reads_as_a_number(tmp_workspace, tmp
     assert r.returncode == 0, r.stdout + r.stderr
     rec = record_of(tmp_workspace, o["run_id"])
     assert rec["postings_unreviewed"] == 1234567890
-    assert rec["postings_surfaced"] == 30          # the rest of the set is untouched
+    assert rec["postings_surfaced"] == 40          # the rest of the set is untouched
 
 
 def test_the_record_matches_the_template_field_set(tmp_workspace):
@@ -4537,7 +4796,7 @@ def test_the_record_matches_the_template_field_set(tmp_workspace):
     close(tmp_workspace, o["run_id"])
     rec = record_of(tmp_workspace, o["run_id"])
     template = json.loads((RUN_SCRIPTS.parent / "templates" / "run-record.example.json").read_text())
-    assert len(RECORD_FIELDS) == 18
+    assert len(RECORD_FIELDS) == 19
     assert set(rec) == RECORD_FIELDS
     assert set(template) == RECORD_FIELDS
     assert set(rec) == set(template)
@@ -4551,7 +4810,8 @@ def test_the_template_arithmetic_holds(tmp_workspace):
     """
     t = json.loads((RUN_SCRIPTS.parent / "templates" / "run-record.example.json").read_text())
     m = t["matches"]
-    assert m["strong"] + m["moderate"] + m["weak"] + t["filtered_out"] == t["postings_reviewed"]
+    assert m["strong"] + m["moderate"] + m["weak"] + t["filtered_out"] \
+        + t["duplicates_of_another"] == t["postings_reviewed"]
     assert t["postings_reviewed"] + t["postings_unreviewed"] == t["postings_surfaced"]
     assert sum(t["by_source"].values()) == t["postings_surfaced"]
     u = t["agent_data_usage"]
