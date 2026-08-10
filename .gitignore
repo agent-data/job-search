@@ -13,6 +13,9 @@ preferences.md
 resumes/
 reports/
 
-# Eval run outputs — transcripts, captured workspaces, per-run grading. They carry machine paths
-# and live posting text; only the aggregate numbers in evals/baseline/ are committed.
-evals/results/
+# The live behavior evals — the driver scripts, the case and seed definitions, the baseline
+# numbers, and every run's output. Untracked on 2026-08-10: the results carry machine paths and
+# live posting text, and nothing else in here is something a user of the plugin needs to read.
+# They still run from the working copy. tests/fixtures/seed-workspace/ is the tracked seed the
+# workspace validator's own test reads.
+evals/
