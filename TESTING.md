@@ -21,7 +21,7 @@ it reports; a few checks are pure shell or visual.
 
 The terminal state (per the AAS-T-10 ruling) is **a structural gate + automated lanes + a shrinking, honestly-labeled manual residual** — not a manual cross-host ritual. What is now **automated** (⚙️, runs in `pytest` / a CLI, host-independent — no manual driving):
 
-- **Scripted mechanics** — `tests/test_mechanics_scripts.py` (449 tests, `python3 -m pytest tests/test_mechanics_scripts.py -q --collect-only`; run them with `pytest -q tests/test_mechanics_scripts.py`): the deterministic state operations the skills call out to — opening and closing a run, workspace discovery, schedule-line composition, dedup, the jobs.jsonl event-line append, recording one agent-data response, queueing a detail read and listing the queue, recording a judgment, and reading a run's counts and its matches back out of the log — each driven through `sh` against a temp fixture. One case runs `sh -n` and strict `dash -n` over every bundled shell script, wherever its owning skill keeps it, so none of them is quietly bash-only: `ls skills/*/scripts/*.sh | wc -l` gives 15, and `ls skills/*/scripts/*.awk | wc -l` gives 9 more `awk` programs those scripts hand off to. `validate-workspace.sh` is syntax-checked here and behavior-tested in the next bullet.
+- **Scripted mechanics** — `tests/test_mechanics_scripts.py` (483 tests, `python3 -m pytest tests/test_mechanics_scripts.py -q --collect-only`; run them with `pytest -q tests/test_mechanics_scripts.py`): the deterministic state operations the skills call out to — opening and closing a run, workspace discovery, schedule-line composition, dedup, the jobs.jsonl event-line append, recording one agent-data response, queueing a detail read and listing the queue, recording a judgment, and reading a run's counts and its matches back out of the log — each driven through `sh` against a temp fixture. One case runs `sh -n` and strict `dash -n` over every bundled shell script, wherever its owning skill keeps it, so none of them is quietly bash-only: `ls skills/*/scripts/*.sh | wc -l` gives 15, and `ls skills/*/scripts/*.awk | wc -l` gives 9 more `awk` programs those scripts hand off to. `validate-workspace.sh` is syntax-checked here and behavior-tested in the next bullet.
 - **Workspace validator** — `tests/test_validate_workspace.py`: `skills/job-search-runbook/scripts/validate-workspace.sh` run against workspaces built per case. It checks config.yaml's required keys, `---` front matter with ISO `created_at`/`updated_at` in preferences.md, the run-record shape and UTC `Z` timestamps, and — with `--post-close` — that no started-marker or scratch directory survived the run. These file rules used to live only as prose in the skills; the script is now what enforces them.
 - **Hardened skill evals** — `python3 scripts/eval_harness.py --root .` validates every `skills/*/evals/evals.json` for structural coherence (contiguous ids, well-formed scenarios, a **discovery** scenario per skill for the four overlap pairs, **stochastic** scenarios carrying `reps ≥ 5` + a **no-guidance control** arm, and — on milestone/liveness scenarios — a **fixed-time fixture** (`fixed_time`: a deterministic reference clock with a valid ISO `now` and a `checks` subset of `milestone`/`liveness`) so those derivations never read the wall clock) and rejects the pinned pack-authored `gpt-5*` literal regression family. Legacy version-1 selectors may resolve through host tier roles; version-2 test and runtime setup injects an exact host-resolved identifier. Pack-authored fixtures and prose never hard-code that identifier. `tests/test_eval_harness.py` unit-tests the rep-aggregation (pass-rate + variance), the control-delta, the fixed-time-fixture validation, and the **unique run marker** enforcement — the off-CI artifact check (`scripts/eval_harness.py --check-artifacts`) accepts a per-run `run_marker` and, for any `run_marked` assertion, requires the artifact to carry it, so a stale artifact left in a reused workspace can never create a false pass.
 - **Release integrity** — `scripts/check_release_integrity.py`: version-sync across the 7 manifests (six JSON plus the Hermes `plugin.yaml`).
@@ -89,7 +89,7 @@ in `-p` commands anyway so the skill is invoked deterministically.
 ```bash
 cd "$JSOS" && python3 -m pytest -q
 ```
-**Expected:** `1037 passed` **and `0 failed`** — treat **`0 failed`** as the real gate. The count moves in both
+**Expected:** `951 passed` **and `0 failed`** — treat **`0 failed`** as the real gate. The count moves in both
 directions: it grows when tests are added, and it fell three times as the 2026-07-30 overhaul landed. First
 688 → 547, when the documentation-prose suites were retired. Then, on 2026-07-31, **554 → 377 → 374 → 372**:
 554 was the measured count once tasks 5–10 had added their own tests; deleting the shared reference corpus and
@@ -118,7 +118,12 @@ pattern, and dropping `find-judgment.awk`'s run scope, added nine (**+9**); and 
 refuse to report success while a scheduled job it did not remove is still installed added sixty-one
 (**+61**, most of it in `test_eval_harness.py`, which went from 62 tests to 116). Each figure is
 `python3 -m pytest tests/ -q --collect-only` at that commit — `b3ac24d`, `9523321`, `08baee7`, `8e849eb`,
-`7d6fbba`, `faa3645`, `f785765`, `0e5f40b`, `2cd027e`. Update the number here whenever it changes. Covers the doc linter, the philosophy guard,
+`7d6fbba`, `faa3645`, `f785765`, `0e5f40b`, `2cd027e`. It then fell once more, to **951**, when the
+top-level `evals/` stopped being tracked on 2026-08-10 and `9bf0536` dropped the tests that read it:
+all of `test_eval_cases.py` (**−32**) and the `evals/run_eval.py` section of `test_eval_harness.py`
+(**−54**, taking that file from 116 tests to 62). For those figures, run the same `--collect-only`
+command at `5950e88` and at `9bf0536`, on the whole suite and on `tests/test_eval_harness.py`.
+Update the number here whenever it changes. Covers the doc linter, the philosophy guard,
 the release-integrity checks, the scripted-mechanics unit tests, the workspace validator
 (`test_validate_workspace.py`), the **eval-scenario validator +
 harness math** (`test_eval_harness.py`), and the fake-shim self-tests (incl. the `bad-query` scenario behind
@@ -838,8 +843,9 @@ cd "$JSOS" && python3 scripts/eval_harness.py --root .   # "Eval harness: eval s
 ```
 
 Then ask Claude, for each of the five suites, to **run its evals** (the `harness` in `skills/<skill>/evals/evals.json`; they use the
-fake-agent-data shim, so zero real credits) — **51 scenarios**:
-- `evaluate-job-fit` (5) · `job-search-run` (18) · `job-preference-interview` (5) · `job-search` (14) · `job-search-agent` (9).
+fake-agent-data shim, so zero real credits) — **52 scenarios**, counted with
+`python3 -c "import json,glob; print(sum(len(json.load(open(p))['evals']) for p in glob.glob('skills/*/evals/evals.json')))"`:
+- `evaluate-job-fit` (5) · `job-search-run` (19) · `job-preference-interview` (5) · `job-search` (14) · `job-search-agent` (9).
 
 Each suite now includes a **discovery** scenario (plant the skill among its siblings, drive a naive prompt, assert the
 right skill is selected and the confusable sibling is not — the four overlap pairs). The judgment-heavy **stochastic**
@@ -932,7 +938,7 @@ entries carry a date mark; the first-Ashby-pass footnote is present.
 - ⬜ Scheduling correct (the composed `/loop <interval>` matches the pinned table per frequency; `/loop` sets `mechanism:loop`; **zero-Python user path** proven with python3 masked) (§9)
 - ⬜ **No numeric scores/weights, budget config, or invented charge** in files or unsolicited chat; accurate calls-first usage context is labeled, and users control frequency, sources, and review depth (§10)
 - ⬜ Docs match reality (install commands, error table, sample digest) (§11)
-- ⬜ Full regression green: `pytest` (**1037**; gate on `0 failed`) + the eval structural gate (`eval_harness.py`) + the five eval suites (**51** scenarios) (§0.3, §12)
+- ⬜ Full regression green: `pytest` (**951**; gate on `0 failed`) + the eval structural gate (`eval_harness.py`) + the five eval suites (**52** scenarios) (§0.3, §12)
 - ⬜ Planned config slash-command tests are marked **N/A (pending build)**, not green (§13)
 - ⬜ Multi-source: live Ashby/Greenhouse/Lever rows; shim multi-source run shows per-source counts + first-pass footnote; one source down never blanks the run (§14)
 

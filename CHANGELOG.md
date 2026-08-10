@@ -4,7 +4,7 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.9.0] — 2026-08-07
+## [0.9.0] — 2026-08-08
 
 ### Changed
 - **A run's digest counts from the event log it wrote, not from the agent's memory of the run.**
@@ -16,6 +16,13 @@ All notable changes to this project are documented here. The format is based on
   are strong. Re-run
   `skills/job-search-run/scripts/run-counts.sh <workspace>/jobs.jsonl <run_id>` a year later and
   you get the numbers that run reported, because every event is selected by that run's id.
+- **One opening posted in several cities is counted once.** One job a company posts in three cities
+  comes back from the sources as three postings. The search judges one of them and records the other
+  two as the same opening: the digest gives it one row, names the other places it was posted on that
+  row, and counts it once, and the home card counts it once too. Both screens decide whether a
+  posting is the same opening as another from the last judgment written for that posting, so a
+  posting whose latest judgment names no other posting keeps its own row and its own place in the
+  counts.
 - **The run writes its log through scripts instead of composing JSON lines by hand.** Each
   agent-data response goes to `record-api-response.sh`, which appends the call and one line per new
   posting; a posting the summary scan cannot settle from the row goes on a read list through
@@ -42,6 +49,15 @@ All notable changes to this project are documented here. The format is based on
   it has, and the removed field is ignored where it appears. Tracking applications is still wanted,
   but as its own thing rather than a field on a job posting — what this pack does right now is work
   out which postings are worth reading.
+
+### Fixed
+- **An event can no longer be lost by landing on the end of the previous one.** If `jobs.jsonl`
+  ended without a newline — a hand edit, a truncated copy, an editor that does not end its files
+  with one — the next event the run appended was written onto that last line, and every reader
+  takes a key's first occurrence, so the joined line read as the earlier event and the new one was
+  gone. Measured on a posting whose judgment landed this way, the run reported it as unreviewed,
+  named it in no match list, and counted it in nothing. Every script that appends to the log now
+  ends the last line first.
 
 ## [0.8.0] — 2026-07-31
 

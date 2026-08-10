@@ -46,7 +46,7 @@ The seven `SKILL.md` files are what every run reads before it can do anything, s
 combined length is a product cost, not a style question. Measure before and after any change to them:
 
 ```bash
-wc -w skills/*/SKILL.md   # 10,468 total on 2026-08-07
+wc -w skills/*/SKILL.md   # 10,619 total on 2026-08-10
 ```
 
 10,000 is the figure to aim at, not a gate: no check fails for going over it, and the corpus is over it
