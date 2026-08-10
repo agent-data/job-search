@@ -141,11 +141,10 @@ linter, the philosophy guard, the release-integrity checks, the mechanics script
 the shims' self-checks), plus a fake `agent-data` PATH shim (`tests/fake-agent-data`) so a whole run is
 exercised with no network and no credits. Scenario suites in the five user-facing skills, at `skills/<skill>/evals/evals.json`,
 checked for structural coherence by [scripts/eval_harness.py](scripts/eval_harness.py) and driven through
-the skill-creator skill. And the live behavior evals in [evals/](evals/) — `run_eval.py` spawns a real
-session against the live Job Postings API and captures the transcript and the workspace it produced, which
-a grader reads; `behaviors.md` maps sixteen behaviors B1–B16 onto the seven cases in `cases/`.
-Because those runs cost real metered calls they are a local release gate, not a CI step. See
-[TESTING.md](TESTING.md) for the matrix.
+the skill-creator skill. On top of those, the maintainer runs a set of live behavior evals against the
+real Job Postings API before tagging a release: each spawns a real session and a grader reads the
+transcript and the workspace it produced. They spend metered calls, so they are a local release gate
+rather than a CI step, and they are not in this repository.
 
 ## Package layering & data flow
 
@@ -195,7 +194,7 @@ When you need an exact runtime detail, go to its owner — do not reproduce it h
 | agent-data CLI: routes, per-source quirks, retry rules, listing id, what a call costs | [agent-data-reference](skills/agent-data-reference/SKILL.md) |
 | The exact shape of `config.yaml`, a run record, a `jobs.jsonl` line, the brief | the `templates/` directory of the skill that writes it: [config.example.yaml](skills/job-search/templates/config.example.yaml) and [workspace.gitignore](skills/job-search/templates/workspace.gitignore) (job-search), [run-record.example.json](skills/job-search-run/templates/run-record.example.json) and [jobs-event.example.json](skills/job-search-run/templates/jobs-event.example.json) (job-search-run), [preferences.example.md](skills/job-preference-interview/templates/preferences.example.md) (job-preference-interview) |
 | Whether a workspace on disk is well formed | [skills/job-search-runbook/scripts/validate-workspace.sh](skills/job-search-runbook/scripts/validate-workspace.sh) |
-| How each skill behaves | its `SKILL.md`, graded by the live behavior evals in [evals/](evals/) and its own `evals/evals.json` |
+| How each skill behaves | its `SKILL.md`, graded by its own `evals/evals.json` and by the maintainer's live behavior evals |
 
 Contributor workflow and the green-gate commands are in [CONTRIBUTING.md](CONTRIBUTING.md) and
 [TESTING.md](TESTING.md).

@@ -23,13 +23,12 @@ The terminal state (per the AAS-T-10 ruling) is **a structural gate + automated 
 
 - **Scripted mechanics** — `tests/test_mechanics_scripts.py` (449 tests, `python3 -m pytest tests/test_mechanics_scripts.py -q --collect-only`; run them with `pytest -q tests/test_mechanics_scripts.py`): the deterministic state operations the skills call out to — opening and closing a run, workspace discovery, schedule-line composition, dedup, the jobs.jsonl event-line append, recording one agent-data response, queueing a detail read and listing the queue, recording a judgment, and reading a run's counts and its matches back out of the log — each driven through `sh` against a temp fixture. One case runs `sh -n` and strict `dash -n` over every bundled shell script, wherever its owning skill keeps it, so none of them is quietly bash-only: `ls skills/*/scripts/*.sh | wc -l` gives 15, and `ls skills/*/scripts/*.awk | wc -l` gives 9 more `awk` programs those scripts hand off to. `validate-workspace.sh` is syntax-checked here and behavior-tested in the next bullet.
 - **Workspace validator** — `tests/test_validate_workspace.py`: `skills/job-search-runbook/scripts/validate-workspace.sh` run against workspaces built per case. It checks config.yaml's required keys, `---` front matter with ISO `created_at`/`updated_at` in preferences.md, the run-record shape and UTC `Z` timestamps, and — with `--post-close` — that no started-marker or scratch directory survived the run. These file rules used to live only as prose in the skills; the script is now what enforces them.
-- **Eval-case lint** — `tests/test_eval_cases.py`: every row in `evals/behaviors.md` names a case file that exists in `evals/cases/`, every case file carries the five header fields `evals/run_eval.py` reads (`behaviors`, `workspace`, `timeout_s`, `models`, `prompt`), and each case's `behaviors:` list matches the rows that name it. This checks that the eval config is coherent; it does not run an eval.
 - **Hardened skill evals** — `python3 scripts/eval_harness.py --root .` validates every `skills/*/evals/evals.json` for structural coherence (contiguous ids, well-formed scenarios, a **discovery** scenario per skill for the four overlap pairs, **stochastic** scenarios carrying `reps ≥ 5` + a **no-guidance control** arm, and — on milestone/liveness scenarios — a **fixed-time fixture** (`fixed_time`: a deterministic reference clock with a valid ISO `now` and a `checks` subset of `milestone`/`liveness`) so those derivations never read the wall clock) and rejects the pinned pack-authored `gpt-5*` literal regression family. Legacy version-1 selectors may resolve through host tier roles; version-2 test and runtime setup injects an exact host-resolved identifier. Pack-authored fixtures and prose never hard-code that identifier. `tests/test_eval_harness.py` unit-tests the rep-aggregation (pass-rate + variance), the control-delta, the fixed-time-fixture validation, and the **unique run marker** enforcement — the off-CI artifact check (`scripts/eval_harness.py --check-artifacts`) accepts a per-run `run_marker` and, for any `run_marked` assertion, requires the artifact to carry it, so a stale artifact left in a reused workspace can never create a false pass.
 - **Release integrity** — `scripts/check_release_integrity.py`: version-sync across the 7 manifests (six JSON plus the Hermes `plugin.yaml`).
 
 Verifying a host-specific action such as scheduling is now a **runtime config-time canary** check, replacing the deleted per-host **structural adapter validation**.
 
-How the skills *behave* is graded by the live behavior evals in `evals/` (§ Behavior evals), which are a **local release gate — CI never runs them**: each one spawns a real `claude -p` session against the live Job Postings API, which needs an API key and costs money. No test asserts sentences of documentation prose; the suites that did were retired on 2026-07-30 in favor of the evals plus `validate-workspace.sh`. Two pytest files still open a reference file, and neither reads it for wording: `tests/test_reference_resolution.py` follows every path a SKILL.md names, from each host's install view, and fails on a dangling one, and `tests/test_usage_context_contract.py` checks that pricing and metering facts have exactly one owning file (the `agent-data-reference` skill).
+How the skills *behave* is graded by live behavior evals the maintainer runs against the real Job Postings API before a release. They need an API key, cost money, and are not in this repository. No test asserts sentences of documentation prose; the suites that did were retired on 2026-07-30 in favor of the evals plus `validate-workspace.sh`. Two pytest files still open a reference file, and neither reads it for wording: `tests/test_reference_resolution.py` follows every path a SKILL.md names, from each host's install view, and fails on a dangling one, and `tests/test_usage_context_contract.py` checks that pricing and metering facts have exactly one owning file (the `agent-data-reference` skill).
 
 What stays a **labeled TRANSITIONAL residual** (👤/🤖, driven by hand): the **behavioral cross-host matrix** — actually running a skill end-to-end on each of the eight hosts that are **not installable on the CI runner** (Codex/Cursor/opencode/Gemini/Copilot/Droid/Pi/Hermes Agent), and the **N ≥ 5 stochastic eval reps** (the discovery/verdict/injection/merge scenarios run against the shim to record real pass-rate + variance + the control delta). These are the **off-CI live-harness step** — expected, not a gap: CI proves the scenarios are *well-formed*; the behavioral reps prove they *pass*, and shrink as hosts become installable. A green structural gate must never be read as a passed behavioral matrix.
 
@@ -121,7 +120,7 @@ refuse to report success while a scheduled job it did not remove is still instal
 `python3 -m pytest tests/ -q --collect-only` at that commit — `b3ac24d`, `9523321`, `08baee7`, `8e849eb`,
 `7d6fbba`, `faa3645`, `f785765`, `0e5f40b`, `2cd027e`. Update the number here whenever it changes. Covers the doc linter, the philosophy guard,
 the release-integrity checks, the scripted-mechanics unit tests, the workspace validator
-(`test_validate_workspace.py`), the eval-case lint (`test_eval_cases.py`), the **eval-scenario validator +
+(`test_validate_workspace.py`), the **eval-scenario validator +
 harness math** (`test_eval_harness.py`), and the fake-shim self-tests (incl. the `bad-query` scenario behind
 T7.12) — dev tooling only; the runtime state procedures are exercised by the live tests below and the skill evals.
 **Result:** ⬜
@@ -861,7 +860,7 @@ marker** into its artifacts (checked with `--check-artifacts`) so a stale artifa
 
 Today all configuration is **conversational** (you chat; Claude edits `config.yaml`). Dedicated config **slash
 commands** — an `/effort`-style surface, e.g. `/job-search-frequency hourly` — are **planned but not built yet**
-(see `docs/exec-plans/tech-debt-tracker.md` → `TODO-CONFIG-COMMANDS`). These tests are **pending-build**: they are **N/A** today and only go
+(tracked as `TODO-CONFIG-COMMANDS` in the maintainer's tech-debt tracker). These tests are **pending-build**: they are **N/A** today and only go
 green once the commands ship. A green run here must never imply the commands exist.
 
 | Test | Planned command | Expected once built | Result |
@@ -946,79 +945,5 @@ Capture reality so the next review can compare against it (this is the boomerang
 - **TTFV (T2.1):** ______ s  ·  **Smoke-subset wall-clock:** ______ min  ·  **Full-pass wall-clock:** ______ min
 - **Where did onboarding / the home view confuse you?** (the one thing you'd fix first) ______
 - **Any T4.7 phrasing Claude misread?** ______
-- **New product gaps found** (add to `docs/exec-plans/tech-debt-tracker.md`): ______
+- **New product gaps found** (add to the tech-debt tracker): ______
 
----
-
-## Behavior evals
-
-The 2026-07-30 skill overhaul (`docs/superpowers/specs/2026-07-30-skill-overhaul-design.md`)
-tests kept behaviors with **live behavioral eval runs** graded on transcripts and captured
-workspaces — never substring assertions against documentation. The behavior → eval matrix is
-`evals/behaviors.md` (rows B1–B16); the seven cases live in `evals/cases/`.
-
-**These are the release gate, and you run them here, not in CI.** Every case spawns a real
-`claude -p` session against the live API, so a run needs your API key and spends metered calls;
-CI checks only that the case config is coherent (`tests/test_eval_cases.py`). Run the full
-matrix — seven cases × two models — before tagging a release, and grade every row in
-`evals/behaviors.md`.
-
-Run one case (each case runs on **both** models):
-
-```bash
-python3 evals/run_eval.py --case fit --model sonnet     # cheapest case
-python3 evals/run_eval.py --case quickstart --model haiku
-```
-
-`triggering` is the one case `run_eval.py` does not run. It holds many prompts rather than one —
-each trigger phrase gets its own session, and what is graded is which skill loaded — so it has its
-own driver, which reuses the same session and workspace-stash code:
-
-```bash
-python3 evals/run_triggering.py --model sonnet --reps 9
-python3 evals/run_triggering.py --model haiku --reps 9 --phrases cost-probe,cli-probe
-```
-
-Each session is killed the moment its first `Skill` call returns, so a routing probe spends no API
-calls. It writes `routing.json` with the skill each session selected, the per-phrase rate, and the
-scheduler check described below.
-
-The runner spawns a real `claude -p` session against the **live** Job Postings API (no mocks)
-and writes `evals/results/<ts>-<case>-<model>/` containing:
-
-- `transcript.jsonl` — every stream-json line stamped with elapsed wall-clock seconds
-- `workspace/` — the `~/.job-search` the session produced
-- `result.json` — timings, exit codes, the case's behavior rows, and the scheduler check
-
-Results stay local (`evals/results/.gitignore`); only aggregate numbers are committed, in
-`evals/baseline/2026-07-30-red-baseline.md` — the pre-overhaul RED numbers that B14 compares
-each post-rewrite run against.
-
-Notes for running:
-
-- The runner moves a real `~/.job-search` aside before the session and restores it after.
-  Eval runs are one at a time: the runner refuses to start while any
-  `~/.job-search.stash-<ts>` exists (a leftover from a crashed or still-running eval). If a
-  crashed runner left one behind, move it back to `~/.job-search` by hand (or remove it if
-  it isn't your real workspace), then rerun.
-- Cases with `workspace: seeded` copy `evals/seeds/<case>/` into place and fail with a clear
-  message when that seed directory is missing; the task that first runs such a case creates
-  its seed.
-- `fit` fetches a live posting at run time (one `search-jobs` + one `get-posting` call) and
-  splices it into the prompt, so the judged posting is always current.
-- `kill-midrun` uses the case's `kill_after_event` regex (also available as
-  `--kill-after-event`) to terminate the child right after the first matching tool call
-  completes, then drives a follow-up session in the same workspace.
-- `schedule` installs a real scheduler entry (cron/launchd/host-native) as part of the
-  canary, and a launchd job outlives the session: launchd starts it outside the child's
-  process group, so the SIGKILL that ends the session never reaches it. On 2026-08-07 one
-  fired after the harness had moved the real `~/.job-search` back and wrote into it.
-- Both runners now list the machine's scheduler entries before and after the session and
-  name every new one that is still installed, in `result.json` (or `routing.json`) and on
-  stdout. Remove what they name, the way it was installed, before the next run.
-- A case may declare `expects_scheduler_entry`, naming the classes it legitimately leaves an
-  entry in. `schedule.yaml` declares all three, because the product keeps the job when the
-  canary passes. One entry per declared class is named and does not fail the run; a second
-  entry in a declared class, an entry in a class the case did not declare, or entries in
-  launchd and cron at once — which is two recurring jobs, not the one declared — all fail it.
-  A case that declares nothing fails on any new entry.

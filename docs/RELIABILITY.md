@@ -47,8 +47,8 @@ the same current state — while the *executor* is the model following the contr
 Two layers verify this. `tests/test_mechanics_scripts.py` drives each script through `sh` against a
 temp fixture, and `tests/test_validate_workspace.py` drives the validator against workspaces built
 per case — so the file rules and the scripted operations are unit-tested. What a *run* does with
-them end to end is graded by the live behavior evals in [../evals/](../evals/) and the
-[../TESTING.md](../TESTING.md) matrix, because that part is the model following the contract.
+them end to end is graded by the live behavior evals the maintainer runs against the real API and by
+the [../TESTING.md](../TESTING.md) matrix, because that part is the model following the contract.
 
 State is an **append-only event log**, not a mutable record: `jobs.jsonl` is a sequence of
 events, and a posting's current state is its last `evaluated` line for its `source` and
@@ -91,7 +91,7 @@ were retired on 2026-07-31 along with the reference file that held them, because
 what the user read — the sentence next to the failing step was. Each skill now names the failures its
 own flow can hit, right beside the step that hits them, and the run's `close_state` (`complete` /
 `blocked` / `interrupted`) is what a later reader keys off. That means what a failure "is" is checked
-by reading the digest and the record, not by matching a token: the live behavior evals in `evals/`
+by reading the digest and the record, not by matching a token: the maintainer's live behavior evals
 grade exactly that.
 
 An interrupted continuation is degraded rather than hidden: the run keeps trustworthy postings
@@ -198,13 +198,13 @@ Reliability claims are only as good as their tests. Four layers back this system
   outage, stale links, a degraded service, cursor chains, malformed pagination — with **no network
   and no metered calls**, so the failure, progress, and retry paths in §2–§4 can be exercised
   repeatedly and for free.
-- **The live behavior evals** in [../evals/](../evals/) check the *model's* behavior against the
-  real API: `run_eval.py` spawns a real session, captures the transcript and the workspace it
-  produced, and a grader reads them. `behaviors.md` maps sixteen behaviors B1–B16 onto
-  the seven cases. This is the layer that proves the reliability claims above — that a blocked gate
-  really does close the run and say what stopped it, that a killed run is reported on the next
-  pass, that judgment stays qualitative. Scenario suites in the five user-facing skills, at
-  `skills/<skill>/evals/evals.json`, cover routing and narrower flows against the shim.
+- **The live behavior evals** the maintainer runs check the *model's* behavior against the real
+  API: each spawns a real session, captures the transcript and the workspace it produced, and a
+  grader reads them. They are not in this repository. This is the layer that proves the reliability
+  claims above — that a blocked gate really does close the run and say what stopped it, that a
+  killed run is reported on the next pass, that judgment stays qualitative. Scenario suites in the
+  five user-facing skills, at `skills/<skill>/evals/evals.json`, cover routing and narrower flows
+  against the shim.
 - **CI** ([../.github/workflows/ci.yml](../.github/workflows/ci.yml)) runs four gates on every
   change: the pytest suite, the philosophy guard, the doc linter, and the release-integrity check.
   `scripts/eval_harness.py`, which checks that those five scenario files are well formed, is a
@@ -213,9 +213,9 @@ Reliability claims are only as good as their tests. Four layers back this system
 Honest scope (per [QUALITY_SCORE.md](QUALITY_SCORE.md)): both eval layers and the live acceptance
 pass run **outside CI**, because a behavior eval spends real metered calls against the live Job
 Postings API. So CI proves the dev tooling, the file rules, and the docs; the release gate that
-proves runtime behavior is a local run of `evals/` before tagging. That split is deliberate and
-tracked, not papered over. The green-gate commands and the contributor workflow are in
-[../CONTRIBUTING.md](../CONTRIBUTING.md); the full acceptance matrix is
+proves runtime behavior is a local run of the behavior evals before tagging. That split is
+deliberate and tracked, not papered over. The green-gate commands and the contributor workflow are
+in [../CONTRIBUTING.md](../CONTRIBUTING.md); the full acceptance matrix is
 [../TESTING.md](../TESTING.md).
 
 ## 7. Reliability of the docs themselves

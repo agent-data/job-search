@@ -2,8 +2,8 @@
 
 An agent harness as a private, local-first **job-search** operating system: a plugin with seven skills —
 five a user reaches, and two more holding the mechanics those five draw on — that the host agent reads and
-executes natively (nothing ships to user machines but markdown), and three test layers — pytest over the dev tooling, a scenario suite in each of
-the five user-facing skills, and the live behavior evals in `evals/`.
+executes natively (nothing ships to user machines but markdown), and two test layers — pytest over the dev tooling, and a scenario suite in each of
+the five user-facing skills.
 **This file is the entry point for coding agents working on this repo** — a map, not the territory.
 Start here, then follow the pointers.
 

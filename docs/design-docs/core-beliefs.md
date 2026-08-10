@@ -101,7 +101,7 @@ the skill that writes each one, listed in
   exits 0 even when blocked, so the record is the only trustworthy signal. The start-to-close sequence is
   owned by the `job-search-runbook` skill, and
   `validate-workspace.sh --post-close <run_id>` checks that even a run that stopped early left no
-  started-marker and no scratch. The behavior is graded by the live evals in `evals/` — B9 covers a run
+  started-marker and no scratch. The behavior is graded by the maintainer's live evals — B9 covers a run
   killed mid-flight — and by the blocked scenarios in `skills/job-search-run/evals/evals.json`.
 - **How to verify.** Read the "One run, start to close" section of
   the `job-search-runbook` skill; then run the job-search-run
@@ -154,9 +154,9 @@ the skill that writes each one, listed in
   `tests/test_validate_workspace.py` drives the validator against workspaces built per case, so the
   rules are mechanically checked rather than asserted in prose. "Read the record, not the exit code"
   is belief 4's close contract, in the same runbook.
-- **How to verify.** Run `python3 -m pytest tests/test_mechanics_scripts.py tests/test_validate_workspace.py`,
-  then the live evals in `evals/` (e.g. `python3 evals/run_eval.py --case headless-run --model sonnet`)
-  and confirm the captured workspace passes `validate-workspace.sh --post-close <run_id>`.
+- **How to verify.** Run `python3 -m pytest tests/test_mechanics_scripts.py tests/test_validate_workspace.py`.
+  The maintainer also runs the headless-run behavior eval and confirms the workspace it captured
+  passes `validate-workspace.sh --post-close <run_id>`; those evals are not in this repository.
 
 ## 7. Consent-gated autonomy
 
@@ -199,8 +199,8 @@ the skill that writes each one, listed in
   never writing a privileged schedule *without* consent. Because the evals stub scheduling (no real
   crontab/launchd runs in tests), the canary's "prove the real invocation before recording" gate is
   verified by the `schedule` case, which installs a real scheduler entry and reads the run record the canary
-  wrote: `python3 evals/run_eval.py --case schedule --model sonnet` (remove the entry after grading). The
-  marker is written only after that record shows a healthy close.
+  wrote — the maintainer runs that case and removes the entry after grading. The marker is written
+  only after that record shows a healthy close.
 
 ## 8. Conversational-first configuration
 

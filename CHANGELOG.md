@@ -95,8 +95,8 @@ Two of these you will notice as a user:
   (`git grep -niE "update available|newer version" -- skills/ README.md` returns nothing),
   because the check read the build stamp, which went with the build step. Until it comes
   back, get updates the way your host offers them — `/plugin` in Claude Code, `codex plugin add`, and
-  so on, per the install section in the README. Tracked as `TODO-UPDATE-AVAILABLE` in
-  `docs/exec-plans/tech-debt-tracker.md`.
+  so on, per the install section in the README. Tracked as `TODO-UPDATE-AVAILABLE` in the
+  maintainer's tech-debt tracker.
 - **"Create a support summary" is gone.** In 0.7.0 you could ask for a local, whitelist-only
   diagnostic file to attach to a bug report. To report a problem now, ask "why did my last run fail?"
   — the agent reads the run record and digest already on your machine and explains what happened —
