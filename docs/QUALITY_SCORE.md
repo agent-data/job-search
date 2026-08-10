@@ -23,5 +23,5 @@ _Last assessed: 2026-07-15._
 | `hooks-guards` | layer | adequate | CI-only guards now distinguish accurate calls-first context from budget controls and invented charge claims; nothing executable ships to user machines, so runtime conduct still rests on instruction-level stances plus evals. |
 | `tests-evals` | layer | adequate | The fake shim covers cursor chains and attempt accounting, with effect-based evals for progress, cleanup, partial depth, quota, consent, and nudges; behavioral skill evals and live acceptance still run outside CI, so CI does not prove model behavior. |
 
-> Detailed, itemised debt lives in the tech-debt tracker under `docs/exec-plans/`. This scorecard is
-> the high-level view; the tracker is the backlog.
+> Detailed, itemised debt lives in a tech-debt tracker kept outside this repository. This scorecard
+> is the high-level view; the tracker is the backlog.

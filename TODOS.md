@@ -1,5 +1,7 @@
 # TODOs
 
-The technical-debt tracker has moved and is now canonical at
-[docs/exec-plans/tech-debt-tracker.md](docs/exec-plans/tech-debt-tracker.md) — co-located with the
-execution plans. Update that file, not this one.
+The itemised technical-debt tracker is an authoring document and is not kept in this repository.
+
+To raise technical debt, open a [GitHub issue](https://github.com/agent-data/job-search/issues).
+For the graded view of where the system is currently weak, see
+[docs/QUALITY_SCORE.md](docs/QUALITY_SCORE.md).
