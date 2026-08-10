@@ -27,7 +27,10 @@ VALIDATOR = ROOT / "skills" / "job-search-runbook" / "scripts" / "validate-works
 RUN_COUNTS = ROOT / "skills" / "job-search-run" / "scripts" / "run-counts.sh"
 CLOSE_RUN = ROOT / "skills" / "job-search-runbook" / "scripts" / "close-run.sh"
 RECORD_TEMPLATE = ROOT / "skills" / "job-search-run" / "templates" / "run-record.example.json"
-SEED_WORKSPACE = ROOT / "evals" / "seeds" / "headless-run"
+# A real workspace kept under tests/, not under evals/ — evals/ is untracked, so a fresh clone
+# would otherwise have no seed to validate. evals/seeds/headless-run/ is still the copy
+# evals/run_eval.py reads for its `workspace: seeded` cases; this one is the tracked twin.
+SEED_WORKSPACE = ROOT / "tests" / "fixtures" / "seed-workspace"
 CONFIG_TEMPLATE = ROOT / "skills" / "job-search" / "templates" / "config.example.yaml"
 PREFERENCES_TEMPLATE = (
     ROOT / "skills" / "job-preference-interview" / "templates" / "preferences.example.md")
