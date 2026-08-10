@@ -275,8 +275,8 @@ def control_delta(guided_results, control_results):
 # Opt-in developer modes (T6.1): artifact assertions + result aggregation over LOCAL,
 # UNTRACKED evidence.
 #
-# The off-CI live canary harness records two evidence files under docs-private/ (gitignored,
-# never shipped): current-artifacts.json (a workspace + assertions about the artifacts a real
+# The off-CI live canary harness records two evidence files in a local gitignored directory
+# (never shipped): current-artifacts.json (a workspace + assertions about the artifacts a real
 # scheduled-path fire produced) and current-results.json (per-scenario guided vs control reps).
 # These modes are invoked only with an explicit path, so the free, deterministic --root CI run
 # never requires either file. Both schema-validate their input (a malformed file is never

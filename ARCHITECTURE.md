@@ -8,8 +8,8 @@ into a workspace that never touches source control.
 
 This doc is the **structural map**: the OS model, the five product **domains**, the five architectural
 **layers**, and how packages depend on each other and data flows through a run. It is deliberately a map,
-not the territory — the binding details live elsewhere and are linked, never restated. For the full design
-specs see [docs/design-docs/index.md](docs/design-docs/index.md); the runtime contracts — the workspace
+not the territory — the binding details live elsewhere and are linked, never restated. The runtime
+contracts — the workspace
 and the run contract in the `job-search-runbook` skill, the job-postings API in the
 `agent-data-reference` skill — are the single source of truth. Read [AGENTS.md](AGENTS.md) first for the agent-facing
 entry point. Companion grading: [docs/QUALITY_SCORE.md](docs/QUALITY_SCORE.md) scores every domain × layer.
@@ -179,14 +179,11 @@ the run. Every script named here is under
 [skills/job-search-run/scripts/](skills/job-search-run/scripts/). A run that a gate stops still closes: it writes a
 record with `close_state: blocked` and `run_health: degraded`, and a digest whose body says what stopped it
 and what fixes it, so the next home view surfaces both. Detail and failure modes are in
-[docs/product-specs/index.md](docs/product-specs/index.md) and
 [agent-data-reference](skills/agent-data-reference/SKILL.md).
 
 **Onboarding flow.** On first run [job-search](skills/job-search/SKILL.md) walks the user end-to-end —
 prereqs, workspace, the preferences interview, queries + cadence, a first live search, and optional
-scheduling (offered as a yes/no, never assumed) — ending with real matches. The full flow is specified in
-[docs/product-specs/index.md](docs/product-specs/index.md); the design rationale in
-[docs/design-docs/index.md](docs/design-docs/index.md).
+scheduling (offered as a yes/no, never assumed) — ending with real matches.
 
 ## Where the contracts live
 
@@ -201,4 +198,4 @@ When you need an exact runtime detail, go to its owner — do not reproduce it h
 | How each skill behaves | its `SKILL.md`, graded by the live behavior evals in [evals/](evals/) and its own `evals/evals.json` |
 
 Contributor workflow and the green-gate commands are in [CONTRIBUTING.md](CONTRIBUTING.md) and
-[TESTING.md](TESTING.md); planned work is tracked in [docs/exec-plans/index.md](docs/exec-plans/index.md).
+[TESTING.md](TESTING.md).

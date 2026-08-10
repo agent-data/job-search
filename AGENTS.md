@@ -13,16 +13,11 @@ Start here, then follow the pointers.
 - **Runtime contracts** — two skills, and between them the single source of truth for everything a run does: [job-search-runbook](skills/job-search-runbook/SKILL.md) (the workspace, what each file holds, how one run opens and closes, what stays off disk) and [agent-data-reference](skills/agent-data-reference/SKILL.md) (the CLI, the four job sources, retries, what a call costs). Docs here POINT to these; never duplicate them. The exact shape of each workspace file is a copyable example in the `templates/` directory of the skill that writes it — [config.example.yaml](skills/job-search/templates/config.example.yaml) and [workspace.gitignore](skills/job-search/templates/workspace.gitignore) under job-search, [preferences.example.md](skills/job-preference-interview/templates/preferences.example.md) under job-preference-interview, [run-record.example.json](skills/job-search-run/templates/run-record.example.json) and [jobs-event.example.json](skills/job-search-run/templates/jobs-event.example.json) under job-search-run.
 
 ## Design & product
-- [Design docs index](docs/design-docs/index.md) — catalogued specs with verification status.
-- [Product specs index](docs/product-specs/index.md) — product flows (onboarding, …).
 - [PRODUCT_SENSE](docs/PRODUCT_SENSE.md) — product philosophy and non-goals.
 
 ## Quality · reliability · security · interface
 - [QUALITY_SCORE](docs/QUALITY_SCORE.md) — graded coverage per domain × layer.
 - [RELIABILITY](docs/RELIABILITY.md) · [SECURITY](docs/SECURITY.md) · [INTERFACE](docs/INTERFACE.md)
-
-## Plans & work
-- [Plans methodology](docs/PLANS.md) · [Exec-plans index](docs/exec-plans/index.md)
 
 ## Working here
 - **Single source of truth:** the shared contracts live once, in the `job-search-runbook` and `agent-data-reference` skills — each of the other five invokes whichever of the two it needs and nothing outside them, nothing is copied per-skill and no build step writes into `skills/`.

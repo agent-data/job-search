@@ -75,8 +75,8 @@ Within about five minutes of installing, the user sees real, live postings judge
 own brief — strong, moderate, or weak, with reasoning — without writing a single file by hand.
 That first digest is the **magical moment**: the product stops being abstract and starts being
 useful. Every step in onboarding either directly builds toward that moment or gates it safely.
-The full onboarding flow, TTFV target, and friction-killer decisions are specified in
-[docs/product-specs/new-user-onboarding.md](product-specs/new-user-onboarding.md).
+The onboarding flow itself — every step, in order — is the `job-search` skill:
+[skills/job-search/SKILL.md](../skills/job-search/SKILL.md).
 
 ### Docs-as-product
 
@@ -156,4 +156,4 @@ domain and architectural layer against known gaps — re-graded as the code chan
 on-demand product-health snapshot.
 
 For the full system rationale, the OS model, and the layer map, see
-[ARCHITECTURE.md](../ARCHITECTURE.md) and [docs/design-docs/index.md](design-docs/index.md).
+[ARCHITECTURE.md](../ARCHITECTURE.md).

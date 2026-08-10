@@ -50,9 +50,8 @@ style reference.
 
 ## The front door and home view
 
-`/job-search` is the entry point for all user interactions. On first run it routes to
-onboarding (see [`product-specs/new-user-onboarding.md`](product-specs/new-user-onboarding.md));
-for a returning user it routes to the home view described in
+`/job-search` is the entry point for all user interactions. On first run it routes to onboarding;
+for a returning user it routes to the home view. Both flows are described in
 [`../skills/job-search/SKILL.md`](../skills/job-search/SKILL.md).
 
 The home view is a compact, glanceable dashboard — not a log dump. A returning user
