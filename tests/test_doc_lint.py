@@ -58,10 +58,10 @@ def test_links_em_dash_anchor_needs_double_hyphen(tmp_path):
     assert r.returncode == 0, r.stdout + r.stderr
 
 def _valid_agents_md():
-    links = ["ARCHITECTURE.md", "docs/design-docs/index.md", "docs/design-docs/core-beliefs.md",
-             "docs/exec-plans/index.md", "docs/product-specs/index.md", "docs/QUALITY_SCORE.md",
+    # Exactly the pointers scan_agents_map requires (doc_lint.REQUIRED_AGENTS_LINKS).
+    links = ["ARCHITECTURE.md", "docs/design-docs/core-beliefs.md", "docs/QUALITY_SCORE.md",
              "docs/PRODUCT_SENSE.md", "docs/RELIABILITY.md", "docs/SECURITY.md",
-             "docs/INTERFACE.md", "docs/PLANS.md",
+             "docs/INTERFACE.md",
              "skills/job-search-runbook/SKILL.md", "skills/agent-data-reference/SKILL.md"]
     return "# Agent Map\n\n" + "\n".join(f"- [{t}]({t})" for t in links) + "\n"
 

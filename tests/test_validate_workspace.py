@@ -6,7 +6,8 @@ record in `runs/` must get right, and the leftovers a finished run must not leav
 prints one `INVALID <file> <rule>` line per broken rule and exits 1; a workspace with nothing wrong
 prints nothing and exits 0.
 
-Scripts are the one place ordinary unit tests belong — skill behavior is graded by `evals/` instead —
+Scripts are the one place ordinary unit tests belong — skill behavior is graded by the scenario
+suites at `skills/<skill>/evals/evals.json` and by the maintainer's live behavior evals instead —
 so each test here builds a temp workspace, runs the script through POSIX `sh` (never bash), and
 asserts the exact line it prints.
 
@@ -27,11 +28,10 @@ VALIDATOR = ROOT / "skills" / "job-search-runbook" / "scripts" / "validate-works
 RUN_COUNTS = ROOT / "skills" / "job-search-run" / "scripts" / "run-counts.sh"
 CLOSE_RUN = ROOT / "skills" / "job-search-runbook" / "scripts" / "close-run.sh"
 RECORD_TEMPLATE = ROOT / "skills" / "job-search-run" / "templates" / "run-record.example.json"
-# A real workspace, copied from evals/seeds/headless-run/. It is kept under tests/ because a later
-# commit on this branch stops tracking evals/, and without a tracked copy a fresh clone would have
-# no workspace for this test to validate. The directory under evals/ stays where it is:
-# evals/run_eval.py:469 builds the path for a seeded case as evals/seeds/<case>/, and three cases
-# declare `workspace: seeded` (grep -rn 'workspace: seeded' evals/cases/*.yaml).
+# A real workspace, kept under tests/ so that a fresh clone has one for this test to validate. It is
+# a copy of the seed workspace the maintainer's live behavior evals use for a headless run. They keep
+# the original, because their runner looks for a seeded case's workspace inside that harness, and the
+# harness is not in this repository: `git ls-files evals` prints nothing.
 SEED_WORKSPACE = ROOT / "tests" / "fixtures" / "seed-workspace"
 CONFIG_TEMPLATE = ROOT / "skills" / "job-search" / "templates" / "config.example.yaml"
 PREFERENCES_TEMPLATE = (

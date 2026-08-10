@@ -136,7 +136,8 @@ leaking into shipped artifacts, and [scripts/doc_lint.py](scripts/doc_lint.py) k
 structurally sound. The scheduling stance is instruction-level (see scheduling-consent above).
 
 ### tests-evals
-Three layers. The deterministic test bed under [tests/](tests/): pytest suites for the dev tooling (the doc
+Two layers in this repository, and a third the maintainer runs outside it. The deterministic test bed
+under [tests/](tests/): pytest suites for the dev tooling (the doc
 linter, the philosophy guard, the release-integrity checks, the mechanics scripts, the workspace validator,
 the shims' self-checks), plus a fake `agent-data` PATH shim (`tests/fake-agent-data`) so a whole run is
 exercised with no network and no credits. Scenario suites in the five user-facing skills, at `skills/<skill>/evals/evals.json`,

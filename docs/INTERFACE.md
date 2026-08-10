@@ -43,8 +43,7 @@ see [`design-docs/core-beliefs.md`](design-docs/core-beliefs.md).
 
 How skills speak — plain English, outcome first, no internal vocabulary, briefs and digests
 rendered inline rather than described — is carried by each skill's own `SKILL.md`, and graded by
-behavior rows B1 and B2 in the maintainer's live behavior evals rather than pinned in a
-style reference.
+the maintainer's live behavior evals rather than pinned in a style reference.
 
 ---
 

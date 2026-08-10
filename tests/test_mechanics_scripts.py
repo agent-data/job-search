@@ -2435,9 +2435,12 @@ def test_the_fixture_glob_finds_something_to_guard():
 @pytest.mark.parametrize("path", sorted(FIXTURES.glob("*.json")), ids=lambda p: p.name)
 def test_a_committed_fixture_carries_no_live_posting_text(path):
     """`.gitignore` gives the reason eval output is not committed — it "carries machine paths and
-    live posting text" — and `tests/fixtures/` is not gitignored, so the same rule holds here by
-    hand. This is what makes it hold: a fixture captured live and committed without `scrub.py`
-    run over it fails.
+    live posting text" — and no ignore rule matches this fixture directory, so the same rule holds
+    here by hand: `git check-ignore --no-index -v tests/fixtures/api-responses/*.json` prints
+    nothing and exits 1. The one ignore file under `tests/fixtures/` is `seed-workspace/.gitignore`,
+    the deny-all a job-search workspace starts with, and it applies only inside that directory.
+    This is what makes the rule hold: a fixture captured live and committed without `scrub.py` run
+    over it fails.
 
     Every fixture in the directory is found by glob, so a file added by a later task is covered
     the moment it lands rather than when somebody remembers to list it.
@@ -3381,7 +3384,9 @@ def test_another_runs_judgments_are_not_listed(tmp_path):
 
 
 def test_the_listing_and_the_counts_agree(tmp_path):
-    """The assertion B8 will make against a live run, made here against a fixture.
+    """The maintainer's live behavior evals check the same thing against a real run: that the
+    digest's counts and the postings it names both come back out of `jobs.jsonl` and agree. This
+    test checks it against a fixture.
 
     The three numbers this test recorded are pinned first, because two scripts that are wrong in
     the same way also agree. Measured 2026-08-06 with `jval` in `event-field.awk` returning "" for

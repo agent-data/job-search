@@ -635,8 +635,8 @@ ls -a "$SHK/runs/"; rm -rf "$SHK"
 ```
 **Expected:** the run says up front that the last run did not finish, deletes the stale marker and its scratch
 directory, and then does this run's work normally — a fresh record and digest, `close_state: complete`. Nothing
-is silently swallowed, and no stale `.started-*` survives. This is behavior row B9; the `kill-midrun` eval case
-covers the same ground with a real kill.
+is silently swallowed, and no stale `.started-*` survives. The maintainer's live behavior evals check the same
+thing with a real kill instead of a marker created here by hand.
 **Result:** ⬜
 
 ### T7.15 Pagination and usage-context matrix — 🤖 + 👤 (fake shim, fully offline)

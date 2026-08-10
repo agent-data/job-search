@@ -101,8 +101,9 @@ the skill that writes each one, listed in
   exits 0 even when blocked, so the record is the only trustworthy signal. The start-to-close sequence is
   owned by the `job-search-runbook` skill, and
   `validate-workspace.sh --post-close <run_id>` checks that even a run that stopped early left no
-  started-marker and no scratch. The behavior is graded by the maintainer's live evals — B9 covers a run
-  killed mid-flight — and by the blocked scenarios in `skills/job-search-run/evals/evals.json`.
+  started-marker and no scratch. The behavior is graded by the maintainer's live evals — one of them kills a
+  run mid-flight and checks what the next run says about it — and by the blocked scenarios in
+  `skills/job-search-run/evals/evals.json`.
 - **How to verify.** Read the "One run, start to close" section of
   the `job-search-runbook` skill; then run the job-search-run
   evals (ask Claude to "run the evals for job-search-run") and confirm each blocked scenario writes its
@@ -191,7 +192,7 @@ the skill that writes each one, listed in
   in [skills/job-search/SKILL.md](../../skills/job-search/SKILL.md) and stated user-facing in
   [docs/SECURITY.md](../SECURITY.md). The canary's proof routes through the **written record** — a run
   record with `trigger: scheduled` and a healthy close, read from the artifact rather than the process exit
-  code (belief 6). Graded by the `schedule` eval case (behavior row B11) and by the job-search scenario
+  code (belief 6). Graded by the maintainer's live scheduling eval and by the job-search scenario
   suite: the yes/no offer, the composed schedule line for the cadence, and the registry marker — not an
   enforced prohibition.
 - **How to verify.** Run the job-search evals and confirm the agent *offers* scheduling as a yes/no,
