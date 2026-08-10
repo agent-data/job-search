@@ -13,9 +13,10 @@ those rules is decided by
 [skills/job-search-runbook/scripts/validate-workspace.sh](../skills/job-search-runbook/scripts/validate-workspace.sh).
 When a number or a literal matters, follow the link to its source of truth.
 
-For the principles behind these mechanisms see
-[design-docs/core-beliefs.md](design-docs/core-beliefs.md); for the structural map see
-[../ARCHITECTURE.md](../ARCHITECTURE.md).
+The design choice behind §2 and §4 — no silent failures, every blocked path named where it is
+hit — is stated in
+[../CONTRIBUTING.md](../CONTRIBUTING.md#project-philosophy-please-dont-regress-these); for the
+structural map see [../ARCHITECTURE.md](../ARCHITECTURE.md).
 
 **TL;DR (reading this mid-incident).** Run-health states and *how a blocked run surfaces without a
 trustworthy exit code* both live in [§4](#4-run-health--blocked-surfacing--visible-without-the-exit-code).
@@ -68,8 +69,7 @@ the scripts that append every line and read the counts back out are under
 
 Because the deterministic pieces are isolated from the LLM judgment, the parts that *can* be
 proven correct *are* — the model is left to do only what genuinely needs judgment (relevance),
-and everything else is testable. See the **Deterministic, testable, headless** belief in
-[design-docs/core-beliefs.md](design-docs/core-beliefs.md#6-deterministic-testable-headless).
+and everything else is testable.
 
 Deeper company-board coverage adds two bounded state rules. Pagination stops a stream when its
 cursor or page signature stops making trustworthy progress, so a bad continuation cannot loop or
@@ -99,9 +99,11 @@ already scanned, marks the affected stream and overall depth incomplete, continu
 and says in the digest that coverage was partial. It never claims exhaustive coverage or persists a
 cursor for later resumption.
 
-That "name it, never swallow it" rule is a core belief, enforced in review and by the linters —
-see **No silent failures — named errors** in
-[design-docs/core-beliefs.md](design-docs/core-beliefs.md#4-no-silent-failures--named-errors).
+That "name it, never swallow it" rule is one of the design choices a change must not regress,
+stated in [../CONTRIBUTING.md](../CONTRIBUTING.md#project-philosophy-please-dont-regress-these).
+No linter checks it. What holds it is review, the scenarios in
+`skills/job-search-run/evals/evals.json` that assert a blocked close writes both the record and a
+digest carrying the cause and the fix, and the maintainer's live behavior evals.
 
 ## 3. Retry & circuit-breaker — patient, then it stops
 

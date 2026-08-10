@@ -89,14 +89,13 @@ def scan_internal_links(root):
 
 
 AGENTS_MAX_LINES = 150
-# The design-docs catalogue, the product-specs catalogue, the exec-plans index and the plans
-# methodology left this repository on 2026-08-10 — they are authoring documents, and every
-# tracked file has to be reviewed before a push to a public remote. core-beliefs.md stayed:
-# AGENTS.md calls it the doc to read before changing behavior, and four of the five other
-# documents under docs/ cite it (grep -rl core-beliefs docs/).
+# The design-docs catalogue, the product-specs catalogue, the exec-plans index, the plans
+# methodology and the agent-first core beliefs all left this repository on 2026-08-10 — they are
+# authoring documents, and every tracked file has to be reviewed before a push to a public remote.
+# The design choices a change must not regress are still stated for a reader of this repository,
+# in CONTRIBUTING.md's "Project philosophy" section, which is where AGENTS.md now sends them.
 REQUIRED_AGENTS_LINKS = (
     "ARCHITECTURE.md",
-    "docs/design-docs/core-beliefs.md",
     "docs/QUALITY_SCORE.md",
     "docs/PRODUCT_SENSE.md",
     "docs/RELIABILITY.md",

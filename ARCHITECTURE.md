@@ -85,8 +85,7 @@ config-time canary proves the schedule actually runs, records the schedule marke
 resolves the concrete mechanism for its own host (there is no per-host adapter). The consent-gated stance is
 an instruction-level design rule carried by the `job-search` skill — the only one that installs a schedule —
 and by the `job-search-runbook` skill it reads for the unattended invocation
-([docs/SECURITY.md](docs/SECURITY.md), [core-beliefs.md](docs/design-docs/core-beliefs.md) Belief 7), not a
-runtime control. The cadence options live in
+([docs/SECURITY.md](docs/SECURITY.md)), not a runtime control. The cadence options live in
 [skills/job-search/templates/config.example.yaml](skills/job-search/templates/config.example.yaml),
 and the cron line for each is composed by
 [skills/job-search/scripts/schedule-line.sh](skills/job-search/scripts/schedule-line.sh).

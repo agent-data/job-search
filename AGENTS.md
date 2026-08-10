@@ -10,7 +10,7 @@ Start here, then follow the pointers.
 
 ## Start here
 - **[ARCHITECTURE.md](ARCHITECTURE.md)** — the five product domains × five layers and how they fit; read before any change.
-- **[Core beliefs](docs/design-docs/core-beliefs.md)** — the agent-first operating principles; read before changing behavior.
+- **[Project philosophy](CONTRIBUTING.md#project-philosophy-please-dont-regress-these)** — the design choices a change must not regress: qualitative relevance rather than a score, usage context rather than budget controls, a private local workspace, and every blocked path named. Read before changing behavior.
 - **Runtime contracts** — two skills, and between them the single source of truth for everything a run does: [job-search-runbook](skills/job-search-runbook/SKILL.md) (the workspace, what each file holds, how one run opens and closes, what stays off disk) and [agent-data-reference](skills/agent-data-reference/SKILL.md) (the CLI, the four job sources, retries, what a call costs). Docs here POINT to these; never duplicate them. The exact shape of each workspace file is a copyable example in the `templates/` directory of the skill that writes it — [config.example.yaml](skills/job-search/templates/config.example.yaml) and [workspace.gitignore](skills/job-search/templates/workspace.gitignore) under job-search, [preferences.example.md](skills/job-preference-interview/templates/preferences.example.md) under job-preference-interview, [run-record.example.json](skills/job-search-run/templates/run-record.example.json) and [jobs-event.example.json](skills/job-search-run/templates/jobs-event.example.json) under job-search-run.
 
 ## Design & product
