@@ -27,9 +27,11 @@ VALIDATOR = ROOT / "skills" / "job-search-runbook" / "scripts" / "validate-works
 RUN_COUNTS = ROOT / "skills" / "job-search-run" / "scripts" / "run-counts.sh"
 CLOSE_RUN = ROOT / "skills" / "job-search-runbook" / "scripts" / "close-run.sh"
 RECORD_TEMPLATE = ROOT / "skills" / "job-search-run" / "templates" / "run-record.example.json"
-# A real workspace kept under tests/, not under evals/ — evals/ is untracked, so a fresh clone
-# would otherwise have no seed to validate. evals/seeds/headless-run/ is still the copy
-# evals/run_eval.py reads for its `workspace: seeded` cases; this one is the tracked twin.
+# A real workspace, copied from evals/seeds/headless-run/. It is kept under tests/ because a later
+# commit on this branch stops tracking evals/, and without a tracked copy a fresh clone would have
+# no workspace for this test to validate. The directory under evals/ stays where it is:
+# evals/run_eval.py:469 builds the path for a seeded case as evals/seeds/<case>/, and three cases
+# declare `workspace: seeded` (grep -rn 'workspace: seeded' evals/cases/*.yaml).
 SEED_WORKSPACE = ROOT / "tests" / "fixtures" / "seed-workspace"
 CONFIG_TEMPLATE = ROOT / "skills" / "job-search" / "templates" / "config.example.yaml"
 PREFERENCES_TEMPLATE = (
@@ -226,7 +228,7 @@ def test_workspace_without_runs_directory_passes(tmp_workspace):
 
 
 def test_seed_workspace_passes():
-    """The eval seed is a real workspace; it stays valid."""
+    """The workspace under tests/fixtures/ is a real one, not built here; it stays valid."""
     r = run_validator(SEED_WORKSPACE)
     assert r.returncode == 0, r.stdout + r.stderr
 
