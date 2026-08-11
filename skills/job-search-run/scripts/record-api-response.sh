@@ -40,7 +40,8 @@
 # Exit 2: bad arguments, a missing file, or a body that is not what --route says it is. A body that
 #         was scanned still records its call — the file came off a metered call whatever shape it
 #         arrived in — so only the checks that run before the scan leave no event: the argument
-#         checks, the missing-file check, and mktemp.
+#         checks, the missing-file check, and mktemp. Put a saved response through this script once:
+#         a second run records a second `call` event for the one metered call behind it.
 set -u
 
 here=$(dirname "$0")
@@ -367,15 +368,15 @@ haspath '^data[.](query|results)[.]' || {
   # opens a source:query_id group in run-counts.awk, a group with no ok:true member is counted as a
   # search that never returned, and close-run.sh reports that as run_health=degraded. The note at
   # the top of this file says that guessing the route from the body files every failed detail read
-  # under searches, and this change follows it: the route here is read off a path only a posting body
-  # carries, not guessed. The body has passed the error gate above and carries data.source_id at two
-  # segments, the same test the get-posting branch applies to itself. Measured with json-scan.awk — 1
-  # such path in a posting body, 0 in a search body, whether the search returned rows or none.
+  # under searches. The route here is read off a path only a posting body carries, not guessed. The
+  # body has passed the error gate above and carries data.source_id at two segments, the same test
+  # the get-posting branch applies to itself. Measured with json-scan.awk — 1 such path in a posting
+  # body, 0 in a search body, whether the search returned rows or none.
   #
   # The mirror case is deliberately left alone. A search body arriving with --route get-posting
   # carries no --query-id, because only a search is required to pass one, so filing it as a search
   # would open the group `<source>:null` that nothing can ever mark answered — the same invented lost
-  # search, at the other gate.
+  # search, this time at the get-posting shape gate.
   haspath '^data[.]source_id$' && callroute=get-posting
   emit_call "$src_flag" false 0 0
   printf 'record-api-response.sh: %s carries neither data.query nor data.results — it is not a search-jobs response; the call is recorded, nothing else\n' \

@@ -1339,7 +1339,7 @@ def test_a_posting_body_missing_data_source_id_entirely_still_records_its_call(t
     `source`, `source_id`, or both.
 
     The event carries the request id off `meta`, because `req` is read at
-    `record-api-response.sh:237`, before the route branch. That is what lets an operator match a
+    `record-api-response.sh:238`, before the route branch. That is what lets an operator match a
     refused call against the service's own record."""
     body = tmp_path / "trimmed.json"
     body.write_text(json.dumps({"data": {"id": "jp_22d0d871db24", "title": "Head of FP&A",
@@ -1363,7 +1363,7 @@ def test_a_posting_body_missing_data_source_id_entirely_still_records_its_call(t
 
 def test_a_search_body_recorded_as_a_detail_read_keeps_the_route_it_was_given(tmp_path):
     """A search body arriving with --route get-posting carries no --query-id, because
-    `record-api-response.sh:129-135` requires one only for a search. Filing it as a search would
+    `record-api-response.sh:130-136` requires one only for a search. Filing it as a search would
     open the group `<source>:null` that nothing can ever mark answered — an invented lost search,
     which is the outcome correcting the route at the search gate exists to avoid. So the call is
     filed as the detail read the caller said it was, and `calls_total_metered` — the number the
@@ -1465,6 +1465,11 @@ def test_a_body_carrying_neither_data_query_nor_data_results_nor_data_source_id_
     assert r.returncode == 2, r.stdout + r.stderr
     ev = [e for e in lines(jobs) if e["event"] == "call"][-1]
     assert ev["route"] == "search-jobs" and ev["ok"] is False
+    # A refused body brought no rows in. Only a search adds rows_new to rows_new_total
+    # (`run-counts.awk:41`, inside the `route == "search-jobs"` block), and this event kept that
+    # route, so a non-zero value here would push rows_new_total above postings_surfaced and trip the
+    # `surfaced-does-not-match-rows-new` check at `validate-workspace.sh:484`.
+    assert ev["rows_new"] == 0
     _, c = counts(jobs)
     assert c["searches_never_succeeded"] == "1"
     assert c["searches_never_succeeded_ids"] == "ashby:q9"
