@@ -1336,7 +1336,7 @@ def test_a_posting_body_missing_data_source_id_entirely_still_records_its_call(t
     """The shape gate, and the path a `--fields` list that dropped `source_id` lands on. It had no
     test at all, and 40 of the 74 metered get-posting calls of the 2026-08-10 run went unrecorded
     across these reject paths: HTTP 200 with valid bodies, trimmed by a field list that left out
-    the two keys a posting is filed under.
+    `source`, `source_id`, or both.
 
     The event carries the request id off `meta`, because `req` is read at
     `record-api-response.sh:227`, before the route branch. That is what lets an operator match a
@@ -1363,11 +1363,11 @@ def test_a_posting_body_missing_data_source_id_entirely_still_records_its_call(t
 
 def test_a_search_body_recorded_as_a_detail_read_keeps_the_route_it_was_given(tmp_path):
     """A search body arriving with --route get-posting carries no --query-id, because
-    `record-api-response.sh:119-124` requires one only for a search. Filing it as a search would
+    `record-api-response.sh:119-125` requires one only for a search. Filing it as a search would
     open the group `<source>:null` that nothing can ever mark answered — an invented lost search,
     which is the outcome correcting the route at the search gate exists to avoid. So the call is
     filed as the detail read the caller said it was, and `calls_total_metered` — the number the
-    billing is charged against — is right either way."""
+    digest prints on its usage line — is right either way."""
     jobs = seeded_jobs(tmp_path, "search.ashby.json")
     r = run_script(RECORD_API, RID, jobs, FIXTURES / "search.linkedin.json",
                    "--route", "get-posting", "--source", "linkedin")
