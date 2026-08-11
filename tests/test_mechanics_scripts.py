@@ -50,6 +50,7 @@ CLEAR_RUN = RUNBOOK_SCRIPTS / "clear-run.sh"
 POSTINGS = SEARCH_SCRIPTS / "posting-counts.sh"
 RESOLVE_RUN = RUN_SCRIPTS / "resolve-run.sh"
 FETCH_POSTING = RUN_SCRIPTS / "fetch-posting.sh"
+CHECK_ARGS = RUN_SCRIPTS / "check-record-args.sh"
 LISTING = "f9a6ec16-0bfd-44d8-b3ee-073776745ee7"
 
 ALL_SCRIPTS = [DEDUP, APPEND, SCHEDULE, DISCOVERY, VALIDATE, RECORD_API, QUEUE, LIST_QUEUE,
@@ -91,22 +92,52 @@ def base_env(home):
 
 # ------------------------------------------------------------ the live agent-data harness
 
-def _agent_data_ready():
-    """True when the agent-data CLI is on PATH here and carries a key."""
+def _live_blocker():
+    """Why the live tests cannot run on this machine, or None when they can.
+
+    Four different states used to answer one bare `False`, and the skip line then read "agent-data
+    is absent or unauthenticated" for every one of them. That is a false statement in two of the
+    four: when `agent-data whoami` exits non-zero it has said nothing about a key, and when it
+    prints something other than JSON there is no `api_key_set` to have read. Each state names
+    itself here instead, because the skip line is the only thing a reader of a skipped run gets.
+    """
     if not shutil.which("agent-data"):
-        return False
+        return "the agent-data CLI is not on PATH here"
     r = subprocess.run(["agent-data", "whoami"], capture_output=True, text=True)
     if r.returncode != 0:
-        return False
+        return "`agent-data whoami` exited %d: %s" % (
+            r.returncode, (r.stderr or r.stdout).strip()[:200] or "it printed nothing")
     try:
-        return json.loads(r.stdout).get("api_key_set") is True
+        whoami = json.loads(r.stdout)
     except json.JSONDecodeError:
-        return False
+        return "`agent-data whoami` printed something other than JSON: %r" % r.stdout[:200]
+    if whoami.get("api_key_set") is not True:
+        return "`agent-data whoami` reports api_key_set=%r, so no key is configured here" % (
+            whoami.get("api_key_set"),)
+    return None
 
 
-needs_api = pytest.mark.skipif(
-    not _agent_data_ready(),
-    reason="agent-data is absent or unauthenticated here — `agent-data whoami` says so")
+LIVE_BLOCKER = _live_blocker()
+needs_api = pytest.mark.skipif(LIVE_BLOCKER is not None, reason=LIVE_BLOCKER or "")
+
+
+def json_object_in(text):
+    """The first complete JSON object in `text`, whatever precedes it.
+
+    fetch-posting.sh prints record-api-response.sh's diagnostic line before an error body, and that
+    line carries the API's own `message` interpolated into it (record-api-response.sh:233). Slicing
+    from the first `{` to the last `}` starts inside the diagnostic as soon as a message holds a
+    brace, and the test would then fail on a change that has nothing to do with what it checks.
+    Each `{` is tried in turn instead, and the first one that decodes whole is the body.
+    """
+    decoder = json.JSONDecoder()
+    for i, ch in enumerate(text):
+        if ch == "{":
+            try:
+                return decoder.raw_decode(text, i)[0]
+            except json.JSONDecodeError:
+                continue
+    raise AssertionError("no JSON object in:\n%s" % text)
 
 
 @pytest.fixture
@@ -117,14 +148,23 @@ def live_run(tmp_workspace):
     search of this run surfaced, so a hand-written surfaced row would be testing against a log
     state the API never produced.
 
+    The run id comes from resolve-run.sh, the script that owns finding it. A glob over `runs/`
+    would repeat the run-id-shape filter that script applies at resolve-run.sh:62, and would hand
+    back `runs/.started-` — the marker that names no run — as if it were a run id.
+
     This calls agent-data directly rather than through search-jobs.sh, which arrives in Task 4.
     Task 7 runs the same chain through both wrappers.
     """
-    subprocess.run(["sh", str(OPEN_RUN), str(tmp_workspace)], capture_output=True, text=True)
+    opened = subprocess.run(["sh", str(OPEN_RUN), str(tmp_workspace)],
+                            capture_output=True, text=True)
+    assert opened.returncode == 0, opened.stdout + opened.stderr
     jobs = tmp_workspace / "jobs.jsonl"
     jobs.write_text("", encoding="utf-8")
-    run_id = [p.name.replace(".started-", "")
-              for p in (tmp_workspace / "runs").glob(".started-*")][0]
+
+    resolved = subprocess.run(["sh", str(RESOLVE_RUN), "--workspace", str(tmp_workspace)],
+                              capture_output=True, text=True)
+    assert resolved.returncode == 0, resolved.stderr
+    run_id = dict(l.split("=", 1) for l in resolved.stdout.splitlines() if "=" in l)["run_id"]
 
     resp = tmp_workspace / "search.json"
     with resp.open("w", encoding="utf-8") as out:
@@ -5739,6 +5779,45 @@ def test_resolving_a_run_runs_under_dash(tmp_workspace):
     assert r.stdout == "workspace=%s\nrun_id=%s\n" % (tmp_workspace, run_id)
 
 
+# ------------------------------------------------------------------------ check-record-args.sh
+
+@pytest.mark.parametrize("shell", ["sh", "dash"])
+@pytest.mark.parametrize("value,rule", [
+    ("linked:in", "may hold neither a comma nor a colon"),
+    ("linked,in", "may hold neither a comma nor a colon"),
+    ("linked\\in", "may hold no backslash"),
+    ("linked\nin", "may hold no control character"),
+])
+def test_check_record_args_refuses_what_record_api_response_refuses(shell, value, rule):
+    """The four characters record-api-response.sh refuses in `--source`, checked without a call.
+
+    This script exists so fetch-posting.sh and search-jobs.sh can apply these rules before spending
+    the metered call rather than after, and it is run directly here as well as through the wrapper,
+    because both wrappers depend on it and only one of them exists yet.
+    """
+    if shell == "dash" and not shutil.which("dash"):
+        pytest.skip("dash is not installed here")
+    r = subprocess.run([shell, str(CHECK_ARGS), "--source", value], capture_output=True, text=True)
+    assert r.returncode == 2
+    assert rule in r.stderr
+    assert "no `call` event would name it" in r.stderr
+
+
+@pytest.mark.parametrize("shell", ["sh", "dash"])
+def test_check_record_args_accepts_the_values_a_run_actually_passes(shell):
+    """A real source and a real query id go through, so the guard cannot be passing by refusing
+    everything. The four sources are not listed here or in the script — agent-data-reference/SKILL.md
+    owns that set and the API refuses the rest."""
+    if shell == "dash" and not shutil.which("dash"):
+        pytest.skip("dash is not installed here")
+    r = subprocess.run(
+        [shell, str(CHECK_ARGS), "--source", "linkedin", "--query-id", "strategic-finance"],
+        capture_output=True, text=True)
+    assert r.returncode == 0, r.stderr
+    assert r.stdout == ""
+    assert r.stderr == ""
+
+
 # ---------------------------------------------------------------------------------- fetch-posting.sh
 
 @pytest.mark.live
@@ -5801,7 +5880,7 @@ def test_fetch_posting_records_the_call_when_the_api_refuses_the_posting(live_ru
          "--source", "linkedin"],
         capture_output=True, text=True)
     assert out.returncode == 1
-    body = json.loads(out.stderr[out.stderr.index("{"):out.stderr.rindex("}") + 1])
+    body = json_object_in(out.stderr)
     assert body["error"]["request_id"].startswith("req_"), \
         "no request_id in the error body — this did not reach the API"
 
@@ -5809,6 +5888,92 @@ def test_fetch_posting_records_the_call_when_the_api_refuses_the_posting(live_ru
             if l.strip()]
     calls = [x for x in rows if x["event"] == "call" and x.get("route") == "get-posting"]
     assert len(calls) == 1, "the failed call was billed and left no record of itself"
+
+
+@pytest.mark.live
+@needs_api
+def test_fetch_posting_refuses_a_source_record_api_response_would_refuse_before_calling(live_run):
+    """A `--source` carrying a colon, checked before the call rather than after it.
+
+    record-api-response.sh refuses four characters in `--source` — a control character and a
+    backslash at record-api-response.sh:92-106, a comma and a colon at :112-120 — and every one of
+    those checks runs before `emit_call` is even defined at :173, so it writes nothing. Reading the
+    posting first and finding that out afterwards leaves a call the API billed with no `call` event
+    naming it, and a run's metered-call count is built from those events.
+
+    Measured 2026-08-11 against an open run, before check-record-args.sh existed: exit 1, the saved
+    error body carrying request_id req_eca95b6e566b46dca902c900, and zero `call` events with route
+    get-posting.
+
+    Two assertions separate "the call never happened" from "the call happened and its record was
+    lost": the log gains nothing at all, and no file under the workspace holds a request id.
+    `agent-data call … > resp 2> err` makes the shell create both files before the CLI runs, so a
+    scratch directory holding either one would mean the call was attempted.
+    """
+    before = live_run.jobs.read_text(encoding="utf-8")
+    out = subprocess.run(
+        ["sh", str(FETCH_POSTING), "--workspace", str(live_run.ws),
+         "--posting-id", live_run.row["posting_id_at_seen"],
+         "--source-url", live_run.row["source_url"],
+         "--source", "linked:in"],
+        capture_output=True, text=True)
+    assert out.returncode == 2, out.stdout + out.stderr
+    assert "may hold neither a comma nor a colon" in out.stderr
+    assert out.stdout == ""
+
+    assert live_run.jobs.read_text(encoding="utf-8") == before, "the log gained a row"
+    scratch = live_run.ws / "runs" / ".scratch"
+    written = "".join(p.read_text(encoding="utf-8", errors="replace")
+                      for p in scratch.rglob("*") if p.is_file()) if scratch.exists() else ""
+    assert "req_" not in written, \
+        "a request id is on disk, so the call was made and its record was lost: %s" % written[:400]
+
+
+@pytest.mark.live
+@needs_api
+def test_fetch_posting_exits_1_when_the_call_worked_and_the_response_was_refused(live_run):
+    """The other half of exit 1: the call succeeded and record-api-response.sh refused the body.
+
+    The posting is a real one from a second live search this run never recorded, so the surfaced
+    check at record-api-response.sh:285-293 does not find it, and that branch records the call and
+    exits 1. The second search runs against ashby where live_run recorded linkedin, so no row of it
+    can match a surfaced row whatever either search returns.
+
+    Without `[ "$recstatus" -eq 0 ] || exit 1` in fetch-posting.sh this exits 0. Deleting that line
+    and running `python3 -m pytest -q -m live` gave `2 passed` before this case existed, so nothing
+    held the line in place.
+    """
+    other = live_run.ws / "other-source.json"
+    with other.open("w", encoding="utf-8") as out:
+        r = subprocess.run(
+            ["agent-data", "call", LISTING, "search-jobs", "--source", "ashby",
+             "--keywords", "strategic finance", "--limit", "5"],
+            stdout=out, stderr=subprocess.PIPE, text=True)
+    assert r.returncode == 0, r.stderr
+    results = json.loads(other.read_text(encoding="utf-8"))["data"]["results"]
+    assert results, "the ashby search returned no rows — widen the keywords"
+    row = results[0]
+
+    fetched = subprocess.run(
+        ["sh", str(FETCH_POSTING), "--workspace", str(live_run.ws),
+         "--posting-id", row["id"], "--source-url", row["source_url"], "--source", row["source"]],
+        capture_output=True, text=True)
+    assert fetched.returncode == 1, fetched.stdout + fetched.stderr
+    assert "no surfaced posting" in fetched.stderr
+    assert fetched.stdout.startswith("response="), \
+        "the posting was fetched and saved, so the path is printed on this failure too"
+
+    saved = json.loads(
+        pathlib.Path(fetched.stdout.split("=", 1)[1].strip()).read_text(encoding="utf-8"))
+    assert saved["meta"]["request_id"].startswith("req_"), \
+        "no request_id — the call never reached the API, so this is not the case under test"
+
+    rows = [json.loads(l) for l in live_run.jobs.read_text(encoding="utf-8").splitlines()
+            if l.strip()]
+    calls = [x for x in rows if x["event"] == "call" and x.get("route") == "get-posting"]
+    assert len(calls) == 1, "the billed call left no record of itself"
+    assert [x for x in rows if x["event"] == "detail"] == [], \
+        "the response was refused, so no posting text should have been stored"
 
 
 # ------------------------------------------------------------------------ posting-counts.sh

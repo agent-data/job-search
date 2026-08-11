@@ -4,11 +4,13 @@
 # Usage: fetch-posting.sh --posting-id P --source-url U --source S [--workspace W]
 #   --posting-id P  required. The `posting_id_at_seen` in the row list-detail-read-queue.sh printed
 #                   for this posting.
-#   --source-url U  required. The same row's `source_url`, which the route matches the posting
-#                   against; a url from anywhere else is refused.
+#   --source-url U  required. The same row's `source_url`. `get-posting` accepts a posting id and a
+#                   source url only as the pair one search result row carried them in, so a url
+#                   taken from another row is refused.
 #   --source S      required. The same row's `source`.
 #   --workspace W   resolve against W instead of asking workspace-discovery.sh. Omit it in a run;
-#                   the tests pass it.
+#                   the tests pass it, because their workspace is a temporary directory
+#                   workspace-discovery.sh would never find.
 #
 # The posting must be one a search of this open run surfaced, or record-api-response.sh refuses the
 # response and this exits 1. Take the three values from one line of what list-detail-read-queue.sh
@@ -17,22 +19,29 @@
 # Not for reading a posting outside a run: there is no run to bill the call to and no log to record
 # it in. That case is the `get-posting` recipe in the agent-data-reference skill.
 #
-# Prints one line on stdout: response=<path to the saved body>.
+# Prints one line on stdout: response=<path to the saved body>. It is printed whenever the call
+# itself succeeded, including when record-api-response.sh then refuses the body and this exits 1 —
+# the posting was fetched and saved, so the path is worth having either way.
 #
 # A run's billable-call count is built from the `call` events in jobs.jsonl, and
 # record-api-response.sh is the only thing that writes one. Calling agent-data on its own leaves no
 # event, so the call is charged and absent from the count. Measured on the 2026-08-11 opencode run:
 # 35 get-posting calls were made and 14 reached the workspace log.
 #
-# The workspace and the run id come from resolve-run.sh, so no caller passes either.
+# In a run nothing passes a workspace or a run id: both come from resolve-run.sh.
 #
 # There is no flag to swap the command this runs. The tests spend real calls, because a wrapper
 # that makes a call and records it cannot be proven against something that never calls anything.
 #
 # Exit 0: the posting was read and both events are in the log.
-# Exit 1: the call failed, or the response was refused. The `call` event is recorded either way,
-#         because a failed call was still charged. stderr carries the body.
-# Exit 2: bad arguments, or no single open run to record against. Nothing was called.
+# Exit 1: the call failed, or record-api-response.sh refused the response. The `call` event is
+#         recorded either way, because a failed call was still charged. The two differ in what the
+#         streams carry. A failed call prints nothing on stdout and puts the error body on stderr.
+#         A refused response prints the response= line on stdout and puts record-api-response.sh's
+#         own diagnostic on stderr, with no body after it. The body is in the file the response=
+#         line names.
+# Exit 2: bad arguments, a --source record-api-response.sh would refuse, or no single open run to
+#         record against. Nothing was called.
 set -u
 
 here=$(dirname "$0")
@@ -54,6 +63,15 @@ done
 [ -n "$posting_id" ] || { usage; exit 2; }
 [ -n "$source_url" ] || { usage; exit 2; }
 [ -n "$src" ]        || { usage; exit 2; }
+
+# Before the call, not after it. record-api-response.sh refuses four characters in --source and
+# every one of those checks runs before it writes anything, so handing it a refused value after the
+# call has been made leaves the call billed and no `call` event naming it — the exact loss this
+# script exists to prevent. check-record-args.sh holds the rules and the measurement.
+#
+# This sits with the argument checks rather than after resolve-run.sh, so a bad --source is named
+# whether or not a run is open, and nothing is read from disk before it is.
+sh "$here/check-record-args.sh" --source "$src" || exit 2
 
 # --workspace is passed on only when the caller gave one, so resolve-run.sh asks
 # workspace-discovery.sh in a run and takes the temporary directory in a test. The expansion is
