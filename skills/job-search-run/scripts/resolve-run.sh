@@ -16,7 +16,7 @@
 # The workspace comes from the runbook skill's workspace-discovery.sh, which owns the precedence.
 # The run id comes from the runs/.started-<run_id> marker open-run.sh writes and clear-run.sh
 # removes. open-run.sh refuses to open a second run over an existing marker, so one marker is the
-# expected state and two is a workspace to stop on rather than guess about.
+# expected state, and on two this script stops instead of choosing between them.
 #
 # Callers pass neither value. On the 2026-08-11 opencode run, 15 of 36 recording calls supplied no
 # jobs.jsonl path and none supplied a run id, because no subagent had been given either.
@@ -61,8 +61,8 @@ fi
 # such a name would hand a caller a run id neither of them will take.
 RUN_ID_GLOB='[0123456789][0123456789][0123456789][0123456789]-[0123456789][0123456789]-[0123456789][0123456789]T[0123456789][0123456789]-[0123456789][0123456789]-[0123456789][0123456789]Z'
 
-# Every marker is collected rather than the first one taken, so two markers name both ids in the
-# refusal instead of silently picking one.
+# Every marker is collected rather than the first one taken, so the refusal on two markers names
+# both ids instead of this script picking one without saying so.
 found='' n=0
 for m in "$ws"/runs/.started-*; do
   [ -e "$m" ] || continue
