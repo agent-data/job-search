@@ -1338,7 +1338,7 @@ def test_a_posting_body_missing_data_source_id_entirely_still_records_its_call(t
     unrecorded: HTTP 200 with valid bodies, trimmed by a field list that left out the two keys a
     posting is filed under.
 
-    The event carries the request id off `meta`, because `req` is read at `:224`, before the route
+    The event carries the request id off `meta`, because `req` is read at `:227`, before the route
     branch. That is what lets an operator match a refused call against the service's own record."""
     body = tmp_path / "trimmed.json"
     body.write_text(json.dumps({"data": {"id": "jp_22d0d871db24", "title": "Head of FP&A",
@@ -1361,7 +1361,7 @@ def test_a_posting_body_missing_data_source_id_entirely_still_records_its_call(t
 
 
 def test_a_search_body_recorded_as_a_detail_read_keeps_the_route_it_was_given(tmp_path):
-    """A search body arriving with --route get-posting carries no --query-id, because `:116-121`
+    """A search body arriving with --route get-posting carries no --query-id, because `:119-124`
     requires one only for a search. Filing it as a search would open the group `<source>:` that
     nothing can ever mark answered — an invented lost search, which is the outcome correcting the
     route at the search gate exists to avoid. So the call is filed as the detail read the caller
