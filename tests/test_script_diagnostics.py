@@ -8,7 +8,7 @@ and the exit status it gave back. `queue-detail-read.sh` and `record-judgment.sh
 log file and write nothing to stdout, so the new stderr line has to leave stdout empty, and that is
 checked too. `dedup.sh --near` does write to stdout, so its tests check that every id that used to
 come back still does, in the same order. `list-detail-read-queue.sh` writes the read list to stdout,
-so its tests check the rows that used to come back still do.
+so its tests check that the rows that used to come back still do.
 
 The `dedup.sh --near` tests run through POSIX `sh` and through `dash` where it is installed, the way
 `tests/test_dedup_guard.py` drives that same script. Helpers are defined here rather than imported
@@ -206,8 +206,12 @@ def test_the_read_queue_says_how_much_of_it_is_worked_off(tmp_path):
     from outside the two were the same: nothing on stdout, nothing on stderr, exit 0."""
     jobs = tmp_path / "jobs.jsonl"
     jobs.write_text("".join([
-        '{"event":"surfaced","run_id":"%s","source":"linkedin","source_id":"1"}\n' % RID,
-        '{"event":"surfaced","run_id":"%s","source":"linkedin","source_id":"2"}\n' % RID,
+        '{"event":"surfaced","run_id":"%s","source":"linkedin","source_id":"1",'
+        '"posting_id_at_seen":"jp_1","source_url":"https://example.test/1",'
+        '"title":"Analyst","company_name":"Acme"}\n' % RID,
+        '{"event":"surfaced","run_id":"%s","source":"linkedin","source_id":"2",'
+        '"posting_id_at_seen":"jp_2","source_url":"https://example.test/2",'
+        '"title":"Engineer","company_name":"Beta"}\n' % RID,
         '{"event":"queued","run_id":"%s","source":"linkedin","source_id":"1"}\n' % RID,
         '{"event":"queued","run_id":"%s","source":"linkedin","source_id":"2"}\n' % RID,
         '{"event":"evaluated","run_id":"%s","source":"linkedin","source_id":"1",'
@@ -215,7 +219,9 @@ def test_the_read_queue_says_how_much_of_it_is_worked_off(tmp_path):
     ]), encoding="utf-8")
     r = run_script(LIST_QUEUE, jobs, RID)
     assert r.returncode == 0, r.stdout + r.stderr
-    assert len(r.stdout.splitlines()) == 1, r.stdout
+    # The whole row, not a count of rows: the six columns each carry a different value here, so a
+    # dropped column, a reordered pair, or a changed separator fails this line.
+    assert r.stdout == "linkedin\t2\tjp_2\thttps://example.test/2\tEngineer\tBeta\n", r.stdout
     assert "list-detail-read-queue: 2 queued for run %s, 1 already judged, 1 to read" % RID \
         in r.stderr, r.stderr
 

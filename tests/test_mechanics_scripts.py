@@ -2856,7 +2856,7 @@ def test_a_stored_posting_body_does_not_add_to_the_new_row_count(tmp_path):
     """`rows_new_total` counts the rows the searches appended, which is what keeps it equal to
     `postings_surfaced` — the output contract prints the two as the same number.
 
-    A stored posting body writes a `call` event carrying `rows_new` 1: `record-api-response.sh:227`
+    A stored posting body writes a `call` event carrying `rows_new` 1: `record-api-response.sh:354`
     passes 1 as the new-row count for a detail read that stored something. Adding `rows_new` from
     every route would therefore put `rows_new_total` one above `postings_surfaced` for each posting
     read in full, on every run that read one.
