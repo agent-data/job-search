@@ -5,7 +5,8 @@
 #                                                 # to judge on stdout; on stderr, one line per
 #                                                 # collapsed row naming the row it was matched to,
 #                                                 # then a line of counts
-#        dedup.sh <jobs.jsonl> <source>          # candidate source_ids on stdin, NEW ones on stdout
+#        dedup.sh <jobs.jsonl> <source>           # candidate source_ids on stdin, NEW ones on
+#                                                 # stdout, then a line of counts on stderr
 #
 # The --near mode answers a different question about one run's own rows: which of them are the
 # same opening seen twice? A company that posts one opening in several locations returns several
@@ -31,6 +32,16 @@
 # kept for a host that runs it standalone. The --near mode above is separate and keeps its caller.
 # This is the scripted form of the model-run prose contract; that prose remains the no-runtime
 # fallback.
+#
+# It also writes one line to stderr counting the candidates: how many were read, how many come back
+# on stdout to be judged, and how many already carry a judgment, with the source and the log file
+# those judgments came from named on the line. A candidate line with no id, and a candidate
+# repeating an id read earlier in the same input, each get a count of their own, printed when it is
+# not zero, so the counts add up to the candidates read and a caller is never left looking for a
+# candidate the line did not mention. No ids on stdout is the ordinary answer for a source that has
+# already judged every candidate it was offered, and it is also what a mistyped source name or jobs
+# path gives; the line tells those apart, because a mistyped one reads `0 already judged` beside the
+# two values it was handed.
 set -u
 
 usage() {
@@ -135,10 +146,41 @@ sed 's/"[[:space:]]*:[[:space:]]*"/":"/g' "$jobs" 2>/dev/null \
 # Candidates on stdin: skip blanks, keep first occurrence, emit those not already known.
 # Preload the known set in BEGIN via getline (robust when the known set is empty — the two-file
 # NR==FNR idiom would misfire on an empty first file), then read candidates from stdin.
-awk -v kf="$known" '
+#
+# stdout carries the ids to judge and nothing else. A closing line on stderr gives the counts, so a
+# call that has nothing new to hand back writes a sentence rather than 0 bytes. The counts add up to
+# `candidates read`. Every candidate line lands in one of them: an id to judge, an id this source
+# has already judged, a line with no id, or a line carrying an id read earlier in this input. The
+# last two are printed only when they are not zero, so an ordinary call still reports three counts,
+# and a caller that adds up the numbers it was given always gets `candidates read` back and is never
+# left looking for a candidate the line did not mention.
+#
+# A candidate repeating an id the source has already judged is counted under `already judged` both
+# times, because the known-set guard runs before the repeat guard. dedup-surfaced.awk counts a
+# repeated judged row the same way, and its header says so.
+#
+# The line names the source and the jobs file, because those two arguments are what decide the
+# `already judged` count and a wrong value in either one comes back as `0 already judged` with every
+# candidate handed back as new. The `sed` above reads the jobs file with its errors dropped, so a
+# path that names no file is an empty known set rather than a failure, and the path on this line is
+# what a caller checks when the count reads 0.
+#
+# The first count names what it counts, and the noun is singular at one: a single candidate in reads
+# `1 candidate read, 1 to judge, 0 already judged for linkedin in jobs.jsonl`. The other four counts
+# take no noun, so they read the same at every number.
+#
+# `| "cat 1>&2"` is how an awk program in this pack writes to stderr — json-scan.awk:51-52 is the
+# precedent — and the close() is what flushes it.
+awk -v kf="$known" -v src="$src" -v jobs="$jobs" '
      BEGIN { while ((getline line < kf) > 0) k[line]=1; close(kf) }
-     { id=$0 }
-     id == ""       { next }
-     k[id]          { next }
-     seen[id]++     { next }
-     { print id }'
+     { cands++; id=$0 }
+     id == ""       { no_id++; next }
+     k[id]          { judged++; next }
+     seen[id]++     { repeat++; next }
+     { kept++; print id }
+     END { counts = sprintf("%d candidate%s read, %d to judge, %d already judged for %s in %s", \
+                            cands+0, (cands+0 == 1 ? "" : "s"), kept+0, judged+0, src, jobs)
+           if (no_id)  counts = counts sprintf(", %d with no id", no_id)
+           if (repeat) counts = counts sprintf(", %d the same id as one above", repeat)
+           printf "dedup.sh: %s\n", counts | "cat 1>&2"
+           close("cat 1>&2") }'

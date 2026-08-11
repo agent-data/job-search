@@ -6,21 +6,23 @@ nothing to stderr on the path that succeeds, which left the agent with the exit 
 that path puts on stdout. Each test here runs one script and checks the sentence it wrote to stderr
 and the exit status it gave back. `queue-detail-read.sh` and `record-judgment.sh` both append to the
 log file and write nothing to stdout, so the new stderr line has to leave stdout empty, and that is
-checked too. `dedup.sh --near` does write to stdout, so its tests check that every id that used to
-come back still does, in the same order. `list-detail-read-queue.sh` writes the read list to stdout,
-so its tests check that the rows that used to come back still do. `run-counts.sh`, `run-matches.sh`
-and `posting-counts.sh` write the digest's numbers, the digest's rows and the home card's three
-counts, so their tests pin the whole block of stdout, byte for byte. `workspace-discovery.sh` had no
-`>&2` write on any path at all, and its three `key=value` lines are read by key, so its tests pin the
-whole block of stdout too. `validate-workspace.sh` writes its findings to stdout and exits 1, so its
-new line is on the exit-0 path only and its tests check that a workspace with findings still leaves
-stderr empty. `dedup-surfaced.awk` is not run directly: it runs inside `record-api-response.sh` on
-the search route, which redirects its stdout into the file it then appends to `jobs.jsonl`, so every
-line that program prints on stdout becomes an event in the user's log. Its tests drive
-`record-api-response.sh` and check that the diagnostic reached stderr, that stdout stayed empty, and
-that the appended events are the same ones as before. `event-log-append.sh` takes the event on stdin
-and writes nothing to stdout, so its tests check that stdout stays empty on the append, on the skip
-and on every one of its seven refusals.
+checked too. Both of `dedup.sh`'s modes write to stdout, so their tests check that every id that
+used to come back still does, in the same order; the two-argument mode's tests do that on each of
+the four input shapes it has, because a jobs path naming no file and a blank line among the
+candidates are both inputs it handles rather than refuses. `list-detail-read-queue.sh` writes the
+read list to stdout, so its tests check that the rows that used to come back still do.
+`run-counts.sh`, `run-matches.sh` and `posting-counts.sh` write the digest's numbers, the digest's
+rows and the home card's three counts, so their tests pin the whole block of stdout, byte for byte.
+`workspace-discovery.sh` had no `>&2` write on any path at all, and its three `key=value` lines are
+read by key, so its tests pin the whole block of stdout too. `validate-workspace.sh` writes its
+findings to stdout and exits 1, so its new line is on the exit-0 path only and its tests check that
+a workspace with findings still leaves stderr empty. `dedup-surfaced.awk` is not run directly: it
+runs inside `record-api-response.sh` on the search route, which redirects its stdout into the file
+it then appends to `jobs.jsonl`, so every line that program prints on stdout becomes an event in the
+user's log. Its tests drive `record-api-response.sh` and check that the diagnostic reached stderr,
+that stdout stayed empty, and that the appended events are the same ones as before.
+`event-log-append.sh` takes the event on stdin and writes nothing to stdout, so its tests check that
+stdout stays empty on the append, on the skip and on every one of its seven refusals.
 
 The last section is a guard rather than a content test. Every test above pins one script's exact
 sentence, so deleting that sentence from the script turns the test that reads it red — that case is
@@ -32,10 +34,10 @@ wrote to stderr, how many lines it wrote, and that each line opens with the pref
 Reword a line and the guard stays green while the content test above goes red; delete one and the
 guard goes red.
 
-The `dedup.sh --near` tests and the failed-append test run through POSIX `sh` and through `dash`
-where it is installed, the way `tests/test_dedup_guard.py` drives that same script. Helpers are
-defined here rather than imported from `tests/test_mechanics_scripts.py` or
-`tests/test_dedup_guard.py`, so this file collects on its own.
+The tests for both of `dedup.sh`'s modes, and the failed-append test, run through POSIX `sh` and
+through `dash` where it is installed, the way `tests/test_dedup_guard.py` drives that same script.
+Helpers are defined here rather than imported from `tests/test_mechanics_scripts.py`
+or `tests/test_dedup_guard.py`, so this file collects on its own.
 """
 import json
 import os
@@ -253,6 +255,142 @@ def test_near_stdout_is_unchanged_by_the_new_stderr(shell):
             ("linkedin:cc1", "", "")]
     r = run_near(rows, shell=shell)
     assert r.stdout == "linkedin:aa1\nlinkedin:bb1\nlinkedin:cc1\n", r.stdout
+
+
+# ------------------------------------------------------- dedup.sh <jobs.jsonl> <source>
+
+def run_dedup(jobs, source, candidates, shell="sh"):
+    """Run `dedup.sh <jobs.jsonl> <source>` with one candidate per line on stdin."""
+    stdin = "".join(c + "\n" for c in candidates)
+    return subprocess.run([shell, str(DEDUP), str(jobs), source], input=stdin,
+                          capture_output=True, text=True)
+
+
+def judged_ids(*source_ids):
+    """A log holding one `evaluated` event per id, for source `linkedin`. The known-ids set is built
+    from those events whichever run wrote them, so the run id here is one no test asks about."""
+    return "".join(
+        '{"event":"evaluated","run_id":"2026-08-01T00-00-00Z","source":"linkedin",'
+        '"source_id":"%s","relevant":true,"match":"weak"}\n' % sid for sid in source_ids)
+
+
+@pytest.mark.parametrize("shell", SHELLS)
+def test_the_two_argument_mode_says_what_it_did_with_each_candidate(tmp_path, shell):
+    """Three candidates in, one of them already judged, two ids back. Before this line the call
+    exited 0 with 0 bytes on stderr — measured 2026-08-11 on this same input through `sh` and
+    through `dash` against the script at `7678f2d` — so the only thing a caller could read was the
+    id list, which is also what a call that ignored its stdin and echoed the log would look like."""
+    jobs = tmp_path / "jobs.jsonl"
+    jobs.write_text(judged_ids("a"), encoding="utf-8")
+    r = run_dedup(jobs, "linkedin", ["a", "c", "d"], shell=shell)
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert r.stdout == "c\nd\n", r.stdout
+    assert r.stderr == ("dedup.sh: 3 candidates read, 2 to judge, 1 already judged for linkedin "
+                        "in %s\n" % jobs), r.stderr
+
+
+@pytest.mark.parametrize("shell", SHELLS)
+def test_a_source_that_has_judged_every_candidate_still_writes_a_line(tmp_path, shell):
+    """Every candidate already judged means nothing on stdout, which is the ordinary end of a run
+    for a source that is caught up. It is also what a mistyped source name gives, and what a jobs
+    path naming no file gives, because both of those come back as an empty known set. The line tells
+    the three apart: this one reads `2 already judged`, and the two below read `0 already judged`
+    beside the source name and the path they were handed."""
+    jobs = tmp_path / "jobs.jsonl"
+    jobs.write_text(judged_ids("a", "b"), encoding="utf-8")
+    r = run_dedup(jobs, "linkedin", ["a", "b"], shell=shell)
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert r.stdout == "", r.stdout
+    assert r.stderr == ("dedup.sh: 2 candidates read, 0 to judge, 2 already judged for linkedin "
+                        "in %s\n" % jobs), r.stderr
+
+    typo = run_dedup(jobs, "linkedn", ["a", "b"], shell=shell)
+    assert typo.stdout == "a\nb\n", typo.stdout
+    assert typo.stderr == ("dedup.sh: 2 candidates read, 2 to judge, 0 already judged for linkedn "
+                           "in %s\n" % jobs), typo.stderr
+
+    missing = tmp_path / "does-not-exist.jsonl"
+    gone = run_dedup(missing, "linkedin", ["a", "b"], shell=shell)
+    assert gone.stdout == "a\nb\n", gone.stdout
+    assert gone.stderr == ("dedup.sh: 2 candidates read, 2 to judge, 0 already judged for linkedin "
+                           "in %s\n" % missing), gone.stderr
+
+
+@pytest.mark.parametrize("shell", SHELLS)
+def test_the_two_argument_counts_account_for_every_candidate(tmp_path, shell):
+    """A blank candidate line and a candidate repeating an id already read are each dropped by their
+    own guard. With three counts on the line, those candidates would be counted in `candidates read`
+    and in nothing else, and a caller looking for the missing two would run the script again or
+    write its own parser. Each guard has a count, printed when it is not zero, so the printed numbers
+    sum to the candidates read."""
+    jobs = tmp_path / "jobs.jsonl"
+    jobs.write_text(judged_ids("a"), encoding="utf-8")
+    r = run_dedup(jobs, "linkedin", ["", "a", "", "d", "d"], shell=shell)
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert r.stdout == "d\n", r.stdout
+    assert r.stderr == ("dedup.sh: 5 candidates read, 1 to judge, 1 already judged for linkedin "
+                        "in %s, 2 with no id, 1 the same id as one above\n" % jobs), r.stderr
+
+    # Neither guard fired here, so neither count is printed and the line stays three counts.
+    clean = run_dedup(jobs, "linkedin", ["c", "d"], shell=shell)
+    assert "with no id" not in clean.stderr, clean.stderr
+    assert "the same id as one above" not in clean.stderr, clean.stderr
+
+
+@pytest.mark.parametrize("shell", SHELLS)
+def test_a_candidate_repeating_an_already_judged_id_is_counted_as_judged(tmp_path, shell):
+    """The known-set guard runs before the repeat guard, so both copies of a judged id land under
+    `already judged` and neither under `the same id as one above`. `dedup-surfaced.awk` counts a
+    repeated judged row the same way, and `test_the_counts_are_rows_and_a_repeat_of_a_judged_posting
+    _is_counted_as_judged` below holds that half. The two counts still sum with the rest to the
+    candidates read, which is the property this pins: 3 = 1 + 2."""
+    jobs = tmp_path / "jobs.jsonl"
+    jobs.write_text(judged_ids("a"), encoding="utf-8")
+    r = run_dedup(jobs, "linkedin", ["a", "a", "d"], shell=shell)
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert r.stdout == "d\n", r.stdout
+    assert r.stderr == ("dedup.sh: 3 candidates read, 1 to judge, 2 already judged for linkedin "
+                        "in %s\n" % jobs), r.stderr
+
+
+@pytest.mark.parametrize("shell", SHELLS)
+def test_the_two_argument_count_reads_as_english_when_one_candidate_comes_in(tmp_path, shell):
+    """One candidate in would read `1 candidates read`. Only the first count carries a noun, so only
+    it takes the singular; the other four read the same at every number, which is why the empty call
+    below still reads `0 candidates read, 0 to judge, 0 already judged`."""
+    jobs = tmp_path / "jobs.jsonl"
+    jobs.write_text(judged_ids("a"), encoding="utf-8")
+    r = run_dedup(jobs, "linkedin", ["d"], shell=shell)
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert r.stdout == "d\n", r.stdout
+    assert r.stderr == ("dedup.sh: 1 candidate read, 1 to judge, 0 already judged for linkedin "
+                        "in %s\n" % jobs), r.stderr
+
+    empty = run_dedup(jobs, "linkedin", [], shell=shell)
+    assert empty.returncode == 0, empty.stdout + empty.stderr
+    assert empty.stdout == "", empty.stdout
+    assert empty.stderr == ("dedup.sh: 0 candidates read, 0 to judge, 0 already judged for linkedin "
+                            "in %s\n" % jobs), empty.stderr
+
+    one_blank = run_dedup(jobs, "linkedin", [""], shell=shell)
+    assert one_blank.stdout == "", one_blank.stdout
+    assert one_blank.stderr == ("dedup.sh: 1 candidate read, 0 to judge, 0 already judged for "
+                                "linkedin in %s, 1 with no id\n" % jobs), one_blank.stderr
+
+
+@pytest.mark.parametrize("shell", SHELLS)
+def test_the_two_argument_stdout_is_unchanged_by_the_new_stderr(tmp_path, shell):
+    """stdout is the id list the caller works from. Every id that used to come back still does, in
+    the same order, on the four input shapes the mode has: an ordinary call, a call whose every
+    candidate is already judged, a call whose jobs path names no file, and a call with blank lines
+    among the candidates."""
+    jobs = tmp_path / "jobs.jsonl"
+    jobs.write_text(judged_ids("a", "b"), encoding="utf-8")
+    missing = tmp_path / "does-not-exist.jsonl"
+    assert run_dedup(jobs, "linkedin", ["a", "c", "d"], shell=shell).stdout == "c\nd\n"
+    assert run_dedup(jobs, "linkedin", ["a", "b"], shell=shell).stdout == ""
+    assert run_dedup(missing, "linkedin", ["x", "y"], shell=shell).stdout == "x\ny\n"
+    assert run_dedup(jobs, "linkedin", ["", "c", ""], shell=shell).stdout == "c\n"
 
 
 # ------------------------------------------------------------------ list-detail-read-queue.sh
@@ -1446,15 +1584,20 @@ def test_a_refused_event_still_says_only_what_it_refused(tmp_path):
 # because the pack does not work them out from the filename either. Measured 2026-08-11 with
 # `python3 -c "import sys; sys.path.insert(0, 'tests'); import test_script_diagnostics as t; p =
 # {v[0] for v in t.BRANCH_STDERR.values()}; print(len(t.BRANCH_STDERR), len(p), sum('.sh' in x for x
-# in p))"`: 18 branches, 11 distinct prefixes, 7 of them carrying `.sh`.
+# in p))"`: 19 branches, 12 distinct prefixes, 8 of them carrying `.sh`.
 #
-# Two exit-0 branches of these scripts are missing from this map, because it holds only the branches
+# `dedup.sh` writes under two prefixes, one per mode, because a caller reading a stderr stream both
+# modes wrote to has to be able to tell which one spoke. `--near` is selected by its flag and names
+# it; the two-argument mode is selected by its two positional arguments and has no flag to name, so
+# it writes under the bare script name. Neither prefix is a prefix of the other, so the check below
+# never passes one mode's line off as the other's.
+#
+# One exit-0 branch of these scripts is missing from this map, because it holds only the branches
 # that write a line. `validate-workspace.sh --quiet-when-clean` leaves its line out for its one
 # caller, and `test_quiet_when_clean_suppresses_only_that_line` above is where that branch is
-# checked. `dedup.sh <jobs.jsonl> <source>`, the two-argument mode, was never given a line at all:
-# measured 2026-08-11, three candidate ids against a log holding one judgment printed two ids on
-# stdout and exited 0 with 0 bytes on stderr.
+# checked.
 BRANCH_STDERR = {
+    "dedup.sh (the two-argument mode)":                         ("dedup.sh: ", 1),
     "dedup.sh --near (a pair collapsed)":                       ("dedup.sh --near: ", 2),
     "dedup.sh --near (no pair collapsed)":                      ("dedup.sh --near: ", 1),
     "event-log-append.sh (appended)":                           ("event-log-append: ", 1),
@@ -1490,7 +1633,7 @@ def success_calls(tmp_path, workspace):
     is where the flag is checked.
 
     Each value is a function rather than a finished `CompletedProcess`, so the fixture below can
-    build all eighteen and run the one its parameter names.
+    build all nineteen and run the one its parameter names.
     """
     def queue_detail_read():
         jobs = tmp_path / "queued.jsonl"
@@ -1569,6 +1712,14 @@ def success_calls(tmp_path, workspace):
         assert first.returncode == 0, ("the first append should exit 0\n"
                                        + first.stdout + first.stderr)
         return run_append(jobs, event)
+
+    def dedup_two_argument():
+        # Three candidates against a log holding one judgment, which is the call in
+        # `test_the_two_argument_mode_says_what_it_did_with_each_candidate`: two ids on stdout, and
+        # neither of the two counts that print only when they are not zero.
+        jobs = tmp_path / "deduped.jsonl"
+        jobs.write_text(judged_ids("a"), encoding="utf-8")
+        return run_dedup(jobs, "linkedin", ["a", "c", "d"])
 
     def dedup_near_collapsing():
         # Two rows of the same opening: the second is collapsed into the first, so this call writes
@@ -1652,6 +1803,7 @@ def success_calls(tmp_path, workspace):
         return run_script(VALIDATOR, "--help")
 
     calls = {
+        "dedup.sh (the two-argument mode)": dedup_two_argument,
         "dedup.sh --near (a pair collapsed)": dedup_near_collapsing,
         "dedup.sh --near (no pair collapsed)": dedup_near_collapsing_nothing,
         "event-log-append.sh (appended)": event_log_append,
