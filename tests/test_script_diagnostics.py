@@ -41,9 +41,10 @@ def lines(path):
 # ------------------------------------------------------------------ queue-detail-read.sh
 
 def test_queueing_a_posting_says_it_queued_it(tmp_path):
-    """The write is announced, the way the already-queued branch announces the write it did not
-    make. Without this line a queued posting and one queued twice both give nothing on stdout,
-    nothing on stderr and exit 0, so the caller cannot tell them apart."""
+    """The write is announced on stderr. The other branch, the one that finds the posting already
+    queued, prints `is already queued for this run — nothing written`. Without this line a queued
+    posting and one queued twice both give nothing on stdout, nothing on stderr and exit 0, so the
+    caller cannot tell them apart."""
     jobs = tmp_path / "jobs.jsonl"
     jobs.write_text(
         '{"event":"surfaced","run_id":"%s","source":"linkedin","source_id":"77"}\n' % RID,

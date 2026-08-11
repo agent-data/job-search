@@ -229,9 +229,10 @@ status=$?
 # from the line that was just written.
 #
 # The status is taken before the printf and given back after it, so when the append fails the caller
-# still gets its non-zero exit status. The `cat` above is the last command in the file, and the EXIT
-# trap at :40 still removes the temporary file when the script ends at an explicit `exit` — measured
-# under sh, dash and bash.
+# still gets its non-zero exit status. Before this block was added, the `cat` above was the last
+# command in the file and the script ended with the append's status, so `exit "$status"` gives back
+# the status the script would have exited with anyway. The EXIT trap at :40 still removes the
+# temporary file when the script ends at an explicit `exit` — measured under sh, dash and bash.
 if [ "$status" -eq 0 ]; then
   verdict="relevant $relevant"
   [ -z "$band" ] || verdict="$verdict, match $band"
