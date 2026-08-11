@@ -1,5 +1,18 @@
 #!/bin/sh
-# dedup.sh — emit the NEW candidate source_ids for a source.
+# dedup.sh — drop the candidate postings a run does not need to read.
+#
+# Usage: dedup.sh <jobs.jsonl> <source>          # candidate source_ids on stdin, NEW ones on stdout
+#        dedup.sh --near                          # id<TAB>company<TAB>title rows on stdin,
+#                                                 # the source_ids to judge on stdout
+#
+# The --near mode answers a different question about one run's own rows: which of them are the
+# same opening seen twice? A company that posts one opening in several locations returns several
+# rows, with different source_ids and titles that differ only by a location parenthetical, and
+# reading each of them bills a detail call for a posting already read. Candidate rows arrive as
+# `source_id<TAB>company<TAB>title`, and the openings to judge come back on stdout: the first row
+# of each group sharing a company and a title that match once lowercased, stripped of their
+# parentheses, and re-spaced. A row missing its company or title has nothing to compare and is
+# kept. This mode reads no file and looks only within the rows it is given.
 #
 # Given the workspace event log <jobs.jsonl> and a <source>, read candidate source_ids on stdin
 # (one per line) and print only those NOT already judged for that source.
@@ -14,19 +27,6 @@
 # kept for a host that runs it standalone. The --near mode below is separate and keeps its caller.
 # This is the scripted form of the model-run prose contract; that prose remains the no-runtime
 # fallback.
-#
-# The --near mode answers a different question about one run's own rows: which of them are the
-# same opening seen twice? A company that posts one opening in several locations returns several
-# rows, with different source_ids and titles that differ only by a location parenthetical, and
-# reading each of them bills a detail call for a posting already read. Candidate rows arrive as
-# `source_id<TAB>company<TAB>title`, and the openings to judge come back on stdout: the first row
-# of each group sharing a company and a title that match once lowercased, stripped of their
-# parentheses, and re-spaced. A row missing its company or title has nothing to compare and is
-# kept. This mode reads no file and looks only within the rows it is given.
-#
-# Usage: dedup.sh <jobs.jsonl> <source>          # candidate source_ids on stdin, NEW ones on stdout
-#        dedup.sh --near                          # id<TAB>company<TAB>title rows on stdin,
-#                                                 # the source_ids to judge on stdout
 set -u
 
 usage() {
