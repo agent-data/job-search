@@ -1339,7 +1339,7 @@ def test_a_posting_body_missing_data_source_id_entirely_still_records_its_call(t
     `source`, `source_id`, or both.
 
     The event carries the request id off `meta`, because `req` is read at
-    `record-api-response.sh:227`, before the route branch. That is what lets an operator match a
+    `record-api-response.sh:232`, before the route branch. That is what lets an operator match a
     refused call against the service's own record."""
     body = tmp_path / "trimmed.json"
     body.write_text(json.dumps({"data": {"id": "jp_22d0d871db24", "title": "Head of FP&A",
@@ -1363,7 +1363,7 @@ def test_a_posting_body_missing_data_source_id_entirely_still_records_its_call(t
 
 def test_a_search_body_recorded_as_a_detail_read_keeps_the_route_it_was_given(tmp_path):
     """A search body arriving with --route get-posting carries no --query-id, because
-    `record-api-response.sh:119-125` requires one only for a search. Filing it as a search would
+    `record-api-response.sh:124-130` requires one only for a search. Filing it as a search would
     open the group `<source>:null` that nothing can ever mark answered — an invented lost search,
     which is the outcome correcting the route at the search gate exists to avoid. So the call is
     filed as the detail read the caller said it was, and `calls_total_metered` — the number the
@@ -1417,6 +1417,56 @@ def test_a_missing_response_file_records_nothing(tmp_path):
     assert r.returncode == 2, r.stdout + r.stderr
     assert "no such file" in r.stderr, r.stderr
     assert not jobs.exists()
+
+
+@pytest.mark.parametrize("shell", ["sh", "dash"])
+def test_a_posting_body_recorded_as_a_search_is_filed_as_the_detail_read_it_was(tmp_path, shell):
+    """The search branch's shape gate. The call behind such a body was made and billed on
+    get-posting, so the event carries that route rather than the one the caller passed. An event
+    carrying search-jobs would open a source:query_id group in `run-counts.awk`, a group with no
+    ok:true member counts as a search that never returned, and `close-run.sh` turns that into
+    run_health=degraded — a lost search invented out of a mislabelled recording.
+
+    The identification is positive rather than a guess: the body has passed the error gate and
+    carries `data.source_id` at two segments, which no search body does. Measured with
+    `json-scan.awk` — 1 such path in detail.ashby.json, 0 in search.zero.json and 0 in
+    happy/search-jobs.ashby.json."""
+    jobs = seeded_jobs(tmp_path, "search.ashby.json")
+    before = [e for e in lines(jobs) if e["event"] == "call"]
+    r = run_script(RECORD_API, RID, jobs, FIXTURES / "detail.ashby.json",
+                   "--route", "search-jobs", "--query-id", "q9", "--source", "ashby", shell=shell)
+    assert r.returncode == 2, r.stdout + r.stderr
+    assert "carries neither data.query nor data.results" in r.stderr, r.stderr
+    after = [e for e in lines(jobs) if e["event"] == "call"]
+    assert len(after) == len(before) + 1, after
+    assert after[-1]["route"] == "get-posting"
+    assert after[-1]["ok"] is False
+    _, c = counts(jobs)
+    assert c["calls_detail_reads"] == "1"
+    assert c["calls_searches"] == "1"              # the search `seeded_jobs` ran, and only that
+    assert c["calls_total_metered"] == "2"
+    assert c["searches_never_succeeded"] == "0"    # no group opened on q9
+
+
+def test_a_body_that_names_no_route_keeps_the_one_it_was_given(tmp_path):
+    """The correction above is scoped to a body that names itself. One that names neither route —
+    no data.query, no data.results, no data.source_id — is filed under the route the caller passed,
+    because nothing in it says otherwise.
+
+    That leaves the group `ashby:q9` unanswered, which is counted as a search that never returned.
+    It is the right reading of what happened: a search call was recorded, and no search body ever
+    arrived for it."""
+    body = tmp_path / "odd.json"
+    body.write_text(json.dumps({"data": {"nothing": "useful"}, "meta": {"request_id": "req_1"}}))
+    jobs = seeded_jobs(tmp_path, "search.ashby.json")
+    r = run_script(RECORD_API, RID, jobs, body, "--route", "search-jobs", "--query-id", "q9",
+                   "--source", "ashby")
+    assert r.returncode == 2, r.stdout + r.stderr
+    ev = [e for e in lines(jobs) if e["event"] == "call"][-1]
+    assert ev["route"] == "search-jobs" and ev["ok"] is False
+    _, c = counts(jobs)
+    assert c["searches_never_succeeded"] == "1"
+    assert c["searches_never_succeeded_ids"] == "ashby:q9"
 
 
 def test_a_source_id_that_is_the_string_null_is_still_a_real_value(tmp_path):

@@ -61,6 +61,11 @@ case $route in
   *) printf 'record-api-response.sh: --route must be search-jobs or get-posting\n' >&2; exit 2 ;;
 esac
 
+# The route a `call` event is filed under. It is the route the caller gave, everywhere but one
+# place: the search branch's shape gate, where a body that identifies itself as a posting is filed
+# as the detail read it was. The reason is written there.
+callroute=$route
+
 # An identifier is refused rather than escaped. Free text is the opposite case — esc writes a
 # judgment reason out whole, control characters included — but a run id, a source and a query id
 # name things other scripts look up, and neither of these two characters survives the trip:
@@ -162,7 +167,7 @@ end_last_line() {
 emit_call() {
   end_last_line
   RAR_QUERY=$query_id RAR_REQ=${req:-} RAR_CODE=${code:-} \
-  awk -v run_id="$run_id" -v ts="$ts" -v route="$route" -v source="$1" \
+  awk -v run_id="$run_id" -v ts="$ts" -v route="$callroute" -v source="$1" \
       -v ok="$2" -v returned="$3" -v newrows="$4" -v retryable="${retryable:-}" '
     function esc(s,   i, c) {
       gsub(/\\/, "\\\\", s); gsub(/"/, "\\\"", s)
@@ -352,7 +357,23 @@ fi
 # response) — so a posting handed here as a search is refused rather than recorded as a search that
 # returned nothing.
 haspath '^data[.](query|results)[.]' || {
-  printf 'record-api-response.sh: %s carries neither data.query nor data.results — it is not a search-jobs response\n' \
+  # A posting body handed here as a search. The call that produced it was made and billed on
+  # get-posting, so the event is filed there rather than under searches: one carrying search-jobs
+  # opens a source:query_id group in run-counts.awk, a group with no ok:true member is counted as a
+  # search that never returned, and close-run.sh reports that as run_health=degraded. Filing every
+  # failed detail read under searches is the outcome the note at the top of this file exists to
+  # prevent, and this is a positive identification rather than a guess: the body has passed the
+  # error gate above and carries data.source_id at two segments, the same test the get-posting
+  # branch applies to itself. Measured with json-scan.awk — 1 such path in a posting body, 0 in a
+  # search body, whether the search returned rows or none.
+  #
+  # The mirror case is deliberately left alone. A search body arriving with --route get-posting
+  # carries no --query-id, because only a search is required to pass one, so filing it as a search
+  # would open the group `<source>:null` that nothing can ever mark answered — the same invented lost
+  # search, at the other gate.
+  haspath '^data[.]source_id$' && callroute=get-posting
+  emit_call "$src_flag" false 0 0
+  printf 'record-api-response.sh: %s carries neither data.query nor data.results — it is not a search-jobs response; the call is recorded, nothing else\n' \
     "$resp" >&2
   exit 2
 }
