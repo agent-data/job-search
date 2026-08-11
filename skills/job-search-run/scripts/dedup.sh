@@ -2,17 +2,19 @@
 # dedup.sh — drop the candidate postings a run does not need to read.
 #
 # Usage: dedup.sh --near                          # id<TAB>company<TAB>title rows on stdin,
-#                                                 # the source_ids to judge on stdout
+#                                                 # the ids to judge on stdout, counts on stderr
 #        dedup.sh <jobs.jsonl> <source>          # candidate source_ids on stdin, NEW ones on stdout
 #
 # The --near mode answers a different question about one run's own rows: which of them are the
 # same opening seen twice? A company that posts one opening in several locations returns several
 # rows, with different source_ids and titles that differ only by a location parenthetical, and
 # reading each of them bills a detail call for a posting already read. Candidate rows arrive as
-# `source_id<TAB>company<TAB>title`, and the openings to judge come back on stdout: the first row
-# of each group sharing a company and a title that match once lowercased, stripped of their
-# parentheses, and re-spaced. A row missing its company or title has nothing to compare and is
-# kept. This mode reads no file and looks only within the rows it is given.
+# `<source>:<source_id><TAB>company<TAB>title`, and the openings to judge come back on stdout: the
+# first row of each group sharing a company and a title that match once lowercased, stripped of
+# their parentheses, and re-spaced. Column 1 is passed through as written and never parsed —
+# SKILL.md sends the `<source>:<source_id>` form so the pairing this mode writes to stderr is what
+# `record-judgment.sh --same-role-as` takes. A row missing its company or title has nothing to
+# compare and is kept. This mode reads no file and looks only within the rows it is given.
 #
 # Given the workspace event log <jobs.jsonl> and a <source>, read candidate source_ids on stdin
 # (one per line) and print only those NOT already judged for that source.
@@ -37,6 +39,18 @@ usage() {
 if [ "${1:-}" = --near ]; then
   [ $# -eq 1 ] || { usage; exit 2; }
   # First row of each (company, title) group wins; a repeated source_id prints once.
+  #
+  # stdout carries the ids to judge and nothing else. Two more things go to stderr. One line per
+  # collapsed row names that row and the row it was matched to, because SKILL.md asks for
+  # `--same-role-as <source>:<source_id>` on every posting this mode leaves out and the pairing is
+  # worked out here to make the decision. A closing line gives the three counts, so a call that
+  # collapsed nothing still writes a sentence rather than 0 bytes: the 2026-08-10 run got 65 ids
+  # from 67 rows with an empty stderr and read that as the script having ignored the rows it piped
+  # in. Four bash calls, at 16:27:18, 16:27:34, 16:27:42 and 16:27:49, went to working that out.
+  #
+  # `first[company, title]` is assigned on the keep path below, so it holds the id of the row that
+  # was kept for that pair — the one a later row is collapsed into. `rows` counts every line read,
+  # blanks included, so `rows read` is the input size the caller handed over.
   exec awk -F'\t' '
     function norm(s) {
       s = tolower(s)
@@ -46,12 +60,18 @@ if [ "${1:-}" = --near ]; then
       sub(/ $/, "", s)
       return s
     }
-    { id = $1; company = norm($2); title = norm($3) }
+    { rows++; id = $1; company = norm($2); title = norm($3) }
     id == ""                  { next }
     seen_id[id]++             { next }
-    company == "" || title == "" { print id; next }
-    seen_role[company, title]++  { next }
-    { print id }'
+    company == "" || title == "" { kept++; print id; next }
+    seen_role[company, title]++  { same++
+                                  printf "dedup.sh --near: %s is the same opening as %s\n", \
+                                    id, first[company, title] | "cat 1>&2"
+                                  next }
+    { kept++; first[company, title] = id; print id }
+    END { printf "dedup.sh --near: %d rows read, %d openings to judge, %d the same opening as one above\n", \
+            rows, kept, same+0 | "cat 1>&2"
+          close("cat 1>&2") }'
 fi
 
 jobs=${1:?usage: dedup.sh <jobs.jsonl> <source>   (candidate source_ids on stdin)}

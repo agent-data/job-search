@@ -60,10 +60,12 @@ applying that date to the rows yourself.
 you, because no script decides it: one opening posted several times over. A company running the same
 role in four cities returns four rows with four `source_id`s and titles that differ only by the
 city, and reading each spends a detail call on a posting already read. Pipe the rows this run
-surfaced as `source_id<TAB>company<TAB>title` into this skill's `scripts/dedup.sh --near`, which
-prints back the `source_id` of the first row in each group sharing a company and a title: one role
-in four cities, one read. Keep the ids it left out — each of those postings still needs a judgment
-before this run can close, and "Read and judge" says how it gets one.
+surfaced as `<source>:<source_id><TAB>company<TAB>title` into this skill's
+`scripts/dedup.sh --near`. On stdout it prints the first row of each group sharing a company and a
+title, so one role posted in four cities becomes one posting to read. On stderr it names every row
+it left out and the row it matched that row to, written in the `<source>:<source_id>` form
+`--same-role-as` takes, so you do not have to work out that pairing yourself. Each row it left out
+still needs a judgment before this run can close, and "Read and judge" says how it gets one.
 
 ## Scan the summaries
 
