@@ -218,3 +218,28 @@ fi
 if [ -s "$jobs" ] && [ "$(tail -c1 "$jobs" | wc -l)" -eq 0 ]; then printf '\n' >> "$jobs"; fi
 
 cat "$line" >> "$jobs"
+status=$?
+
+# The verdict that landed, said back. The branch above that finds this exact verdict already
+# recorded, and the one that finds a different judgment already recorded, each print a line saying
+# nothing was written; without this line the branch that does write says nothing at all, so nothing
+# on stdout, nothing on stderr and exit 0 covers both a recorded judgment and a refused one. Saying
+# the verdict back also lets the caller check that the flags it passed are the fields the log now
+# holds. The fields are read from the variables checked at the top of this script, not re-parsed
+# from the line that was just written.
+#
+# The status is taken before the printf and given back after it, so when the append fails the caller
+# still gets its non-zero exit status. The `cat` above is the last command in the file, and the EXIT
+# trap at :40 still removes the temporary file when the script ends at an explicit `exit` — measured
+# under sh, dash and bash.
+if [ "$status" -eq 0 ]; then
+  verdict="relevant $relevant"
+  [ -z "$band" ] || verdict="$verdict, match $band"
+  verdict="$verdict, detail_read $detail_read"
+  [ "$nhc" = true ] && verdict="$verdict, needs_human_check true"
+  [ -z "$same_role" ] || verdict="$verdict, same_role_as $same_role"
+  [ -z "$posted_extracted" ] || verdict="$verdict, posted_at_extracted $posted_extracted"
+  printf 'record-judgment: recorded %s:%s for run %s — %s\n' \
+    "$source" "$source_id" "$run_id" "$verdict" >&2
+fi
+exit "$status"

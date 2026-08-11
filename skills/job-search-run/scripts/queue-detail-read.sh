@@ -103,11 +103,11 @@ awk -v run_id="$run_id" -v source="$source" -v source_id="$source_id" -v ts="$ts
   }' >> "$jobs"
 status=$?
 
-# The write is announced, the way the already-queued branch above announces the write it did not
-# make. Without this line the two outcomes look the same from outside — nothing on stdout, nothing
-# on stderr, exit 0 — and the caller cannot tell a queued posting from one it queued twice. The
-# status is taken before the printf and given back after it, so an awk that failed still reaches the
-# caller as a failure.
+# The write is announced, the way the already-queued branch above prints a line saying nothing was
+# written. Without this line the two outcomes look the same from outside — nothing on stdout,
+# nothing on stderr, exit 0 — and the caller cannot tell a queued posting from one it queued twice.
+# The status is taken before the printf and given back after it, so when awk fails the caller still
+# gets its non-zero exit status.
 if [ "$status" -eq 0 ]; then
   printf 'queue-detail-read: queued %s:%s for run %s\n' "$source" "$source_id" "$run_id" >&2
 fi
