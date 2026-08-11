@@ -22,6 +22,13 @@ that the appended events are the same ones as before. `event-log-append.sh` take
 and writes nothing to stdout, so its tests check that stdout stays empty on the append, on the skip
 and on every one of its seven refusals.
 
+The last section is a guard rather than a content test. Every test above pins one script's exact
+sentence, so it fails when the wording changes and passes when the line is deleted and nothing
+replaces it, because the assertion is deleted along with the line it was written for. The guard runs
+a success invocation of each of the ten scripts and checks only that the script wrote to stderr and
+that the line opens with the script's own name, so a rewording leaves it passing and a deletion
+fails it.
+
 The `dedup.sh --near` tests and the failed-append test run through POSIX `sh` and through `dash`
 where it is installed, the way `tests/test_dedup_guard.py` drives that same script. Helpers are
 defined here rather than imported from `tests/test_mechanics_scripts.py` or
@@ -1402,3 +1409,188 @@ def test_a_refused_event_still_says_only_what_it_refused(tmp_path):
         assert r.stdout == "", (event, r.stdout)
         assert r.stderr == "event-log-append: %s\n" % said, (event, r.stderr)
         assert not jobs.exists(), jobs.read_text()
+
+
+# ------------------------------------------------------------------ the ten scripts together
+
+# What each script's stderr line opens with, written out one script at a time rather than worked out
+# from the filename, because the pack does not work it out from the filename either. Measured
+# 2026-08-11 over the map below with `python3 -c "import sys; sys.path.insert(0, 'tests'); import
+# test_script_diagnostics as t; print(sum('.sh' in p for p in t.EXPECTED_PREFIX.values()),
+# len(t.EXPECTED_PREFIX))"`: 6 of the 10 prefixes carry `.sh` and the other 4 leave it off.
+EXPECTED_PREFIX = {
+    "dedup.sh --near":           "dedup.sh --near: ",
+    "event-log-append.sh":       "event-log-append: ",
+    "list-detail-read-queue.sh": "list-detail-read-queue: ",
+    "posting-counts.sh":         "posting-counts.sh: ",
+    "queue-detail-read.sh":      "queue-detail-read: ",
+    "record-judgment.sh":        "record-judgment: ",
+    "run-counts.sh":             "run-counts.sh: ",
+    "run-matches.sh":            "run-matches.sh: ",
+    "validate-workspace.sh":     "validate-workspace.sh: ",
+    "workspace-discovery.sh":    "workspace-discovery.sh: ",
+}
+
+
+def success_calls(tmp_path, workspace):
+    """One call per script in `EXPECTED_PREFIX`, each on an input that script exits 0 on.
+
+    Every input is built the way the tests above build the same script's input, through the same
+    helpers and the same log constants, so the guard runs the success paths those tests already
+    pin rather than a second set of its own. `validate-workspace.sh` is called without
+    `--quiet-when-clean`, the flag that leaves its line out;
+    `test_the_flag_that_suppresses_a_line_is_the_one_a_caller_asks_for` is where that flag is
+    checked.
+
+    Each value is a function rather than a finished `CompletedProcess`, so the fixture below can
+    build all ten and run the one its parameter names.
+    """
+    def queue_detail_read():
+        jobs = tmp_path / "queued.jsonl"
+        jobs.write_text(surfaced_event("77"), encoding="utf-8")
+        return run_script(QUEUE, jobs, "--run-id", RID, "--source", "linkedin", "--source-id", "77")
+
+    def record_judgment():
+        jobs = tmp_path / "judged.jsonl"
+        jobs.write_text(
+            '{"event":"surfaced","run_id":"%s","source":"linkedin","source_id":"77",'
+            '"title":"Analyst","company_name":"Acme"}\n' % RID, encoding="utf-8")
+        return run_script(JUDGE, jobs, "--run-id", RID, "--source", "linkedin", "--source-id", "77",
+                          "--detail-read", "true", "--relevant", "true", "--match", "moderate",
+                          "--reasoning", "fits the brief")
+
+    def list_detail_read_queue():
+        # Two postings queued and one of them judged, which is the log
+        # `test_the_read_queue_says_how_much_of_it_is_worked_off` reads: one row on stdout, and
+        # none of the three counts on the stderr line is zero.
+        jobs = tmp_path / "read-queue.jsonl"
+        jobs.write_text("".join([
+            '{"event":"surfaced","run_id":"%s","source":"linkedin","source_id":"1",'
+            '"posting_id_at_seen":"jp_1","source_url":"https://example.test/1",'
+            '"title":"Analyst","company_name":"Acme"}\n' % RID,
+            '{"event":"surfaced","run_id":"%s","source":"linkedin","source_id":"2",'
+            '"posting_id_at_seen":"jp_2","source_url":"https://example.test/2",'
+            '"title":"Engineer","company_name":"Beta"}\n' % RID,
+            '{"event":"queued","run_id":"%s","source":"linkedin","source_id":"1"}\n' % RID,
+            '{"event":"queued","run_id":"%s","source":"linkedin","source_id":"2"}\n' % RID,
+            '{"event":"evaluated","run_id":"%s","source":"linkedin","source_id":"1",'
+            '"relevant":"false"}\n' % RID,
+        ]), encoding="utf-8")
+        return run_script(LIST_QUEUE, jobs, RID)
+
+    def event_log_append():
+        jobs = tmp_path / "appended.jsonl"
+        return run_append(jobs, '{"event":"surfaced","run_id":"%s","source":"ashby",'
+                                '"source_id":"abc-1"}' % RID)
+
+    def dedup_near():
+        return run_near([("linkedin:aa1", "Acme", "Software Engineer (Remote)"),
+                         ("linkedin:aa2", "Acme", "Software Engineer (NYC)")])
+
+    def run_counts():
+        jobs = tmp_path / "counted.jsonl"
+        jobs.write_text(WORKED_LOG, encoding="utf-8")
+        return run_script(COUNTS, jobs, RID)
+
+    def run_matches():
+        jobs = tmp_path / "matched.jsonl"
+        jobs.write_text(FOUR_BAND_LOG, encoding="utf-8")
+        return run_script(MATCHES, jobs, RID)
+
+    def posting_counts():
+        jobs = tmp_path / "postings.jsonl"
+        jobs.write_text(JUDGED_LOG, encoding="utf-8")
+        return run_script(POSTINGS, jobs)
+
+    def workspace_discovery():
+        # The default path: a `.job-search` holding a `config.yaml` and no registry file, which is
+        # one of the four calls in
+        # `test_the_other_precedence_paths_print_the_three_keys_they_printed_before`.
+        home = tmp_path / "discovery-home"
+        (home / ".job-search").mkdir(parents=True)
+        (home / ".job-search" / "config.yaml").write_text("version: 1\n", encoding="utf-8")
+        return run_script(DISCOVERY, env=discovery_env(home))
+
+    def validate_workspace():
+        return run_validator(workspace)
+
+    calls = {
+        "dedup.sh --near": dedup_near,
+        "event-log-append.sh": event_log_append,
+        "list-detail-read-queue.sh": list_detail_read_queue,
+        "posting-counts.sh": posting_counts,
+        "queue-detail-read.sh": queue_detail_read,
+        "record-judgment.sh": record_judgment,
+        "run-counts.sh": run_counts,
+        "run-matches.sh": run_matches,
+        "validate-workspace.sh": validate_workspace,
+        "workspace-discovery.sh": workspace_discovery,
+    }
+    # The fixture takes its parameters from `EXPECTED_PREFIX`, so a script listed here and not there
+    # would be built and never run. This assertion fails instead.
+    assert sorted(calls) == sorted(EXPECTED_PREFIX), (sorted(calls), sorted(EXPECTED_PREFIX))
+    return calls
+
+
+@pytest.fixture(params=sorted(EXPECTED_PREFIX))
+def instrumented(request, tmp_path, tmp_workspace):
+    """One script per parameter, as `(label, call)`, where `call()` runs it on an input it exits 0
+    on. `tmp_workspace` is requested for `validate-workspace.sh`; the other nine build what they
+    need under `tmp_path`."""
+    return request.param, success_calls(tmp_path, tmp_workspace)[request.param]
+
+
+def test_every_instrumented_script_writes_a_line_on_its_success_path(instrumented):
+    """Every test above pins one script's exact sentence. Delete that sentence from the script and
+    the assertion that read it is deleted with it, so the suite stays green over a script that has
+    stopped writing its line. This test reads none of the wording: it runs each script on an input
+    it exits 0 on and checks that stderr is not empty and that the line opens with the script's own
+    name. Reword a line and this still passes; delete one and this fails.
+
+    The exit status is checked first and in the same test, because a call that failed would satisfy
+    the stderr check for the wrong reason: nine of these ten already wrote to stderr when they
+    refuse an argument or cannot find the file they were handed, before the 2026-08-11 TD-008 plan
+    added a line to any of them. Measured 2026-08-11 with `git show 4fb0672:<path> | grep -c '>&2'`
+    over the ten, where 4fb0672 is the commit before the plan's first: the nine counts run from 1 to
+    7, and `workspace-discovery.sh` counts 0.
+    """
+    label, call = instrumented
+    r = call()
+    assert r.returncode == 0, "%s: this is meant to be a success call, and it exited %d\n%s" % (
+        label, r.returncode, r.stdout + r.stderr)
+    assert r.stderr.strip() != "", (
+        "%s exited 0 and wrote nothing to stderr. A caller reading that cannot tell it from a "
+        "script that never ran, and re-running to find out is what TD-008 measured: 4 bash calls "
+        "and 31 seconds on dedup.sh --near in the 2026-08-10 run." % label)
+    assert r.stderr.startswith(EXPECTED_PREFIX[label]), (
+        "%s: the line should open with the script's own name, so a caller reading a stderr stream "
+        "that several scripts wrote to can tell which one wrote this line; got %r"
+        % (label, r.stderr[:80]))
+
+
+def test_the_flag_that_suppresses_a_line_is_the_one_a_caller_asks_for(tmp_workspace):
+    """`--quiet-when-clean` is the only flag in the pack that leaves a line out of a success path,
+    and the guard above would fail on the call that passes it, so the guard calls this script
+    without it. Measured 2026-08-11 with
+    `git grep -n -- "--quiet\\|--silent\\|QUIET\\|SILENT" skills/*/scripts/`: the only hits are this
+    script and `open-run.sh`, the caller that passes the flag.
+
+    `open-run.sh` runs this script inside its own and reports the same finding through its own exit
+    status, and a second line on its stderr would break
+    `test_a_present_brief_with_no_way_to_digest_it_is_not_called_missing` in
+    `tests/test_mechanics_scripts.py`. The read of `open-run.sh` below ties the flag to that one
+    caller: take the flag off that call and this test fails, because no other call in the pack
+    passes it.
+    """
+    quiet = run_validator(tmp_workspace, "--quiet-when-clean")
+    assert quiet.returncode == 0, quiet.stdout + quiet.stderr
+    assert quiet.stdout == "", quiet.stdout
+    assert quiet.stderr == "", quiet.stderr
+
+    # The same workspace without the flag, which is the call the guard makes.
+    loud = run_validator(tmp_workspace)
+    assert loud.returncode == 0, loud.stdout + loud.stderr
+    assert loud.stderr.startswith(EXPECTED_PREFIX["validate-workspace.sh"]), loud.stderr
+
+    open_run = (RUNBOOK_SCRIPTS / "open-run.sh").read_text(encoding="utf-8")
+    assert "validate-workspace.sh\" \"$ws\" --quiet-when-clean" in open_run, open_run
