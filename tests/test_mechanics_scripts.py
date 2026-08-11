@@ -1277,9 +1277,10 @@ def test_a_posting_body_without_a_usable_source_and_source_id_is_refused(tmp_pat
     through `field` would say `no surfaced posting for ashby:null`, pointing at the run's search
     results when the fault is in the response body.
 
-    Exit 2, not 1, and no `call` event: an unusable body is the caller handing over the wrong file,
-    which is what the search path does with the same shape. A call that happened is recorded by the
-    branches below this one."""
+    Exit 2, and the call is recorded. The body came off a metered call whatever shape it arrived
+    in — `agent-data-reference:19` says one metered call per attempt — and refusing to log it lost
+    44 of the 78 get-posting calls one 2026-08-10 run made, whose digest reported 38 metered calls
+    against a true 82. Only the checks that run before the body is scanned leave no event."""
     body = tmp_path / "body.json"
     body.write_text(json.dumps({"data": dict(row, description_markdown="A role."),
                                 "meta": {"request_id": "req_1"}}))
@@ -1289,7 +1290,11 @@ def test_a_posting_body_without_a_usable_source_and_source_id_is_refused(tmp_pat
     assert r.returncode == 2, r.stdout + r.stderr
     assert "no usable %s —" % names in r.stderr, r.stderr
     assert [e for e in lines(jobs) if e["event"] == "detail"] == []
-    assert [e for e in lines(jobs) if e["event"] == "call"] == before
+    after = [e for e in lines(jobs) if e["event"] == "call"]
+    assert len(after) == len(before) + 1, after
+    assert after[-1]["route"] == "get-posting"
+    assert after[-1]["ok"] is False
+    assert after[-1]["rows_returned"] == 0 and after[-1]["rows_new"] == 0
 
 
 @pytest.mark.parametrize("row,names", [
@@ -1305,7 +1310,12 @@ def test_a_non_string_source_or_source_id_in_a_posting_body_is_refused(tmp_path,
 
     Without it the body reached the surfaced check and the operator was told `no surfaced posting
     for ashby:123`, which sends them to the run's search results when the fault is in the body. An
-    object or an array never gets this far: the shape gate wants `data.source_id` as a scalar."""
+    object or an array never gets this far: the shape gate wants `data.source_id` as a scalar.
+
+    Exit 2, and the call is recorded. The body came off a metered call whatever shape it arrived
+    in — `agent-data-reference:19` says one metered call per attempt — and refusing to log it lost
+    44 of the 78 get-posting calls one 2026-08-10 run made, whose digest reported 38 metered calls
+    against a true 82. Only the checks that run before the body is scanned leave no event."""
     body = tmp_path / "body.json"
     body.write_text(json.dumps({"data": dict(row, description_markdown="A role."),
                                 "meta": {"request_id": "req_1"}}))
@@ -1315,7 +1325,97 @@ def test_a_non_string_source_or_source_id_in_a_posting_body_is_refused(tmp_path,
     assert r.returncode == 2, r.stdout + r.stderr
     assert "has a non-string %s —" % names in r.stderr, r.stderr
     assert [e for e in lines(jobs) if e["event"] == "detail"] == []
-    assert [e for e in lines(jobs) if e["event"] == "call"] == before
+    after = [e for e in lines(jobs) if e["event"] == "call"]
+    assert len(after) == len(before) + 1, after
+    assert after[-1]["route"] == "get-posting"
+    assert after[-1]["ok"] is False
+    assert after[-1]["rows_returned"] == 0 and after[-1]["rows_new"] == 0
+
+
+def test_a_posting_body_missing_data_source_id_entirely_still_records_its_call(tmp_path):
+    """The shape gate, and the path a `--fields` list that dropped `source_id` lands on. It had no
+    test at all, and it is where 44 of the 78 metered get-posting calls of the 2026-08-10 run went
+    unrecorded: HTTP 200 with valid bodies, trimmed by a field list that left out the two keys a
+    posting is filed under.
+
+    The event carries the request id off `meta`, because `req` is read at `:224`, before the route
+    branch. That is what lets an operator match a refused call against the service's own record."""
+    body = tmp_path / "trimmed.json"
+    body.write_text(json.dumps({"data": {"id": "jp_22d0d871db24", "title": "Head of FP&A",
+                                         "company_name": "Acme",
+                                         "description_markdown": "A role."},
+                                "meta": {"request_id": "req_1"}}))
+    jobs = seeded_jobs(tmp_path, "search.ashby.json")
+    before = [e for e in lines(jobs) if e["event"] == "call"]
+    r = run_script(RECORD_API, RID, jobs, body, "--route", "get-posting", "--source", "ashby")
+    assert r.returncode == 2, r.stdout + r.stderr
+    assert "carries no data.source_id" in r.stderr, r.stderr
+    after = [e for e in lines(jobs) if e["event"] == "call"]
+    assert len(after) == len(before) + 1, after
+    ev = after[-1]
+    assert ev["route"] == "get-posting" and ev["ok"] is False
+    assert ev["source"] == "ashby"
+    assert ev["rows_returned"] == 0 and ev["rows_new"] == 0
+    assert ev["request_id"] == "req_1"
+    assert [e for e in lines(jobs) if e["event"] == "detail"] == []
+
+
+def test_a_search_body_recorded_as_a_detail_read_keeps_the_route_it_was_given(tmp_path):
+    """A search body arriving with --route get-posting carries no --query-id, because `:116-121`
+    requires one only for a search. Filing it as a search would open the group `<source>:` that
+    nothing can ever mark answered — an invented lost search, which is the outcome correcting the
+    route at the search gate exists to avoid. So the call is filed as the detail read the caller
+    said it was, and `calls_total_metered` is right either way, which is the number the free tier
+    turns on."""
+    jobs = seeded_jobs(tmp_path, "search.ashby.json")
+    r = run_script(RECORD_API, RID, jobs, FIXTURES / "search.linkedin.json",
+                   "--route", "get-posting", "--source", "linkedin")
+    assert r.returncode == 2, r.stdout + r.stderr
+    assert "carries no data.source_id" in r.stderr, r.stderr
+    ev = [e for e in lines(jobs) if e["event"] == "call"][-1]
+    assert ev["route"] == "get-posting" and ev["ok"] is False
+    _, c = counts(jobs)
+    assert c["calls_detail_reads"] == "1"
+    assert c["calls_total_metered"] == "2"
+    assert c["searches_never_succeeded"] == "0"
+
+
+def test_a_refused_detail_read_reaches_the_counts_a_digest_prints(tmp_path):
+    """The defect was only visible in the digest. The 2026-08-10 run made 78 metered get-posting
+    calls, wrote 34 `call` events with route get-posting into `jobs.jsonl`, and printed
+    `Agent-data usage: 38 metered calls this run` against a true 82. The script-level assertions
+    above do not catch that on their own: the number a run reports is what `run-counts.sh` prints,
+    and it counts events."""
+    jobs = seeded_jobs(tmp_path, "search.ashby.json")
+    trimmed = tmp_path / "trimmed.json"
+    trimmed.write_text(json.dumps({"data": {"id": "jp_22d0d871db24", "title": "Head of FP&A"},
+                                   "meta": {"request_id": "req_1"}}))
+    refused = run_script(RECORD_API, RID, jobs, trimmed, "--route", "get-posting",
+                         "--source", "ashby")
+    assert refused.returncode == 2, refused.stderr
+    ok = record_detail(jobs, "detail.ashby.json")
+    assert ok.returncode == 0, ok.stderr
+    _, c = counts(jobs)
+    assert c["calls_detail_reads"] == "2"          # the refused read and the one that stored
+    assert c["calls_searches"] == "1"              # the search `seeded_jobs` ran
+    assert c["calls_total_metered"] == "3"
+    assert c["calls_failed"] == "1"
+
+
+def test_a_missing_response_file_records_nothing(tmp_path):
+    """Where the exit-2 contract now draws its line: a body that was scanned records its call, and
+    the checks that run before the scan do not. Nothing proves a call was made when the file naming
+    the response is not there, and `jobs.jsonl` is not created at all — which is what
+    `test_the_writer_cannot_produce_two_searches_on_one_source_that_share_a_query_id` relies on for
+    the missing-query-id refusal.
+
+    This passes before the change as well as after. It is here so the next edit to the reject paths
+    cannot quietly widen them into the argument checks."""
+    jobs = tmp_path / "jobs.jsonl"
+    r = run_script(RECORD_API, RID, jobs, tmp_path / "nope.json", "--route", "get-posting")
+    assert r.returncode == 2, r.stdout + r.stderr
+    assert "no such file" in r.stderr, r.stderr
+    assert not jobs.exists()
 
 
 def test_a_source_id_that_is_the_string_null_is_still_a_real_value(tmp_path):

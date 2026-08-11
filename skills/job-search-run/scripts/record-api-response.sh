@@ -32,7 +32,10 @@
 # Exit 0: the rows were appended, or the search legitimately returned none, or the posting was
 #         already stored for this run and only its call was recorded.
 # Exit 1: no rows appended; stderr names the problem. The call event is still recorded.
-# Exit 2: bad arguments, a missing file, or a body that is not what --route says it is.
+# Exit 2: bad arguments, a missing file, or a body that is not what --route says it is. A body that
+#         was scanned still records its call — the file came off a metered call whatever shape it
+#         arrived in — so only the checks that run before the scan leave no event: the argument
+#         checks, the missing-file check, and mktemp.
 set -u
 
 here=$(dirname "$0")
@@ -228,7 +231,8 @@ if [ "$route" = get-posting ]; then
   # uses [.] rather than \. for the reason given at haspath above: awk resolves the escape in a -v
   # assignment, and the dot would then match any character.
   haspath '^data[.]source_id$' || {
-    printf 'record-api-response.sh: %s carries no data.source_id — it is not a get-posting response\n' \
+    emit_call "$src_flag" false 0 0
+    printf 'record-api-response.sh: %s carries no data.source_id — it is not a get-posting response; the call is recorded, nothing else\n' \
       "$resp" >&2
     exit 2
   }
@@ -249,12 +253,14 @@ if [ "$route" = get-posting ]; then
     esac
   done
   [ -z "$missing" ] || {
-    printf 'record-api-response.sh: %s has no usable %s — absent, null, or an empty string\n' \
+    emit_call "$src_flag" false 0 0
+    printf 'record-api-response.sh: %s has no usable %s — absent, null, or an empty string; the call is recorded, nothing else\n' \
       "$resp" "$missing" >&2
     exit 2
   }
   [ -z "$notstring" ] || {
-    printf 'record-api-response.sh: %s has a non-string %s — every script that finds a posting matches the quoted form, so this posting would be stored and then unreachable\n' \
+    emit_call "$src_flag" false 0 0
+    printf 'record-api-response.sh: %s has a non-string %s — every script that finds a posting matches the quoted form, so this posting would be stored and then unreachable; the call is recorded, nothing else\n' \
       "$resp" "$notstring" >&2
     exit 2
   }
