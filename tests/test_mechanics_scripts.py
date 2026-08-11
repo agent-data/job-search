@@ -3911,9 +3911,9 @@ def printed_commands(refusal):
     """The commands a refusal printed, taken out of the message rather than composed from its parts.
 
     Each is wrapped in backticks by the message, and nothing else in it is. Composing the expected
-    command here instead would assert only that two copies of one recipe agree, which is what three
-    rounds of review found: the command asserted against was each time the corrected one, and the
-    command printed was each time the broken one.
+    command here instead would only check the test's own command against the test's own command,
+    which is what three rounds of review found: the command asserted against was each time the
+    corrected one, and the command printed was each time the broken one.
     """
     commands = re.findall(r"`([^`]+)`", refusal.stderr)
     assert len(commands) == 2, refusal.stderr
@@ -3935,16 +3935,17 @@ def test_the_printed_recovery_commands_run_as_printed(tmp_workspace, tmp_path):
     """The refusal's two commands are run exactly as the refusal printed them, from a directory that
     holds neither script, and both have to exit 0 and leave the workspace ready to open again.
 
-    This is the case that closes the defect three reviews found in three different spellings: the
-    message left out `--close-state`, then left out `--trigger`, then named the scripts by bare
-    basename, so `close-run.sh …` exited 127 with `command not found`. Every one of those shipped
-    past a hand-check, because the command typed into the terminal was each time not the command the
-    script printed. Taking the text out of stderr and running that is what makes the two the same
-    thing.
+    This is the case that closes one defect three reviews found three times in three different
+    forms: the message left out `--close-state`, then left out `--trigger`, then named the scripts
+    by bare basename, so `close-run.sh …` exited 127 with `command not found`. Every one of those
+    shipped past a hand-check, because the command typed into the terminal was each time not the
+    command the script printed. Taking the text out of stderr and running that is what makes the two
+    the same thing.
 
-    The workspace path carries a space, which is the case single-quoting the arguments is for:
-    unquoted, the shell splits `/…/a work space` into two arguments and `close-run.sh` reads `work`
-    as the run id.
+    The workspace path carries a space, which is what single-quoting the arguments is for. Unquoted,
+    the shell splits the path at each space when the command runs: measured on `/…/a work space`,
+    `close-run.sh` gets `/…/a` as the workspace and `work` as the run id, then stops at `space` with
+    `close-run: unknown option space` and exit 1, under both `sh` and `dash`.
     """
     ws = tmp_path / "a work space"
     shutil.copytree(str(tmp_workspace), str(ws))

@@ -1359,16 +1359,16 @@ def test_quiet_when_clean_suppresses_only_that_line(tmp_workspace):
 
     This is the only flag in the pack that leaves a line out of a success path, which is why the
     guard at the end of this file has no entry for the branch it takes. Measured 2026-08-11 with
-    `git grep -n -- "--quiet\\|--silent\\|QUIET\\|SILENT" skills/*/scripts/`: eight hits, and every
-    one of them is this flag — `validate-workspace.sh:14,15,29,32,42,537`, which is the two header
-    lines, the `QUIET_WHEN_CLEAN` variable, the usage line, the flag parse and the `if` that reads
-    it, and the comment and the call in `open-run.sh` that `grep -n -- "--quiet-when-clean"
-    skills/job-search-runbook/scripts/open-run.sh` finds, which is the one caller that passes it.
-    Those two are named by a grep rather than by line number because they have moved four times
-    while `open-run.sh` gained comments, and a line number in a docstring in another file goes stale
-    on every edit above the line it names. The read of `open-run.sh` at the end ties the flag to that
-    caller: take the flag off that call and this test fails, because no other call in the pack passes
-    it.
+    `git grep -n -- "--quiet\\|--silent\\|QUIET\\|SILENT" skills/*/scripts/`: nine hits, and every
+    one of them is this flag. Six are in `validate-workspace.sh` — the two header lines, the
+    `QUIET_WHEN_CLEAN` variable, the usage line, the flag parse and the `if` that reads it. Two are
+    in `open-run.sh`, a comment and the call, and that call is the only one in the pack that passes
+    the flag. The ninth is a comment in `close-run.sh` recording that it does not pass it.
+
+    No line numbers are given, because the two in `open-run.sh` moved four times while that script
+    gained comments, and a line number written in a docstring in another file goes stale on every
+    edit above the line it names. Re-run the grep above to place them. The read of `open-run.sh` at the end ties the flag to that caller: take the flag off that
+    call and this test fails, because no other call in the pack passes it.
     """
     r = run_validator(tmp_workspace, "--quiet-when-clean")
     assert r.returncode == 0, r.stdout + r.stderr

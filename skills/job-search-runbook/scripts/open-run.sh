@@ -96,8 +96,11 @@ done
   # so the commands still run after the caller has changed directory, and `dirname "$0"` on its own
   # is relative whenever this script was called by a relative path.
   #
-  # The three values are single-quoted because a workspace under a directory with a space in its
-  # name would otherwise print as two arguments and the command would fail on the second.
+  # The three values are single-quoted. The message prints one string either way; the quoting
+  # decides how the shell splits it when the caller runs it. Unquoted, a workspace path with a space
+  # in it splits at the space: measured on `/…/a work space`, close-run.sh gets `/…/a` as the
+  # workspace and `work` as the run id, then stops at `space` with `close-run: unknown option
+  # space`, exit 1, under both sh and dash.
   dir=$(cd "$here" 2>/dev/null && pwd) || dir=$here
   close_cmd="'$dir/close-run.sh' '$ws' '$open_marker' --trigger manual --close-state interrupted"
   clear_cmd="'$dir/clear-run.sh' '$ws' '$open_marker'"
