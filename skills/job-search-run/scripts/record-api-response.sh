@@ -18,6 +18,11 @@
 # description, so nothing in it identifies the route that produced it, and guessing files every
 # failed detail read under searches.
 #
+# One exception, and it changes only the route a `call` event is filed under, never which branch
+# runs: a body handed to --route search-jobs that carries data.source_id at two segments has its
+# call filed under get-posting. The search branch's shape gate does that, and the reason is
+# written there.
+#
 # The `call` event is written for every attempt — a failed one and a repeat one included. It is the
 # record that the call happened, and what a run's metered-call count is worked out from. The rows
 # are all-or-nothing: a response with one unusable row appends none of its rows.
@@ -62,8 +67,8 @@ case $route in
 esac
 
 # The route a `call` event is filed under. It is the route the caller gave, everywhere but one
-# place: the search branch's shape gate, where a body that identifies itself as a posting is filed
-# as the detail read it was. The reason is written there.
+# place: the search branch's shape gate, where a body carrying data.source_id at two segments is
+# filed as the detail read it was. The reason is written there.
 callroute=$route
 
 # An identifier is refused rather than escaped. Free text is the opposite case — esc writes a
@@ -360,12 +365,12 @@ haspath '^data[.](query|results)[.]' || {
   # A posting body handed here as a search. The call that produced it was made and billed on
   # get-posting, so the event is filed there rather than under searches: one carrying search-jobs
   # opens a source:query_id group in run-counts.awk, a group with no ok:true member is counted as a
-  # search that never returned, and close-run.sh reports that as run_health=degraded. Filing every
-  # failed detail read under searches is the outcome the note at the top of this file exists to
-  # prevent, and this is a positive identification rather than a guess: the body has passed the
-  # error gate above and carries data.source_id at two segments, the same test the get-posting
-  # branch applies to itself. Measured with json-scan.awk — 1 such path in a posting body, 0 in a
-  # search body, whether the search returned rows or none.
+  # search that never returned, and close-run.sh reports that as run_health=degraded. The note at
+  # the top of this file says guessing the route from the body files every failed detail read under
+  # searches, and this change follows it: the route here is read off a path only a posting body
+  # carries, not guessed. The body has passed the error gate above and carries data.source_id at two
+  # segments, the same test the get-posting branch applies to itself. Measured with json-scan.awk —
+  # 1 such path in a posting body, 0 in a search body, whether the search returned rows or none.
   #
   # The mirror case is deliberately left alone. A search body arriving with --route get-posting
   # carries no --query-id, because only a search is required to pass one, so filing it as a search

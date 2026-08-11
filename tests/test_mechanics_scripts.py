@@ -1339,7 +1339,7 @@ def test_a_posting_body_missing_data_source_id_entirely_still_records_its_call(t
     `source`, `source_id`, or both.
 
     The event carries the request id off `meta`, because `req` is read at
-    `record-api-response.sh:232`, before the route branch. That is what lets an operator match a
+    `record-api-response.sh:237`, before the route branch. That is what lets an operator match a
     refused call against the service's own record."""
     body = tmp_path / "trimmed.json"
     body.write_text(json.dumps({"data": {"id": "jp_22d0d871db24", "title": "Head of FP&A",
@@ -1363,7 +1363,7 @@ def test_a_posting_body_missing_data_source_id_entirely_still_records_its_call(t
 
 def test_a_search_body_recorded_as_a_detail_read_keeps_the_route_it_was_given(tmp_path):
     """A search body arriving with --route get-posting carries no --query-id, because
-    `record-api-response.sh:124-130` requires one only for a search. Filing it as a search would
+    `record-api-response.sh:129-135` requires one only for a search. Filing it as a search would
     open the group `<source>:null` that nothing can ever mark answered — an invented lost search,
     which is the outcome correcting the route at the search gate exists to avoid. So the call is
     filed as the detail read the caller said it was, and `calls_total_metered` — the number the
@@ -1448,10 +1448,11 @@ def test_a_posting_body_recorded_as_a_search_is_filed_as_the_detail_read_it_was(
     assert c["searches_never_succeeded"] == "0"    # no group opened on q9
 
 
-def test_a_body_that_names_no_route_keeps_the_one_it_was_given(tmp_path):
-    """The correction above is scoped to a body that names itself. One that names neither route —
-    no data.query, no data.results, no data.source_id — is filed under the route the caller passed,
-    because nothing in it says otherwise.
+def test_a_body_carrying_neither_data_query_nor_data_results_nor_data_source_id_keeps_its_route(tmp_path):
+    """The correction above is scoped to a body carrying data.source_id at two segments. A body
+    carrying neither data.query nor data.results nor data.source_id is filed under the route the
+    caller passed, because neither of the gate's two patterns matches any path in it — this one
+    scans to data.nothing and meta.request_id.
 
     That leaves the group `ashby:q9` unanswered, which is counted as a search that never returned.
     It is the right reading of what happened: a search call was recorded, and no search body ever
