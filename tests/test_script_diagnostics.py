@@ -437,8 +437,19 @@ FOUR_BAND_STDOUT = (
     "2026-08-04\tJudged f4\t\n"
 )
 
-TALLY = ("run-matches.sh: run %s — %d strong, %d moderate, %d weak, %d filtered, "
-         "%d the same opening as another and given no row")
+def tally(named, total, jobs, run_id, strong, moderate, weak, filtered, dups, unbanded=0):
+    """The stderr line `run-matches.sh` writes. `named` of `total` lines in the log name `run_id`, in
+    the same words `run-counts.sh` says it in — the two scripts read the same log and are meant to
+    reach the same pair of numbers. The sixth count is written only when it is above zero, so it is
+    left off unless `unbanded` is given."""
+    sixth = "" if not unbanded else \
+        ", %d judged relevant with no band and given no row" % unbanded
+    return ("run-matches.sh: %d of %d lines in %s name run %s — %d strong, %d moderate, %d weak, "
+            "%d filtered, %d the same opening as another and given no row%s\n"
+            % (named, total, jobs, run_id, strong, moderate, weak, filtered, dups, sixth))
+
+
+FOUR_BAND_LINES = len(FOUR_BAND_LOG.splitlines())
 
 
 @pytest.mark.parametrize("shell", SHELLS)
@@ -455,23 +466,54 @@ def test_run_matches_reports_the_band_tally_the_digest_headings_use(tmp_path, sh
     r = run_script(MATCHES, jobs, RID, shell=shell)
     assert r.returncode == 0, r.stdout + r.stderr
     assert r.stdout == FOUR_BAND_STDOUT, r.stdout
-    assert r.stderr == TALLY % (RID, 1, 2, 3, 4, 1) + "\n", r.stderr
+    assert r.stderr == tally(FOUR_BAND_LINES, FOUR_BAND_LINES, jobs, RID, 1, 2, 3, 4, 1), r.stderr
 
 
 @pytest.mark.parametrize("shell", SHELLS)
-def test_a_run_id_no_event_carries_still_gets_a_tally_naming_that_id(tmp_path, shell):
-    """Measured 2026-08-11: a run id no event in the log carries printed 0 bytes on stdout, 0 bytes
-    on stderr and exit 0 (`sh skills/job-search-run/scripts/run-matches.sh <log>
-    2026-01-01T00-00-00Z`), which is byte for byte what a run that judged nothing printed. The tally
-    is written whether or not the run id matched anything, and it names the id back, so a caller
-    that mistyped one reads its own id here. The counts do not tell those two runs apart on their
-    own — both are all zeros, which is why this asserts the id in the line and not only the zeros."""
+def test_a_run_that_judged_nothing_and_a_run_id_no_event_carries_read_differently(tmp_path, shell):
+    """Both of those runs print no rows and an all-zero tally, so the counts alone do not say which
+    one happened: measured 2026-08-11 on the log below, the two calls printed the same six zeros and
+    differed only in the run id echoed back. The line opens with how many of the log's lines name the
+    run, which is the number that separates them — 3 of 3 for the run that judged nothing, 0 of 3 for
+    the id no event carries.
+
+    `run-counts.sh` reports that same pair for the same log and the same id, in the same words, and
+    this asserts both scripts' lines so the two cannot drift into describing it differently."""
+    jobs = tmp_path / "jobs.jsonl"
+    jobs.write_text("".join([surfaced("n1"), surfaced("n2"), surfaced("n3")]), encoding="utf-8")
+
+    judged_nothing = run_script(MATCHES, jobs, RID, shell=shell)
+    assert judged_nothing.returncode == 0, judged_nothing.stdout + judged_nothing.stderr
+    assert judged_nothing.stdout == "", judged_nothing.stdout
+    assert judged_nothing.stderr == tally(3, 3, jobs, RID, 0, 0, 0, 0, 0), judged_nothing.stderr
+
+    no_such_run = run_script(MATCHES, jobs, "2026-01-01T00-00-00Z", shell=shell)
+    assert no_such_run.returncode == 0, no_such_run.stdout + no_such_run.stderr
+    assert no_such_run.stdout == "", no_such_run.stdout
+    assert no_such_run.stderr == tally(0, 3, jobs, "2026-01-01T00-00-00Z", 0, 0, 0, 0, 0), \
+        no_such_run.stderr
+
+    assert judged_nothing.stderr != no_such_run.stderr
+
+    c = run_script(COUNTS, jobs, RID, shell=shell)
+    assert "run-counts.sh: 3 of 3 lines in %s name run %s\n" % (jobs, RID) in c.stderr, c.stderr
+    c = run_script(COUNTS, jobs, "2026-01-01T00-00-00Z", shell=shell)
+    assert "run-counts.sh: 0 of 3 lines in %s name run 2026-01-01T00-00-00Z\n" % jobs in c.stderr, \
+        c.stderr
+
+
+@pytest.mark.parametrize("shell", SHELLS)
+def test_a_run_id_no_event_carries_prints_no_row_off_a_log_full_of_judgments(tmp_path, shell):
+    """The run id is read on every line before anything else, so a log holding eleven judged
+    postings prints nothing for an id none of them carries. The tally says so twice over: 0 of 22
+    lines name it, and every count is zero."""
     jobs = tmp_path / "jobs.jsonl"
     jobs.write_text(FOUR_BAND_LOG, encoding="utf-8")
     r = run_script(MATCHES, jobs, "2026-01-01T00-00-00Z", shell=shell)
     assert r.returncode == 0, r.stdout + r.stderr
     assert r.stdout == "", r.stdout
-    assert r.stderr == TALLY % ("2026-01-01T00-00-00Z", 0, 0, 0, 0, 0) + "\n", r.stderr
+    assert r.stderr == tally(0, FOUR_BAND_LINES, jobs, "2026-01-01T00-00-00Z", 0, 0, 0, 0, 0), \
+        r.stderr
 
 
 @pytest.mark.parametrize("shell", SHELLS)
@@ -487,18 +529,20 @@ def test_the_last_count_follows_same_role_as_being_there_not_what_it_names(tmp_p
     without a location, which reaches this script as the four characters `null`. All four are
     counted. Measured 2026-08-11: with the count taken after the first-colon split instead, `d3`
     goes uncounted, and with it taken after the empty-location check, `d4` does."""
-    jobs = tmp_path / "jobs.jsonl"
-    jobs.write_text("".join([
+    log = "".join([
         surfaced("a1"), surfaced("d1"), surfaced("d2"), surfaced("d3"), surfaced("d4"),
         evaluated("d1", "strong", same_role_as="linkedin:a1"),
         evaluated("d2", "strong", same_role_as="linkedin:zz9"),
         evaluated("d3", "strong", same_role_as="the other Austin listing"),
         evaluated("d4", "strong", same_role_as="linkedin:a1", location="null"),
-    ]), encoding="utf-8")
+    ])
+    jobs = tmp_path / "jobs.jsonl"
+    jobs.write_text(log, encoding="utf-8")
+    n = len(log.splitlines())
     r = run_script(MATCHES, jobs, RID, shell=shell)
     assert r.returncode == 0, r.stdout + r.stderr
     assert r.stdout == "", r.stdout
-    assert r.stderr == TALLY % (RID, 0, 0, 0, 0, 4) + "\n", r.stderr
+    assert r.stderr == tally(n, n, jobs, RID, 0, 0, 0, 0, 4), r.stderr
     # All four were judged strong, and neither script counts any of them as strong.
     c = run_script(COUNTS, jobs, RID, shell=shell)
     assert c.returncode == 0, c.stdout + c.stderr
@@ -513,20 +557,21 @@ def test_a_relevant_row_with_no_band_is_counted_where_it_is_left_out(tmp_path, s
     would not add up to the postings this run reviewed. It is counted in a sixth number, printed
     only when it is not zero. `run-counts.sh` is the script that owns this finding and exits 1 on
     it; this one prints its listing and exits 0, and the two report the same number."""
-    jobs = tmp_path / "jobs.jsonl"
-    jobs.write_text("".join([
+    log = "".join([
         surfaced("s1"), surfaced("u1"),
         evaluated("s1", "strong"),
         evaluated("u1", ""),
-    ]), encoding="utf-8")
+    ])
+    jobs = tmp_path / "jobs.jsonl"
+    jobs.write_text(log, encoding="utf-8")
+    n = len(log.splitlines())
     r = run_script(MATCHES, jobs, RID, shell=shell)
     assert r.returncode == 0, r.stdout + r.stderr
     assert r.stdout == (
         "strong\tlinkedin\ts1\tEngineer s1\tCompany s1\tCity s1\thttps://example.test/s1\tfalse\t"
         "2026-08-04\tJudged s1\t\n"
     ), r.stdout
-    assert r.stderr == TALLY % (RID, 1, 0, 0, 0, 0) + \
-        ", 1 judged relevant with no band and given no row\n", r.stderr
+    assert r.stderr == tally(n, n, jobs, RID, 1, 0, 0, 0, 0, unbanded=1), r.stderr
     c = run_script(COUNTS, jobs, RID, shell=shell)
     assert c.returncode == 1, c.stdout + c.stderr
     assert "INVALID relevant-row-without-a-band=1\n" in c.stdout, c.stdout

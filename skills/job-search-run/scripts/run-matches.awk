@@ -1,17 +1,17 @@
 # run-matches.awk — see run-matches.sh.
 #
 # `order` fixes the order the rows come out in, because awk walks an array in no defined order. It
-# holds the postings in the order this run first judged them, and the END block walks it four
-# times, once per band. Replacing it with a `for (k in judgment)` walk moves the rows within a
-# band, so the same log read on two machines prints two different digests. Measured on a log whose
-# five strong judgments landed in the order 0003, 0000, 0004, 0002, 0001: BSD awk 20200816 printed
-# them 0000, 0001, 0002, 0003, 0004 and mawk 1.3.4 printed them 0004, 0000, 0001, 0002, 0003 —
-# three orders, no two alike. With `order`, both awks print the order the postings were first
-# judged in.
+# holds the postings in the order this run first judged them, and the END block walks it five
+# times: once to work out which postings are the same opening as another, then once per band.
+# Replacing it with a `for (k in judgment)` walk moves the rows within a band, so the same log
+# read on two machines prints two different digests. Measured on a log whose five strong judgments
+# landed in the order 0003, 0000, 0004, 0002, 0001: BSD awk 20200816 printed them 0000, 0001,
+# 0002, 0003, 0004 and mawk 1.3.4 printed them 0004, 0000, 0001, 0002, 0003 — three orders, no two
+# alike. With `order`, both awks print the order the postings were first judged in.
 #
 # A posting is keyed by its source and its source_id joined with SUBSEP, the 0x1c byte, which
 # cannot reach a value — the reason written out at run-counts.awk:14-16. A source_id may hold a
-# `|`, so joining on one would let two postings share a key: record-judgment.sh:70-75 refuses only
+# `|`, so joining on one would let two postings share a key: record-judgment.sh:76-81 refuses only
 # a control character and a backslash, and measured, source `s` with source_id `x|y` and source
 # `s|x` with source_id `y` were both recorded at exit 0 and both join to `s|x|y`. With the key
 # joined on `|`, this script printed one row for those two postings instead of two.
@@ -42,7 +42,7 @@ BEGIN {
 }
 
 {
-  if (jval($0, "run_id") != want) next
+  if (jval($0, "run_id") != want) { notmine++; next }  # only the stderr line in END reads notmine
   ev = jval($0, "event")
   if (ev != "surfaced" && ev != "evaluated") next
   k = jval($0, "source") SUBSEP jval($0, "source_id")
@@ -126,16 +126,22 @@ END {
   }
 
   # Until this line existed, a run that judged nothing printed 0 bytes on stdout, 0 on stderr and
-  # exit 0, and so did a run id no event in the log carries. Measured 2026-08-11 on a log of three
-  # surfaced postings and no judgment, called once with that run's own id and once with
-  # 2026-01-01T00-00-00Z: the two calls matched byte for byte on both streams. This line gives the
-  # caller the per-band tally the digest headings are written from, so the agent does not count the
-  # printed rows itself, and it names the run id back, so a caller that mistyped one reads its own
-  # id here. The counts do not tell those two runs apart on their own — both are all zeros.
+  # exit 0, and so did a run id no event in the log carries. This line gives the caller the per-band
+  # tally the digest headings are written from, so the agent does not count the printed rows itself,
+  # and it names the run id back, so a caller that mistyped one reads its own id here.
+  #
+  # The counts alone still do not say which of those two runs happened — both are all zeros — so the
+  # line opens with how many lines of the log name the run. It is worded the way run-counts.awk
+  # words the same fact — `grep -n 'name run' skills/job-search-run/scripts/run-counts.awk` returns
+  # the one line that prints it there — so a caller that ran both scripts on one log reads the same
+  # two numbers in the same words. NR is every line read and notmine is the lines the run_id guard
+  # turned away, so the difference is the lines that name this run. Measured 2026-08-11 on a log of
+  # three surfaced postings and no judgment: with that run's own id the line opens `3 of 3 lines`,
+  # and with 2026-01-01T00-00-00Z it opens `0 of 3 lines`.
   #
   # The last two counts are the postings this run reviewed that get no row: one whose judgment
   # carries same_role_as, counted where dup is set, and one judged relevant carrying no band,
-  # counted where the band test drops it. With both of them here the six counts add up to
+  # counted where the band test drops it. With both of them here the six posting counts add up to
   # run-counts.sh's postings_reviewed — checked on four logs 2026-08-11, at 11, 4, 2 and 0. The
   # second is printed only when it is above zero, the way dedup.sh --near prints its two guard
   # counts, and run-counts.sh is still the script that owns that finding and exits 1 on it — this
@@ -145,9 +151,10 @@ END {
   # precedent — and the close() is what flushes it.
   extra = ""
   if (unbanded > 0) extra = sprintf(", %d judged relevant with no band and given no row", unbanded)
-  printf "run-matches.sh: run %s — %d strong, %d moderate, %d weak, %d filtered," \
-         " %d the same opening as another and given no row%s\n", \
-    want, printed["strong"]+0, printed["moderate"]+0, printed["weak"]+0, printed["filtered"]+0, \
+  printf "run-matches.sh: %d of %d lines in %s name run %s — %d strong, %d moderate, %d weak," \
+         " %d filtered, %d the same opening as another and given no row%s\n", \
+    NR - notmine, NR, FILENAME, want, \
+    printed["strong"]+0, printed["moderate"]+0, printed["weak"]+0, printed["filtered"]+0, \
     dups+0, extra | "cat 1>&2"
   close("cat 1>&2")
 }
