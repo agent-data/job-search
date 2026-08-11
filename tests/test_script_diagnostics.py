@@ -139,9 +139,11 @@ def test_near_names_the_row_each_collapsed_row_was_matched_to(shell):
 
 @pytest.mark.parametrize("shell", SHELLS)
 def test_near_reports_how_many_rows_it_read_and_handed_back(shell):
-    """65 ids out of a 67-row input, with 0 bytes on stderr, is what the 2026-08-10 run read as
-    evidence that the script had ignored the rows it piped in. It had not — that call worked. Four
-    bash calls, at 16:27:18, 16:27:34, 16:27:42 and 16:27:49, went to working that out."""
+    """65 ids out of a 67-row input, with 0 bytes on stderr, is what the 2026-08-10 run got back at
+    16:27:18 from a call that had worked. It wrote that the script "reads from jobs.jsonl directly,
+    not via my generated TSV" and "seems to have queried the log itself" (16:27:26), then spent
+    three more bash calls, at 16:27:34, 16:27:42 and 16:27:49, re-deriving the rows, reading the
+    script's source, and running the same call a second time."""
     r = run_near([("linkedin:aa1", "Acme", "Software Engineer (Remote)"),
                   ("linkedin:aa2", "Acme", "Software Engineer (NYC)"),
                   ("linkedin:bb1", "Beta", "Analyst")], shell=shell)
@@ -158,6 +160,28 @@ def test_near_reports_zero_collapsed_when_every_row_is_its_own_opening(shell):
                   ("linkedin:bb1", "Beta", "Analyst")], shell=shell)
     assert "2 rows read, 2 openings to judge, 0 the same opening as one above" in r.stderr, r.stderr
     assert "is the same opening as" not in r.stderr, r.stderr
+
+
+@pytest.mark.parametrize("shell", SHELLS)
+def test_near_accounts_for_every_row_it_read(shell):
+    """A row with no id and a row repeating an id already read are each dropped by their own guard.
+    With three counts on the line, those rows were counted in `rows read` and in nothing else: 4
+    rows came back as 2 openings and 0 collapsed, and a caller looking for the other two rows would
+    run the script again or write its own parser. Each guard now has a count, printed when it is not
+    zero, so the printed numbers sum to the rows read."""
+    rows = [("linkedin:aa1", "Acme", "Engineer"),
+            ("linkedin:aa1", "Acme", "Engineer"),
+            ("", "Beta", "Analyst"),
+            ("linkedin:bb1", "Beta", "Analyst")]
+    r = run_near(rows, shell=shell)
+    assert ("dedup.sh --near: 4 rows read, 2 openings to judge, 0 the same opening as one above, "
+            "1 with no id, 1 the same id as one above") in r.stderr, r.stderr
+
+    # Neither guard fired here, so neither count is printed and the line stays three counts.
+    clean = run_near([("linkedin:aa1", "Acme", "Engineer"),
+                      ("linkedin:bb1", "Beta", "Analyst")], shell=shell)
+    assert "with no id" not in clean.stderr, clean.stderr
+    assert "the same id as one above" not in clean.stderr, clean.stderr
 
 
 @pytest.mark.parametrize("shell", SHELLS)

@@ -1,8 +1,10 @@
 #!/bin/sh
 # dedup.sh — drop the candidate postings a run does not need to read.
 #
-# Usage: dedup.sh --near                          # id<TAB>company<TAB>title rows on stdin,
-#                                                 # the ids to judge on stdout, counts on stderr
+# Usage: dedup.sh --near                          # id<TAB>company<TAB>title rows on stdin, the ids
+#                                                 # to judge on stdout; on stderr, one line per
+#                                                 # collapsed row naming the row it was matched to,
+#                                                 # then a line of counts
 #        dedup.sh <jobs.jsonl> <source>          # candidate source_ids on stdin, NEW ones on stdout
 #
 # The --near mode answers a different question about one run's own rows: which of them are the
@@ -43,10 +45,18 @@ if [ "${1:-}" = --near ]; then
   # stdout carries the ids to judge and nothing else. Two more things go to stderr. One line per
   # collapsed row names that row and the row it was matched to, because SKILL.md asks for
   # `--same-role-as <source>:<source_id>` on every posting this mode leaves out and the pairing is
-  # worked out here to make the decision. A closing line gives the three counts, so a call that
-  # collapsed nothing still writes a sentence rather than 0 bytes: the 2026-08-10 run got 65 ids
-  # from 67 rows with an empty stderr and read that as the script having ignored the rows it piped
-  # in. Four bash calls, at 16:27:18, 16:27:34, 16:27:42 and 16:27:49, went to working that out.
+  # worked out here to make the decision. A closing line gives the counts, so even a call that
+  # collapsed nothing writes a sentence rather than 0 bytes. The 2026-08-10 run got 65 ids from 67
+  # rows with an empty stderr, and wrote that this script "reads from jobs.jsonl directly, not via
+  # my generated TSV" and "seems to have queried the log itself" (16:27:26). The call at 16:27:18
+  # had already produced those 65 ids; three more bash calls, at 16:27:34, 16:27:42 and 16:27:49,
+  # re-derived the rows, read this script's source, and ran the same call a second time.
+  #
+  # The counts add up to `rows read`. Every row lands in one of them: an opening to judge, the same
+  # opening as one above, a row with no id, or a row carrying an id that was read already. The last
+  # two are printed only when they are not zero, so an ordinary call still reports three counts, and
+  # a caller that adds up the numbers it was given always gets `rows read` back and is never left
+  # looking for a row the line did not mention.
   #
   # `first[company, title]` is assigned on the keep path below, so it holds the id of the row that
   # was kept for that pair — the one a later row is collapsed into. `rows` counts every line read,
@@ -61,16 +71,19 @@ if [ "${1:-}" = --near ]; then
       return s
     }
     { rows++; id = $1; company = norm($2); title = norm($3) }
-    id == ""                  { next }
-    seen_id[id]++             { next }
+    id == ""                  { no_id++; next }
+    seen_id[id]++             { repeat_id++; next }
     company == "" || title == "" { kept++; print id; next }
     seen_role[company, title]++  { same++
                                   printf "dedup.sh --near: %s is the same opening as %s\n", \
                                     id, first[company, title] | "cat 1>&2"
                                   next }
     { kept++; first[company, title] = id; print id }
-    END { printf "dedup.sh --near: %d rows read, %d openings to judge, %d the same opening as one above\n", \
-            rows, kept, same+0 | "cat 1>&2"
+    END { counts = sprintf("%d rows read, %d openings to judge, %d the same opening as one above", \
+                           rows, kept, same+0)
+          if (no_id)     counts = counts sprintf(", %d with no id", no_id)
+          if (repeat_id) counts = counts sprintf(", %d the same id as one above", repeat_id)
+          printf "dedup.sh --near: %s\n", counts | "cat 1>&2"
           close("cat 1>&2") }'
 fi
 
