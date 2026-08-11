@@ -3849,31 +3849,29 @@ def frozen_date(tmp_path, stamp=FROZEN_STAMP):
     return {"PATH": "%s:%s" % (d, os.environ["PATH"])}
 
 
-def test_a_run_opening_in_the_same_second_as_another_is_refused(tmp_workspace, tmp_path):
-    """`run_id` is the clock read to the second, so two runs that open inside one second are handed
-    the same id — one path for both run records, so the second close overwrites the first, and one
-    set of events, which `run-counts.sh` folds into a single set of counts because it filters
-    events by `run_id`. Nothing downstream can separate them afterwards.
+def test_a_refused_open_names_the_open_run_rather_than_an_unwritable_runs_dir(tmp_workspace):
+    """A refused open prints one of two messages and they send the caller to different places: a run
+    is already open, or `runs/` could not be written to. This case drives the first and asserts the
+    second is absent, because a caller that read `cannot write the started-marker` here would go
+    looking for a permissions problem in a workspace that has none.
 
-    This is the sequential case, which back-to-back scripted calls and a re-run straight after a
-    crash both produce: the first call has finished before the second starts. The case where the
-    two overlap — a scheduled run starting alongside a manual one — is the one below.
+    It also holds the refusal to one line on stderr and nothing at all on stdout. Stdout is where
+    `run_id`, `started_at` and `brief_revision` go, so a byte there would hand a caller a run that
+    did not open.
 
-    The one-run-at-a-time guard is what refuses it. The first run's marker is on disk before the
-    second call reaches the guard, so the second stops there and never reaches the `set -C` write
-    that would have refused the taken name. That write is still what refuses the two calls that
-    overlap, which is the case below.
-
-    `cannot write the started-marker` is the other message a refused open can print, and it means an
-    unwritable `runs/` rather than a run already open. This case asserts it is absent: a caller that
-    read it here would go looking for a permissions problem in a workspace that has none.
+    No frozen clock. This case used to pin both opens to one second, because before the
+    one-run-at-a-time guard the second open was refused by the `set -C` write and only a shared
+    `run_id` could trigger that. The guard refuses on the marker's presence and never compares the
+    two ids, so the second open is refused whether or not the clock has moved on, and the override
+    would have pinned a condition the outcome no longer depends on. Why a shared `run_id` still has
+    to be refused is written where `grep -n 'Why a shared run_id has to be refused'
+    skills/job-search-runbook/scripts/open-run.sh` points, and the case below drives it.
     """
-    env = frozen_date(tmp_path)
-    first = run_script(OPEN_RUN, tmp_workspace, env=env)
+    first = run_script(OPEN_RUN, tmp_workspace)
     assert first.returncode == 0, first.stdout + first.stderr
     run_id = parsed_output(first)["run_id"]
 
-    second = run_script(OPEN_RUN, tmp_workspace, env=env)
+    second = run_script(OPEN_RUN, tmp_workspace)
     assert second.returncode == 2, second.stdout + second.stderr
     assert second.stdout == ""
     assert run_id in second.stderr
@@ -3881,6 +3879,54 @@ def test_a_run_opening_in_the_same_second_as_another_is_refused(tmp_workspace, t
     assert "already open" in second.stderr
     assert len(second.stderr.splitlines()) == 1, second.stderr
     assert [p.name for p in (tmp_workspace / "runs").glob(".started-*")] == [".started-" + run_id]
+
+
+def test_the_refusal_names_the_flags_close_run_will_not_run_without(tmp_workspace):
+    """The message tells the caller to close the open run, and `close-run.sh` exits 1 without either
+    `--trigger` or `--close-state` — `close-run.sh:93` and `:95`. A message naming the two scripts
+    but not the flags sends the caller to a command that fails, so both flags and their values are
+    part of what this refusal has to say.
+
+    `manual` rather than `scheduled`: nothing on disk records what started a run that never closed.
+    `trigger` is written in one place, `runs/<run_id>.json` at `close-run.sh:338`, which is the file
+    an unclosed run does not have; the marker is empty; and no event in `jobs.jsonl` carries the
+    field. Of the two values `close-run.sh` takes, `scheduled` is the one the scheduling canary
+    reads as proof the scheduler ran — `grep -n 'canary passes' skills/job-search/SKILL.md` — so
+    `manual` is the one that does not leave evidence of a scheduled run behind it.
+    """
+    first = run_script(OPEN_RUN, tmp_workspace)
+    assert first.returncode == 0, first.stdout + first.stderr
+    run_id = parsed_output(first)["run_id"]
+
+    second = run_script(OPEN_RUN, tmp_workspace)
+    assert second.returncode == 2, second.stdout + second.stderr
+    assert "--trigger manual" in second.stderr
+    assert "--close-state interrupted" in second.stderr
+    # Both commands carry the workspace and the run id, so they run as printed.
+    assert "close-run.sh %s %s --trigger manual --close-state interrupted" % (
+        tmp_workspace, run_id) in second.stderr
+    assert "clear-run.sh %s %s" % (tmp_workspace, run_id) in second.stderr
+
+
+def test_a_marker_with_no_run_id_does_not_hide_a_real_one(tmp_workspace):
+    """`runs/.started-` with nothing after the dash makes `${m##*/.started-}` expand to empty, and
+    an empty value is what the guard reads as no run open. It sorts before every `.started-<run_id>`
+    — measured under both `sh` and `dash`, where `for m in runs/.started-*` lists `.started-` first —
+    so a guard that stopped at the first name in the directory would open a second run on top of a
+    real marker, which is the one thing it exists to prevent.
+
+    The empty name is skipped rather than refused on. Refusing would print an empty run id, and
+    `close-run.sh` and `clear-run.sh` both refuse one at their `${2:?…}` usage guard, so the caller
+    would be told to run two commands that cannot take the value the message gave them.
+    """
+    (tmp_workspace / "runs" / ".started-").write_text("")
+    (tmp_workspace / "runs" / ".started-2020-01-01T00-00-00Z").write_text("")
+    r = run_script(OPEN_RUN, tmp_workspace)
+    assert r.returncode == 2, r.stdout + r.stderr
+    assert r.stdout == ""
+    assert "2020-01-01T00-00-00Z" in r.stderr
+    assert sorted(p.name for p in (tmp_workspace / "runs").glob(".started-*")) == [
+        ".started-", ".started-2020-01-01T00-00-00Z"]
 
 
 def forked_together(workspace, env, tmp_path, count=2, shell="sh"):

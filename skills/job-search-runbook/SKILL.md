@@ -71,8 +71,15 @@ rather than from the registry.
 ## One run, start to close
 
 1. **Look for a leftover marker** — `ls <workspace>/runs/.started-* 2>/dev/null`. A marker there
-   belongs to a run that stopped before it could close. Say that the last run did not finish,
-   delete the marker, and go on with this run.
+   belongs to a run that stopped before it could close. Say that the last run did not finish, then
+   close and clear it before going on with this run: first
+   `skills/job-search-runbook/scripts/close-run.sh <workspace> <run_id> --trigger manual
+   --close-state interrupted`, then `skills/job-search-runbook/scripts/clear-run.sh <workspace>
+   <run_id>`, taking `<run_id>` off the marker's name. Pass `manual` because nothing on disk records
+   what started a run that never closed — `trigger` is written only into the run record, which is
+   the file that run never wrote — and `scheduled` is what the scheduling canary reads as proof the
+   scheduler ran. Deleting the marker instead leaves nothing recording that the run happened, which
+   is why `skills/job-search-runbook/scripts/clear-run.sh` refuses a run with no record.
 2. **Open the run** — run the plugin's `skills/job-search-runbook/scripts/open-run.sh <workspace>`.
    It prints `run_id`, `started_at` and `brief_revision` on stdout, in that order; carry all three
    through the run. Exit 1 means the run is open — the marker is on disk and those three lines are
@@ -85,13 +92,11 @@ rather than from the registry.
    run is already open in this workspace; or this `run_id` is already taken because another run
    opened in the same second. The last two both name a marker and they take opposite handling. A
    taken `run_id` means the marker belongs to the run that just opened, not to a run that stopped —
-   leave it alone, do not go back to step 1 and delete it, and run
+   leave it alone, do not treat it as the leftover marker of step 1, and run
    `skills/job-search-runbook/scripts/open-run.sh` again a second later. A run already open means an
-   earlier run's marker is still in `runs/`, so opening again gives the same refusal every time.
-   Close that run with `skills/job-search-runbook/scripts/close-run.sh`, passing
-   `--close-state interrupted` if it stopped without finishing, clear it with
-   `skills/job-search-runbook/scripts/clear-run.sh`, then open this one. Both take the run id
-   stderr names, and the clear refuses a run with no record, so the close has to come first.
+   earlier run's marker is still in `runs/`, so opening again gives the same refusal every time: go
+   back to step 1, close and clear that run, then open this one. The refusal names the run id both
+   commands take.
 3. **Do the run's work**, recording events as you go.
 4. **Close, in this order.** First
    `skills/job-search-runbook/scripts/close-run.sh <workspace> <run_id> --trigger … --close-state …`,

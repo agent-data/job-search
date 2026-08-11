@@ -58,20 +58,37 @@ mkdir -p "$ws/runs" || exit 2
 # this script, minted 2026-08-11T16-15-54Z while .started-2026-08-11T16-06-16Z was on disk, and
 # wrote 29 events plus a second copy of 25 surfaced rows under the new id.
 #
-# The message names a close state because closing is not optional here: clear-run.sh refuses a run
-# with no record — `grep -n 'close the run before clearing it'
-# skills/job-search-runbook/scripts/clear-run.sh` — so the marker comes off only after close-run.sh
-# has written one. interrupted is the one of the three states close-run.sh takes that fits a run
-# that stopped part-way; the other two are complete and blocked, at close-run.sh:95.
+# The message spells the recovery out because both flags close-run.sh needs are ones the caller
+# cannot work out from the marker. clear-run.sh refuses a run with no record — `grep -n 'close the
+# run before clearing it' skills/job-search-runbook/scripts/clear-run.sh` — so the marker comes off
+# only after close-run.sh has written one, and close-run.sh takes --trigger and --close-state or it
+# exits 1 (close-run.sh:93 and :95).
+#
+# --close-state is interrupted, the one of the three that fits a run that stopped part-way; the
+# other two are complete and blocked.
+#
+# --trigger is manual because nothing on disk records what started a run that never closed. trigger
+# is written in one place, runs/<run_id>.json at close-run.sh:338, and that file is the one an
+# unclosed run does not have; the marker is empty, written with `printf ''` below, and no event in
+# jobs.jsonl carries the field. Of the two values close-run.sh accepts, scheduled is the one the
+# scheduling canary reads as proof the scheduler ran — `grep -n 'canary passes'
+# skills/job-search/SKILL.md` — so manual is the value that does not leave behind evidence of a
+# scheduled run that nothing scheduled.
 open_marker=''
 for m in "$ws"/runs/.started-*; do
   [ -e "$m" ] || continue
   open_marker=${m##*/.started-}
+  # runs/.started- with nothing after the dash leaves this empty. Skip it and keep scanning: it
+  # sorts before every .started-<run_id> under both sh and dash, so stopping here would open a
+  # second run over a real marker further down the directory. Refusing on it instead would print an
+  # empty run id, and close-run.sh and clear-run.sh both refuse one, so the caller would have no way
+  # out. This script never writes that name; a hand edit or a truncated copy can leave it.
+  [ -n "$open_marker" ] || continue
   break
 done
 [ -z "$open_marker" ] || {
-  printf 'open-run.sh: run %s is already open in %s — close it with close-run.sh, using --close-state interrupted if it stopped without finishing, then clear it with clear-run.sh before opening another\n' \
-    "$open_marker" "$ws" >&2
+  printf 'open-run.sh: run %s is already open in %s — close it with `close-run.sh %s %s --trigger manual --close-state interrupted`, then clear it with `clear-run.sh %s %s`, before opening another. Pass manual because nothing on disk records what started a run that never closed, and scheduled is what the scheduling canary reads as proof the scheduler ran.\n' \
+    "$open_marker" "$ws" "$ws" "$open_marker" "$ws" "$open_marker" >&2
   exit 2
 }
 

@@ -84,6 +84,18 @@ All notable changes to this project are documented here. The format is based on
   out which postings are worth reading.
 
 ### Fixed
+- **A second run can no longer open on top of a run that is already open.** Opening a run wrote its
+  marker into `runs/` without looking for one already there, so two runs started a second apart both
+  opened and the workspace carried two run ids at once. Every event the newer run recorded was then
+  missing from the older run's counts, and the older run's record reported fewer agent-data calls
+  than were billed for it. Measured on a run where this happened: 29 events, and a second copy of 25
+  postings the first run had already surfaced, went into the log under a run id the first run knew
+  nothing about. A run now refuses to open while any marker is in `runs/`, and says on stderr which
+  run is open and the two commands that close and clear it. This includes the marker left behind by
+  a run that stopped before it could close, which a new run used to open straight over: close that
+  run `interrupted` and clear it, and the next run opens. The runbook's first step now says to close
+  and clear it too, where it used to say to delete the marker — deleting it leaves nothing recording
+  that the run happened, which is why clearing a run that has no record has always been refused.
 - **An event can no longer be lost by landing on the end of the previous one.** If `jobs.jsonl`
   ended without a newline — a hand edit, a truncated copy, an editor that does not end its files
   with one — the next event the run appended was written onto that last line, and every reader
