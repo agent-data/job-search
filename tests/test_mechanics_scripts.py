@@ -22,6 +22,7 @@ import shutil
 import subprocess
 import tempfile
 import time
+from types import SimpleNamespace
 
 import pytest
 
@@ -48,6 +49,8 @@ CLOSE_RUN = RUNBOOK_SCRIPTS / "close-run.sh"
 CLEAR_RUN = RUNBOOK_SCRIPTS / "clear-run.sh"
 POSTINGS = SEARCH_SCRIPTS / "posting-counts.sh"
 RESOLVE_RUN = RUN_SCRIPTS / "resolve-run.sh"
+FETCH_POSTING = RUN_SCRIPTS / "fetch-posting.sh"
+LISTING = "f9a6ec16-0bfd-44d8-b3ee-073776745ee7"
 
 ALL_SCRIPTS = [DEDUP, APPEND, SCHEDULE, DISCOVERY, VALIDATE, RECORD_API, QUEUE, LIST_QUEUE,
                JUDGE, COUNTS, MATCHES, OPEN_RUN, CLOSE_RUN, CLEAR_RUN, POSTINGS]
@@ -84,6 +87,65 @@ def base_env(home):
         "PATH": "/usr/bin:/bin:/usr/sbin:/sbin",
         "JOBSEARCH_OS_HOME": str(home),
     }
+
+
+# ------------------------------------------------------------ the live agent-data harness
+
+def _agent_data_ready():
+    """True when the agent-data CLI is on PATH here and carries a key."""
+    if not shutil.which("agent-data"):
+        return False
+    r = subprocess.run(["agent-data", "whoami"], capture_output=True, text=True)
+    if r.returncode != 0:
+        return False
+    try:
+        return json.loads(r.stdout).get("api_key_set") is True
+    except json.JSONDecodeError:
+        return False
+
+
+needs_api = pytest.mark.skipif(
+    not _agent_data_ready(),
+    reason="agent-data is absent or unauthenticated here — `agent-data whoami` says so")
+
+
+@pytest.fixture
+def live_run(tmp_workspace):
+    """A workspace with an open run and one live search already recorded.
+
+    The search is real because record-api-response.sh refuses a detail event for a posting no
+    search of this run surfaced, so a hand-written surfaced row would be testing against a log
+    state the API never produced.
+
+    This calls agent-data directly rather than through search-jobs.sh, which arrives in Task 4.
+    Task 7 runs the same chain through both wrappers.
+    """
+    subprocess.run(["sh", str(OPEN_RUN), str(tmp_workspace)], capture_output=True, text=True)
+    jobs = tmp_workspace / "jobs.jsonl"
+    jobs.write_text("", encoding="utf-8")
+    run_id = [p.name.replace(".started-", "")
+              for p in (tmp_workspace / "runs").glob(".started-*")][0]
+
+    resp = tmp_workspace / "search.json"
+    with resp.open("w", encoding="utf-8") as out:
+        r = subprocess.run(
+            ["agent-data", "call", LISTING, "search-jobs", "--source", "linkedin",
+             "--keywords", "strategic finance", "--limit", "5"],
+            stdout=out, stderr=subprocess.PIPE, text=True)
+    assert r.returncode == 0, r.stderr
+    body = json.loads(resp.read_text(encoding="utf-8"))
+    assert body["meta"]["request_id"].startswith("req_"), "no request_id — this did not reach the API"
+
+    rec = subprocess.run(
+        ["sh", str(RECORD_API), run_id, str(jobs), str(resp),
+         "--route", "search-jobs", "--query-id", "strategic-finance", "--source", "linkedin"],
+        capture_output=True, text=True)
+    assert rec.returncode == 0, rec.stderr
+
+    rows = [json.loads(l) for l in jobs.read_text(encoding="utf-8").splitlines() if l.strip()]
+    surfaced = [x for x in rows if x["event"] == "surfaced"]
+    assert surfaced, "the live search surfaced no rows — widen the keywords"
+    return SimpleNamespace(ws=tmp_workspace, jobs=jobs, run_id=run_id, row=surfaced[0])
 
 
 # --------------------------------------------------------------------------- dedup
@@ -5675,6 +5737,78 @@ def test_resolving_a_run_runs_under_dash(tmp_workspace):
     r = run_script(RESOLVE_RUN, "--workspace", tmp_workspace, shell="dash")
     assert r.returncode == 0, r.stdout + r.stderr
     assert r.stdout == "workspace=%s\nrun_id=%s\n" % (tmp_workspace, run_id)
+
+
+# ---------------------------------------------------------------------------------- fetch-posting.sh
+
+@pytest.mark.live
+@needs_api
+def test_fetch_posting_records_the_call_and_the_detail(live_run):
+    out = subprocess.run(
+        ["sh", str(FETCH_POSTING), "--workspace", str(live_run.ws),
+         "--posting-id", live_run.row["posting_id_at_seen"],
+         "--source-url", live_run.row["source_url"],
+         "--source", live_run.row["source"]],
+        capture_output=True, text=True)
+    assert out.returncode == 0, out.stderr
+    assert out.stdout.startswith("response=")
+
+    saved = json.loads(
+        pathlib.Path(out.stdout.split("=", 1)[1].strip()).read_text(encoding="utf-8"))
+    assert saved["meta"]["request_id"].startswith("req_"), \
+        "no request_id — the wrapper did not reach the API"
+
+    rows = [json.loads(l) for l in live_run.jobs.read_text(encoding="utf-8").splitlines()
+            if l.strip()]
+    calls = [x for x in rows if x["event"] == "call" and x.get("route") == "get-posting"]
+    details = [x for x in rows if x["event"] == "detail"]
+    assert len(calls) == 1
+    assert calls[0]["run_id"] == live_run.run_id
+    assert len(details) == 1
+    assert details[0]["source_id"] == live_run.row["source_id"]
+
+
+def test_fetch_posting_refuses_before_calling_when_no_run_is_open(tmp_workspace):
+    """Exits before any call, so this one spends nothing and needs no key."""
+    out = subprocess.run(
+        ["sh", str(FETCH_POSTING), "--workspace", str(tmp_workspace),
+         "--posting-id", "jp_000000000000", "--source-url", "https://example.test/1",
+         "--source", "linkedin"],
+        capture_output=True, text=True)
+    assert out.returncode == 2
+    assert "no run is open" in out.stderr
+
+
+@pytest.mark.live
+@needs_api
+def test_fetch_posting_records_the_call_when_the_api_refuses_the_posting(live_run):
+    """A refused call was still billed, so it still owes a `call` event.
+
+    Measured 2026-08-11: `get-posting --posting_id jp_000000000000 --source_url
+    https://www.linkedin.com/jobs/view/0000000000 --source linkedin` exits 1, writes nothing to
+    stdout, and puts an error body on stderr carrying `error.status` 404, `error.code`
+    `data_unavailable`, and an `error.request_id`.
+
+    The assertion below reads `error.request_id` rather than the code string. This API's error
+    codes have changed before — the 2026-07-06 multi-source reconciliation found them moved to
+    `validation_error` and `503` — so pinning a code would make this test fail on a change that
+    does not affect what it is checking: that a refused call still left a `call` event.
+    """
+    out = subprocess.run(
+        ["sh", str(FETCH_POSTING), "--workspace", str(live_run.ws),
+         "--posting-id", "jp_000000000000",
+         "--source-url", "https://www.linkedin.com/jobs/view/0000000000",
+         "--source", "linkedin"],
+        capture_output=True, text=True)
+    assert out.returncode == 1
+    body = json.loads(out.stderr[out.stderr.index("{"):out.stderr.rindex("}") + 1])
+    assert body["error"]["request_id"].startswith("req_"), \
+        "no request_id in the error body — this did not reach the API"
+
+    rows = [json.loads(l) for l in live_run.jobs.read_text(encoding="utf-8").splitlines()
+            if l.strip()]
+    calls = [x for x in rows if x["event"] == "call" and x.get("route") == "get-posting"]
+    assert len(calls) == 1, "the failed call was billed and left no record of itself"
 
 
 # ------------------------------------------------------------------------ posting-counts.sh
