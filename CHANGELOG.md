@@ -38,6 +38,32 @@ All notable changes to this project are documented here. The format is based on
   The three numbers come from `skills/job-search/scripts/posting-counts.sh <workspace>/jobs.jsonl`,
   which prints `relevant`, `to_confirm` and `filtered`, one `key=value` per line — run it yourself
   and you get the same numbers the card shows.
+- **Ten of the scripts a run calls now say what they did.** A script that appended the event,
+  recorded the verdict, or found nothing left to read used to finish without printing anything about
+  it, so the search could not tell a call that worked from a call that did nothing. In the run this
+  was measured on, that cost four bash calls over 31 seconds on `dedup.sh --near`, three of them
+  re-deriving an answer the first call had already given correctly. Between them those ten scripts
+  now write one sentence to stderr on nineteen branches that exit 0 —
+  `queue-detail-read: queued <source>:<source_id> for run <run_id>`, `run-counts.sh: <n> of <n>
+  lines in <log> name run <run_id>`, `workspace-discovery.sh: no registry file at <path> — nothing
+  to parse-check`. What each script prints on stdout is unchanged byte for byte, and so is every
+  exit code, so anything reading these scripts by key or by column reads what it read before. One
+  test runs an invocation per branch and checks the line is still there, so a later edit cannot drop
+  one without the suite going red.
+- **Three scripts now report a fact they used to work out and throw away.** `dedup.sh --near`
+  collapses the several postings of one opening down to the one worth reading; it now names on
+  stderr each posting it left out and the one it matched that posting to, written in the form
+  `record-judgment.sh --same-role-as` takes, so the search no longer has to derive that pairing by
+  differencing its own input against the output. `dedup-surfaced.awk`, which runs inside
+  `record-api-response.sh`, says why the rows it dropped were dropped — already judged, already
+  surfaced by this run, or repeated inside the one response — where its caller used to get two
+  totals and no breakdown. And `list-detail-read-queue.sh` says how many postings the run queued to
+  read, how many of those already carry a judgment, and how many are left, so a queue that has been
+  worked off and a mistyped run id no longer give the same empty answer. One input convention moved
+  with the first of those: column 1 of the rows piped into `dedup.sh --near` now carries
+  `<source>:<source_id>` rather than the bare `source_id`. The script treats column 1 as an opaque
+  id and never looks inside it, so both forms collapse the same rows; what the prefixed form buys is
+  that the pairing printed back is the exact value `--same-role-as` takes.
 
 ### Removed
 - **Per-posting status tracking.** Saying "mark that one applied" no longer records anything: a
