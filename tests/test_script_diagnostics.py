@@ -14,7 +14,11 @@ counts, so their tests pin the whole block of stdout, byte for byte. `workspace-
 `>&2` write on any path at all, and its three `key=value` lines are read by key, so its tests pin the
 whole block of stdout too. `validate-workspace.sh` writes its findings to stdout and exits 1, so its
 new line is on the exit-0 path only and its tests check that a workspace with findings still leaves
-stderr empty.
+stderr empty. `dedup-surfaced.awk` is not run directly: it runs inside `record-api-response.sh` on
+the search route, which redirects its stdout into the file it then appends to `jobs.jsonl`, so every
+line that program prints on stdout becomes an event in the user's log. Its tests drive
+`record-api-response.sh` and check that the diagnostic reached stderr, that stdout stayed empty, and
+that the appended events are the same ones as before.
 
 The `dedup.sh --near` tests run through POSIX `sh` and through `dash` where it is installed, the way
 `tests/test_dedup_guard.py` drives that same script. Helpers are defined here rather than imported
@@ -42,6 +46,8 @@ MATCHES = RUN_SCRIPTS / "run-matches.sh"
 POSTINGS = ROOT / "skills" / "job-search" / "scripts" / "posting-counts.sh"
 DISCOVERY = RUNBOOK_SCRIPTS / "workspace-discovery.sh"
 VALIDATOR = RUNBOOK_SCRIPTS / "validate-workspace.sh"
+RECORD_API = RUN_SCRIPTS / "record-api-response.sh"
+SEARCH_FIXTURE = ROOT / "tests" / "fixtures" / "api-responses" / "search.linkedin.json"
 
 RID = "2026-08-05T16-47-00Z"
 
@@ -986,3 +992,165 @@ def test_a_workspace_with_findings_still_writes_nothing_to_stderr(tmp_workspace)
     assert r.stdout == ("INVALID config.yaml missing-key queries\n"
                         "INVALID config.yaml missing-key schedule\n"
                         "INVALID config.yaml missing-key search.sources\n"), r.stdout
+
+
+# ------------------------------------------------------------------ dedup-surfaced.awk
+
+def record_search(jobs, body, query_id="q", shell="sh"):
+    """Run one search body through `record-api-response.sh`, the only caller of the awk program.
+
+    `dedup-surfaced.awk` takes its input from that script and writes its rows back to it, so there
+    is no way to drive it that also exercises the redirection the diagnostic has to stay out of.
+    """
+    return run_script(RECORD_API, RID, jobs, body, "--route", "search-jobs",
+                      "--query-id", query_id, shell=shell)
+
+
+def api_rows():
+    """The 25 rows of the LinkedIn search fixture, in the order the response holds them."""
+    return json.loads(SEARCH_FIXTURE.read_text(encoding="utf-8"))["data"]["results"]
+
+
+def api_body(tmp_path, name, rows):
+    """A search response carrying `rows`, built by swapping the results of the LinkedIn fixture, so
+    every field the row builder reads is the one the live API sends."""
+    body = json.loads(SEARCH_FIXTURE.read_text(encoding="utf-8"))
+    body["data"]["results"] = rows
+    path = tmp_path / name
+    path.write_text(json.dumps(body), encoding="utf-8")
+    return path
+
+
+def judged_event(source_id, run_id="2026-08-01T00-00-00Z"):
+    """An `evaluated` event from an earlier run. `dedup-surfaced.awk` skips a judged posting
+    whatever run judged it, so the run id here is deliberately not this run's."""
+    return ('{"event":"evaluated","run_id":"%s","source":"linkedin","source_id":"%s",'
+            '"relevant":true,"match":"weak"}\n' % (run_id, source_id))
+
+
+def surfaced_event(source_id, run_id=RID):
+    return ('{"event":"surfaced","run_id":"%s","source":"linkedin","source_id":"%s"}\n'
+            % (run_id, source_id))
+
+
+def dedup_line(judged, already, repeated):
+    return ("dedup-surfaced: %d already judged, %d already surfaced by this run, "
+            "%d repeated inside this response" % (judged, already, repeated))
+
+
+def totals_line(appended, returned):
+    return ("record-api-response.sh: %d rows appended, %d rows in the response"
+            % (appended, returned))
+
+
+def test_a_response_that_loses_no_row_says_so_with_three_zeros(tmp_path):
+    """The line is written on every search, not only where something dropped. Without it, a run
+    whose whole page was new and a run whose diagnostic went missing look the same to the caller."""
+    jobs = tmp_path / "jobs.jsonl"
+    r = record_search(jobs, SEARCH_FIXTURE, query_id="q1")
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert dedup_line(0, 0, 0) in r.stderr, r.stderr
+    assert totals_line(25, 25) in r.stderr, r.stderr
+
+
+def test_the_same_page_twice_in_one_run_is_reported_as_already_surfaced(tmp_path):
+    """`0 rows appended, 25 rows in the response` says nothing about whether the 25 already carry a
+    verdict or were surfaced by an earlier query of this same run. Those are different facts about
+    the run, and this program is the only place either one is worked out."""
+    jobs = tmp_path / "jobs.jsonl"
+    first = record_search(jobs, SEARCH_FIXTURE, query_id="q1")
+    assert first.returncode == 0, first.stdout + first.stderr
+    second = record_search(jobs, SEARCH_FIXTURE, query_id="q2")
+    assert second.returncode == 0, second.stdout + second.stderr
+    assert dedup_line(0, 25, 0) in second.stderr, second.stderr
+    assert totals_line(0, 25) in second.stderr, second.stderr
+
+
+def test_a_posting_that_already_carries_a_verdict_is_reported_as_judged(tmp_path):
+    """The judged check is not scoped to a run: a posting with a verdict from any run is not offered
+    again. A caller that sees three rows go missing off a fresh log can tell from this line that the
+    reason is three verdicts already in the log rather than a query it ran twice."""
+    jobs = tmp_path / "jobs.jsonl"
+    rows = api_rows()
+    jobs.write_text("".join(judged_event(row["source_id"]) for row in rows[:3]), encoding="utf-8")
+    r = record_search(jobs, api_body(tmp_path, "ten.json", rows[:10]), query_id="q1")
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert dedup_line(3, 0, 0) in r.stderr, r.stderr
+    assert totals_line(7, 10) in r.stderr, r.stderr
+
+
+def test_a_row_the_one_response_holds_twice_is_counted_apart_from_the_other_two(tmp_path):
+    """A row repeated inside a single response is dropped by the same branch as the other two, and
+    it is neither already judged nor already surfaced: no verdict in the log covers it, and no
+    earlier search of this run returned it. A caller told only `10 rows appended, 12 rows in the
+    response` would go looking in its log for two postings that were never there."""
+    jobs = tmp_path / "jobs.jsonl"
+    rows = api_rows()
+    body = api_body(tmp_path, "twelve.json", rows[:10] + [rows[0], rows[3]])
+    r = record_search(jobs, body, query_id="q1")
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert dedup_line(0, 0, 2) in r.stderr, r.stderr
+    assert totals_line(10, 12) in r.stderr, r.stderr
+
+
+def test_a_posting_this_run_surfaced_and_then_judged_is_reported_as_judged(tmp_path):
+    """Both rules match this posting, and it is counted once. The label is the later of the two
+    events in the log, and a run writes the verdict after the row it surfaced, so a posting it has
+    since judged is reported as judged. Counting it under both would break the one property the
+    three counts have: that they add up to the rows the response held minus the rows appended."""
+    jobs = tmp_path / "jobs.jsonl"
+    rows = api_rows()
+    jobs.write_text(surfaced_event(rows[0]["source_id"])
+                    + judged_event(rows[0]["source_id"], run_id=RID), encoding="utf-8")
+    r = record_search(jobs, api_body(tmp_path, "one.json", rows[:1]), query_id="q1")
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert dedup_line(1, 0, 0) in r.stderr, r.stderr
+    assert totals_line(0, 1) in r.stderr, r.stderr
+
+
+def test_the_three_counts_account_for_every_row_that_was_not_appended(tmp_path):
+    """One response holding a row of each kind, so the three counts are told apart rather than
+    summed. Every row the program drops is dropped by the one branch these three count, so the three
+    add up to the rows the response held minus the rows appended, and there is no fourth kind."""
+    jobs = tmp_path / "jobs.jsonl"
+    rows = api_rows()
+    jobs.write_text(judged_event(rows[0]["source_id"]), encoding="utf-8")
+    first = record_search(jobs, api_body(tmp_path, "three.json", rows[1:4]), query_id="q1")
+    assert first.returncode == 0, first.stdout + first.stderr
+    assert dedup_line(0, 0, 0) in first.stderr, first.stderr
+    # rows[0] already carries a verdict, rows[1] was surfaced by the query above, rows[4] is here
+    # twice, and rows[5] is new.
+    body = api_body(tmp_path, "five.json", [rows[0], rows[1], rows[4], rows[4], rows[5]])
+    second = record_search(jobs, body, query_id="q2")
+    assert second.returncode == 0, second.stdout + second.stderr
+    assert dedup_line(1, 1, 1) in second.stderr, second.stderr
+    assert totals_line(2, 5) in second.stderr, second.stderr
+    counts = re.search(r"dedup-surfaced: (\d+) already judged, (\d+) already surfaced by this run, "
+                       r"(\d+) repeated inside this response", second.stderr)
+    totals = re.search(r"record-api-response\.sh: (\d+) rows appended, (\d+) rows in the response",
+                       second.stderr)
+    assert counts and totals, second.stderr
+    appended, returned = int(totals.group(1)), int(totals.group(2))
+    assert sum(int(g) for g in counts.groups()) == returned - appended, second.stderr
+
+
+def test_the_diagnostic_stays_off_the_stdout_that_becomes_the_event_log(tmp_path):
+    """`record-api-response.sh` runs the awk program with its stdout redirected to the file it then
+    appends to `jobs.jsonl` — `grep -n 'dedup-surfaced.awk'
+    skills/job-search-run/scripts/record-api-response.sh` finds the one invocation — so a line
+    printed there becomes an event in the user's log rather than a diagnostic. Both passes are
+    checked: the first prints three zeros and the second prints a count of 25, and the log holds the
+    same 27 events either way."""
+    jobs = tmp_path / "jobs.jsonl"
+    rows = api_rows()
+    first = record_search(jobs, SEARCH_FIXTURE, query_id="q1")
+    assert first.returncode == 0, first.stdout + first.stderr
+    assert first.stdout == "", first.stdout
+    second = record_search(jobs, SEARCH_FIXTURE, query_id="q2")
+    assert second.returncode == 0, second.stdout + second.stderr
+    assert second.stdout == "", second.stdout
+    assert "dedup-surfaced" not in jobs.read_text(encoding="utf-8"), jobs.read_text()
+    events = lines(jobs)
+    assert [e["event"] for e in events] == ["call"] + ["surfaced"] * 25 + ["call"]
+    assert [e["source_id"] for e in events[1:26]] == [row["source_id"] for row in rows]
+    assert [e["rows_new"] for e in (events[0], events[26])] == [25, 0]
