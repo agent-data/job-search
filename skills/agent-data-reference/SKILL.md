@@ -61,7 +61,10 @@ agent-data call f9a6ec16-0bfd-44d8-b3ee-073776745ee7 get-posting \
 ```
 
 `posting_id` and `source_url` are both required. `--source` is optional, and passing the row's own
-value removes an inference step. `--fields` is optional and trims the response.
+value removes an inference step. The route docs offer `--fields` to trim the response: VERY IMPORTANT DO NOT use
+`--fields`. Nearly all of a posting's bytes are the description and the salary text, which a reader needs,
+and a list that leaves out `source` or `source_id` is refused by `record-api-response.sh` — the
+posting is then read again, and billed again.
 
 ## When a call fails
 

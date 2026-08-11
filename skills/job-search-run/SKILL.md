@@ -71,7 +71,8 @@ Judge every surfaced row from what the row carries — title, company, `location
 `salary_display`, the date. A row that plainly breaks a must-have the brief names is settled here,
 with no detail read, through this skill's
 `scripts/record-judgment.sh <workspace>/jobs.jsonl --run-id <run_id> --source <source>
---source-id <source_id> --detail-read false --relevant false --reasoning '<the must-have it broke>'`.
+--source-id <source_id> --detail-read false --relevant false
+--dealbreakers '<the must-have it broke>' --reasoning '<how the row breaks it>'`.
 Every other row goes on the read list with this skill's
 `scripts/queue-detail-read.sh <workspace>/jobs.jsonl --run-id <run_id> --source <source>
 --source-id <source_id>`, which records that the posting is one to read and nothing else.
@@ -87,7 +88,7 @@ the posting and writes it into its reasoning.
 The read list is this skill's `scripts/list-detail-read-queue.sh <workspace>/jobs.jsonl <run_id>`,
 which prints one tab-separated line per posting this run queued and has not judged yet: `source`,
 `source_id`, `posting_id_at_seen`, `source_url`, `title`, `company_name`. Where your host has
-subagents, dispatch one per line, in parallel: each posting is judged in its own fresh context,
+subagents, dispatch one per posting, in parallel: each posting is judged in its own fresh context,
 leaving this session's for coordinating the run. Where your host has none, work the list in order.
 Both paths run on the host's own model.
 
@@ -139,8 +140,8 @@ heading that says three strong is followed by the three lines whose band is stro
 An opening the run found in more than one place counts once and is listed once. The postings whose
 judgment named another in `--same-role-as` are counted under `duplicates_of_another` and in no band,
 and they get no line of their own; the other places that opening was posted arrive in the
-`also_posted` column of the line that is listed, joined with `; `. Say those places on that line
-rather than dropping them — the user is choosing where to apply.
+`also_posted` column of the line that is listed, joined with `; `. VERY IMPORTANT: Say those places on that line
+rather than dropping them — the user is choosing where to apply, UNLESS the location contradicts the user's preferences.
 
 One of those postings adds nothing to that column: one whose row came back with no location. It is
 still counted under `duplicates_of_another`, so that number can be higher than the number of places
