@@ -25,9 +25,10 @@
 #         this run cannot fix, so close it blocked. Where the detail is depends on whose problem it
 #         is: findings about the workspace print on stdout after the three lines, and a failure of
 #         this script's own, such as no way to take the brief revision, prints on stderr.
-# Exit 2: the run did not open and nothing was written. Four causes, and the message on stderr says
-#         which one: no such workspace, no config.yaml, the run_id is already taken by a run that
-#         opened this same second, or the started-marker could not be written.
+# Exit 2: the run did not open and nothing was written. Five causes, and the message on stderr says
+#         which one: no such workspace, no config.yaml, another run is already open in this
+#         workspace, the run_id is already taken by a run that opened this same second, or the
+#         started-marker could not be written.
 #
 # A missing operand is the exception the caller sees a shell-picked code for, the way
 # run-counts.sh's own header records — `grep -n 'missing operand'
@@ -48,6 +49,25 @@ now=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 run_id=$(printf '%s\n' "$now" | tr ':' '-')
 
 mkdir -p "$ws/runs" || exit 2
+
+# One run at a time. close-run.sh writes the record and clear-run.sh removes the marker, so a
+# marker still on disk means a run opened and has not been closed. Opening a second run over it
+# gives the workspace two run ids at once: events recorded against the newer one are absent from
+# the older one's counts, and the older run's record then reports fewer calls than were billed.
+# Measured on the 2026-08-11 opencode run, where a subagent that could not find a run id called
+# this script, minted 2026-08-11T16-15-54Z while .started-2026-08-11T16-06-16Z was on disk, and
+# wrote 29 events plus a second copy of 25 surfaced rows under the new id.
+open_marker=''
+for m in "$ws"/runs/.started-*; do
+  [ -e "$m" ] || continue
+  open_marker=${m##*/.started-}
+  break
+done
+[ -z "$open_marker" ] || {
+  printf 'open-run.sh: run %s is already open in %s — close it with close-run.sh and clear it with clear-run.sh before opening another\n' \
+    "$open_marker" "$ws" >&2
+  exit 2
+}
 
 # The marker is written before the three lines are printed, so a run_id never reaches a caller for a
 # run that has no marker on disk.

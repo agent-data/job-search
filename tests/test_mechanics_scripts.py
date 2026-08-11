@@ -3817,6 +3817,21 @@ def test_opening_creates_the_marker(tmp_workspace):
     assert (tmp_workspace / "runs" / (".started-" + out["run_id"])).exists()
 
 
+def test_open_run_refuses_while_another_run_is_open(tmp_workspace):
+    first = subprocess.run(["sh", str(OPEN_RUN), str(tmp_workspace)],
+                           capture_output=True, text=True)
+    assert first.returncode == 0, first.stderr
+    markers = sorted(p.name for p in (tmp_workspace / "runs").glob(".started-*"))
+    assert len(markers) == 1
+
+    second = subprocess.run(["sh", str(OPEN_RUN), str(tmp_workspace)],
+                            capture_output=True, text=True)
+    assert second.returncode == 2
+    assert "already open" in second.stderr
+    assert markers[0].replace(".started-", "") in second.stderr
+    assert sorted(p.name for p in (tmp_workspace / "runs").glob(".started-*")) == markers
+
+
 FROZEN_STAMP = "2026-07-30T15:04:02Z"
 
 
@@ -3844,16 +3859,14 @@ def test_a_run_opening_in_the_same_second_as_another_is_refused(tmp_workspace, t
     crash both produce: the first call has finished before the second starts. The case where the
     two overlap — a scheduled run starting alongside a manual one — is the one below.
 
-    The script reports one of two things when the marker write fails, now that `set -C` refuses an
-    existing file: the name is taken, or `runs/` cannot be written to. Both come back from the same
-    failed redirection, so one message for both would leave a caller either cleaning up a workspace
-    that is fine or retrying a write that will fail every time. This case asserts the first message
-    and asserts the second is absent.
+    The one-run-at-a-time guard is what refuses it. The first run's marker is on disk before the
+    second call reaches the guard, so the second stops there and never reaches the `set -C` write
+    that would have refused the taken name. That write is still what refuses the two calls that
+    overlap, which is the case below.
 
-    The retry it names is `open-run.sh` again and nothing else. The marker on disk belongs to a run
-    that opened this same second, so sending the caller back through the run contract's step 1 —
-    glob `runs/.started-*`, say the last run did not finish, delete it — would have it delete a
-    marker that is not stale.
+    `cannot write the started-marker` is the other message a refused open can print, and it means an
+    unwritable `runs/` rather than a run already open. This case asserts it is absent: a caller that
+    read it here would go looking for a permissions problem in a workspace that has none.
     """
     env = frozen_date(tmp_path)
     first = run_script(OPEN_RUN, tmp_workspace, env=env)
@@ -3865,7 +3878,7 @@ def test_a_run_opening_in_the_same_second_as_another_is_refused(tmp_workspace, t
     assert second.stdout == ""
     assert run_id in second.stderr
     assert "cannot write the started-marker" not in second.stderr
-    assert "open-run.sh again" in second.stderr
+    assert "already open" in second.stderr
     assert len(second.stderr.splitlines()) == 1, second.stderr
     assert [p.name for p in (tmp_workspace / "runs").glob(".started-*")] == [".started-" + run_id]
 
@@ -3914,6 +3927,11 @@ def test_two_runs_starting_at_once_do_not_both_get_the_run_id(tmp_workspace, tmp
     overlap and they do not overlap every time. Run against a check-then-write script, this case
     failed 20 of 20 times. On the CI runner `/bin/sh` is `dash`, so it covers the shell the script
     ships against there without naming it.
+
+    Which of the two refusals the loser gets depends on how far apart the children start: the
+    one-run-at-a-time guard when the first child has already written its marker, `set -C` when it
+    has not. The assertions below check the outcome — one exit 2, one marker on disk — because that
+    holds either way. Asserting the message would make this case depend on the timing it measures.
     """
     env = frozen_date(tmp_path)
     run_id = FROZEN_STAMP.replace(":", "-")
@@ -3929,16 +3947,23 @@ def test_two_runs_starting_at_once_do_not_both_get_the_run_id(tmp_workspace, tmp
         assert [p.name for p in runs.glob(".started-*")] == [".started-" + run_id]
 
 
-def test_a_leftover_marker_from_an_earlier_run_does_not_refuse_this_one(tmp_workspace, tmp_path):
-    """The refusal above must not catch the marker a run that died left behind. That one carries
-    the earlier run's id, so its name differs from the one being minted now, and deciding what to
-    say about it belongs to the run contract's step 1, not here."""
+def test_a_leftover_marker_from_an_earlier_run_refuses_this_one(tmp_workspace, tmp_path):
+    """The marker a run that died left behind refuses the new run too. It is the one case `set -C`
+    lets through, because the marker carries the earlier run's id and the write below is to the id
+    being minted now: with the 2020 marker here and a frozen 2026 clock, the version without the
+    one-run-at-a-time guard exited 0 and left both markers in `runs/`.
+
+    Nothing in `runs/` says whether the run that wrote a marker is still going or stopped, so both
+    are refused and the caller decides which it is. Refusing keeps `runs/` down to one marker, which
+    is what lets a caller that was not handed a run id find the open one by reading the directory.
+    """
     (tmp_workspace / "runs" / ".started-2020-01-01T00-00-00Z").write_text("")
     r = run_script(OPEN_RUN, tmp_workspace, env=frozen_date(tmp_path))
-    assert r.returncode == 0, r.stdout + r.stderr
-    assert (tmp_workspace / "runs" / ".started-2020-01-01T00-00-00Z").exists()
-    assert (tmp_workspace / "runs"
-            / (".started-" + parsed_output(r)["run_id"])).exists()
+    assert r.returncode == 2, r.stdout + r.stderr
+    assert r.stdout == ""
+    assert "2020-01-01T00-00-00Z" in r.stderr
+    assert [p.name for p in (tmp_workspace / "runs").glob(".started-*")] == [
+        ".started-2020-01-01T00-00-00Z"]
 
 
 def test_a_marker_that_cannot_be_written_stops_the_run_before_it_prints(tmp_workspace):
@@ -4572,6 +4597,11 @@ def test_completed_at_is_later_than_started_at_and_not_later_than_the_file(tmp_w
         tzinfo=datetime.timezone.utc)
     written = datetime.datetime.fromtimestamp(path.stat().st_mtime, datetime.timezone.utc)
     assert stated <= written + datetime.timedelta(seconds=2)
+
+    # The first run is cleared before the second opens, because `open-run.sh` refuses to open while a
+    # marker is on disk and `close-run.sh` leaves the marker for `clear-run.sh` to remove.
+    cleared = run_script(CLEAR_RUN, tmp_workspace, o["run_id"])
+    assert cleared.returncode == 0, cleared.stdout + cleared.stderr
 
     calls, env = date_shim(tmp_path)
     o2 = parsed_output(run_script(OPEN_RUN, tmp_workspace, env=env))
