@@ -3838,8 +3838,10 @@ FROZEN_STAMP = "2026-07-30T15:04:02Z"
 def frozen_date(tmp_path, stamp=FROZEN_STAMP):
     """A PATH whose `date` always answers the same second, so two runs are handed one `run_id`.
 
-    Two consecutive calls land in the same second most of the time but not reliably, and the case
-    below is about what happens when they do.
+    Two consecutive calls land in the same second most of the time but not reliably, and the two
+    cases that still take this pin it rather than hope for it: the concurrency case, which needs
+    both children handed the same `run_id` before `set -C` decides between them, and the leftover
+    marker case, which needs the id being minted to differ from the 2020 marker on disk.
     """
     d = tmp_path / "frozen-date"
     d.mkdir(exist_ok=True)
@@ -3883,7 +3885,7 @@ def test_a_refused_open_names_the_open_run_rather_than_an_unwritable_runs_dir(tm
 
 def test_the_refusal_names_the_flags_close_run_will_not_run_without(tmp_workspace):
     """The message tells the caller to close the open run, and `close-run.sh` exits 1 without either
-    `--trigger` or `--close-state` — `close-run.sh:93` and `:95`. A message naming the two scripts
+    `--trigger` or `--close-state` — `close-run.sh:93` and `:96`. A message naming the two scripts
     but not the flags sends the caller to a command that fails, so both flags and their values are
     part of what this refusal has to say.
 
@@ -3892,20 +3894,109 @@ def test_the_refusal_names_the_flags_close_run_will_not_run_without(tmp_workspac
     an unclosed run does not have; the marker is empty; and no event in `jobs.jsonl` carries the
     field. Of the two values `close-run.sh` takes, `scheduled` is the one the scheduling canary
     reads as proof the scheduler ran — `grep -n 'canary passes' skills/job-search/SKILL.md` — so
-    `manual` is the one that does not leave evidence of a scheduled run behind it.
+    `manual` is the one that does not write `scheduled` into a record when no scheduler ran.
+
+    That the two commands run is not asserted here by reading them. The case below runs them.
     """
     first = run_script(OPEN_RUN, tmp_workspace)
     assert first.returncode == 0, first.stdout + first.stderr
-    run_id = parsed_output(first)["run_id"]
 
     second = run_script(OPEN_RUN, tmp_workspace)
     assert second.returncode == 2, second.stdout + second.stderr
     assert "--trigger manual" in second.stderr
     assert "--close-state interrupted" in second.stderr
-    # Both commands carry the workspace and the run id, so they run as printed.
-    assert "close-run.sh %s %s --trigger manual --close-state interrupted" % (
-        tmp_workspace, run_id) in second.stderr
-    assert "clear-run.sh %s %s" % (tmp_workspace, run_id) in second.stderr
+
+
+def printed_commands(refusal):
+    """The commands a refusal printed, taken out of the message rather than composed from its parts.
+
+    Each is wrapped in backticks by the message, and nothing else in it is. Composing the expected
+    command here instead would assert only that two copies of one recipe agree, which is what three
+    rounds of review found: the command asserted against was each time the corrected one, and the
+    command printed was each time the broken one.
+    """
+    commands = re.findall(r"`([^`]+)`", refusal.stderr)
+    assert len(commands) == 2, refusal.stderr
+    return commands
+
+
+def run_as_printed(command, cwd):
+    """Run one printed command through `sh -c`, from `cwd`, with the scripts nowhere on PATH.
+
+    PATH holds the system directories and nothing else, so a command naming a script by bare
+    basename exits 127 here — which is what it did for a caller at a shell, and what three rounds of
+    hand-checking missed by running from a PATH that had been extended with the scripts directory.
+    """
+    return subprocess.run(["sh", "-c", command], cwd=str(cwd), capture_output=True, text=True,
+                          env={"PATH": "/usr/bin:/bin:/usr/sbin:/sbin"})
+
+
+def test_the_printed_recovery_commands_run_as_printed(tmp_workspace, tmp_path):
+    """The refusal's two commands are run exactly as the refusal printed them, from a directory that
+    holds neither script, and both have to exit 0 and leave the workspace ready to open again.
+
+    This is the case that closes the defect three reviews found in three different spellings: the
+    message left out `--close-state`, then left out `--trigger`, then named the scripts by bare
+    basename, so `close-run.sh …` exited 127 with `command not found`. Every one of those shipped
+    past a hand-check, because the command typed into the terminal was each time not the command the
+    script printed. Taking the text out of stderr and running that is what makes the two the same
+    thing.
+
+    The workspace path carries a space, which is the case single-quoting the arguments is for:
+    unquoted, the shell splits `/…/a work space` into two arguments and `close-run.sh` reads `work`
+    as the run id.
+    """
+    ws = tmp_path / "a work space"
+    shutil.copytree(str(tmp_workspace), str(ws))
+    elsewhere = tmp_path / "elsewhere"
+    elsewhere.mkdir()
+
+    first = run_script(OPEN_RUN, ws)
+    assert first.returncode == 0, first.stdout + first.stderr
+    run_id = parsed_output(first)["run_id"]
+    (ws / "jobs.jsonl").write_text("", encoding="utf-8")
+
+    refused = run_script(OPEN_RUN, ws)
+    assert refused.returncode == 2, refused.stdout + refused.stderr
+    close_cmd, clear_cmd = printed_commands(refused)
+
+    closed = run_as_printed(close_cmd, elsewhere)
+    assert closed.returncode == 0, "%s\n%s%s" % (close_cmd, closed.stdout, closed.stderr)
+    assert (ws / "runs" / (run_id + ".json")).exists(), close_cmd
+
+    cleared = run_as_printed(clear_cmd, elsewhere)
+    assert cleared.returncode == 0, "%s\n%s%s" % (clear_cmd, cleared.stdout, cleared.stderr)
+
+    reopened = run_script(OPEN_RUN, ws)
+    assert reopened.returncode == 0, reopened.stdout + reopened.stderr
+    assert [p.name for p in (ws / "runs").glob(".started-*")] == [
+        ".started-" + parsed_output(reopened)["run_id"]]
+
+
+def test_the_printed_commands_run_when_open_run_was_called_by_a_relative_path(tmp_workspace,
+                                                                              tmp_path):
+    """`dirname "$0"` is relative whenever this script was called by a relative path, so a message
+    built from it alone prints commands that run only from the directory the caller happened to be
+    in. Called as `sh skills/job-search-runbook/scripts/open-run.sh` from the repo root, the printed
+    commands are run from a third directory here, which is where a relative path fails.
+
+    This is why the refusal takes `cd "$here" && pwd` rather than `$here`.
+    """
+    elsewhere = tmp_path / "elsewhere"
+    elsewhere.mkdir()
+    rel = OPEN_RUN.relative_to(ROOT).as_posix()
+
+    first = subprocess.run(["sh", rel, str(tmp_workspace)], cwd=str(ROOT),
+                           capture_output=True, text=True)
+    assert first.returncode == 0, first.stdout + first.stderr
+    (tmp_workspace / "jobs.jsonl").write_text("", encoding="utf-8")
+
+    refused = subprocess.run(["sh", rel, str(tmp_workspace)], cwd=str(ROOT),
+                             capture_output=True, text=True)
+    assert refused.returncode == 2, refused.stdout + refused.stderr
+    for command in printed_commands(refused):
+        r = run_as_printed(command, elsewhere)
+        assert r.returncode == 0, "%s\n%s%s" % (command, r.stdout, r.stderr)
 
 
 def test_a_marker_with_no_run_id_does_not_hide_a_real_one(tmp_workspace):
