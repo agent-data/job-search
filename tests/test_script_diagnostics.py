@@ -23,11 +23,14 @@ and writes nothing to stdout, so its tests check that stdout stays empty on the 
 and on every one of its seven refusals.
 
 The last section is a guard rather than a content test. Every test above pins one script's exact
-sentence, so it fails when the wording changes and passes when the line is deleted and nothing
-replaces it, because the assertion is deleted along with the line it was written for. The guard runs
-a success invocation of each of the ten scripts and checks only that the script wrote to stderr and
-that the line opens with the script's own name, so a rewording leaves it passing and a deletion
-fails it.
+sentence, so deleting that sentence from the script turns the test that reads it red — that case is
+already covered. The case that is not is an edit that drops a feature and takes both with it: the
+line goes out of the script and the test written for it goes out of the suite, and every test left
+passes over a script that has stopped saying what it did. The guard is the one that fails then. It
+runs one invocation per exit-0 branch of the ten scripts and reads no wording — only that the branch
+wrote to stderr, how many lines it wrote, and that each line opens with the prefix that branch uses.
+Reword a line and the guard stays green while the content test above goes red; delete one and the
+guard goes red.
 
 The `dedup.sh --near` tests and the failed-append test run through POSIX `sh` and through `dash`
 where it is installed, the way `tests/test_dedup_guard.py` drives that same script. Helpers are
@@ -1082,7 +1085,17 @@ def test_quiet_when_clean_suppresses_only_that_line(tmp_workspace):
     `test_a_present_brief_with_no_way_to_digest_it_is_not_called_missing` — where a second line
     would be a `command not found` from something that PATH is missing. Redirecting the whole of
     this script's stderr at that call site would suppress this script's own failures along with the
-    line, so the flag suppresses the line alone."""
+    line, so the flag suppresses the line alone.
+
+    This is the only flag in the pack that leaves a line out of a success path, which is why the
+    guard at the end of this file has no entry for the branch it takes. Measured 2026-08-11 with
+    `git grep -n -- "--quiet\\|--silent\\|QUIET\\|SILENT" skills/*/scripts/`: eight hits, and every
+    one of them is this flag — `validate-workspace.sh:14,15,29,32,42,537`, which is the two header
+    lines, the `QUIET_WHEN_CLEAN` variable, the usage line, the flag parse and the `if` that reads
+    it, and `open-run.sh:127,130`, which is the one caller that passes it. The read of `open-run.sh`
+    at the end ties the flag to that caller: take the flag off that call and this test fails,
+    because no other call in the pack passes it.
+    """
     r = run_validator(tmp_workspace, "--quiet-when-clean")
     assert r.returncode == 0, r.stdout + r.stderr
     assert r.stdout == "", r.stdout
@@ -1093,6 +1106,9 @@ def test_quiet_when_clean_suppresses_only_that_line(tmp_workspace):
     assert bad.returncode == 2, bad.stdout + bad.stderr
     assert bad.stdout == "", bad.stdout
     assert bad.stderr == "validate-workspace.sh: no such workspace: %s\n" % missing, bad.stderr
+
+    open_run = (RUNBOOK_SCRIPTS / "open-run.sh").read_text(encoding="utf-8")
+    assert "validate-workspace.sh\" \"$ws\" --quiet-when-clean" in open_run, open_run
 
 
 def test_a_workspace_with_findings_still_writes_nothing_to_stderr(tmp_workspace):
@@ -1411,44 +1427,87 @@ def test_a_refused_event_still_says_only_what_it_refused(tmp_path):
         assert not jobs.exists(), jobs.read_text()
 
 
-# ------------------------------------------------------------------ the ten scripts together
+# --------------------------------------------------- one invocation per exit-0 branch of the ten
 
-# What each script's stderr line opens with, written out one script at a time rather than worked out
-# from the filename, because the pack does not work it out from the filename either. Measured
-# 2026-08-11 over the map below with `python3 -c "import sys; sys.path.insert(0, 'tests'); import
-# test_script_diagnostics as t; print(sum('.sh' in p for p in t.EXPECTED_PREFIX.values()),
-# len(t.EXPECTED_PREFIX))"`: 6 of the 10 prefixes carry `.sh` and the other 4 leave it off.
-EXPECTED_PREFIX = {
-    "dedup.sh --near":           "dedup.sh --near: ",
-    "event-log-append.sh":       "event-log-append: ",
-    "list-detail-read-queue.sh": "list-detail-read-queue: ",
-    "posting-counts.sh":         "posting-counts.sh: ",
-    "queue-detail-read.sh":      "queue-detail-read: ",
-    "record-judgment.sh":        "record-judgment: ",
-    "run-counts.sh":             "run-counts.sh: ",
-    "run-matches.sh":            "run-matches.sh: ",
-    "validate-workspace.sh":     "validate-workspace.sh: ",
-    "workspace-discovery.sh":    "workspace-discovery.sh: ",
+# One entry per exit-0 branch of the ten scripts: the prefix every line that branch writes opens
+# with, and how many lines it writes to stderr.
+#
+# This is keyed on branches rather than on scripts because six of the ten scripts have more than one
+# exit-0 branch, and a case per script runs one of those branches and never runs the others.
+# Measured 2026-08-11: with a case per script, deleting the `printf` from `queue-detail-read.sh`'s
+# already-queued branch left the guard 10 of 10 green, and the only test that went red was that
+# script's own content test, which would go out of the suite with the line it reads.
+#
+# The line count is what makes a deletion visible on the one branch that writes two lines.
+# `dedup.sh --near` prints a line per collapsed row and then a counts line, so with only "stderr is
+# not empty" to go on, deleting either of them leaves the other and the case stays green.
+#
+# The prefixes are written out one branch at a time rather than worked out from the filename,
+# because the pack does not work them out from the filename either. Measured 2026-08-11 with
+# `python3 -c "import sys; sys.path.insert(0, 'tests'); import test_script_diagnostics as t; p =
+# {v[0] for v in t.BRANCH_STDERR.values()}; print(len(t.BRANCH_STDERR), len(p), sum('.sh' in x for x
+# in p))"`: 18 branches, 11 distinct prefixes, 7 of them carrying `.sh`.
+#
+# Two exit-0 branches of these scripts are missing from this map, because it holds only the branches
+# that write a line. `validate-workspace.sh --quiet-when-clean` leaves its line out for its one
+# caller, and `test_quiet_when_clean_suppresses_only_that_line` above is where that branch is
+# checked. `dedup.sh <jobs.jsonl> <source>`, the two-argument mode, was never given a line at all:
+# measured 2026-08-11, three candidate ids against a log holding one judgment printed two ids on
+# stdout and exited 0 with 0 bytes on stderr.
+BRANCH_STDERR = {
+    "dedup.sh --near (a pair collapsed)":                       ("dedup.sh --near: ", 2),
+    "dedup.sh --near (no pair collapsed)":                      ("dedup.sh --near: ", 1),
+    "event-log-append.sh (appended)":                           ("event-log-append: ", 1),
+    "event-log-append.sh (the event is already there)":         ("event-log-append: ", 1),
+    "list-detail-read-queue.sh":                                ("list-detail-read-queue: ", 1),
+    "posting-counts.sh":                                        ("posting-counts.sh: ", 1),
+    "queue-detail-read.sh (queued)":                            ("queue-detail-read: ", 1),
+    "queue-detail-read.sh (already queued)":                    ("queue-detail-read: ", 1),
+    "record-judgment.sh (recorded)":                            ("record-judgment: ", 1),
+    "record-judgment.sh (the verdict is already there)":        ("record-judgment: ", 1),
+    "run-counts.sh":                                            ("run-counts.sh: ", 1),
+    "run-matches.sh":                                           ("run-matches.sh: ", 1),
+    "validate-workspace.sh (clean)":                            ("validate-workspace.sh: ", 1),
+    "validate-workspace.sh (clean, --post-close)":              ("validate-workspace.sh: ", 1),
+    "validate-workspace.sh (--help)":                           ("usage: validate-workspace.sh ", 1),
+    "workspace-discovery.sh (the registry names a workspace)":  ("workspace-discovery.sh: ", 1),
+    "workspace-discovery.sh (the registry names none)":         ("workspace-discovery.sh: ", 1),
+    "workspace-discovery.sh (no registry file)":                ("workspace-discovery.sh: ", 1),
 }
 
 
 def success_calls(tmp_path, workspace):
-    """One call per script in `EXPECTED_PREFIX`, each on an input that script exits 0 on.
+    """One call per branch in `BRANCH_STDERR`, each on an input that reaches that branch at exit 0.
 
     Every input is built the way the tests above build the same script's input, through the same
-    helpers and the same log constants, so the guard runs the success paths those tests already
-    pin rather than a second set of its own. `validate-workspace.sh` is called without
-    `--quiet-when-clean`, the flag that leaves its line out;
-    `test_the_flag_that_suppresses_a_line_is_the_one_a_caller_asks_for` is where that flag is
-    checked.
+    helpers and the same log constants, so the guard runs the success paths those tests already pin
+    rather than a second set of its own. The branches a script reaches only on a second call — a
+    posting queued twice, a verdict recorded twice, an event appended twice — run the first call
+    here and hand back the second.
+
+    `validate-workspace.sh` is called without `--quiet-when-clean` on both of its clean branches,
+    because that flag leaves the line out; `test_quiet_when_clean_suppresses_only_that_line` above
+    is where the flag is checked.
 
     Each value is a function rather than a finished `CompletedProcess`, so the fixture below can
-    build all ten and run the one its parameter names.
+    build all eighteen and run the one its parameter names.
     """
     def queue_detail_read():
         jobs = tmp_path / "queued.jsonl"
         jobs.write_text(surfaced_event("77"), encoding="utf-8")
         return run_script(QUEUE, jobs, "--run-id", RID, "--source", "linkedin", "--source-id", "77")
+
+    def queue_detail_read_already_queued():
+        # The same posting offered twice. The first call appends the queued event, the second finds
+        # it, writes its own line and exits 0 without appending a second one — a second event would
+        # put the posting on the read list twice.
+        jobs = tmp_path / "queued-twice.jsonl"
+        jobs.write_text(surfaced_event("78"), encoding="utf-8")
+        args = (jobs, "--run-id", RID, "--source", "linkedin", "--source-id", "78")
+        first = run_script(QUEUE, *args)
+        assert first.returncode == 0, ("the first queue call should exit 0\n"
+                                       + first.stdout + first.stderr)
+        return run_script(QUEUE, *args)
 
     def record_judgment():
         jobs = tmp_path / "judged.jsonl"
@@ -1458,6 +1517,22 @@ def success_calls(tmp_path, workspace):
         return run_script(JUDGE, jobs, "--run-id", RID, "--source", "linkedin", "--source-id", "77",
                           "--detail-read", "true", "--relevant", "true", "--match", "moderate",
                           "--reasoning", "fits the brief")
+
+    def record_judgment_already_recorded():
+        # The same verdict recorded twice. The script drops the timestamp from both lines before
+        # comparing them, so the second call reaches the branch that finds this exact verdict
+        # already in the log even when the two calls land in different seconds.
+        jobs = tmp_path / "judged-twice.jsonl"
+        jobs.write_text(
+            '{"event":"surfaced","run_id":"%s","source":"linkedin","source_id":"78",'
+            '"title":"Analyst","company_name":"Acme"}\n' % RID, encoding="utf-8")
+        args = (jobs, "--run-id", RID, "--source", "linkedin", "--source-id", "78",
+                "--detail-read", "true", "--relevant", "true", "--match", "moderate",
+                "--reasoning", "fits the brief")
+        first = run_script(JUDGE, *args)
+        assert first.returncode == 0, ("the first record call should exit 0\n"
+                                       + first.stdout + first.stderr)
+        return run_script(JUDGE, *args)
 
     def list_detail_read_queue():
         # Two postings queued and one of them judged, which is the log
@@ -1483,9 +1558,29 @@ def success_calls(tmp_path, workspace):
         return run_append(jobs, '{"event":"surfaced","run_id":"%s","source":"ashby",'
                                 '"source_id":"abc-1"}' % RID)
 
-    def dedup_near():
+    def event_log_append_already_there():
+        # The same event offered twice. The skip is on `evaluated` events only — a posting is
+        # recorded as `surfaced` before it is judged, and skipping on that first event would drop
+        # the judgment — so this is an evaluated event, not the surfaced one above.
+        jobs = tmp_path / "appended-twice.jsonl"
+        event = ('{"event":"evaluated","run_id":"%s","source":"ashby","source_id":"abc-2",'
+                 '"relevant":"true","match":"strong"}' % RID)
+        first = run_append(jobs, event)
+        assert first.returncode == 0, ("the first append should exit 0\n"
+                                       + first.stdout + first.stderr)
+        return run_append(jobs, event)
+
+    def dedup_near_collapsing():
+        # Two rows of the same opening: the second is collapsed into the first, so this call writes
+        # the pairing line and then the counts line.
         return run_near([("linkedin:aa1", "Acme", "Software Engineer (Remote)"),
                          ("linkedin:aa2", "Acme", "Software Engineer (NYC)")])
+
+    def dedup_near_collapsing_nothing():
+        # Two different openings, so no pairing line is written and the counts line is the whole of
+        # stderr. This is the branch that says a call which collapsed nothing still speaks.
+        return run_near([("linkedin:aa1", "Acme", "Software Engineer"),
+                         ("linkedin:bb2", "Beta", "Data Analyst")])
 
     def run_counts():
         jobs = tmp_path / "counted.jsonl"
@@ -1502,7 +1597,7 @@ def success_calls(tmp_path, workspace):
         jobs.write_text(JUDGED_LOG, encoding="utf-8")
         return run_script(POSTINGS, jobs)
 
-    def workspace_discovery():
+    def workspace_discovery_no_registry():
         # The default path: a `.job-search` holding a `config.yaml` and no registry file, which is
         # one of the four calls in
         # `test_the_other_precedence_paths_print_the_three_keys_they_printed_before`.
@@ -1511,86 +1606,124 @@ def success_calls(tmp_path, workspace):
         (home / ".job-search" / "config.yaml").write_text("version: 1\n", encoding="utf-8")
         return run_script(DISCOVERY, env=discovery_env(home))
 
+    def workspace_discovery_registry_names_a_workspace():
+        # A registry naming a workspace that holds a config.yaml, which is the call in
+        # `test_discovery_names_the_workspace_the_registry_chose`. This branch exits 0 at the
+        # registry step and never reaches the two config checks below it.
+        home = tmp_path / "discovery-registry-home"
+        ws = tmp_path / "discovery-chosen"
+        ws.mkdir(parents=True)
+        (ws / "config.yaml").write_text("version: 1\n", encoding="utf-8")
+        reg = registry_path(home)
+        reg.parent.mkdir(parents=True)
+        reg.write_text(json.dumps({"active_workspace": str(ws)}), encoding="utf-8")
+        return run_script(DISCOVERY, env=discovery_env(home))
+
+    def workspace_discovery_registry_names_none():
+        # A registry file holding an empty `active_workspace`, which is one of the three states
+        # that share a line in `test_discovery_says_which_of_the_four_registry_states_it_found`.
+        # This branch writes its line and falls through to the default config below, so the call
+        # exits 0 there.
+        home = tmp_path / "discovery-unnamed-home"
+        (home / ".job-search").mkdir(parents=True)
+        (home / ".job-search" / "config.yaml").write_text("version: 1\n", encoding="utf-8")
+        reg = registry_path(home)
+        reg.parent.mkdir(parents=True)
+        reg.write_text('{"active_workspace": ""}', encoding="utf-8")
+        return run_script(DISCOVERY, env=discovery_env(home))
+
     def validate_workspace():
         return run_validator(workspace)
 
+    def validate_workspace_post_close():
+        # `--post-close` checks the run's record on top of the workspace's two files and says so on
+        # its own line, which is the call in
+        # `test_the_clean_line_names_the_run_when_post_close_is_given`.
+        write_clean_run(workspace)
+        return run_validator(workspace, "--post-close", RID)
+
+    def validate_workspace_help():
+        # The one branch here that predates the 2026-08-11 plan: `-h` and `--help` print the usage
+        # line and exit 0. Measured 2026-08-11, `sh validate-workspace.sh --help` exited 0 with 0
+        # bytes on stdout and the usage line on stderr. This case is the only test that runs the
+        # branch: measured 2026-08-11 with `git grep -n -- '--help' tests/`, every hit is in this
+        # file. Its line opens with `usage: ` rather than with the bare script name, which is why
+        # `BRANCH_STDERR` carries a prefix per branch rather than one per script.
+        return run_script(VALIDATOR, "--help")
+
     calls = {
-        "dedup.sh --near": dedup_near,
-        "event-log-append.sh": event_log_append,
+        "dedup.sh --near (a pair collapsed)": dedup_near_collapsing,
+        "dedup.sh --near (no pair collapsed)": dedup_near_collapsing_nothing,
+        "event-log-append.sh (appended)": event_log_append,
+        "event-log-append.sh (the event is already there)": event_log_append_already_there,
         "list-detail-read-queue.sh": list_detail_read_queue,
         "posting-counts.sh": posting_counts,
-        "queue-detail-read.sh": queue_detail_read,
-        "record-judgment.sh": record_judgment,
+        "queue-detail-read.sh (queued)": queue_detail_read,
+        "queue-detail-read.sh (already queued)": queue_detail_read_already_queued,
+        "record-judgment.sh (recorded)": record_judgment,
+        "record-judgment.sh (the verdict is already there)": record_judgment_already_recorded,
         "run-counts.sh": run_counts,
         "run-matches.sh": run_matches,
-        "validate-workspace.sh": validate_workspace,
-        "workspace-discovery.sh": workspace_discovery,
+        "validate-workspace.sh (clean)": validate_workspace,
+        "validate-workspace.sh (clean, --post-close)": validate_workspace_post_close,
+        "validate-workspace.sh (--help)": validate_workspace_help,
+        "workspace-discovery.sh (the registry names a workspace)":
+            workspace_discovery_registry_names_a_workspace,
+        "workspace-discovery.sh (the registry names none)": workspace_discovery_registry_names_none,
+        "workspace-discovery.sh (no registry file)": workspace_discovery_no_registry,
     }
-    # The fixture takes its parameters from `EXPECTED_PREFIX`, so a script listed here and not there
+    # The fixture takes its parameters from `BRANCH_STDERR`, so a branch listed here and not there
     # would be built and never run. This assertion fails instead.
-    assert sorted(calls) == sorted(EXPECTED_PREFIX), (sorted(calls), sorted(EXPECTED_PREFIX))
+    assert sorted(calls) == sorted(BRANCH_STDERR), (sorted(calls), sorted(BRANCH_STDERR))
     return calls
 
 
-@pytest.fixture(params=sorted(EXPECTED_PREFIX))
-def instrumented(request, tmp_path, tmp_workspace):
-    """One script per parameter, as `(label, call)`, where `call()` runs it on an input it exits 0
-    on. `tmp_workspace` is requested for `validate-workspace.sh`; the other nine build what they
-    need under `tmp_path`."""
+@pytest.fixture(params=sorted(BRANCH_STDERR))
+def success_branch(request, tmp_path, tmp_workspace):
+    """One exit-0 branch per parameter, as `(label, call)`, where `call()` reaches that branch.
+    `tmp_workspace` is requested for the three `validate-workspace.sh` branches; the rest build what
+    they need under `tmp_path`."""
     return request.param, success_calls(tmp_path, tmp_workspace)[request.param]
 
 
-def test_every_instrumented_script_writes_a_line_on_its_success_path(instrumented):
-    """Every test above pins one script's exact sentence. Delete that sentence from the script and
-    the assertion that read it is deleted with it, so the suite stays green over a script that has
-    stopped writing its line. This test reads none of the wording: it runs each script on an input
-    it exits 0 on and checks that stderr is not empty and that the line opens with the script's own
-    name. Reword a line and this still passes; delete one and this fails.
+def test_every_exit_0_branch_of_the_instrumented_scripts_still_writes_a_line(success_branch):
+    """One invocation per exit-0 branch, reading whether the branch wrote to stderr rather than what
+    it wrote.
+
+    Every test above pins one branch's exact sentence, and deleting that sentence from the script
+    turns the test that reads it red — that case is already covered. The case that is not is an edit
+    that drops a feature and takes both with it: the line goes out of the script and the test
+    written for it goes out of the suite, and every test left passes over a script that has stopped
+    saying what it did. This is the test that fails then, because it is parametrised over
+    `BRANCH_STDERR` rather than written next to any one line, so taking a line out of a script
+    without taking its entry out of that map leaves a case with nothing to read.
+
+    No wording is read here, so a rewording leaves this green while the content test above goes red.
 
     The exit status is checked first and in the same test, because a call that failed would satisfy
-    the stderr check for the wrong reason: nine of these ten already wrote to stderr when they
-    refuse an argument or cannot find the file they were handed, before the 2026-08-11 TD-008 plan
-    added a line to any of them. Measured 2026-08-11 with `git show 4fb0672:<path> | grep -c '>&2'`
-    over the ten, where 4fb0672 is the commit before the plan's first: the nine counts run from 1 to
-    7, and `workspace-discovery.sh` counts 0.
+    the stderr check for the wrong reason: nine of these ten scripts already wrote to stderr when
+    they refuse an argument or cannot find the file they were handed, before the 2026-08-11 TD-008
+    plan added a line to any of them. Measured 2026-08-11 with `git show 4fb0672:<path> | grep -c
+    '>&2'` over the ten, where 4fb0672 is the commit before the plan's first: the nine counts run
+    from 1 to 7, and `workspace-discovery.sh` counts 0.
     """
-    label, call = instrumented
+    label, call = success_branch
+    prefix, expected = BRANCH_STDERR[label]
     r = call()
     assert r.returncode == 0, "%s: this is meant to be a success call, and it exited %d\n%s" % (
         label, r.returncode, r.stdout + r.stderr)
-    assert r.stderr.strip() != "", (
+
+    written = [line for line in r.stderr.splitlines() if line.strip() != ""]
+    assert written != [], (
         "%s exited 0 and wrote nothing to stderr. A caller reading that cannot tell it from a "
         "script that never ran, and re-running to find out is what TD-008 measured: 4 bash calls "
         "and 31 seconds on dedup.sh --near in the 2026-08-10 run." % label)
-    assert r.stderr.startswith(EXPECTED_PREFIX[label]), (
-        "%s: the line should open with the script's own name, so a caller reading a stderr stream "
-        "that several scripts wrote to can tell which one wrote this line; got %r"
-        % (label, r.stderr[:80]))
-
-
-def test_the_flag_that_suppresses_a_line_is_the_one_a_caller_asks_for(tmp_workspace):
-    """`--quiet-when-clean` is the only flag in the pack that leaves a line out of a success path,
-    and the guard above would fail on the call that passes it, so the guard calls this script
-    without it. Measured 2026-08-11 with
-    `git grep -n -- "--quiet\\|--silent\\|QUIET\\|SILENT" skills/*/scripts/`: the only hits are this
-    script and `open-run.sh`, the caller that passes the flag.
-
-    `open-run.sh` runs this script inside its own and reports the same finding through its own exit
-    status, and a second line on its stderr would break
-    `test_a_present_brief_with_no_way_to_digest_it_is_not_called_missing` in
-    `tests/test_mechanics_scripts.py`. The read of `open-run.sh` below ties the flag to that one
-    caller: take the flag off that call and this test fails, because no other call in the pack
-    passes it.
-    """
-    quiet = run_validator(tmp_workspace, "--quiet-when-clean")
-    assert quiet.returncode == 0, quiet.stdout + quiet.stderr
-    assert quiet.stdout == "", quiet.stdout
-    assert quiet.stderr == "", quiet.stderr
-
-    # The same workspace without the flag, which is the call the guard makes.
-    loud = run_validator(tmp_workspace)
-    assert loud.returncode == 0, loud.stdout + loud.stderr
-    assert loud.stderr.startswith(EXPECTED_PREFIX["validate-workspace.sh"]), loud.stderr
-
-    open_run = (RUNBOOK_SCRIPTS / "open-run.sh").read_text(encoding="utf-8")
-    assert "validate-workspace.sh\" \"$ws\" --quiet-when-clean" in open_run, open_run
+    assert len(written) == expected, (
+        "%s writes %d line(s) to stderr and this call wrote %d. Either one of its lines was "
+        "deleted, or a line was added and BRANCH_STDERR still holds the old count.\n%s"
+        % (label, expected, len(written), r.stderr))
+    for line in written:
+        assert line.startswith(prefix), (
+            "%s: every line this branch writes should open with %r, so a caller reading a stderr "
+            "stream that several scripts wrote to can tell which one wrote the line; got %r"
+            % (label, prefix, line[:80]))
