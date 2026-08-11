@@ -10,7 +10,9 @@ checked too. `dedup.sh --near` does write to stdout, so its tests check that eve
 come back still does, in the same order. `list-detail-read-queue.sh` writes the read list to stdout,
 so its tests check that the rows that used to come back still do. `run-counts.sh`, `run-matches.sh`
 and `posting-counts.sh` write the digest's numbers, the digest's rows and the home card's three
-counts, so their tests pin the whole block of stdout, byte for byte.
+counts, so their tests pin the whole block of stdout, byte for byte. `workspace-discovery.sh` had no
+`>&2` write on any path at all, and its three `key=value` lines are read by key, so its tests pin the
+whole block of stdout too.
 
 The `dedup.sh --near` tests run through POSIX `sh` and through `dash` where it is installed, the way
 `tests/test_dedup_guard.py` drives that same script. Helpers are defined here rather than imported
@@ -28,6 +30,7 @@ import pytest
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 RUN_SCRIPTS = ROOT / "skills" / "job-search-run" / "scripts"
+RUNBOOK_SCRIPTS = ROOT / "skills" / "job-search-runbook" / "scripts"
 QUEUE = RUN_SCRIPTS / "queue-detail-read.sh"
 JUDGE = RUN_SCRIPTS / "record-judgment.sh"
 DEDUP = RUN_SCRIPTS / "dedup.sh"
@@ -35,6 +38,7 @@ LIST_QUEUE = RUN_SCRIPTS / "list-detail-read-queue.sh"
 COUNTS = RUN_SCRIPTS / "run-counts.sh"
 MATCHES = RUN_SCRIPTS / "run-matches.sh"
 POSTINGS = ROOT / "skills" / "job-search" / "scripts" / "posting-counts.sh"
+DISCOVERY = RUNBOOK_SCRIPTS / "workspace-discovery.sh"
 
 RID = "2026-08-05T16-47-00Z"
 
@@ -705,3 +709,163 @@ def test_the_counts_on_the_line_account_for_the_postings_the_three_keys_leave_ou
     relevant, _, filtered = [int(l.split("=", 1)[1]) for l in r.stdout.splitlines()]
     assert judged == relevant + filtered + aliased, r.stdout + r.stderr
     assert lines_read == 3, r.stderr
+
+
+# ------------------------------------------------------------------ workspace-discovery.sh
+
+def discovery_env(home):
+    """An environment rooted at `home` with no registry redirect.
+
+    `XDG_CONFIG_HOME` and `JOBSEARCH_OS_REGISTRY` are set to the empty string rather than left out:
+    `run_script` starts from `os.environ`, and the script reads both with `${VAR:-...}`, which takes
+    the default for an empty value as well as for an unset one. Without these two, a machine that
+    exports `XDG_CONFIG_HOME` would put the registry somewhere other than
+    `<home>/.config/job-search/config.json` and every path below would be read against the wrong
+    file.
+    """
+    return {"HOME": str(home), "JOBSEARCH_OS_HOME": str(home),
+            "XDG_CONFIG_HOME": "", "JOBSEARCH_OS_REGISTRY": ""}
+
+
+def registry_path(home):
+    """Where `discovery_env` puts the registry file."""
+    return home / ".config" / "job-search" / "config.json"
+
+
+def named_line(reg, workspace):
+    """The line for a registry that holds a non-empty `active_workspace`."""
+    return ("workspace-discovery.sh: registry %s names active_workspace %s — found by grep, which "
+            "does not check that the file is JSON, so parse-check the file yourself\n"
+            % (reg, workspace))
+
+
+def unnamed_line(reg):
+    """The line for a registry file that exists and yields no workspace.
+
+    One line for two states, because the `grep` reaches both the same way: a registry holding an
+    empty `active_workspace`, and a registry that is not JSON at all. The line says so rather than
+    naming one of them, which is the most this script can report without parsing the file.
+    """
+    return ("workspace-discovery.sh: registry %s exists but names no active_workspace — grep does "
+            "not check that the file is JSON, so this line also covers a registry that is not JSON "
+            "at all; parse-check the file yourself\n" % reg)
+
+
+def no_registry_line(reg):
+    """The line for a path holding no registry file. This is the one state a caller no longer has to
+    establish for itself: with no file there, there is nothing to parse-check."""
+    return "workspace-discovery.sh: no registry file at %s — nothing to parse-check\n" % reg
+
+
+def keys(workspace, source, first_run):
+    """The three `key=value` lines this script prints, in the order it prints them."""
+    return "workspace=%s\nsource=%s\nfirst_run=%s\n" % (workspace, source, first_run)
+
+
+@pytest.mark.parametrize("shell", SHELLS)
+def test_discovery_says_which_of_the_three_registry_states_it_found(tmp_path, shell):
+    """`source=none` covers three states — no registry file, a registry naming no workspace, and a
+    registry that is not JSON — and `skills/job-search-runbook/SKILL.md` requires the caller to stop
+    the run on the third: "A registry file that exists but does not parse as JSON stops the run."
+    Measured 2026-08-11 against the script as it stood before these lines existed, with one HOME and
+    the registry file rewritten between calls: all three printed the same three keys, 0 bytes on
+    stderr, exit 0.
+
+    The script still does not parse JSON, so the second and third states share one line. What the
+    caller gets that it did not have is whether there is a file at that path at all.
+    """
+    home = tmp_path / "h"
+    (home / ".job-search").mkdir(parents=True)
+    reg = registry_path(home)
+    reg.parent.mkdir(parents=True)
+    env = discovery_env(home)
+    # `.job-search` exists with no `config.yaml` in it, so all three calls fall through to the
+    # first-run path and print the same three keys.
+    three_keys = keys(home / ".job-search", "none", "true")
+
+    missing = run_script(DISCOVERY, shell=shell, env=env)
+    assert missing.returncode == 0, missing.stdout + missing.stderr
+    assert missing.stderr == no_registry_line(reg), missing.stderr
+    assert missing.stdout == three_keys, missing.stdout
+
+    reg.write_text('{"active_workspace": ""}', encoding="utf-8")
+    empty = run_script(DISCOVERY, shell=shell, env=env)
+    assert empty.returncode == 0, empty.stdout + empty.stderr
+    assert empty.stderr == unnamed_line(reg), empty.stderr
+    assert empty.stdout == three_keys, empty.stdout
+
+    reg.write_text("this is not json", encoding="utf-8")
+    unparsed = run_script(DISCOVERY, shell=shell, env=env)
+    assert unparsed.returncode == 0, unparsed.stdout + unparsed.stderr
+    assert unparsed.stderr == unnamed_line(reg), unparsed.stderr
+    assert unparsed.stdout == three_keys, unparsed.stdout
+
+    # stdout is byte-identical across all three, which is why the stderr line is needed. The call
+    # with no file there is separated from the other two; those two share a line, and the line says
+    # that they do.
+    assert missing.stdout == empty.stdout == unparsed.stdout
+    assert missing.stderr != empty.stderr
+    assert empty.stderr == unparsed.stderr
+
+
+@pytest.mark.parametrize("shell", SHELLS)
+def test_discovery_names_the_workspace_the_registry_chose(tmp_path, shell):
+    """The registry wins over both config paths and over the first-run path, so the workspace it
+    names is the one the whole run works in. The line says which path that is, and says the value
+    came from a `grep` over an unparsed file."""
+    home = tmp_path / "h"
+    ws = tmp_path / "chosen"
+    ws.mkdir(parents=True)
+    (ws / "config.yaml").write_text("version: 1\n", encoding="utf-8")
+    reg = registry_path(home)
+    reg.parent.mkdir(parents=True)
+    reg.write_text(json.dumps({"active_workspace": str(ws)}), encoding="utf-8")
+    r = run_script(DISCOVERY, shell=shell, env=discovery_env(home))
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert r.stderr == named_line(reg, ws), r.stderr
+    assert r.stdout == keys(ws, "registry", "false"), r.stdout
+
+
+@pytest.mark.parametrize("shell", SHELLS)
+def test_the_other_precedence_paths_print_the_three_keys_they_printed_before(tmp_path, shell):
+    """The script's header lists four paths that reach `emit`. The one above is the registry with a
+    `config.yaml` at the workspace it names; here are the other three, plus the registry path's
+    other branch — a registry naming a workspace that has no `config.yaml`, which prints
+    `source=registry first_run=true`.
+
+    Each stdout is pinned as the whole block rather than as a count of lines or one key: all three
+    keys are here in their printed order, so a renamed key, a reordered pair or a changed value fails
+    this comparison.
+    """
+    default_home = tmp_path / "default"
+    (default_home / ".job-search").mkdir(parents=True)
+    (default_home / ".job-search" / "config.yaml").write_text("version: 1\n", encoding="utf-8")
+    d = run_script(DISCOVERY, shell=shell, env=discovery_env(default_home))
+    assert d.returncode == 0, d.stdout + d.stderr
+    assert d.stdout == keys(default_home / ".job-search", "default", "false"), d.stdout
+    assert d.stderr == no_registry_line(registry_path(default_home)), d.stderr
+
+    legacy_home = tmp_path / "legacy"
+    (legacy_home / "job-search").mkdir(parents=True)
+    (legacy_home / "job-search" / "config.yaml").write_text("version: 1\n", encoding="utf-8")
+    leg = run_script(DISCOVERY, shell=shell, env=discovery_env(legacy_home))
+    assert leg.returncode == 0, leg.stdout + leg.stderr
+    assert leg.stdout == keys(legacy_home / "job-search", "legacy", "false"), leg.stdout
+    assert leg.stderr == no_registry_line(registry_path(legacy_home)), leg.stderr
+
+    first_home = tmp_path / "first"
+    first_home.mkdir()
+    f = run_script(DISCOVERY, shell=shell, env=discovery_env(first_home))
+    assert f.returncode == 0, f.stdout + f.stderr
+    assert f.stdout == keys(first_home / ".job-search", "none", "true"), f.stdout
+    assert f.stderr == no_registry_line(registry_path(first_home)), f.stderr
+
+    fresh_home = tmp_path / "fresh"
+    fresh_ws = tmp_path / "named-but-not-created"
+    fresh_reg = registry_path(fresh_home)
+    fresh_reg.parent.mkdir(parents=True)
+    fresh_reg.write_text(json.dumps({"active_workspace": str(fresh_ws)}), encoding="utf-8")
+    n = run_script(DISCOVERY, shell=shell, env=discovery_env(fresh_home))
+    assert n.returncode == 0, n.stdout + n.stderr
+    assert n.stdout == keys(fresh_ws, "registry", "true"), n.stdout
+    assert n.stderr == named_line(fresh_reg, fresh_ws), n.stderr
