@@ -1279,8 +1279,8 @@ def test_a_posting_body_without_a_usable_source_and_source_id_is_refused(tmp_pat
 
     Exit 2, and the call is recorded. The body came off a metered call whatever shape it arrived
     in — `agent-data-reference:19` says one metered call per attempt — and refusing to log it lost
-    44 of the 78 get-posting calls one 2026-08-10 run made, whose digest reported 38 metered calls
-    against a true 82. Only the checks that run before the body is scanned leave no event."""
+    40 of the 74 get-posting calls one 2026-08-10 run made, whose digest reported 38 metered calls
+    against a true 78. Only the checks that run before the body is scanned leave no event."""
     body = tmp_path / "body.json"
     body.write_text(json.dumps({"data": dict(row, description_markdown="A role."),
                                 "meta": {"request_id": "req_1"}}))
@@ -1314,8 +1314,8 @@ def test_a_non_string_source_or_source_id_in_a_posting_body_is_refused(tmp_path,
 
     Exit 2, and the call is recorded. The body came off a metered call whatever shape it arrived
     in — `agent-data-reference:19` says one metered call per attempt — and refusing to log it lost
-    44 of the 78 get-posting calls one 2026-08-10 run made, whose digest reported 38 metered calls
-    against a true 82. Only the checks that run before the body is scanned leave no event."""
+    40 of the 74 get-posting calls one 2026-08-10 run made, whose digest reported 38 metered calls
+    against a true 78. Only the checks that run before the body is scanned leave no event."""
     body = tmp_path / "body.json"
     body.write_text(json.dumps({"data": dict(row, description_markdown="A role."),
                                 "meta": {"request_id": "req_1"}}))
@@ -1334,12 +1334,13 @@ def test_a_non_string_source_or_source_id_in_a_posting_body_is_refused(tmp_path,
 
 def test_a_posting_body_missing_data_source_id_entirely_still_records_its_call(tmp_path):
     """The shape gate, and the path a `--fields` list that dropped `source_id` lands on. It had no
-    test at all, and it is where 44 of the 78 metered get-posting calls of the 2026-08-10 run went
-    unrecorded: HTTP 200 with valid bodies, trimmed by a field list that left out the two keys a
-    posting is filed under.
+    test at all, and 40 of the 74 metered get-posting calls of the 2026-08-10 run went unrecorded
+    across these reject paths: HTTP 200 with valid bodies, trimmed by a field list that left out
+    the two keys a posting is filed under.
 
-    The event carries the request id off `meta`, because `req` is read at `:227`, before the route
-    branch. That is what lets an operator match a refused call against the service's own record."""
+    The event carries the request id off `meta`, because `req` is read at
+    `record-api-response.sh:227`, before the route branch. That is what lets an operator match a
+    refused call against the service's own record."""
     body = tmp_path / "trimmed.json"
     body.write_text(json.dumps({"data": {"id": "jp_22d0d871db24", "title": "Head of FP&A",
                                          "company_name": "Acme",
@@ -1361,12 +1362,12 @@ def test_a_posting_body_missing_data_source_id_entirely_still_records_its_call(t
 
 
 def test_a_search_body_recorded_as_a_detail_read_keeps_the_route_it_was_given(tmp_path):
-    """A search body arriving with --route get-posting carries no --query-id, because `:119-124`
-    requires one only for a search. Filing it as a search would open the group `<source>:` that
-    nothing can ever mark answered — an invented lost search, which is the outcome correcting the
-    route at the search gate exists to avoid. So the call is filed as the detail read the caller
-    said it was, and `calls_total_metered` is right either way, which is the number the free tier
-    turns on."""
+    """A search body arriving with --route get-posting carries no --query-id, because
+    `record-api-response.sh:119-124` requires one only for a search. Filing it as a search would
+    open the group `<source>:null` that nothing can ever mark answered — an invented lost search,
+    which is the outcome correcting the route at the search gate exists to avoid. So the call is
+    filed as the detail read the caller said it was, and `calls_total_metered` — the number the
+    billing is charged against — is right either way."""
     jobs = seeded_jobs(tmp_path, "search.ashby.json")
     r = run_script(RECORD_API, RID, jobs, FIXTURES / "search.linkedin.json",
                    "--route", "get-posting", "--source", "linkedin")
@@ -1381,9 +1382,9 @@ def test_a_search_body_recorded_as_a_detail_read_keeps_the_route_it_was_given(tm
 
 
 def test_a_refused_detail_read_reaches_the_counts_a_digest_prints(tmp_path):
-    """The defect was only visible in the digest. The 2026-08-10 run made 78 metered get-posting
+    """The defect was only visible in the digest. The 2026-08-10 run made 74 metered get-posting
     calls, wrote 34 `call` events with route get-posting into `jobs.jsonl`, and printed
-    `Agent-data usage: 38 metered calls this run` against a true 82. The script-level assertions
+    `Agent-data usage: 38 metered calls this run` against a true 78. The script-level assertions
     above do not catch that on their own: the number a run reports is what `run-counts.sh` prints,
     and it counts events."""
     jobs = seeded_jobs(tmp_path, "search.ashby.json")
