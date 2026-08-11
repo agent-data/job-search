@@ -8,9 +8,9 @@ and the exit status it gave back. `queue-detail-read.sh` and `record-judgment.sh
 log file and write nothing to stdout, so the new stderr line has to leave stdout empty, and that is
 checked too. `dedup.sh --near` does write to stdout, so its tests check that every id that used to
 come back still does, in the same order. `list-detail-read-queue.sh` writes the read list to stdout,
-so its tests check that the rows that used to come back still do. `run-counts.sh` and
-`run-matches.sh` write the digest's numbers and the digest's rows, so their tests pin the whole
-block of stdout, byte for byte.
+so its tests check that the rows that used to come back still do. `run-counts.sh`, `run-matches.sh`
+and `posting-counts.sh` write the digest's numbers, the digest's rows and the home card's three
+counts, so their tests pin the whole block of stdout, byte for byte.
 
 The `dedup.sh --near` tests run through POSIX `sh` and through `dash` where it is installed, the way
 `tests/test_dedup_guard.py` drives that same script. Helpers are defined here rather than imported
@@ -20,6 +20,7 @@ own.
 import json
 import os
 import pathlib
+import re
 import shutil
 import subprocess
 
@@ -33,6 +34,7 @@ DEDUP = RUN_SCRIPTS / "dedup.sh"
 LIST_QUEUE = RUN_SCRIPTS / "list-detail-read-queue.sh"
 COUNTS = RUN_SCRIPTS / "run-counts.sh"
 MATCHES = RUN_SCRIPTS / "run-matches.sh"
+POSTINGS = ROOT / "skills" / "job-search" / "scripts" / "posting-counts.sh"
 
 RID = "2026-08-05T16-47-00Z"
 
@@ -586,3 +588,120 @@ def test_the_sixth_count_is_left_off_when_no_row_is_missing_a_band(tmp_path, she
     jobs.write_text(FOUR_BAND_LOG, encoding="utf-8")
     r = run_script(MATCHES, jobs, RID, shell=shell)
     assert "with no band" not in r.stderr, r.stderr
+
+
+# ------------------------------------------------------------------ posting-counts.sh
+
+# Five judgments over the whole log, which is what this script reads — it takes no run id. Two
+# postings were kept, one of them carrying an open question, and three were thrown out, one of those
+# also carrying an open question. The three printed numbers are 2, 1 and 3 — every one different —
+# so a `printf` that reads the wrong counter prints a number this file does not expect.
+JUDGED_LOG = "".join([
+    '{"event":"evaluated","source":"linkedin","source_id":"r1","relevant":"true",'
+    '"match":"strong"}\n',
+    '{"event":"evaluated","source":"linkedin","source_id":"r2","relevant":"true","match":"weak",'
+    '"needs_human_check":"true"}\n',
+    '{"event":"evaluated","source":"linkedin","source_id":"f1","relevant":"false"}\n',
+    '{"event":"evaluated","source":"linkedin","source_id":"f2","relevant":"false"}\n',
+    '{"event":"evaluated","source":"linkedin","source_id":"f3","relevant":"false",'
+    '"needs_human_check":"true"}\n',
+])
+
+# What the log above prints on stdout, byte for byte, and what a log holding no judgment prints.
+# Pinned as the whole block rather than as a count of lines or a set of substrings: all three keys
+# are here in their printed order, so a renamed key, a reordered pair, a dropped key or a changed
+# number fails this comparison. The second is not called ZEROED_STDOUT because that name is taken
+# above by `run-counts.sh`'s zeroed key set, and a second binding of it would rebind the first —
+# measured 2026-08-11 with it named that way, the two shells of
+# test_a_run_id_no_event_carries_reads_zero_lines_rather_than_zero_work failed on their
+# `assert r.stdout == ZEROED_STDOUT` while the six tests in this section passed.
+JUDGED_STDOUT = "relevant=2\nto_confirm=1\nfiltered=3\n"
+NO_JUDGMENT_STDOUT = "relevant=0\nto_confirm=0\nfiltered=0\n"
+
+
+def read_line(lines_read, judged, aliased):
+    """The stderr line `posting-counts.sh` writes.
+
+    The three counts on it are the lines the script read, the postings carrying a judgment, and the
+    postings among those whose judgment names another one. `relevant` plus `filtered` plus the third
+    count equals the second, which is why the third is there. `to_confirm` is not one of the terms in
+    that sum, because it counts within `relevant`.
+    """
+    return ("posting-counts.sh: %d lines read, %d postings carry a judgment, %d of them the same "
+            "opening as another and counted under neither relevant nor filtered\n"
+            % (lines_read, judged, aliased))
+
+
+@pytest.mark.parametrize("shell", SHELLS)
+def test_posting_counts_separates_an_empty_log_from_one_it_could_not_parse(tmp_path, shell):
+    """Three zeroed keys at exit 0 covered a log with no judgments, an empty log, and a file of lines
+    that are not JSON at all. Measured 2026-08-11 against the script as it stood before this line
+    existed: 200 lines of `not json at all <n>` gave stdout `relevant=0 to_confirm=0 filtered=0`, 0
+    bytes on stderr and exit 0, byte for byte what an empty file gave. `skills/job-search/SKILL.md`
+    tells the agent to run this script rather than read the log itself — `grep -n 'reading that log
+    yourself' skills/job-search/SKILL.md` — so those three keys were the whole of what it had."""
+    junk = tmp_path / "junk.jsonl"
+    junk.write_text("".join("not json at all %d\n" % i for i in range(200)), encoding="utf-8")
+    r = run_script(POSTINGS, junk, shell=shell)
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert r.stdout == NO_JUDGMENT_STDOUT, r.stdout
+    assert r.stderr == read_line(200, 0, 0), r.stderr
+
+    empty = tmp_path / "empty.jsonl"
+    empty.write_text("", encoding="utf-8")
+    e = run_script(POSTINGS, empty, shell=shell)
+    assert e.returncode == 0, e.stdout + e.stderr
+    assert e.stdout == NO_JUDGMENT_STDOUT, e.stdout
+    assert e.stderr == read_line(0, 0, 0), e.stderr
+    # The two runs printed the same stdout, and the line is what tells them apart.
+    assert r.stdout == e.stdout
+    assert r.stderr != e.stderr
+
+
+@pytest.mark.parametrize("shell", SHELLS)
+def test_posting_counts_says_how_many_postings_carry_a_judgment(tmp_path, shell):
+    """A log of five judgments reads `5 lines read, 5 postings carry a judgment`, which is the pair
+    that separates it from the log of 200 lines that are not JSON and from the empty one. stdout is
+    the same three keys it was before this line existed."""
+    jobs = tmp_path / "jobs.jsonl"
+    jobs.write_text(JUDGED_LOG, encoding="utf-8")
+    r = run_script(POSTINGS, jobs, shell=shell)
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert r.stdout == JUDGED_STDOUT, r.stdout
+    assert r.stderr == read_line(5, 5, 0), r.stderr
+
+
+@pytest.mark.parametrize("shell", SHELLS)
+def test_the_counts_on_the_line_account_for_the_postings_the_three_keys_leave_out(tmp_path, shell):
+    """A posting whose judgment names another one in `same_role_as` is the same opening seen twice,
+    so it is counted under neither `relevant` nor `filtered` — `grep -n 'counts under NEITHER'
+    skills/job-search/scripts/posting-counts.sh` is where that is written down. `postings carry a
+    judgment` counts it, because it does carry one, so with only two counts on the line an agent
+    would read `2 postings carry a judgment` over a stdout saying `relevant=1 to_confirm=0
+    filtered=0` and find that 1 plus 0 is not 2. The third count is that posting.
+
+    The log also holds a `surfaced` line, so `lines read` here is above the postings judged for a
+    reason other than text that is not JSON."""
+    log = "".join([
+        '{"event":"surfaced","run_id":"%s","source":"linkedin","source_id":"r1"}\n' % RID,
+        '{"event":"evaluated","source":"linkedin","source_id":"r1","relevant":"true",'
+        '"match":"strong"}\n',
+        '{"event":"evaluated","source":"linkedin","source_id":"d1","relevant":"true",'
+        '"match":"strong","same_role_as":"linkedin:r1"}\n',
+    ])
+    jobs = tmp_path / "jobs.jsonl"
+    jobs.write_text(log, encoding="utf-8")
+    r = run_script(POSTINGS, jobs, shell=shell)
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert r.stdout == "relevant=1\nto_confirm=0\nfiltered=0\n", r.stdout
+    assert r.stderr == read_line(3, 2, 1), r.stderr
+
+    # The same check written as arithmetic over the numbers actually printed, so it fails on any log
+    # where they stop adding up rather than only on this one. `posting-counts.sh` is the only text on
+    # the line, and it carries no digit, so the three numbers are every digit run on it. Measured
+    # 2026-08-11 with `judged++` moved below the `same_role_as` test in a copy of the script: the
+    # line reads `1 postings carry a judgment` and this comparison fails at 1 != 1 + 0 + 1.
+    lines_read, judged, aliased = [int(n) for n in re.findall(r"[0-9]+", r.stderr)]
+    relevant, _, filtered = [int(l.split("=", 1)[1]) for l in r.stdout.splitlines()]
+    assert judged == relevant + filtered + aliased, r.stdout + r.stderr
+    assert lines_read == 3, r.stderr

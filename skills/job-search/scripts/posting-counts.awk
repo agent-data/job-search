@@ -15,9 +15,9 @@
 # prints filtered=0, and the same program with that one test deleted prints filtered=3, under both
 # BSD awk and mawk. Do not drop it to save the four jval calls it skips.
 #
-# Nothing here depends on the order the END block visits postings in: all three printed numbers are
-# sums and the three printf statements are in a fixed order, so `for (k in seen)` prints the same
-# output under every awk.
+# Nothing here depends on the order the END block visits postings in: every number it prints is a
+# sum over that loop or NR, and the printf statements are in a fixed order, so `for (k in seen)`
+# prints the same output under every awk, on stdout and on stderr alike.
 #
 # same_role_as is read for whether it is there, not for what it names. The row it names is the row
 # that was read, and that row is counted on its own line; looking it up would change no count.
@@ -55,7 +55,13 @@
 
 END {
   for (k in seen) {
-    if (alias[k] != "") continue    # the same opening, counted under the row that was read
+    # Counted before the test below, so this is every posting carrying a judgment, including the
+    # ones the three keys leave out. Only the stderr line at the end of this block reads it.
+    judged++
+    if (alias[k] != "") {
+      aliased++                     # so the stderr line accounts for this posting too
+      continue                      # the same opening, counted under the row that was read
+    }
     if (rel[k] == "true") {
       relevant++
       if (human[k] == "true") confirm++
@@ -66,4 +72,27 @@ END {
   printf "relevant=%d\n",   relevant+0
   printf "to_confirm=%d\n", confirm+0
   printf "filtered=%d\n",   filtered+0
+  # All three keys print as 0 for a log with no judgments, for an empty log, and for a file of lines
+  # that are not JSON at all: `posting-counts.sh <log> | wc -c` answers 35 for each of the three,
+  # measured 2026-08-11 on an empty file, on 200 lines of `not json at all <n>`, and on a log of one
+  # surfaced, one queued and one call line. This line is what separates them, and it goes to stderr,
+  # which is what keeps those 35 bytes the same as they were before it existed. job-search/SKILL.md
+  # tells the agent to run this script rather than read the log itself, so the three keys were the
+  # whole of what it had. `grep -n 'reading that log yourself' skills/job-search/SKILL.md` is where
+  # that instruction is written.
+  #
+  # The third count is what makes the numbers add up. `judged` counts a posting whose judgment names
+  # another one in same_role_as, because it does carry a judgment, and the alias test above leaves
+  # that posting out of all three keys. With only the first two numbers, a log of one such posting
+  # and the one it names prints `2 postings carry a judgment` over a stdout reading `relevant=1
+  # to_confirm=0 filtered=0`, and 1 plus 0 is not 2. With the third, relevant plus filtered plus it
+  # equals judged on every log. to_confirm is not a term in that sum, because it counts within
+  # relevant — `grep -n 'to_confirm counts over' posting-counts.sh` is where that is written down.
+  #
+  # `| "cat 1>&2"` is how an awk program in this pack writes to stderr — json-scan.awk:51-52 is the
+  # precedent — and the close() is what flushes it.
+  printf "posting-counts.sh: %d lines read, %d postings carry a judgment, %d of them the same" \
+         " opening as another and counted under neither relevant nor filtered\n", \
+    NR, judged+0, aliased+0 | "cat 1>&2"
+  close("cat 1>&2")
 }
