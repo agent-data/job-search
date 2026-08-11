@@ -1362,7 +1362,7 @@ def test_quiet_when_clean_suppresses_only_that_line(tmp_workspace):
     `git grep -n -- "--quiet\\|--silent\\|QUIET\\|SILENT" skills/*/scripts/`: eight hits, and every
     one of them is this flag — `validate-workspace.sh:14,15,29,32,42,537`, which is the two header
     lines, the `QUIET_WHEN_CLEAN` variable, the usage line, the flag parse and the `if` that reads
-    it, and `open-run.sh:127,130`, which is the one caller that passes it. The read of `open-run.sh`
+    it, and `open-run.sh:147,150`, which is the one caller that passes it. The read of `open-run.sh`
     at the end ties the flag to that caller: take the flag off that call and this test fails,
     because no other call in the pack passes it.
     """
