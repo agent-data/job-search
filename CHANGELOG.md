@@ -43,7 +43,7 @@ All notable changes to this project are documented here. The format is based on
   it, so the search could not tell a call that worked from a call that did nothing. In the run this
   was measured on, that cost four bash calls over 31 seconds on `dedup.sh --near`, three of them
   re-deriving an answer the first call had already given correctly. Between them those ten scripts
-  now write one sentence to stderr on nineteen branches that exit 0 —
+  now write one sentence to stderr on twenty branches that exit 0 —
   `queue-detail-read: queued <source>:<source_id> for run <run_id>`, `run-counts.sh: <n> of <n>
   lines in <log> name run <run_id>`, `workspace-discovery.sh: no registry file at <path> — nothing
   to parse-check`. What each script prints on stdout is unchanged byte for byte, and so is every
@@ -57,9 +57,10 @@ All notable changes to this project are documented here. The format is based on
   differencing its own input against the output. `dedup-surfaced.awk`, which runs inside
   `record-api-response.sh`, says why the rows it dropped were dropped — already judged, already
   surfaced by this run, or repeated inside the one response — where its caller used to get two
-  totals and no breakdown. And `list-detail-read-queue.sh` says how many postings the run queued to
-  read, how many of those already carry a judgment, and how many are left, so a queue that has been
-  worked off and a mistyped run id no longer give the same empty answer. One input convention moved
+  totals and no breakdown. And `list-detail-read-queue.sh` says how many lines of the log name the
+  run, then how many postings the run queued to read, how many of those already carry a judgment,
+  and how many are left, so a queue that has been worked off, a run that queued nothing, and a
+  mistyped run id no longer give the same empty answer. One input convention moved
   with the first of those: column 1 of the rows piped into `dedup.sh --near` now carries
   `<source>:<source_id>` rather than the bare `source_id`. The script treats column 1 as an opaque
   id and never looks inside it, so both forms collapse the same rows; what the prefixed form buys is

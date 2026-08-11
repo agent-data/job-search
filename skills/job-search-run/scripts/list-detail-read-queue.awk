@@ -21,6 +21,11 @@
   ev = jval($0, "event")
   k  = jval($0, "source") "|" jval($0, "source_id")
   rid = jval($0, "run_id")
+  # Every line naming this run, whatever its event is, which is what the stderr line in END opens
+  # with. run-counts.awk and run-matches.awk take the same number as NR minus the lines their
+  # run_id guard turned away; this program has no such guard, because it reads three event types on
+  # three branches and lets the rest through, so the count is taken here instead.
+  if (rid == want) matched++
 
   if (ev == "surfaced" && rid == want) {
     src[k]   = jval($0, "source");             sid[k]     = jval($0, "source_id")
@@ -44,7 +49,20 @@ END {
   # A caller could not tell those two apart: both printed nothing on stdout, nothing on stderr, and
   # exited 0. This line tells them apart. `| "cat 1>&2"` is how an awk program in this pack writes
   # to stderr; json-scan.awk:51-52 is the precedent, and the close() is what flushes it.
-  printf "list-detail-read-queue: %d queued for run %s, %d already judged, %d to read\n", \
-    n+0, want, done+0, listed+0 | "cat 1>&2"
+  #
+  # The three counts alone do not say a run id is wrong. A run that queued nothing and a mistyped
+  # id both read `0 queued, 0 already judged, 0 to read`, and the only part of that line that
+  # changed was the id the caller passed in — measured 2026-08-11 on a log of one surfaced and one
+  # evaluated line. So the line opens with how many lines of the log name the run, in the words
+  # run-counts.awk and run-matches.awk use for the same fact — `grep -n 'of %d line'
+  # skills/job-search-run/scripts/run-counts.awk` returns the one line that prints it there, and
+  # run-matches.awk opens on the same clause. The noun follows the total and the verb follows the
+  # count in front of it, so a one-line log reads `1 of 1 line in <log> names run <id>`. A caller
+  # that ran all three scripts on one log reads the same pair in the same words in each.
+  printf "list-detail-read-queue: %d of %d line%s in %s name%s run %s — %d queued, %d already" \
+         " judged, %d to read\n", \
+    matched+0, NR, (NR == 1 ? "" : "s"), \
+    FILENAME, (matched+0 == 1 ? "s" : ""), want, \
+    n+0, done+0, listed+0 | "cat 1>&2"
   close("cat 1>&2")
 }

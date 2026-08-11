@@ -418,21 +418,44 @@ def test_the_read_queue_says_how_much_of_it_is_worked_off(tmp_path):
     # The whole row, not a count of rows: the six columns each carry a different value here, so a
     # dropped column, a reordered pair, or a changed separator fails this line.
     assert r.stdout == "linkedin\t2\tjp_2\thttps://example.test/2\tEngineer\tBeta\n", r.stdout
-    assert "list-detail-read-queue: 2 queued for run %s, 1 already judged, 1 to read" % RID \
-        in r.stderr, r.stderr
+    assert r.stderr == ("list-detail-read-queue: 5 of 5 lines in %s name run %s — 2 queued, "
+                        "1 already judged, 1 to read\n" % (jobs, RID)), r.stderr
 
 
 def test_a_run_id_that_names_no_event_is_not_the_same_as_an_empty_queue(tmp_path):
-    """A mistyped run id reads `0 queued`, where a worked-off queue reads its real queued count with
-    every one of them judged."""
+    """A mistyped run id reads `0 of <n> lines name run <id>`, where a run whose events are in the
+    log reads a count above zero.
+
+    The three queue counts do not say it on their own. A run that queued nothing and a mistyped id
+    both read `0 queued, 0 already judged, 0 to read`, and the only part of that line that changed
+    was the id the caller passed in — so a caller comparing the two had nothing but its own input to
+    read. Both calls are made here, on one log, and the two lines are compared."""
     jobs = tmp_path / "jobs.jsonl"
     jobs.write_text(
-        '{"event":"queued","run_id":"%s","source":"linkedin","source_id":"1"}\n' % RID,
+        '{"event":"surfaced","run_id":"%s","source":"linkedin","source_id":"1"}\n'
+        '{"event":"evaluated","run_id":"%s","source":"linkedin","source_id":"1",'
+        '"relevant":"false"}\n' % (RID, RID),
         encoding="utf-8")
-    r = run_script(LIST_QUEUE, jobs, "2026-01-01T00-00-00Z")
-    assert r.returncode == 0, r.stdout + r.stderr
-    assert r.stdout == "", r.stdout
-    assert "0 queued for run 2026-01-01T00-00-00Z, 0 already judged, 0 to read" in r.stderr, r.stderr
+
+    wrong = run_script(LIST_QUEUE, jobs, "2026-01-01T00-00-00Z")
+    assert wrong.returncode == 0, wrong.stdout + wrong.stderr
+    assert wrong.stdout == "", wrong.stdout
+    assert wrong.stderr == ("list-detail-read-queue: 0 of 2 lines in %s name run "
+                            "2026-01-01T00-00-00Z — 0 queued, 0 already judged, 0 to read\n"
+                            % jobs), wrong.stderr
+
+    # The same three zeroed counts, reached with the run id that is really in the log: this run
+    # queued nothing, so there is nothing on its queue and nothing to read.
+    right = run_script(LIST_QUEUE, jobs, RID)
+    assert right.returncode == 0, right.stdout + right.stderr
+    assert right.stdout == "", right.stdout
+    assert right.stderr == ("list-detail-read-queue: 2 of 2 lines in %s name run %s — 0 queued, "
+                            "0 already judged, 0 to read\n" % (jobs, RID)), right.stderr
+
+    assert wrong.stdout == right.stdout
+    assert "0 queued, 0 already judged, 0 to read" in wrong.stderr
+    assert "0 queued, 0 already judged, 0 to read" in right.stderr
+    assert wrong.stderr != right.stderr
 
 
 # ------------------------------------------------------------------ run-counts.sh
@@ -783,12 +806,13 @@ def test_the_sixth_count_is_left_off_when_no_row_is_missing_a_band(tmp_path, she
 
 @pytest.mark.parametrize("shell", SHELLS)
 def test_the_opening_reads_as_english_when_one_line_names_the_run(tmp_path, shell):
-    """Both scripts open on the same six words and both used to read `1 of 1 lines … name run`. The
-    noun follows the total and the verb follows the count in front of it, so a log of one line reads
-    `1 of 1 line … names run` and a log of six with one line matching reads `1 of 6 lines … names
-    run`. Zero takes the plural verb, and a log of one line naming another run reads `0 of 1 line …
-    name run`. Both scripts are asserted on every log, because the two are meant to report the same
-    pair in the same words."""
+    """All three scripts open on the same six words, and the first two used to read `1 of 1 lines …
+    name run`. The noun follows the total and the verb follows the count in front of it, so a log of
+    one line reads `1 of 1 line … names run` and a log of six with one line matching reads `1 of 6
+    lines … names run`. Zero takes the plural verb, and a log of one line naming another run reads
+    `0 of 1 line … name run`. Every script is asserted on every log, because the three are meant to
+    report the same pair in the same words: a caller that ran all three on one log reads one clause,
+    not three spellings of it."""
     one = tmp_path / "one.jsonl"
     one.write_text(surfaced("only"), encoding="utf-8")
     c = run_script(COUNTS, one, RID, shell=shell)
@@ -798,6 +822,10 @@ def test_the_opening_reads_as_english_when_one_line_names_the_run(tmp_path, shel
     assert m.returncode == 0, m.stdout + m.stderr
     assert m.stderr == tally(1, 1, one, RID, 0, 0, 0, 0, 0), m.stderr
     assert "1 of 1 line in %s names run" % one in m.stderr, m.stderr
+    q = run_script(LIST_QUEUE, one, RID, shell=shell)
+    assert q.returncode == 0, q.stdout + q.stderr
+    assert q.stderr == ("list-detail-read-queue: 1 of 1 line in %s names run %s — 0 queued, "
+                        "0 already judged, 0 to read\n" % (one, RID)), q.stderr
 
     # The same one line, read for a run it does not name: the verb goes back to the plural and the
     # noun stays singular, because the noun follows the total rather than the count in front of it.
@@ -805,6 +833,8 @@ def test_the_opening_reads_as_english_when_one_line_names_the_run(tmp_path, shel
     assert "run-counts.sh: 0 of 1 line in %s name run" % one in c0.stderr, c0.stderr
     m0 = run_script(MATCHES, one, "2026-01-01T00-00-00Z", shell=shell)
     assert m0.stderr == tally(0, 1, one, "2026-01-01T00-00-00Z", 0, 0, 0, 0, 0), m0.stderr
+    q0 = run_script(LIST_QUEUE, one, "2026-01-01T00-00-00Z", shell=shell)
+    assert "list-detail-read-queue: 0 of 1 line in %s name run" % one in q0.stderr, q0.stderr
 
     # One line of six naming the run: singular verb over a plural noun.
     six = tmp_path / "six.jsonl"
@@ -816,6 +846,15 @@ def test_the_opening_reads_as_english_when_one_line_names_the_run(tmp_path, shel
     m6 = run_script(MATCHES, six, RID, shell=shell)
     assert m6.stderr == tally(1, 6, six, RID, 0, 0, 0, 0, 0), m6.stderr
     assert "1 of 6 lines in %s names run" % six in m6.stderr, m6.stderr
+    q6 = run_script(LIST_QUEUE, six, RID, shell=shell)
+    assert "1 of 6 lines in %s names run" % six in q6.stderr, q6.stderr
+
+    # The clause itself, taken off each of the three lines and compared, so a later edit to any one
+    # of them that rewords it — a different preposition, a dropped `in <log>`, a comma — is caught
+    # here rather than leaving three scripts saying one fact three ways.
+    clause = "1 of 6 lines in %s names run %s" % (six, RID)
+    for r in (c6, m6, q6):
+        assert clause in r.stderr, r.stderr
 
 
 # ------------------------------------------------------------------ posting-counts.sh
@@ -847,20 +886,22 @@ JUDGED_STDOUT = "relevant=2\nto_confirm=1\nfiltered=3\n"
 NO_JUDGMENT_STDOUT = "relevant=0\nto_confirm=0\nfiltered=0\n"
 
 
-def read_line(lines_read, judged, aliased):
+def read_line(named, lines_read, judged, aliased):
     """The stderr line `posting-counts.sh` writes.
 
-    The three counts on it are the lines the script read, the postings carrying a judgment, and the
-    postings among those whose judgment names another one. `relevant` plus `filtered` plus the third
-    count equals the second, which is why the third is there. `to_confirm` is not one of the terms in
-    that sum, because it counts within `relevant`.
+    The four counts on it are the lines that name an event, the lines the script read in all, the
+    postings carrying a judgment, and the postings among those whose judgment names another one.
+    `relevant` plus `filtered` plus the last count equals the third, which is why that one is there.
+    `to_confirm` is not one of the terms in that sum, because it counts within `relevant`.
 
-    Each count carries its noun, and the noun and its verb are singular at one, which is what
-    `test_the_counts_read_as_english_when_each_of_them_is_one` holds.
+    The opening pair is what separates a file of lines that are not JSON from a log full of events,
+    which `test_posting_counts_separates_an_empty_log_from_one_it_could_not_parse` holds. Each count
+    carries its noun, the noun follows the total and the verb follows the count in front of it, which
+    is what `test_the_counts_read_as_english_when_each_of_them_is_one` holds.
     """
-    return ("posting-counts.sh: %d %s read, %d %s a judgment, %d of those %s the same opening as "
-            "another posting, counted under neither relevant nor filtered\n"
-            % (lines_read, "line" if lines_read == 1 else "lines",
+    return ("posting-counts.sh: %d of %d line%s name%s an event, %d %s a judgment, %d of those %s "
+            "the same opening as another posting, counted under neither relevant nor filtered\n"
+            % (named, lines_read, "" if lines_read == 1 else "s", "s" if named == 1 else "",
                judged, "posting carries" if judged == 1 else "postings carry",
                aliased, "is" if aliased == 1 else "are"))
 
@@ -872,36 +913,53 @@ def test_posting_counts_separates_an_empty_log_from_one_it_could_not_parse(tmp_p
     existed: 200 lines of `not json at all <n>` gave stdout `relevant=0 to_confirm=0 filtered=0`, 0
     bytes on stderr and exit 0, byte for byte what an empty file gave. `skills/job-search/SKILL.md`
     tells the agent to run this script rather than read the log itself — `grep -n 'reading that log
-    yourself' skills/job-search/SKILL.md` — so those three keys were the whole of what it had."""
+    yourself' skills/job-search/SKILL.md` — so those three keys were the whole of what it had.
+
+    The third file here is the one the line count alone could not separate from the junk: 200
+    `surfaced` events also carry no judgment, so with the total as the only opening number the two
+    printed the same line, byte for byte. The count of lines that name an event is what separates
+    them."""
     junk = tmp_path / "junk.jsonl"
     junk.write_text("".join("not json at all %d\n" % i for i in range(200)), encoding="utf-8")
     r = run_script(POSTINGS, junk, shell=shell)
     assert r.returncode == 0, r.stdout + r.stderr
     assert r.stdout == NO_JUDGMENT_STDOUT, r.stdout
-    assert r.stderr == read_line(200, 0, 0), r.stderr
+    assert r.stderr == read_line(0, 200, 0, 0), r.stderr
 
     empty = tmp_path / "empty.jsonl"
     empty.write_text("", encoding="utf-8")
     e = run_script(POSTINGS, empty, shell=shell)
     assert e.returncode == 0, e.stdout + e.stderr
     assert e.stdout == NO_JUDGMENT_STDOUT, e.stdout
-    assert e.stderr == read_line(0, 0, 0), e.stderr
-    # The two runs printed the same stdout, and the line is what tells them apart.
-    assert r.stdout == e.stdout
+    assert e.stderr == read_line(0, 0, 0, 0), e.stderr
+
+    events = tmp_path / "events.jsonl"
+    events.write_text("".join(
+        '{"event":"surfaced","run_id":"%s","source":"linkedin","source_id":"%d"}\n' % (RID, i)
+        for i in range(200)), encoding="utf-8")
+    s = run_script(POSTINGS, events, shell=shell)
+    assert s.returncode == 0, s.stdout + s.stderr
+    assert s.stdout == NO_JUDGMENT_STDOUT, s.stdout
+    assert s.stderr == read_line(200, 200, 0, 0), s.stderr
+
+    # All three runs printed the same stdout, and the line is what tells them apart. The last pair
+    # is the one the total alone left identical.
+    assert r.stdout == e.stdout == s.stdout
     assert r.stderr != e.stderr
+    assert r.stderr != s.stderr
 
 
 @pytest.mark.parametrize("shell", SHELLS)
 def test_posting_counts_says_how_many_postings_carry_a_judgment(tmp_path, shell):
-    """A log of five judgments reads `5 lines read, 5 postings carry a judgment`, which is the pair
-    that separates it from the log of 200 lines that are not JSON and from the empty one. stdout is
-    the same three keys it was before this line existed."""
+    """A log of five judgments reads `5 of 5 lines name an event, 5 postings carry a judgment`, which
+    is what separates it from the log of 200 lines that are not JSON and from the empty one. stdout
+    is the same three keys it was before this line existed."""
     jobs = tmp_path / "jobs.jsonl"
     jobs.write_text(JUDGED_LOG, encoding="utf-8")
     r = run_script(POSTINGS, jobs, shell=shell)
     assert r.returncode == 0, r.stdout + r.stderr
     assert r.stdout == JUDGED_STDOUT, r.stdout
-    assert r.stderr == read_line(5, 5, 0), r.stderr
+    assert r.stderr == read_line(5, 5, 5, 0), r.stderr
 
 
 @pytest.mark.parametrize("shell", SHELLS)
@@ -927,33 +985,39 @@ def test_the_counts_on_the_line_account_for_the_postings_the_three_keys_leave_ou
     r = run_script(POSTINGS, jobs, shell=shell)
     assert r.returncode == 0, r.stdout + r.stderr
     assert r.stdout == "relevant=1\nto_confirm=0\nfiltered=0\n", r.stdout
-    assert r.stderr == read_line(3, 2, 1), r.stderr
+    assert r.stderr == read_line(3, 3, 2, 1), r.stderr
 
     # The same check written as arithmetic over the numbers actually printed, so it fails on any log
     # where they stop adding up rather than only on this one. `posting-counts.sh` is the only text on
-    # the line, and it carries no digit, so the three numbers are every digit run on it. Measured
+    # the line, and it carries no digit, so the four numbers are every digit run on it. Measured
     # 2026-08-11 with `judged++` moved below the `same_role_as` test in a copy of the script: the
     # line reads `1 posting carries a judgment` and this comparison fails at 1 != 1 + 0 + 1.
-    lines_read, judged, aliased = [int(n) for n in re.findall(r"[0-9]+", r.stderr)]
+    named, lines_read, judged, aliased = [int(n) for n in re.findall(r"[0-9]+", r.stderr)]
     relevant, _, filtered = [int(l.split("=", 1)[1]) for l in r.stdout.splitlines()]
     assert judged == relevant + filtered + aliased, r.stdout + r.stderr
     assert lines_read == 3, r.stderr
+    # Every line of this log is a JSON event, so the two opening numbers are equal here.
+    assert named == lines_read, r.stderr
 
 
 @pytest.mark.parametrize("shell", SHELLS)
 def test_the_counts_read_as_english_when_each_of_them_is_one(tmp_path, shell):
     """A log of one judgment used to read `1 lines read, 1 postings carry a judgment`. The noun and
     its verb take the singular at one, and the third count is a clause with a verb of its own, so at
-    one it reads `1 of those is` and at any other number `n of those are`."""
+    one it reads `1 of those is` and at any other number `n of those are`.
+
+    The opening pair bends the way `run-counts.sh` bends the same shape: the noun follows the total
+    and the verb follows the count in front of it, so one line naming an event out of one reads
+    `1 of 1 line names an event`."""
     one = tmp_path / "one.jsonl"
     one.write_text('{"event":"evaluated","source":"linkedin","source_id":"r1","relevant":"true",'
                    '"match":"strong"}\n', encoding="utf-8")
     r = run_script(POSTINGS, one, shell=shell)
     assert r.returncode == 0, r.stdout + r.stderr
     assert r.stdout == "relevant=1\nto_confirm=0\nfiltered=0\n", r.stdout
-    assert r.stderr == ("posting-counts.sh: 1 line read, 1 posting carries a judgment, 0 of those "
-                        "are the same opening as another posting, counted under neither relevant "
-                        "nor filtered\n"), r.stderr
+    assert r.stderr == ("posting-counts.sh: 1 of 1 line names an event, 1 posting carries a "
+                        "judgment, 0 of those are the same opening as another posting, counted "
+                        "under neither relevant nor filtered\n"), r.stderr
 
     # The third count at one, which is the only place `is` appears.
     aliased = tmp_path / "aliased.jsonl"
@@ -965,6 +1029,14 @@ def test_the_counts_read_as_english_when_each_of_them_is_one(tmp_path, shell):
     a = run_script(POSTINGS, aliased, shell=shell)
     assert a.returncode == 0, a.stdout + a.stderr
     assert "2 postings carry a judgment, 1 of those is the same opening" in a.stderr, a.stderr
+
+    # Zero takes the plural verb over a singular total, which is the pairing the two ternaries in
+    # the printf have to get independently right.
+    none = tmp_path / "none.jsonl"
+    none.write_text("not json at all\n", encoding="utf-8")
+    z = run_script(POSTINGS, none, shell=shell)
+    assert z.returncode == 0, z.stdout + z.stderr
+    assert z.stderr.startswith("posting-counts.sh: 0 of 1 line name an event,"), z.stderr
 
 
 # ------------------------------------------------------------------ workspace-discovery.sh
@@ -1011,6 +1083,15 @@ def no_registry_line(reg):
     """The line for a path holding no registry file. This is the one state a caller no longer has to
     establish for itself: with no file there, there is nothing to parse-check."""
     return "workspace-discovery.sh: no registry file at %s — nothing to parse-check\n" % reg
+
+
+def unseen_registry_line(reg, directory):
+    """The line for a path the script cannot look at, because a directory on the way to it cannot be
+    searched. `[ -f ]` is false here for the same reason it is false when no file is there, so
+    without this line the script reported no registry file at a path that had one."""
+    return ("workspace-discovery.sh: cannot tell whether a registry file is at %s — the directory %s"
+            " cannot be searched, so nothing there was read and no file there was ruled out\n"
+            % (reg, directory))
 
 
 def keys(workspace, source, first_run):
@@ -1073,6 +1154,57 @@ def test_discovery_says_which_of_the_four_registry_states_it_found(tmp_path, she
     assert missing.stdout == empty.stdout == unparsed.stdout == number.stdout
     assert missing.stderr != empty.stderr
     assert empty.stderr == unparsed.stderr == number.stderr
+
+
+@pytest.mark.skipif(os.geteuid() == 0, reason="root searches a directory whatever its mode is")
+@pytest.mark.parametrize("shell", SHELLS)
+def test_discovery_separates_a_registry_it_cannot_look_at_from_none_being_there(tmp_path, shell):
+    """A registry sitting in a directory that cannot be searched read as no registry file at all.
+    `[ -f "$REG" ]` is false in both situations, and the line under it stated the one that is checked
+    less often: measured 2026-08-11 with the holding directory at mode 000 and a registry inside it,
+    the script printed `no registry file at <path> — nothing to parse-check`, both clauses of it
+    false. `skills/job-search-runbook/SKILL.md` stops the run on a registry it cannot read, and a
+    caller told the file is not there has nothing left to stop on.
+
+    The second call puts the unsearchable directory one level higher, because a directory two levels
+    up hides the holding directory exactly as it hides the file, and the walk in the script has to
+    reach it.
+    """
+    home = tmp_path / "h"
+    (home / ".job-search").mkdir(parents=True)
+    reg = registry_path(home)
+    reg.parent.mkdir(parents=True)
+    reg.write_text('{"active_workspace": "%s"}' % (home / "chosen"), encoding="utf-8")
+    env = discovery_env(home)
+    three_keys = keys(home / ".job-search", "none", "true")
+
+    reg.parent.chmod(0o000)
+    try:
+        blocked = run_script(DISCOVERY, shell=shell, env=env)
+    finally:
+        reg.parent.chmod(0o755)
+    assert blocked.returncode == 0, blocked.stdout + blocked.stderr
+    assert blocked.stderr == unseen_registry_line(reg, reg.parent), blocked.stderr
+    # The three keys are what they were, so the line is the whole of what separates this state.
+    assert blocked.stdout == three_keys, blocked.stdout
+
+    reg.parent.parent.chmod(0o000)
+    try:
+        higher = run_script(DISCOVERY, shell=shell, env=env)
+    finally:
+        reg.parent.parent.chmod(0o755)
+    assert higher.returncode == 0, higher.stdout + higher.stderr
+    assert higher.stderr == unseen_registry_line(reg, reg.parent.parent), higher.stderr
+    assert higher.stdout == three_keys, higher.stdout
+
+    # The same path with the file really gone, which is the state the old line described. The two
+    # read differently now, and only this one says there is nothing to parse-check.
+    reg.unlink()
+    gone = run_script(DISCOVERY, shell=shell, env=env)
+    assert gone.returncode == 0, gone.stdout + gone.stderr
+    assert gone.stderr == no_registry_line(reg), gone.stderr
+    assert gone.stdout == three_keys, gone.stdout
+    assert blocked.stderr != gone.stderr
 
 
 @pytest.mark.parametrize("shell", SHELLS)
@@ -1584,7 +1716,7 @@ def test_a_refused_event_still_says_only_what_it_refused(tmp_path):
 # because the pack does not work them out from the filename either. Measured 2026-08-11 with
 # `python3 -c "import sys; sys.path.insert(0, 'tests'); import test_script_diagnostics as t; p =
 # {v[0] for v in t.BRANCH_STDERR.values()}; print(len(t.BRANCH_STDERR), len(p), sum('.sh' in x for x
-# in p))"`: 19 branches, 12 distinct prefixes, 8 of them carrying `.sh`.
+# in p))"`: 20 branches, 12 distinct prefixes, 8 of them carrying `.sh`.
 #
 # `dedup.sh` writes under two prefixes, one per mode, because a caller reading a stderr stream both
 # modes wrote to has to be able to tell which one spoke. `--near` is selected by its flag and names
@@ -1616,6 +1748,7 @@ BRANCH_STDERR = {
     "workspace-discovery.sh (the registry names a workspace)":  ("workspace-discovery.sh: ", 1),
     "workspace-discovery.sh (the registry names none)":         ("workspace-discovery.sh: ", 1),
     "workspace-discovery.sh (no registry file)":                ("workspace-discovery.sh: ", 1),
+    "workspace-discovery.sh (the registry cannot be looked at)": ("workspace-discovery.sh: ", 1),
 }
 
 
@@ -1633,7 +1766,7 @@ def success_calls(tmp_path, workspace):
     is where the flag is checked.
 
     Each value is a function rather than a finished `CompletedProcess`, so the fixture below can
-    build all nineteen and run the one its parameter names.
+    build all twenty and run the one its parameter names.
     """
     def queue_detail_read():
         jobs = tmp_path / "queued.jsonl"
@@ -1783,6 +1916,25 @@ def success_calls(tmp_path, workspace):
         reg.write_text('{"active_workspace": ""}', encoding="utf-8")
         return run_script(DISCOVERY, env=discovery_env(home))
 
+    def workspace_discovery_registry_out_of_reach():
+        # A registry file whose holding directory cannot be searched, which is the call in
+        # `test_discovery_separates_a_registry_it_cannot_look_at_from_none_being_there`. Like the
+        # branch above it, this one writes its line and falls through to the default config, so the
+        # call exits 0 there. Run as root the mode is ignored and the call takes the no-registry-file
+        # branch instead, which writes one line under the same prefix, so this case reads the same
+        # either way and needs no skip of its own.
+        home = tmp_path / "discovery-unreachable-home"
+        (home / ".job-search").mkdir(parents=True)
+        (home / ".job-search" / "config.yaml").write_text("version: 1\n", encoding="utf-8")
+        reg = registry_path(home)
+        reg.parent.mkdir(parents=True)
+        reg.write_text('{"active_workspace": ""}', encoding="utf-8")
+        reg.parent.chmod(0o000)
+        try:
+            return run_script(DISCOVERY, env=discovery_env(home))
+        finally:
+            reg.parent.chmod(0o755)
+
     def validate_workspace():
         return run_validator(workspace)
 
@@ -1823,6 +1975,8 @@ def success_calls(tmp_path, workspace):
             workspace_discovery_registry_names_a_workspace,
         "workspace-discovery.sh (the registry names none)": workspace_discovery_registry_names_none,
         "workspace-discovery.sh (no registry file)": workspace_discovery_no_registry,
+        "workspace-discovery.sh (the registry cannot be looked at)":
+            workspace_discovery_registry_out_of_reach,
     }
     # The fixture takes its parameters from `BRANCH_STDERR`, so a branch listed here and not there
     # would be built and never run. This assertion fails instead.

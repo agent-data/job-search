@@ -24,8 +24,9 @@ first_run=false
 
 It writes one more line to stderr, naming the registry path and saying what it found there, so a
 terminal or a tool result that merges the two streams shows four lines. That line says whether there
-is a file at that path at all, and whether a non-empty `active_workspace` string came out of it.
-Read it together with the parse-check rule at the end of this section.
+is a file at that path at all — or that it could not tell — and whether a non-empty
+`active_workspace` string came out of it. Read it together with the parse-check rule at the end of
+this section.
 
 `first_run=true` means that path has no `config.yaml` yet and setup creates it. `source=legacy` means
 the workspace sits at the older visible path: keep using it, and record it in the registry as
@@ -49,7 +50,10 @@ First match decides:
 A registry file that exists but does not parse as JSON stops the run: report that the file at that
 path cannot be read, rather than picking a workspace it might not name. The script reads the file
 with `grep`, so its stderr line tells you whether there is a file at that path but never whether
-that file is JSON — parse-check it yourself.
+that file is JSON — parse-check it yourself. A registry the script could not look at stops the run
+the same way: its line says a directory on the way to that path cannot be searched, so nothing there
+was read and no file there was ruled out, and the workspace on stdout came from the rules below
+rather than from the registry.
 
 ## What each file holds
 
@@ -91,7 +95,9 @@ that file is JSON — parse-check it yourself.
    `skills/job-search-runbook/scripts/clear-run.sh <workspace> <run_id>`, which deletes the marker
    and the scratch directory. Then
    `skills/job-search-runbook/scripts/validate-workspace.sh <workspace> --post-close <run_id>`,
-   fixing whatever it prints.
+   fixing whatever it prints on stdout. A close with nothing wrong prints nothing there and writes
+   one line to stderr — `checked <workspace> and run <run_id> — no broken rule found` — which is
+   the answer, not a finding to act on.
 
 The digest is written between the record and the clearing because it carries `run_health` off the
 record and may still need the responses in the scratch directory.

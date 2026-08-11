@@ -8,6 +8,9 @@
 #
 # Prints one line, run_health=healthy or run_health=degraded, which the digest's header carries.
 #
+# Its stderr carries one line written by run-counts.sh, as well as any this script writes itself.
+# That line is let through on purpose; the reason is at the call that produces it.
+#
 # Every count comes from run-counts.sh and completed_at from a clock read here, so no number in the
 # record is anyone's account of the run. run_health is worked out the same way: healthy means the
 # run closed complete, left no posting unjudged, had every search it attempted answer at least once,
@@ -181,6 +184,20 @@ jobs=$ws/jobs.jsonl
 # stuck open: run-counts.sh exits 2 on a log that is not there.
 [ -f "$jobs" ] || : > "$jobs"
 
+# This call captures run-counts.sh's stdout and lets its stderr through to whoever ran close-run,
+# so a close prints a `run-counts.sh:` line as well as close-run's own. That is deliberate. The line
+# says how many lines of the log name this run, and every count in the record comes from this call:
+# a run id no line of the log names produces a record of zeroes that this script writes and exits 0
+# on, because the unjudged-posting refusal below counts zero unjudged postings too. Nothing else in
+# a close separates that from a run that really did record nothing. The line names the script that
+# wrote it, so a reader can see which one spoke.
+#
+# The pack's two other answers to a nested script's line do not fit here. validate-workspace.sh
+# discards this same script's stderr with 2>/dev/null, because it reports its own findings in its
+# own words and this line adds nothing to them. open-run.sh passes validate-workspace.sh
+# --quiet-when-clean, because a test there pins its stderr at one line and a second line would read
+# as a command that could not be found. close-run has no finding that carries this fact, and no test
+# pins its stderr: `grep -rn "closed\.stderr ==" tests/` returns nothing, measured 2026-08-11.
 counts=$(sh "$runscripts/run-counts.sh" "$jobs" "$run_id")
 counts_status=$?
 

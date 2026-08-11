@@ -127,9 +127,14 @@ of `preferences.md` (`created_at` where that is the only one), and the newest `r
 and the digest it points at. For the match counts, run this skill's
 `scripts/posting-counts.sh <workspace>/jobs.jsonl` rather than reading that log yourself: it prints
 `relevant`, `to_confirm` and `filtered` on stdout, one `key=value` per line, and writes one line to
-stderr saying how many lines it read and how many postings carry a judgment. Three zeroed counts
-over `0 lines read` is an empty log; over a line count above zero, nothing in the file was read as a
-judgment. The log only grows — every run appends to it and nothing shortens it. Exit 2 means there
+stderr saying how many of the lines it read name an event, out of how many lines in all, how many
+postings carry a judgment, and how many of those are the same opening as another posting. Read the
+judgment count, not the line count, before saying the search has found nothing: three zeroed counts
+over `0 postings carry a judgment` mean nothing in the log has been judged yet, and the same three
+over a judgment count above zero mean every posting judged is the same opening as another one —
+which the third count reports and the three keys leave out. `0 of 0 lines name an event` is an empty
+log, and a line count above zero with none of those lines naming an event is a file that is not this
+event log. The log only grows — every run appends to it and nothing shortens it. Exit 2 means there
 is no file at that path: no counts were printed, and stderr names the path. Leave the Matches block
 off the card and say the workspace holds no event log yet. Then render the card:
 

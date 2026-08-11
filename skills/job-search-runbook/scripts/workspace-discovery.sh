@@ -16,17 +16,18 @@
 #                                          source=<registry|default|legacy|none>
 #                                          first_run=<true|false>
 #
-# and one line on stderr saying what it found at the registry path. Four states fall past the
+# and one line on stderr saying what it found at the registry path. Five states fall past the
 # registry step, and the three keys above say nothing about which one happened: a registry holding an
 # empty active_workspace, one whose active_workspace is not a string at all, a registry that is not
-# JSON at all, and no registry file. Measured 2026-08-11 on one HOME with the file rewritten between
-# calls, all four printed the same three keys on stdout and exited 0, so the stderr line is the only
+# JSON at all, no registry file, and a path this script cannot look at because a directory on the way
+# to it cannot be searched. Measured 2026-08-11 on one HOME with the file rewritten between calls,
+# all of them printed the same three keys on stdout and exited 0, so the stderr line is the only
 # part of the answer that separates them. This skill's SKILL.md §"Find the workspace" requires the
 # caller to stop the run on the registry that is not JSON, and this script does not parse JSON: the
 # `grep` below reads the first three the same way, so those three share one stderr line, which says
-# what the grep did establish — that the file holds no non-empty active_workspace string. The state
-# the line does separate out is no registry file at that path, where the caller has nothing to
-# parse-check.
+# what the grep did establish — that the file holds no non-empty active_workspace string. The last
+# two get a line each: one says there is no file to parse-check, the other says the script could not
+# read a file there and could not rule one out, which SKILL.md stops the run on.
 set -u
 
 REG="${JOBSEARCH_OS_REGISTRY:-${XDG_CONFIG_HOME:-${JOBSEARCH_OS_HOME:-$HOME}/.config}/job-search/config.json}"
@@ -63,7 +64,26 @@ if [ -f "$REG" ]; then
       "$REG" >&2
   fi
 else
-  printf 'workspace-discovery.sh: no registry file at %s — nothing to parse-check\n' "$REG" >&2
+  # `[ -f "$REG" ]` comes back false in two situations, and only one of them means no registry file
+  # is there. It is false just the same when a directory on the way to that path cannot be searched,
+  # where a registry file may be present and this script cannot read it. Measured 2026-08-11 with
+  # the holding directory at mode 000 and a registry inside it: the test was false and this branch
+  # reported no registry file at a path that had one. SKILL.md §"Find the workspace" stops the run
+  # on a registry it cannot read, and a caller told there is no file there has nothing to stop on.
+  #
+  # The walk goes up to the nearest ancestor that can be seen at all, rather than testing the
+  # holding directory alone: a directory two levels up that cannot be searched hides that directory
+  # exactly as it hides the file. Each step drops one component, and the loop stops at `/` or `.`.
+  probe=$(dirname "$REG")
+  while [ ! -e "$probe" ] && [ "$probe" != "/" ] && [ "$probe" != "." ]; do
+    probe=$(dirname "$probe")
+  done
+  if [ -d "$probe" ] && [ ! -x "$probe" ]; then
+    printf 'workspace-discovery.sh: cannot tell whether a registry file is at %s — the directory %s cannot be searched, so nothing there was read and no file there was ruled out\n' \
+      "$REG" "$probe" >&2
+  else
+    printf 'workspace-discovery.sh: no registry file at %s — nothing to parse-check\n' "$REG" >&2
+  fi
 fi
 
 # 2) Default hidden workspace has a config.

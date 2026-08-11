@@ -23,13 +23,17 @@ first:
    brief revision. From here on, a failure closes as a `blocked` run.
 3. Run `agent-data whoami`. When `api_key_set` comes back false, close blocked: the API key is
    missing, and `agent-data init` from `agent-data-reference`'s CLI table is the fix.
-4. Run the plugin's `skills/job-search-runbook/scripts/validate-workspace.sh <workspace>`. It
-   answers in one of two ways. A single line reading `checked <workspace> — no broken rule found`
-   means the config and the brief are both usable. Read the path in that line and confirm it is the
-   workspace you meant to check, because every valid workspace passes this check the same way, so
-   the path is the only part of the answer that tells you which one was read. One line per problem
-   instead, each naming one file and one broken rule, means the workspace is not usable: close
-   blocked and report those problems to the user in plain language.
+4. Run the plugin's `skills/job-search-runbook/scripts/validate-workspace.sh <workspace>`, and keep
+   both streams: one of its three answers arrives on stdout and the other two on stderr, so a call
+   that captured stdout alone would read a clean workspace as silence. A single line on stderr
+   reading `checked <workspace> — no broken rule found`, at exit 0, means the config and the brief
+   are both usable. Read the path in that line and confirm it is the workspace you meant to check,
+   because every valid workspace passes this check the same way, so the path is the only part of the
+   answer that tells you which one was read. One line per problem on stdout instead, each naming one
+   file and one broken rule, at exit 1, means the workspace is not usable: close blocked and report
+   those problems to the user in plain language. Exit 2 with a message on stderr means the command
+   was wrong rather than the workspace — a path that is no workspace, or a flag the script does not
+   take — so fix the command and run it again.
 5. Say what this run opens with, in the shape `agent-data-reference`'s cost recipe gives, before
    searching.
 
@@ -93,7 +97,11 @@ the posting and writes it into its reasoning.
 
 The read list is this skill's `scripts/list-detail-read-queue.sh <workspace>/jobs.jsonl <run_id>`,
 which prints one tab-separated line per posting this run queued and has not judged yet: `source`,
-`source_id`, `posting_id_at_seen`, `source_url`, `title`, `company_name`. Where your host has
+`source_id`, `posting_id_at_seen`, `source_url`, `title`, `company_name`. It writes one line to
+stderr as well: how many lines of the log name this run, then how many postings the run queued, how
+many of those already carry a judgment, and how many are left to read. Read that line every time no
+row comes back, because a queue worked all the way off and a mistyped run id both print nothing —
+`0 of <n> lines … name run` is the mistyped id. Where your host has
 subagents, dispatch one per posting, in parallel: each posting is judged in its own fresh context,
 leaving this session's for coordinating the run. Where your host has none, work the list in order.
 Both paths run on the host's own model.
@@ -140,8 +148,13 @@ which prints one `key=value` per line; the postings come from
 `scripts/run-matches.sh <workspace>/jobs.jsonl <run_id>`, which prints one tab-separated line per
 posting this run judged — band, source, source_id, title, company_name, location_display,
 source_url, needs_human_check, posted_at, reasoning, also_posted — strong first, then moderate,
-weak, and the ones judged not relevant. Render each section from the lines carrying its band, so a
-heading that says three strong is followed by the three lines whose band is strong.
+weak, and the ones judged not relevant. Both write one line to stderr as well, opening with how many
+lines of the log name this run: `0 of <n> lines … name run` means the run id is wrong, and every
+number below it would be a zero copied into the digest. `run-matches.sh` carries its per-band tally
+on that line — strong, moderate, weak, filtered, and the postings that are the same opening as
+another and got no row. Render each section from the lines carrying its band and take how many it
+holds from that tally rather than counting the rows yourself, so a heading that says three strong is
+followed by the three lines whose band is strong.
 
 An opening the run found in more than one place counts once and is listed once. The postings whose
 judgment named another in `--same-role-as` are counted under `duplicates_of_another` and in no band,
@@ -198,7 +211,9 @@ further than the freshness window.
 Close is the runbook's step 4, in the order it gives: `close-run.sh`, then this digest, then
 `clear-run.sh`, then the plugin's
 `skills/job-search-runbook/scripts/validate-workspace.sh <workspace> --post-close <run_id>`, fixing
-whatever it prints. Three values on the `close-run.sh` command line are yours to decide and nothing
+whatever it prints on stdout. A close with nothing wrong prints nothing there and writes one line to
+stderr — `checked <workspace> and run <run_id> — no broken rule found` — which is the answer, not
+a finding to act on. Three values on the `close-run.sh` command line are yours to decide and nothing
 else in the record is. `--trigger` is `manual` for a run the user asked for and `scheduled` for one
 a scheduler started, including the verification run after a schedule change; `--scheduler-id` names
 that job; `--close-state` is the runbook's `complete`, `blocked` or `interrupted`.

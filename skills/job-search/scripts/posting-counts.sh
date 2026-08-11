@@ -31,11 +31,13 @@
 # close-run.sh carries the same paragraph about its own walk to run-counts.sh — `grep -n 'ships as
 # one directory' skills/job-search-runbook/scripts/close-run.sh`; change the two together.
 #
-# It also writes one line to stderr: how many lines it read, how many postings carry a judgment, and
-# how many of those are the same opening as another posting. `relevant` plus `filtered` plus that
-# third count equals the second, so the line accounts for the postings the three keys leave out. All
-# three keys print as 0 for a log holding no judgment, for an empty log and for a file of lines that
-# are not JSON at all, and the line is what tells those apart.
+# It also writes one line to stderr: how many of the lines it read name an event, out of how many
+# lines in all, how many postings carry a judgment, and how many of those are the same opening as
+# another posting. `relevant` plus `filtered` plus that last count equals the postings carrying a
+# judgment, so the line accounts for the postings the three keys leave out. All three keys print as 0
+# for a log holding no judgment, for an empty log and for a file of lines that are not JSON at all,
+# and the opening pair tells those three apart: an empty log has no lines to read, a file that is not
+# JSON has lines and none of them names an event, and a log holding no judgment has lines that do.
 #
 # Exit 0: the three counts printed. Exit 2: no counts printed — no log at that path, named on
 # stderr. Any other status is awk failing partway, which leaves part of the key set on stdout: read
