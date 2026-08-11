@@ -1468,7 +1468,7 @@ def test_a_body_carrying_neither_data_query_nor_data_results_nor_data_source_id_
     # A refused body brought no rows in. Only a search adds rows_new to rows_new_total
     # (`run-counts.awk:41`, inside the `route == "search-jobs"` block), and this event kept that
     # route, so a non-zero value here would push rows_new_total above postings_surfaced and trip the
-    # `surfaced-does-not-match-rows-new` check at `validate-workspace.sh:484`.
+    # `surfaced-does-not-match-rows-new` check at `validate-workspace.sh:490`.
     assert ev["rows_new"] == 0
     _, c = counts(jobs)
     assert c["searches_never_succeeded"] == "1"
