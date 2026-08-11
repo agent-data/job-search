@@ -57,6 +57,12 @@ mkdir -p "$ws/runs" || exit 2
 # Measured on the 2026-08-11 opencode run, where a subagent that could not find a run id called
 # this script, minted 2026-08-11T16-15-54Z while .started-2026-08-11T16-06-16Z was on disk, and
 # wrote 29 events plus a second copy of 25 surfaced rows under the new id.
+#
+# The message names a close state because closing is not optional here: clear-run.sh refuses a run
+# with no record — `grep -n 'close the run before clearing it'
+# skills/job-search-runbook/scripts/clear-run.sh` — so the marker comes off only after close-run.sh
+# has written one. interrupted is the one of the three states close-run.sh takes that fits a run
+# that stopped part-way; the other two are complete and blocked, at close-run.sh:95.
 open_marker=''
 for m in "$ws"/runs/.started-*; do
   [ -e "$m" ] || continue
@@ -64,7 +70,7 @@ for m in "$ws"/runs/.started-*; do
   break
 done
 [ -z "$open_marker" ] || {
-  printf 'open-run.sh: run %s is already open in %s — close it with close-run.sh and clear it with clear-run.sh before opening another\n' \
+  printf 'open-run.sh: run %s is already open in %s — close it with close-run.sh, using --close-state interrupted if it stopped without finishing, then clear it with clear-run.sh before opening another\n' \
     "$open_marker" "$ws" >&2
   exit 2
 }

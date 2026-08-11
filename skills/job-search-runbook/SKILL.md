@@ -79,12 +79,19 @@ rather than from the registry.
    printed — and something is wrong that this run cannot fix: read stdout after the three lines for
    the findings about the workspace files, and stderr for the case where the brief's revision could
    not be taken. Report whichever you got in plain language and close the run `blocked`. Exit 2
-   means the run did not open and nothing was written, and stderr says which of four things
+   means the run did not open and nothing was written, and stderr says which of five things
    happened: there is no such workspace; there is no `config.yaml`, which is the one that means
-   setup has not run; `runs/` could not be made or the marker could not be written into it; or this
-   `run_id` is already taken because another run opened in the same second. That marker belongs to
-   the run that just opened, not to a run that stopped — leave it alone, do not go back to step 1
-   and delete it, and run `skills/job-search-runbook/scripts/open-run.sh` again a second later.
+   setup has not run; `runs/` could not be made or the marker could not be written into it; another
+   run is already open in this workspace; or this `run_id` is already taken because another run
+   opened in the same second. The last two both name a marker and they take opposite handling. A
+   taken `run_id` means the marker belongs to the run that just opened, not to a run that stopped —
+   leave it alone, do not go back to step 1 and delete it, and run
+   `skills/job-search-runbook/scripts/open-run.sh` again a second later. A run already open means an
+   earlier run's marker is still in `runs/`, so opening again gives the same refusal every time.
+   Close that run with `skills/job-search-runbook/scripts/close-run.sh`, passing
+   `--close-state interrupted` if it stopped without finishing, clear it with
+   `skills/job-search-runbook/scripts/clear-run.sh`, then open this one. Both take the run id
+   stderr names, and the clear refuses a run with no record, so the close has to come first.
 3. **Do the run's work**, recording events as you go.
 4. **Close, in this order.** First
    `skills/job-search-runbook/scripts/close-run.sh <workspace> <run_id> --trigger … --close-state …`,
