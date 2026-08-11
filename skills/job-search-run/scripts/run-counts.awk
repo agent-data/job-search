@@ -17,7 +17,7 @@
 
 {
   ev = jval($0, "event")
-  if (jval($0, "run_id") != want) next
+  if (jval($0, "run_id") != want) { notmine++; next }  # only the stderr line in END reads notmine
   k = jval($0, "source") SUBSEP jval($0, "source_id")
 
   if (ev == "call") {
@@ -35,7 +35,7 @@
       if (ok == "true") answered[g] = 1
       # Only a search brings new rows in, which is what keeps rows_new_total equal to
       # postings_surfaced. A stored posting body writes a call event carrying rows_new 1
-      # (record-api-response.sh:227), so adding rows_new from every route would put rows_new_total
+      # (record-api-response.sh:354), so adding rows_new from every route would put rows_new_total
       # one above postings_surfaced for each posting read in full. An absent, null or non-numeric
       # rows_new adds 0.
       rowsnew += jval($0, "rows_new")
@@ -113,6 +113,17 @@ END {
   printf "searches_never_succeeded=%d\n", lost+0
   printf "searches_never_succeeded_ids=%s\n", lostids
   printf "rows_new_total=%d\n",       rowsnew+0
+  # Every key above prints whether or not the run id matched anything, so a run that did nothing and
+  # a run id no event in the log carries print the same zeroed lines: 332 bytes, measured 2026-08-11
+  # with `run-counts.sh <log> <a-run-id-the-log-does-not-carry> | wc -c`. This line says which of
+  # the two happened. NR is every line read and notmine is the lines the run_id guard turned away,
+  # so the difference is the lines that name this run. `| "cat 1>&2"` is how an awk program in this
+  # pack writes to stderr — json-scan.awk:51-52 is the precedent — and the close() is what flushes
+  # it. It is written before the unbanded check below, which exits 1, so a caller that got exit 1
+  # has the line as well.
+  printf "run-counts.sh: %d of %d lines in %s name run %s\n", \
+    NR - notmine, NR, FILENAME, want | "cat 1>&2"
+  close("cat 1>&2")
   if (unbanded > 0) {
     printf "INVALID relevant-row-without-a-band=%d\n", unbanded
     exit 1

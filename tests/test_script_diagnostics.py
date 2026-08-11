@@ -29,6 +29,7 @@ QUEUE = RUN_SCRIPTS / "queue-detail-read.sh"
 JUDGE = RUN_SCRIPTS / "record-judgment.sh"
 DEDUP = RUN_SCRIPTS / "dedup.sh"
 LIST_QUEUE = RUN_SCRIPTS / "list-detail-read-queue.sh"
+COUNTS = RUN_SCRIPTS / "run-counts.sh"
 
 RID = "2026-08-05T16-47-00Z"
 
@@ -202,8 +203,10 @@ def test_near_stdout_is_unchanged_by_the_new_stderr(shell):
 # ------------------------------------------------------------------ list-detail-read-queue.sh
 
 def test_the_read_queue_says_how_much_of_it_is_worked_off(tmp_path):
-    """No rows is the ordinary case at the end of a run and also what a mistyped run id gives, and
-    from outside the two were the same: nothing on stdout, nothing on stderr, exit 0."""
+    """Two postings are queued here and one of them is judged, so one row comes back. That row was
+    the whole answer: it did not say how many postings the run queued or how many of them were
+    already judged, so a caller could not tell a queue most of the way worked off from a queue with
+    one posting in it."""
     jobs = tmp_path / "jobs.jsonl"
     jobs.write_text("".join([
         '{"event":"surfaced","run_id":"%s","source":"linkedin","source_id":"1",'
@@ -237,3 +240,131 @@ def test_a_run_id_that_names_no_event_is_not_the_same_as_an_empty_queue(tmp_path
     assert r.returncode == 0, r.stdout + r.stderr
     assert r.stdout == "", r.stdout
     assert "0 queued for run 2026-01-01T00-00-00Z, 0 already judged, 0 to read" in r.stderr, r.stderr
+
+
+# ------------------------------------------------------------------ run-counts.sh
+
+# Six lines, five of them naming RID: one answered search that brought in two rows, the two postings
+# it surfaced, one detail read, and one judgment. The sixth line names another run, so a run_id
+# guard that stopped filtering would print `6 of 6`.
+WORKED_LOG = "".join([
+    '{"event":"call","run_id":"%s","route":"search-jobs","ok":"true","source":"linkedin",'
+    '"query_id":"q1","rows_new":2}\n' % RID,
+    '{"event":"surfaced","run_id":"%s","source":"linkedin","source_id":"1"}\n' % RID,
+    '{"event":"surfaced","run_id":"%s","source":"linkedin","source_id":"2"}\n' % RID,
+    '{"event":"detail","run_id":"%s","source":"linkedin","source_id":"1"}\n' % RID,
+    '{"event":"evaluated","run_id":"%s","source":"linkedin","source_id":"1","relevant":"true",'
+    '"match":"strong"}\n' % RID,
+    '{"event":"surfaced","run_id":"other","source":"ashby","source_id":"9"}\n',
+])
+
+# What the run above prints on stdout, byte for byte. Pinned as the whole block rather than as a
+# count of lines or a set of substrings: every key is here in its printed order, so a renamed key, a
+# reordered pair, a dropped key or a changed number fails this comparison.
+WORKED_STDOUT = (
+    "postings_surfaced=2\n"
+    "postings_reviewed=1\n"
+    "postings_unreviewed=1\n"
+    "postings_detail_read=1\n"
+    "match_strong=1\n"
+    "match_moderate=0\n"
+    "match_weak=0\n"
+    "filtered_out=0\n"
+    "duplicates_of_another=0\n"
+    "by_source_linkedin=2\n"
+    "calls_searches=1\n"
+    "calls_detail_reads=0\n"
+    "calls_other=0\n"
+    "calls_total_metered=1\n"
+    "calls_failed=0\n"
+    "searches_never_succeeded=0\n"
+    "searches_never_succeeded_ids=\n"
+    "rows_new_total=2\n"
+)
+
+# The same keys with every number zeroed, which is what a run id no event carries prints: 332 bytes
+# over 17 lines. The one key missing is `by_source_linkedin` — no posting surfaced, so no source is
+# named.
+ZEROED_STDOUT = (
+    "postings_surfaced=0\n"
+    "postings_reviewed=0\n"
+    "postings_unreviewed=0\n"
+    "postings_detail_read=0\n"
+    "match_strong=0\n"
+    "match_moderate=0\n"
+    "match_weak=0\n"
+    "filtered_out=0\n"
+    "duplicates_of_another=0\n"
+    "calls_searches=0\n"
+    "calls_detail_reads=0\n"
+    "calls_other=0\n"
+    "calls_total_metered=0\n"
+    "calls_failed=0\n"
+    "searches_never_succeeded=0\n"
+    "searches_never_succeeded_ids=\n"
+    "rows_new_total=0\n"
+)
+
+
+@pytest.mark.parametrize("shell", SHELLS)
+def test_run_counts_says_how_many_lines_of_the_log_name_the_run(tmp_path, shell):
+    """Every key prints whether or not the run id matched anything, so a run that did nothing and a
+    run id no event carries both printed the same 332 bytes on stdout, 0 bytes on stderr and exit 0
+    (measured 2026-08-11 with `sh skills/job-search-run/scripts/run-counts.sh <log>
+    2026-01-01T00-00-00Z | wc -c`). This line says which of the two happened."""
+    jobs = tmp_path / "jobs.jsonl"
+    jobs.write_text(WORKED_LOG, encoding="utf-8")
+    r = run_script(COUNTS, jobs, RID, shell=shell)
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert "run-counts.sh: 5 of 6 lines in %s name run %s" % (jobs, RID) in r.stderr, r.stderr
+    assert r.stdout == WORKED_STDOUT, r.stdout
+
+
+@pytest.mark.parametrize("shell", SHELLS)
+def test_a_run_id_no_event_carries_reads_zero_lines_rather_than_zero_work(tmp_path, shell):
+    """A mistyped run id reads `0 of 6 lines`, where a run whose events are in the log reads a count
+    above zero even when it surfaced nothing. stdout is the same zeroed key set it was before this
+    line existed."""
+    jobs = tmp_path / "jobs.jsonl"
+    jobs.write_text(WORKED_LOG, encoding="utf-8")
+    r = run_script(COUNTS, jobs, "2026-01-01T00-00-00Z", shell=shell)
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert "run-counts.sh: 0 of 6 lines in %s name run 2026-01-01T00-00-00Z" % jobs \
+        in r.stderr, r.stderr
+    assert r.stdout == ZEROED_STDOUT, r.stdout
+
+
+@pytest.mark.parametrize("shell", SHELLS)
+def test_run_counts_writes_the_line_on_the_path_that_exits_1(tmp_path, shell):
+    """A relevant posting carrying no band makes this script print `INVALID …` and exit 1. The line
+    is written before that check runs, so the caller reading a failed call gets it too."""
+    jobs = tmp_path / "jobs.jsonl"
+    jobs.write_text("".join([
+        '{"event":"surfaced","run_id":"%s","source":"linkedin","source_id":"1"}\n' % RID,
+        '{"event":"evaluated","run_id":"%s","source":"linkedin","source_id":"1",'
+        '"relevant":"true"}\n' % RID,
+    ]), encoding="utf-8")
+    r = run_script(COUNTS, jobs, RID, shell=shell)
+    assert r.returncode == 1, r.stdout + r.stderr
+    assert "run-counts.sh: 2 of 2 lines in %s name run %s" % (jobs, RID) in r.stderr, r.stderr
+    assert r.stdout == (
+        "postings_surfaced=1\n"
+        "postings_reviewed=1\n"
+        "postings_unreviewed=0\n"
+        "postings_detail_read=0\n"
+        "match_strong=0\n"
+        "match_moderate=0\n"
+        "match_weak=0\n"
+        "filtered_out=0\n"
+        "duplicates_of_another=0\n"
+        "by_source_linkedin=1\n"
+        "calls_searches=0\n"
+        "calls_detail_reads=0\n"
+        "calls_other=0\n"
+        "calls_total_metered=0\n"
+        "calls_failed=0\n"
+        "searches_never_succeeded=0\n"
+        "searches_never_succeeded_ids=\n"
+        "rows_new_total=0\n"
+        "INVALID relevant-row-without-a-band=1\n"
+    ), r.stdout
