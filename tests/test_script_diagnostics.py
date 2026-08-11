@@ -8,7 +8,9 @@ and the exit status it gave back. `queue-detail-read.sh` and `record-judgment.sh
 log file and write nothing to stdout, so the new stderr line has to leave stdout empty, and that is
 checked too. `dedup.sh --near` does write to stdout, so its tests check that every id that used to
 come back still does, in the same order. `list-detail-read-queue.sh` writes the read list to stdout,
-so its tests check that the rows that used to come back still do.
+so its tests check that the rows that used to come back still do. `run-counts.sh` and
+`run-matches.sh` write the digest's numbers and the digest's rows, so their tests pin the whole
+block of stdout, byte for byte.
 
 The `dedup.sh --near` tests run through POSIX `sh` and through `dash` where it is installed, the way
 `tests/test_dedup_guard.py` drives that same script. Helpers are defined here rather than imported
@@ -30,6 +32,7 @@ JUDGE = RUN_SCRIPTS / "record-judgment.sh"
 DEDUP = RUN_SCRIPTS / "dedup.sh"
 LIST_QUEUE = RUN_SCRIPTS / "list-detail-read-queue.sh"
 COUNTS = RUN_SCRIPTS / "run-counts.sh"
+MATCHES = RUN_SCRIPTS / "run-matches.sh"
 
 RID = "2026-08-05T16-47-00Z"
 
@@ -368,3 +371,173 @@ def test_run_counts_writes_the_line_on_the_path_that_exits_1(tmp_path, shell):
         "rows_new_total=0\n"
         "INVALID relevant-row-without-a-band=1\n"
     ), r.stdout
+
+
+# ------------------------------------------------------------------ run-matches.sh
+
+def surfaced(source_id, run_id=RID):
+    """One `surfaced` event. `run-matches.awk` reads no field but the ids off this event — every
+    column it prints comes off the judgment — so the three keys here are all it needs."""
+    return ('{"event":"surfaced","run_id":"%s","source":"linkedin","source_id":"%s"}\n'
+            % (run_id, source_id))
+
+
+def evaluated(source_id, band, needs_human_check="false", same_role_as=None, location=None,
+              run_id=RID):
+    """One `evaluated` event carrying the fields the listing prints. `band` None is a posting judged
+    not relevant, which reaches the listing as `filtered`; a band of `""` is a posting judged
+    relevant carrying no band at all."""
+    relevant = "false" if band is None else "true"
+    match = "" if band is None else ',"match":"%s"' % band
+    role = "" if same_role_as is None else ',"same_role_as":"%s"' % same_role_as
+    where = location if location is not None else "City %s" % source_id
+    return ('{"event":"evaluated","run_id":"%s","source":"linkedin","source_id":"%s",'
+            '"relevant":"%s"%s,"title":"Engineer %s","company_name":"Company %s",'
+            '"location_display":"%s","source_url":"https://example.test/%s",'
+            '"needs_human_check":"%s","posted_at":"2026-08-04","reasoning":"Judged %s"%s}\n'
+            % (run_id, source_id, relevant, match, source_id, source_id, where, source_id,
+               needs_human_check, source_id, role))
+
+
+# One run judged in all four bands, with one more posting recorded as the same opening as `s1`. The
+# four band counts are 1, 2, 3 and 4 — every one different — so a `printf` that reads the wrong
+# counter prints a number this file does not expect.
+FOUR_BAND_LOG = "".join(
+    [surfaced(s) for s in ["s1", "m1", "m2", "w1", "w2", "w3", "f1", "f2", "f3", "f4", "d1"]]
+    + [evaluated("s1", "strong", needs_human_check="true")]
+    + [evaluated(s, "moderate") for s in ["m1", "m2"]]
+    + [evaluated(s, "weak") for s in ["w1", "w2", "w3"]]
+    + [evaluated(s, None) for s in ["f1", "f2", "f3", "f4"]]
+    + [evaluated("d1", "strong", same_role_as="linkedin:s1", location="Portland, OR")])
+
+# What the run above prints on stdout, byte for byte. Pinned as the whole listing rather than as a
+# count of rows: the eleven columns of the first row each hold a different non-empty value, so a
+# dropped column, a reordered pair or a changed separator fails this comparison. `d1` has no row of
+# its own — its location is the last column of the row it names.
+FOUR_BAND_STDOUT = (
+    "strong\tlinkedin\ts1\tEngineer s1\tCompany s1\tCity s1\thttps://example.test/s1\ttrue\t"
+    "2026-08-04\tJudged s1\tPortland, OR\n"
+    "moderate\tlinkedin\tm1\tEngineer m1\tCompany m1\tCity m1\thttps://example.test/m1\tfalse\t"
+    "2026-08-04\tJudged m1\t\n"
+    "moderate\tlinkedin\tm2\tEngineer m2\tCompany m2\tCity m2\thttps://example.test/m2\tfalse\t"
+    "2026-08-04\tJudged m2\t\n"
+    "weak\tlinkedin\tw1\tEngineer w1\tCompany w1\tCity w1\thttps://example.test/w1\tfalse\t"
+    "2026-08-04\tJudged w1\t\n"
+    "weak\tlinkedin\tw2\tEngineer w2\tCompany w2\tCity w2\thttps://example.test/w2\tfalse\t"
+    "2026-08-04\tJudged w2\t\n"
+    "weak\tlinkedin\tw3\tEngineer w3\tCompany w3\tCity w3\thttps://example.test/w3\tfalse\t"
+    "2026-08-04\tJudged w3\t\n"
+    "filtered\tlinkedin\tf1\tEngineer f1\tCompany f1\tCity f1\thttps://example.test/f1\tfalse\t"
+    "2026-08-04\tJudged f1\t\n"
+    "filtered\tlinkedin\tf2\tEngineer f2\tCompany f2\tCity f2\thttps://example.test/f2\tfalse\t"
+    "2026-08-04\tJudged f2\t\n"
+    "filtered\tlinkedin\tf3\tEngineer f3\tCompany f3\tCity f3\thttps://example.test/f3\tfalse\t"
+    "2026-08-04\tJudged f3\t\n"
+    "filtered\tlinkedin\tf4\tEngineer f4\tCompany f4\tCity f4\thttps://example.test/f4\tfalse\t"
+    "2026-08-04\tJudged f4\t\n"
+)
+
+TALLY = ("run-matches.sh: run %s — %d strong, %d moderate, %d weak, %d filtered, "
+         "%d the same opening as another and given no row")
+
+
+@pytest.mark.parametrize("shell", SHELLS)
+def test_run_matches_reports_the_band_tally_the_digest_headings_use(tmp_path, shell):
+    """`job-search-run/SKILL.md` asks for a heading that says how many strong matches there are and
+    then a line for each of them. The rows come from here, and until this line existed the count
+    over them did not: the agent counted the rows itself. Each count is incremented where its row is
+    printed, so the heading and the rows under it cannot disagree.
+
+    The counts are 1, 2, 3 and 4, and the run also holds one posting recorded as the same opening as
+    another, which gets no row and is counted last."""
+    jobs = tmp_path / "jobs.jsonl"
+    jobs.write_text(FOUR_BAND_LOG, encoding="utf-8")
+    r = run_script(MATCHES, jobs, RID, shell=shell)
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert r.stdout == FOUR_BAND_STDOUT, r.stdout
+    assert r.stderr == TALLY % (RID, 1, 2, 3, 4, 1) + "\n", r.stderr
+
+
+@pytest.mark.parametrize("shell", SHELLS)
+def test_a_run_id_no_event_carries_still_gets_a_tally_naming_that_id(tmp_path, shell):
+    """Measured 2026-08-11: a run id no event in the log carries printed 0 bytes on stdout, 0 bytes
+    on stderr and exit 0 (`sh skills/job-search-run/scripts/run-matches.sh <log>
+    2026-01-01T00-00-00Z`), which is byte for byte what a run that judged nothing printed. The tally
+    is written whether or not the run id matched anything, and it names the id back, so a caller
+    that mistyped one reads its own id here. The counts do not tell those two runs apart on their
+    own — both are all zeros, which is why this asserts the id in the line and not only the zeros."""
+    jobs = tmp_path / "jobs.jsonl"
+    jobs.write_text(FOUR_BAND_LOG, encoding="utf-8")
+    r = run_script(MATCHES, jobs, "2026-01-01T00-00-00Z", shell=shell)
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert r.stdout == "", r.stdout
+    assert r.stderr == TALLY % ("2026-01-01T00-00-00Z", 0, 0, 0, 0, 0) + "\n", r.stderr
+
+
+@pytest.mark.parametrize("shell", SHELLS)
+def test_the_last_count_follows_same_role_as_being_there_not_what_it_names(tmp_path, shell):
+    """A posting whose judgment carries `same_role_as` is the same opening as another, so it gets no
+    row and is counted in the last number instead. The test is whether the field is there, never on
+    what it names, which is the test `run-counts.sh` counts `duplicates_of_another` on — so the two
+    scripts reach the same number and this test checks both.
+
+    Four postings carry the field and not one of them puts a location on a row: `d1` names a posting
+    this run surfaced and never judged, `d2` names an id no search of this run turned up, `d3`
+    carries a value not written as `<source>:<source_id>` at all, and `d4` names `a1` but came back
+    without a location, which reaches this script as the four characters `null`. All four are
+    counted. Measured 2026-08-11: with the count taken after the first-colon split instead, `d3`
+    goes uncounted, and with it taken after the empty-location check, `d4` does."""
+    jobs = tmp_path / "jobs.jsonl"
+    jobs.write_text("".join([
+        surfaced("a1"), surfaced("d1"), surfaced("d2"), surfaced("d3"), surfaced("d4"),
+        evaluated("d1", "strong", same_role_as="linkedin:a1"),
+        evaluated("d2", "strong", same_role_as="linkedin:zz9"),
+        evaluated("d3", "strong", same_role_as="the other Austin listing"),
+        evaluated("d4", "strong", same_role_as="linkedin:a1", location="null"),
+    ]), encoding="utf-8")
+    r = run_script(MATCHES, jobs, RID, shell=shell)
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert r.stdout == "", r.stdout
+    assert r.stderr == TALLY % (RID, 0, 0, 0, 0, 4) + "\n", r.stderr
+    # All four were judged strong, and neither script counts any of them as strong.
+    c = run_script(COUNTS, jobs, RID, shell=shell)
+    assert c.returncode == 0, c.stdout + c.stderr
+    assert "duplicates_of_another=4\n" in c.stdout, c.stdout
+    assert "match_strong=0\n" in c.stdout, c.stdout
+
+
+@pytest.mark.parametrize("shell", SHELLS)
+def test_a_relevant_row_with_no_band_is_counted_where_it_is_left_out(tmp_path, shell):
+    """A row judged relevant whose `match` is none of strong, moderate and weak gets no row here.
+    Without a count of its own it would be in the log and in none of the five numbers, so the tally
+    would not add up to the postings this run reviewed. It is counted in a sixth number, printed
+    only when it is not zero. `run-counts.sh` is the script that owns this finding and exits 1 on
+    it; this one prints its listing and exits 0, and the two report the same number."""
+    jobs = tmp_path / "jobs.jsonl"
+    jobs.write_text("".join([
+        surfaced("s1"), surfaced("u1"),
+        evaluated("s1", "strong"),
+        evaluated("u1", ""),
+    ]), encoding="utf-8")
+    r = run_script(MATCHES, jobs, RID, shell=shell)
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert r.stdout == (
+        "strong\tlinkedin\ts1\tEngineer s1\tCompany s1\tCity s1\thttps://example.test/s1\tfalse\t"
+        "2026-08-04\tJudged s1\t\n"
+    ), r.stdout
+    assert r.stderr == TALLY % (RID, 1, 0, 0, 0, 0) + \
+        ", 1 judged relevant with no band and given no row\n", r.stderr
+    c = run_script(COUNTS, jobs, RID, shell=shell)
+    assert c.returncode == 1, c.stdout + c.stderr
+    assert "INVALID relevant-row-without-a-band=1\n" in c.stdout, c.stdout
+
+
+@pytest.mark.parametrize("shell", SHELLS)
+def test_the_sixth_count_is_left_off_when_no_row_is_missing_a_band(tmp_path, shell):
+    """The run in `test_run_matches_reports_the_band_tally_the_digest_headings_use` has no such row,
+    and its tally is five counts. This checks the wording is absent rather than present with a
+    zero."""
+    jobs = tmp_path / "jobs.jsonl"
+    jobs.write_text(FOUR_BAND_LOG, encoding="utf-8")
+    r = run_script(MATCHES, jobs, RID, shell=shell)
+    assert "with no band" not in r.stderr, r.stderr

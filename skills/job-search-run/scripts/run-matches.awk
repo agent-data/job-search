@@ -30,11 +30,12 @@
 # never on what it names — so the count above a band and the rows under it stay equal. The rule for
 # a value that names no row here is written out in run-matches.sh.
 #
-# A relevant row carrying no band is left out here and reported by run-counts.sh, which is the
-# script that owns that finding and exits 1 on it. A relevant row's band is one of strong, moderate
-# and weak, so all three of these are rows with no band: an absent `match` key, which reads as an
-# empty string; a JSON null, which reads as the four characters `null`; and the string `filtered`,
-# which is what a row judged not relevant gets rather than a value a judgment carries.
+# A relevant row carrying no band is left out of the listing and counted on the stderr line the END
+# block writes. run-counts.sh owns that finding and exits 1 on it; this script prints its listing
+# and exits 0. A relevant row's band is one of strong, moderate and weak, so all three of these are
+# rows with no band: an absent `match` key, which reads as an empty string; a JSON null, which reads
+# as the four characters `null`; and the string `filtered`, which is what a row judged not relevant
+# gets rather than a value a judgment carries.
 
 BEGIN {
   rank["strong"] = 1; rank["moderate"] = 2; rank["weak"] = 3; rank["filtered"] = 4
@@ -68,7 +69,7 @@ END {
     if (!(k in mine)) continue
     rl = jval(judgment[k], "same_role_as")
     if (rl == "") continue
-    dup[k] = 1
+    dup[k] = 1; dups++
     p = index(rl, ":")
     if (p == 0) continue
     t = substr(rl, 1, p - 1) SUBSEP substr(rl, p + 1)
@@ -103,9 +104,18 @@ END {
         # the two scripts call the same rows unbanded. `filtered` is not among them: it is what a
         # row judged not relevant gets, so a relevant row carrying the string `filtered` is a row
         # with no band, not a filtered-out posting.
-        if (band != "strong" && band != "moderate" && band != "weak") continue
+        if (band != "strong" && band != "moderate" && band != "weak") {
+          # Counted on the first pass only, because this loop reaches each posting once per band and
+          # the count is per posting. It is counted rather than left out, so that the tally at the
+          # end of this block accounts for every posting this run surfaced and judged.
+          if (b == 1) unbanded++
+          continue
+        }
       } else band = "filtered"
       if (rank[band] != b) continue
+      # Counted where the row is printed, so the tally and the rows it counts cannot disagree: a
+      # heading that says three strong is followed by three strong rows.
+      printed[band]++
       printf "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n",
         band,
         jval(l, "source"), jval(l, "source_id"),
@@ -114,4 +124,30 @@ END {
         jval(l, "posted_at"), jval(l, "reasoning"), also[k]
     }
   }
+
+  # Until this line existed, a run that judged nothing printed 0 bytes on stdout, 0 on stderr and
+  # exit 0, and so did a run id no event in the log carries. Measured 2026-08-11 on a log of three
+  # surfaced postings and no judgment, called once with that run's own id and once with
+  # 2026-01-01T00-00-00Z: the two calls matched byte for byte on both streams. This line gives the
+  # caller the per-band tally the digest headings are written from, so the agent does not count the
+  # printed rows itself, and it names the run id back, so a caller that mistyped one reads its own
+  # id here. The counts do not tell those two runs apart on their own — both are all zeros.
+  #
+  # The last two counts are the postings this run reviewed that get no row: one whose judgment
+  # carries same_role_as, counted where dup is set, and one judged relevant carrying no band,
+  # counted where the band test drops it. With both of them here the six counts add up to
+  # run-counts.sh's postings_reviewed — checked on four logs 2026-08-11, at 11, 4, 2 and 0. The
+  # second is printed only when it is above zero, the way dedup.sh --near prints its two guard
+  # counts, and run-counts.sh is still the script that owns that finding and exits 1 on it — this
+  # one prints its listing and exits 0.
+  #
+  # `| "cat 1>&2"` is how an awk program in this pack writes to stderr — json-scan.awk:51-52 is the
+  # precedent — and the close() is what flushes it.
+  extra = ""
+  if (unbanded > 0) extra = sprintf(", %d judged relevant with no band and given no row", unbanded)
+  printf "run-matches.sh: run %s — %d strong, %d moderate, %d weak, %d filtered," \
+         " %d the same opening as another and given no row%s\n", \
+    want, printed["strong"]+0, printed["moderate"]+0, printed["weak"]+0, printed["filtered"]+0, \
+    dups+0, extra | "cat 1>&2"
+  close("cat 1>&2")
 }
