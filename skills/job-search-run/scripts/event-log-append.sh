@@ -54,10 +54,10 @@ case $ev in
 esac
 
 evtype=$(printf '%s\n' "$ev" | grep -o '"event"[[:space:]]*:[[:space:]]*"[^"]*"' | cut -d'"' -f4)
+src=$(printf '%s\n' "$ev" | grep -o '"source"[[:space:]]*:[[:space:]]*"[^"]*"' | cut -d'"' -f4)
 
 if [ "$evtype" = evaluated ]; then
   # Every evaluated event carries a non-empty "source".
-  src=$(printf '%s\n' "$ev" | grep -o '"source"[[:space:]]*:[[:space:]]*"[^"]*"' | cut -d'"' -f4)
   [ -n "$src" ] || { echo 'event-log-append: evaluated event needs a non-empty "source"' >&2; exit 1; }
 
   # Idempotency: skip if this (source, source_id) already has an `evaluated` event. The filter on
@@ -101,7 +101,7 @@ if [ "$evtype" = evaluated ]; then
        | grep -F '"source":"'"$src"'"' \
        | grep -o '"source_id":"[^"]*"' | cut -d'"' -f4 \
        | grep -qxF -- "$sid"; then
-    exit 0
+    printf 'event-log-append: %s:%s already has this event — nothing written\n' "$src" "$sid" >&2; exit 0
   fi
 fi
 
@@ -129,3 +129,17 @@ dir=$(dirname "$jobs")
 if [ -s "$jobs" ] && [ "$(tail -c1 "$jobs" | wc -l)" -eq 0 ]; then printf '\n' >> "$jobs"; fi
 
 printf '%s\n' "$ev" >> "$jobs"
+status=$?
+
+# The append is announced, and the skip above announces the write it did not make. Without those two
+# lines an event that was appended and a duplicate that was skipped look the same from outside —
+# nothing on stdout, nothing on stderr, exit 0 — and the caller cannot tell which of the two
+# happened. The append used to be the last command in the script, so the status the caller saw was
+# the append's own; the status is taken before the printf and given back after it, so an append that
+# failed still reaches the caller as a failure. The source is read at the top of the script next to
+# the event type: the assignment it replaced was inside the evaluated branch, and the `set -u` above
+# makes reading an unset variable an error on every other path.
+if [ "$status" -eq 0 ]; then
+  printf 'event-log-append: appended %s for %s:%s\n' "$evtype" "$src" "$sid" >&2
+fi
+exit "$status"

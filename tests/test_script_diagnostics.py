@@ -18,10 +18,12 @@ stderr empty. `dedup-surfaced.awk` is not run directly: it runs inside `record-a
 the search route, which redirects its stdout into the file it then appends to `jobs.jsonl`, so every
 line that program prints on stdout becomes an event in the user's log. Its tests drive
 `record-api-response.sh` and check that the diagnostic reached stderr, that stdout stayed empty, and
-that the appended events are the same ones as before.
+that the appended events are the same ones as before. `event-log-append.sh` takes the event on stdin
+and writes nothing to stdout, so its tests check that stdout stays empty on the append, on the skip
+and on every one of its seven refusals.
 
-The `dedup.sh --near` tests run through POSIX `sh` and through `dash` where it is installed, the way
-`tests/test_dedup_guard.py` drives that same script. Helpers are defined here rather than imported
+The `dedup.sh --near` tests and the failed-append test run through POSIX `sh` and through `dash`
+where it is installed, the way `tests/test_dedup_guard.py` drives that same script. Helpers are defined here rather than imported
 from `tests/test_mechanics_scripts.py` or `tests/test_dedup_guard.py`, so this file collects on its
 own.
 """
@@ -47,6 +49,7 @@ POSTINGS = ROOT / "skills" / "job-search" / "scripts" / "posting-counts.sh"
 DISCOVERY = RUNBOOK_SCRIPTS / "workspace-discovery.sh"
 VALIDATOR = RUNBOOK_SCRIPTS / "validate-workspace.sh"
 RECORD_API = RUN_SCRIPTS / "record-api-response.sh"
+APPEND = RUN_SCRIPTS / "event-log-append.sh"
 SEARCH_FIXTURE = ROOT / "tests" / "fixtures" / "api-responses" / "search.linkedin.json"
 
 RID = "2026-08-05T16-47-00Z"
@@ -67,6 +70,12 @@ def run_near(rows, shell="sh"):
     """Run `dedup.sh --near` with `rows` (list of (id, company, title)) on stdin."""
     stdin = "".join("%s\t%s\t%s\n" % row for row in rows)
     return subprocess.run([shell, str(DEDUP), "--near"], input=stdin,
+                          capture_output=True, text=True)
+
+
+def run_append(jobs, event, shell="sh"):
+    """Run `event-log-append.sh` over `jobs` with one event line on stdin."""
+    return subprocess.run([shell, str(APPEND), str(jobs)], input=event + "\n",
                           capture_output=True, text=True)
 
 
@@ -1154,3 +1163,108 @@ def test_the_diagnostic_stays_off_the_stdout_that_becomes_the_event_log(tmp_path
     assert [e["event"] for e in events] == ["call"] + ["surfaced"] * 25 + ["call"]
     assert [e["source_id"] for e in events[1:26]] == [row["source_id"] for row in rows]
     assert [e["rows_new"] for e in (events[0], events[26])] == [25, 0]
+
+
+# ------------------------------------------------------------------ event-log-append.sh
+
+def test_appending_an_event_by_hand_says_whether_it_landed(tmp_path):
+    """Appending an event and skipping a duplicate both gave exit 0 with zero bytes on both
+    streams, so a caller that piped an event in could not tell the two apart.
+
+    The skip is the `evaluated` path only — `grep -n 'evtype. = evaluated'
+    skills/job-search-run/scripts/event-log-append.sh` finds the one branch that holds it — so this
+    case is written with an `evaluated` event. The script writes nothing to stdout on either path,
+    and the new line has to leave stdout empty, so that is checked too.
+    """
+    jobs = tmp_path / "jobs.jsonl"
+    jobs.write_text("", encoding="utf-8")
+    ev = ('{"event":"evaluated","run_id":"%s","source":"linkedin","source_id":"9",'
+          '"relevant":true,"match":"strong"}' % RID)
+
+    first = run_append(jobs, ev)
+    assert first.returncode == 0, first.stdout + first.stderr
+    assert first.stdout == "", first.stdout
+    assert "event-log-append: appended evaluated for linkedin:9" in first.stderr, first.stderr
+
+    second = run_append(jobs, ev)
+    assert second.returncode == 0, second.stdout + second.stderr
+    assert second.stdout == "", second.stdout
+    assert ("event-log-append: linkedin:9 already has this event — nothing written"
+            in second.stderr), second.stderr
+    assert "appended" not in second.stderr, second.stderr
+    assert len(lines(jobs)) == 1, jobs.read_text()
+
+
+def test_an_appended_event_is_named_by_its_own_type(tmp_path):
+    """The type in the line is the one on the event, not the word `evaluated`. A `surfaced` event
+    is also the one case where the same event twice is appended twice rather than skipped, because
+    the skip branch runs only for `evaluated`. Measured 2026-08-11 on `git show
+    64e7d06:skills/job-search-run/scripts/event-log-append.sh`: the same `surfaced` event piped in
+    twice exited 0 both times and left two lines in the log.
+    """
+    jobs = tmp_path / "jobs.jsonl"
+    ev = '{"event":"surfaced","run_id":"%s","source":"ashby","source_id":"abc-1"}' % RID
+
+    first = run_append(jobs, ev)
+    assert first.returncode == 0, first.stdout + first.stderr
+    assert "event-log-append: appended surfaced for ashby:abc-1" in first.stderr, first.stderr
+
+    second = run_append(jobs, ev)
+    assert second.returncode == 0, second.stdout + second.stderr
+    assert "event-log-append: appended surfaced for ashby:abc-1" in second.stderr, second.stderr
+    assert "nothing written" not in second.stderr, second.stderr
+    assert len(lines(jobs)) == 2, jobs.read_text()
+
+
+@pytest.mark.parametrize("shell", SHELLS)
+def test_an_append_that_failed_says_nothing_about_appending(tmp_path, shell):
+    """The append was the last command in the script, so the status the caller saw was its own. The
+    status is now taken before the printf and given back after it, and this holds both halves of
+    that: a failed append still exits non-zero, and it writes no line saying the event landed.
+
+    The log here is under a path whose parent is a file, so `mkdir -p` cannot make the directory and
+    the `>>` has nowhere to write. Measured 2026-08-11 against `git show
+    64e7d06:skills/job-search-run/scripts/event-log-append.sh`, the version before this line was
+    added, which gives the same status on the same input: 1 under `sh` and 2 under `dash`.
+    """
+    (tmp_path / "notadir").write_text("", encoding="utf-8")
+    jobs = tmp_path / "notadir" / "jobs.jsonl"
+    r = run_append(jobs, '{"event":"evaluated","source":"linkedin","source_id":"9"}', shell=shell)
+    assert r.returncode != 0, r.stdout + r.stderr
+    assert r.stdout == "", r.stdout
+    assert "event-log-append: appended" not in r.stderr, r.stderr
+    assert not jobs.exists()
+
+
+def test_a_refused_event_still_says_only_what_it_refused(tmp_path):
+    """The script refuses an event seven ways, and each writes one line and exits 1. Every refusal
+    is written with `echo` and the two new lines with `printf`, so `grep -c "echo
+    'event-log-append:" skills/job-search-run/scripts/event-log-append.sh` counts the refusals and
+    returns 7. The two new lines are on the exit-0 paths, so a refusal still says nothing about an
+    append. Nothing is written to the log either: the file the caller named is not created at all.
+    """
+    jobs = tmp_path / "jobs.jsonl"
+    refusals = [
+        ('{"event":"evaluated","source":"linkedin","source_id":"9"}\n'
+         '{"event":"evaluated","source":"linkedin","source_id":"10"}',
+         "event must be a single line"),
+        ("", "empty event"),
+        ('{"event":"evaluated","source":"linkedin","source_id":"9","source_id":"10"}',
+         '"source_id" must appear exactly once'),
+        ('{"event":"evaluated","source":"linkedin","source_id":""}',
+         '"source_id" must be non-empty'),
+        ('{"event":"evaluated","source":"linkedin","source":"ashby","source_id":"9"}',
+         '"source" must appear at most once'),
+        ('{"event":"evaluated","source":"linkedin","source_id":"9",'
+         '"same_role_as":{"id":"ashby:1"}}',
+         '"same_role_as" must be a flat string'),
+        ('{"event":"evaluated","source_id":"9"}',
+         'evaluated event needs a non-empty "source"'),
+    ]
+    for event, said in refusals:
+        r = subprocess.run(["sh", str(APPEND), str(jobs)], input=event,
+                           capture_output=True, text=True)
+        assert r.returncode == 1, (event, r.stdout, r.stderr)
+        assert r.stdout == "", (event, r.stdout)
+        assert r.stderr == "event-log-append: %s\n" % said, (event, r.stderr)
+        assert not jobs.exists(), jobs.read_text()
