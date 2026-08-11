@@ -5465,7 +5465,7 @@ def test_to_confirm_counts_over_the_relevant_postings_only(tmp_path):
 
 def test_a_second_posting_for_the_same_role_is_counted_once(tmp_path):
     """One opening reached by two queries gets an `evaluated` line each, and the second names the
-    first in `same_role_as` — `job-search-run/SKILL.md:90`. It is the same job, so it is one entry.
+    first in `same_role_as` — `job-search-run/SKILL.md:113`. It is the same job, so it is one entry.
 
     The second line is left out of every count rather than moved into `filtered`, which is why all
     three are asserted. Measured 2026-08-07 with `if (k in alias) continue` deleted: relevant=2
@@ -5510,8 +5510,8 @@ def test_two_postings_that_would_share_a_pipe_joined_key_are_counted_separately(
 
 def test_a_hand_written_log_with_two_judgments_for_one_posting_takes_the_later_line(tmp_path):
     """No run writes this log. Both append paths refuse a second `evaluated` event for a
-    `(source, source_id)` that already has one — `event-log-append.sh:19-20` states the rule and
-    `:60-72` enforces it, and `record-judgment.sh:17` reads "Exit 0: recorded, or this posting
+    `(source, source_id)` that already has one — `event-log-append.sh:21-23` states the rule and
+    `:99-105` enforces it, and `record-judgment.sh:23` reads "Exit 0: recorded, or this posting
     already carries exactly this judgment" — so only a log written or edited by hand reaches this
     case. What is pinned here is `posting-counts.awk`'s behavior, not the product's.
 

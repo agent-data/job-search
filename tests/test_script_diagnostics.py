@@ -7,7 +7,8 @@ that path puts on stdout. Each test here runs one script and checks the sentence
 and the exit status it gave back. `queue-detail-read.sh` and `record-judgment.sh` both append to the
 log file and write nothing to stdout, so the new stderr line has to leave stdout empty, and that is
 checked too. `dedup.sh --near` does write to stdout, so its tests check that every id that used to
-come back still does, in the same order.
+come back still does, in the same order. `list-detail-read-queue.sh` writes the read list to stdout,
+so its tests check the rows that used to come back still do.
 
 The `dedup.sh --near` tests run through POSIX `sh` and through `dash` where it is installed, the way
 `tests/test_dedup_guard.py` drives that same script. Helpers are defined here rather than imported
@@ -27,6 +28,7 @@ RUN_SCRIPTS = ROOT / "skills" / "job-search-run" / "scripts"
 QUEUE = RUN_SCRIPTS / "queue-detail-read.sh"
 JUDGE = RUN_SCRIPTS / "record-judgment.sh"
 DEDUP = RUN_SCRIPTS / "dedup.sh"
+LIST_QUEUE = RUN_SCRIPTS / "list-detail-read-queue.sh"
 
 RID = "2026-08-05T16-47-00Z"
 
@@ -195,3 +197,37 @@ def test_near_stdout_is_unchanged_by_the_new_stderr(shell):
             ("linkedin:cc1", "", "")]
     r = run_near(rows, shell=shell)
     assert r.stdout == "linkedin:aa1\nlinkedin:bb1\nlinkedin:cc1\n", r.stdout
+
+
+# ------------------------------------------------------------------ list-detail-read-queue.sh
+
+def test_the_read_queue_says_how_much_of_it_is_worked_off(tmp_path):
+    """No rows is the ordinary case at the end of a run and also what a mistyped run id gives, and
+    from outside the two were the same: nothing on stdout, nothing on stderr, exit 0."""
+    jobs = tmp_path / "jobs.jsonl"
+    jobs.write_text("".join([
+        '{"event":"surfaced","run_id":"%s","source":"linkedin","source_id":"1"}\n' % RID,
+        '{"event":"surfaced","run_id":"%s","source":"linkedin","source_id":"2"}\n' % RID,
+        '{"event":"queued","run_id":"%s","source":"linkedin","source_id":"1"}\n' % RID,
+        '{"event":"queued","run_id":"%s","source":"linkedin","source_id":"2"}\n' % RID,
+        '{"event":"evaluated","run_id":"%s","source":"linkedin","source_id":"1",'
+        '"relevant":"false"}\n' % RID,
+    ]), encoding="utf-8")
+    r = run_script(LIST_QUEUE, jobs, RID)
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert len(r.stdout.splitlines()) == 1, r.stdout
+    assert "list-detail-read-queue: 2 queued for run %s, 1 already judged, 1 to read" % RID \
+        in r.stderr, r.stderr
+
+
+def test_a_run_id_that_names_no_event_is_not_the_same_as_an_empty_queue(tmp_path):
+    """A mistyped run id reads `0 queued`, where a worked-off queue reads its real queued count with
+    every one of them judged."""
+    jobs = tmp_path / "jobs.jsonl"
+    jobs.write_text(
+        '{"event":"queued","run_id":"%s","source":"linkedin","source_id":"1"}\n' % RID,
+        encoding="utf-8")
+    r = run_script(LIST_QUEUE, jobs, "2026-01-01T00-00-00Z")
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert r.stdout == "", r.stdout
+    assert "0 queued for run 2026-01-01T00-00-00Z, 0 already judged, 0 to read" in r.stderr, r.stderr
