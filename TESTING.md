@@ -914,7 +914,7 @@ agent-data call f9a6ec16-0bfd-44d8-b3ee-073776745ee7 search-jobs \
 "Build the eval sandbox (§0.2), export `JOBSEARCH_TEST_SCENARIO=multi-source`, run
 job-search-run against the sandbox workspace, and show the digest + jobs.jsonl."
 **Expected:** per-source counts breakdown; ashby events carry `"source":"ashby"`; null-date
-entries carry a date mark; the first-Ashby-pass footnote is present.
+entries carry a date mark.
 **Result:** ⬜
 
 ### T14.3 One source down never blanks the run — 🤖
@@ -940,7 +940,7 @@ entries carry a date mark; the first-Ashby-pass footnote is present.
 - ⬜ Docs match reality (install commands, error table, sample digest) (§11)
 - ⬜ Full regression green: `pytest` (**951**; gate on `0 failed`) + the eval structural gate (`eval_harness.py`) + the five eval suites (**52** scenarios) (§0.3, §12)
 - ⬜ Planned config slash-command tests are marked **N/A (pending build)**, not green (§13)
-- ⬜ Multi-source: live Ashby/Greenhouse/Lever rows; shim multi-source run shows per-source counts + first-pass footnote; one source down never blanks the run (§14)
+- ⬜ Multi-source: live Ashby/Greenhouse/Lever rows; shim multi-source run shows per-source counts; one source down never blanks the run (§14)
 
 **Teardown:** `rm -rf "$JSOS_TEST"` and any `$T*`/`$SH*` dirs you kept.
 

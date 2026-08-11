@@ -32,5 +32,4 @@ Agent-data usage: 9 metered calls this run · about $0.072 pay-as-you-go equival
 ---
 _Notes:_
 - 1 posting's detail link had expired (the source re-indexed it); judged from its summary.
-- First pass over Ashby company boards — this batch can include older postings, since boards don't always state dates.
 - Your preferences brief is dated 2026-06-05 — fresh; no review needed yet.

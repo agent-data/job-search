@@ -202,9 +202,7 @@ Two more lines belong in the digest when these counts are not zero. When `postin
 not zero, say how many postings this run never judged. When `searches_never_succeeded` is not zero,
 a footnote names the searches `searches_never_succeeded_ids` lists, each written
 `<source>:<query_id>`, as searches that never returned. Footnotes carry the rest: expired detail
-links, a source lost partway, and — for each company board (ashby, greenhouse, lever) that returned
-rows while this workspace held none of its postings yet — a first pass over it reaching back
-further than the freshness window.
+links and a source lost partway.
 
 ## Close
 
