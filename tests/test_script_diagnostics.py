@@ -482,13 +482,16 @@ FOUR_BAND_STDOUT = (
 def tally(named, total, jobs, run_id, strong, moderate, weak, filtered, dups, unbanded=0):
     """The stderr line `run-matches.sh` writes. `named` of `total` lines in the log name `run_id`, in
     the same words `run-counts.sh` says it in — the two scripts read the same log and are meant to
-    reach the same pair of numbers. The sixth count is written only when it is above zero, so it is
-    left off unless `unbanded` is given."""
+    reach the same pair of numbers. The noun follows `total` and the verb follows `named`, so a
+    one-line log reads `1 of 1 line … names run`, which is what
+    `test_the_opening_reads_as_english_when_one_line_names_the_run` holds. The sixth count is written
+    only when it is above zero, so it is left off unless `unbanded` is given."""
     sixth = "" if not unbanded else \
         ", %d judged relevant with no band and given no row" % unbanded
-    return ("run-matches.sh: %d of %d lines in %s name run %s — %d strong, %d moderate, %d weak, "
+    return ("run-matches.sh: %d of %d line%s in %s name%s run %s — %d strong, %d moderate, %d weak, "
             "%d filtered, %d the same opening as another and given no row%s\n"
-            % (named, total, jobs, run_id, strong, moderate, weak, filtered, dups, sixth))
+            % (named, total, "" if total == 1 else "s", jobs, "s" if named == 1 else "", run_id,
+               strong, moderate, weak, filtered, dups, sixth))
 
 
 FOUR_BAND_LINES = len(FOUR_BAND_LOG.splitlines())
@@ -628,6 +631,43 @@ def test_the_sixth_count_is_left_off_when_no_row_is_missing_a_band(tmp_path, she
     jobs.write_text(FOUR_BAND_LOG, encoding="utf-8")
     r = run_script(MATCHES, jobs, RID, shell=shell)
     assert "with no band" not in r.stderr, r.stderr
+
+
+@pytest.mark.parametrize("shell", SHELLS)
+def test_the_opening_reads_as_english_when_one_line_names_the_run(tmp_path, shell):
+    """Both scripts open on the same six words and both used to read `1 of 1 lines … name run`. The
+    noun follows the total and the verb follows the count in front of it, so a log of one line reads
+    `1 of 1 line … names run` and a log of six with one line matching reads `1 of 6 lines … names
+    run`. Zero takes the plural verb, and a log of one line naming another run reads `0 of 1 line …
+    name run`. Both scripts are asserted on every log, because the two are meant to report the same
+    pair in the same words."""
+    one = tmp_path / "one.jsonl"
+    one.write_text(surfaced("only"), encoding="utf-8")
+    c = run_script(COUNTS, one, RID, shell=shell)
+    assert c.returncode == 0, c.stdout + c.stderr
+    assert "run-counts.sh: 1 of 1 line in %s names run %s\n" % (one, RID) in c.stderr, c.stderr
+    m = run_script(MATCHES, one, RID, shell=shell)
+    assert m.returncode == 0, m.stdout + m.stderr
+    assert m.stderr == tally(1, 1, one, RID, 0, 0, 0, 0, 0), m.stderr
+    assert "1 of 1 line in %s names run" % one in m.stderr, m.stderr
+
+    # The same one line, read for a run it does not name: the verb goes back to the plural and the
+    # noun stays singular, because the noun follows the total rather than the count in front of it.
+    c0 = run_script(COUNTS, one, "2026-01-01T00-00-00Z", shell=shell)
+    assert "run-counts.sh: 0 of 1 line in %s name run" % one in c0.stderr, c0.stderr
+    m0 = run_script(MATCHES, one, "2026-01-01T00-00-00Z", shell=shell)
+    assert m0.stderr == tally(0, 1, one, "2026-01-01T00-00-00Z", 0, 0, 0, 0, 0), m0.stderr
+
+    # One line of six naming the run: singular verb over a plural noun.
+    six = tmp_path / "six.jsonl"
+    six.write_text(surfaced("a") + "".join(
+        surfaced(s, run_id="2026-01-01T00-00-00Z") for s in ["b", "c", "d", "e", "f"]),
+        encoding="utf-8")
+    c6 = run_script(COUNTS, six, RID, shell=shell)
+    assert "run-counts.sh: 1 of 6 lines in %s names run %s\n" % (six, RID) in c6.stderr, c6.stderr
+    m6 = run_script(MATCHES, six, RID, shell=shell)
+    assert m6.stderr == tally(1, 6, six, RID, 0, 0, 0, 0, 0), m6.stderr
+    assert "1 of 6 lines in %s names run" % six in m6.stderr, m6.stderr
 
 
 # ------------------------------------------------------------------ posting-counts.sh

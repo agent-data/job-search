@@ -117,12 +117,19 @@ END {
   # a run id no event in the log carries print the same zeroed lines: 332 bytes, measured 2026-08-11
   # with `run-counts.sh <log> <a-run-id-the-log-does-not-carry> | wc -c`. This line says which of
   # the two happened. NR is every line read and notmine is the lines the run_id guard turned away,
-  # so the difference is the lines that name this run. `| "cat 1>&2"` is how an awk program in this
-  # pack writes to stderr — json-scan.awk:51-52 is the precedent — and the close() is what flushes
-  # it. It is written before the unbanded check below, which exits 1, so a caller that got exit 1
-  # has the line as well.
-  printf "run-counts.sh: %d of %d lines in %s name run %s\n", \
-    NR - notmine, NR, FILENAME, want | "cat 1>&2"
+  # so the difference is the lines that name this run.
+  #
+  # The noun follows the total, so a log of one line reads `1 of 1 line`. The verb follows the count
+  # in front of it: `names` when one line names the run, and `name` at every other count, zero
+  # included. A six-line log with one line matching reads `1 of 6 lines in <log> names run <id>`.
+  # run-matches.awk opens its line with the same wording and bends it the same way.
+  #
+  # `| "cat 1>&2"` is how an awk program in this pack writes to stderr — json-scan.awk:51-52 is the
+  # precedent — and the close() is what flushes it. It is written before the unbanded check below,
+  # which exits 1, so a caller that got exit 1 has the line as well.
+  printf "run-counts.sh: %d of %d line%s in %s name%s run %s\n", \
+    NR - notmine, NR, (NR == 1 ? "" : "s"), \
+    FILENAME, (NR - notmine == 1 ? "s" : ""), want | "cat 1>&2"
   close("cat 1>&2")
   if (unbanded > 0) {
     printf "INVALID relevant-row-without-a-band=%d\n", unbanded

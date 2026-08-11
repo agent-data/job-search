@@ -132,12 +132,14 @@ END {
   #
   # The counts alone still do not say which of those two runs happened — both are all zeros — so the
   # line opens with how many lines of the log name the run. It is worded the way run-counts.awk
-  # words the same fact — `grep -n 'name run' skills/job-search-run/scripts/run-counts.awk` returns
-  # the one line that prints it there — so a caller that ran both scripts on one log reads the same
-  # two numbers in the same words. NR is every line read and notmine is the lines the run_id guard
-  # turned away, so the difference is the lines that name this run. Measured 2026-08-11 on a log of
-  # three surfaced postings and no judgment: with that run's own id the line opens `3 of 3 lines`,
-  # and with 2026-01-01T00-00-00Z it opens `0 of 3 lines`.
+  # words the same fact — `grep -n 'of %d line' skills/job-search-run/scripts/run-counts.awk`
+  # returns the one line that prints it there — so a caller that ran both scripts on one log reads
+  # the same two numbers in the same words, down to the noun and the verb: the noun follows the
+  # total and the verb follows the count in front of it, so a one-line log reads `1 of 1 line in
+  # <log> names run <id>`. NR is every line read and notmine is the lines the run_id guard turned
+  # away, so the difference is the lines that name this run. Measured 2026-08-11 on a log of three
+  # surfaced postings and no judgment: with that run's own id the line opens `3 of 3 lines`, and
+  # with 2026-01-01T00-00-00Z it opens `0 of 3 lines`.
   #
   # The last two counts are the postings this run reviewed that get no row: one whose judgment
   # carries same_role_as, counted where dup is set, and one judged relevant carrying no band,
@@ -151,9 +153,10 @@ END {
   # precedent — and the close() is what flushes it.
   extra = ""
   if (unbanded > 0) extra = sprintf(", %d judged relevant with no band and given no row", unbanded)
-  printf "run-matches.sh: %d of %d lines in %s name run %s — %d strong, %d moderate, %d weak," \
+  printf "run-matches.sh: %d of %d line%s in %s name%s run %s — %d strong, %d moderate, %d weak," \
          " %d filtered, %d the same opening as another and given no row%s\n", \
-    NR - notmine, NR, FILENAME, want, \
+    NR - notmine, NR, (NR == 1 ? "" : "s"), \
+    FILENAME, (NR - notmine == 1 ? "s" : ""), want, \
     printed["strong"]+0, printed["moderate"]+0, printed["weak"]+0, printed["filtered"]+0, \
     dups+0, extra | "cat 1>&2"
   close("cat 1>&2")

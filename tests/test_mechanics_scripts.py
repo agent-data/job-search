@@ -5470,7 +5470,7 @@ def test_to_confirm_counts_over_the_relevant_postings_only(tmp_path):
 
 def test_a_second_posting_for_the_same_role_is_counted_once(tmp_path):
     """One opening reached by two queries gets an `evaluated` line each, and the second names the
-    first in `same_role_as` — `job-search-run/SKILL.md:113`. It is the same job, so it is one entry.
+    first in `same_role_as` — `job-search-run/SKILL.md:117`. It is the same job, so it is one entry.
 
     The second line is left out of every count rather than moved into `filtered`, which is why all
     three are asserted. Measured 2026-08-07 with `if (k in alias) continue` deleted: relevant=2
