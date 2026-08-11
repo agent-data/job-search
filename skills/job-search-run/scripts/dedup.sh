@@ -1,9 +1,9 @@
 #!/bin/sh
 # dedup.sh — drop the candidate postings a run does not need to read.
 #
-# Usage: dedup.sh <jobs.jsonl> <source>          # candidate source_ids on stdin, NEW ones on stdout
-#        dedup.sh --near                          # id<TAB>company<TAB>title rows on stdin,
+# Usage: dedup.sh --near                          # id<TAB>company<TAB>title rows on stdin,
 #                                                 # the source_ids to judge on stdout
+#        dedup.sh <jobs.jsonl> <source>          # candidate source_ids on stdin, NEW ones on stdout
 #
 # The --near mode answers a different question about one run's own rows: which of them are the
 # same opening seen twice? A company that posts one opening in several locations returns several
@@ -24,7 +24,7 @@
 # set (every candidate is new). Blank candidate lines (a null source_id can't be deduped) are
 # skipped. record-api-response.sh now makes this same judged-posting check as it appends, so the
 # two-argument mode is redundant for a run that records its responses through that script, and is
-# kept for a host that runs it standalone. The --near mode below is separate and keeps its caller.
+# kept for a host that runs it standalone. The --near mode above is separate and keeps its caller.
 # This is the scripted form of the model-run prose contract; that prose remains the no-runtime
 # fallback.
 set -u
