@@ -47,6 +47,7 @@ OPEN_RUN = RUNBOOK_SCRIPTS / "open-run.sh"
 CLOSE_RUN = RUNBOOK_SCRIPTS / "close-run.sh"
 CLEAR_RUN = RUNBOOK_SCRIPTS / "clear-run.sh"
 POSTINGS = SEARCH_SCRIPTS / "posting-counts.sh"
+RESOLVE_RUN = RUN_SCRIPTS / "resolve-run.sh"
 
 ALL_SCRIPTS = [DEDUP, APPEND, SCHEDULE, DISCOVERY, VALIDATE, RECORD_API, QUEUE, LIST_QUEUE,
                JUDGE, COUNTS, MATCHES, OPEN_RUN, CLOSE_RUN, CLEAR_RUN, POSTINGS]
@@ -4279,15 +4280,16 @@ def test_a_present_brief_with_no_way_to_digest_it_is_not_called_missing(tmp_work
 
 @pytest.mark.skipif(not shutil.which("dash"), reason="dash is not installed here")
 def test_opening_a_run_runs_under_dash(tmp_workspace):
-    """One of the three shipped scripts that run another shipped script rather than an awk program —
-    `command grep -rn '\\.sh"' skills/*/scripts/*.sh` returns three lines, one each in
-    `open-run.sh`, `close-run.sh` and `validate-workspace.sh` — so it is run end to end under
-    strict dash:
+    """One of the four shipped scripts that run another shipped script rather than an awk program —
+    `command grep -rn '^[^#]*sh "' skills/*/scripts/*.sh` returns four lines, one each in
+    `resolve-run.sh`, `close-run.sh`, `open-run.sh` and `validate-workspace.sh` — so it is run end
+    to end under strict dash:
     `${1:?}`, `command -v`, the `printf ''` that writes the marker and the `sh` call on
     `validate-workspace.sh` are none of them exercised by `dash -n`. `close-run.sh` gets the same
-    treatment at `test_closing_and_clearing_a_run_run_under_dash`, and `validate-workspace.sh` at
+    treatment at `test_closing_and_clearing_a_run_run_under_dash`, `validate-workspace.sh` at
     `test_the_count_and_timestamp_checks_run_under_every_shell` in
-    `tests/test_validate_workspace.py`, which is the case that drives its `sh` call."""
+    `tests/test_validate_workspace.py`, which is the case that drives its `sh` call, and
+    `resolve-run.sh` at `test_resolving_a_run_runs_under_dash`."""
     r = run_script(OPEN_RUN, tmp_workspace, shell="dash")
     assert r.returncode == 0, r.stdout + r.stderr
     out = parsed_output(r)
@@ -5525,6 +5527,154 @@ def test_closing_and_clearing_a_run_run_under_dash(tmp_workspace):
     c = run_script(CLEAR_RUN, tmp_workspace, o["run_id"], shell="dash")
     assert c.returncode == 0, c.stderr
     assert not (tmp_workspace / "runs" / (".started-" + o["run_id"])).exists()
+
+
+# ---------------------------------------------------------------------------------- resolve-run.sh
+
+def test_resolve_run_prints_the_workspace_and_the_open_run(tmp_workspace):
+    """The two lines the callers read: the workspace, and the run open in it.
+
+    The run id compared against is the one `open-run.sh` printed, not one written here, so the two
+    scripts have to name the same run for this to pass. The newline count holds the output to two
+    lines: a third would reach a caller that captures the whole block.
+    """
+    r = subprocess.run(["sh", str(OPEN_RUN), str(tmp_workspace)],
+                       capture_output=True, text=True)
+    run_id = [l.split("=", 1)[1] for l in r.stdout.splitlines() if l.startswith("run_id=")][0]
+
+    out = subprocess.run(["sh", str(RESOLVE_RUN), "--workspace", str(tmp_workspace)],
+                         capture_output=True, text=True)
+    assert out.returncode == 0, out.stderr
+    kv = dict(l.split("=", 1) for l in out.stdout.splitlines() if "=" in l)
+    assert kv["workspace"] == str(tmp_workspace)
+    assert kv["run_id"] == run_id
+    assert out.stdout.count("\n") == 2
+
+
+def test_resolve_run_says_so_when_no_run_is_open(tmp_workspace):
+    """No marker in `runs/` means no run has been opened, and there is no run id to print. Exit 2
+    rather than an empty `run_id=` line, which a caller would use as a run id."""
+    out = subprocess.run(["sh", str(RESOLVE_RUN), "--workspace", str(tmp_workspace)],
+                         capture_output=True, text=True)
+    assert out.returncode == 2
+    assert "no run is open" in out.stderr
+
+
+def test_resolve_run_refuses_when_two_markers_are_on_disk(tmp_workspace):
+    """Two markers means two runs are open, and picking either one records this work against a run
+    it does not belong to. Both ids are in the message, so the caller can see which two runs the
+    workspace is holding rather than go looking for them."""
+    (tmp_workspace / "runs" / ".started-2026-08-11T16-06-16Z").write_text("", encoding="utf-8")
+    (tmp_workspace / "runs" / ".started-2026-08-11T16-15-54Z").write_text("", encoding="utf-8")
+    out = subprocess.run(["sh", str(RESOLVE_RUN), "--workspace", str(tmp_workspace)],
+                         capture_output=True, text=True)
+    assert out.returncode == 2
+    assert "more than one run is open" in out.stderr
+    assert "2026-08-11T16-06-16Z" in out.stderr
+    assert "2026-08-11T16-15-54Z" in out.stderr
+
+
+def test_a_marker_that_names_no_run_id_is_not_counted_as_a_second_run(tmp_workspace):
+    """Markers are selected by the run-id shape, not by the `.started-*` glob alone.
+
+    `runs/.started-` with nothing after the dash names no run, and `open-run.sh` skips it rather
+    than refusing on it — `grep -n 'with nothing after the dash'
+    skills/job-search-runbook/scripts/open-run.sh` — so a workspace can hold it beside a real
+    marker. Counted, it would make one open run look like two and stop the run at the refusal
+    above. `.started-not-a-run-id` is selected out the same way: `close-run.sh` and `clear-run.sh`
+    both check a run id against that shape before doing anything with it, so a name they refuse is
+    not a run this can hand to a caller.
+    """
+    (tmp_workspace / "runs" / ".started-").write_text("", encoding="utf-8")
+    (tmp_workspace / "runs" / ".started-not-a-run-id").write_text("", encoding="utf-8")
+    (tmp_workspace / "runs" / ".started-2026-08-11T16-06-16Z").write_text("", encoding="utf-8")
+    out = subprocess.run(["sh", str(RESOLVE_RUN), "--workspace", str(tmp_workspace)],
+                         capture_output=True, text=True)
+    assert out.returncode == 0, out.stderr
+    assert out.stdout == "workspace=%s\nrun_id=2026-08-11T16-06-16Z\n" % tmp_workspace
+
+
+def test_resolve_run_finds_the_workspace_when_no_flag_names_one(tmp_workspace, tmp_path):
+    """The call a run makes: no arguments at all. Every other case here passes `--workspace`, which
+    is how the tests reach a temporary directory, so this is the only one that runs
+    `workspace-discovery.sh`, and the only one that would go red if the relative path this script
+    names that script by were wrong.
+    """
+    home = tmp_path / "home"
+    home.mkdir()
+    ws = home / ".job-search"
+    shutil.copytree(str(tmp_workspace), str(ws))
+    opened_run = run_script(OPEN_RUN, ws)
+    assert opened_run.returncode == 0, opened_run.stdout + opened_run.stderr
+    run_id = parsed_output(opened_run)["run_id"]
+
+    r = run_sh(RESOLVE_RUN, env=base_env(home))
+    assert r.returncode == 0, r.stderr
+    assert r.stdout == "workspace=%s\nrun_id=%s\n" % (ws, run_id)
+
+
+CONSUMER = """#!/bin/sh
+# What a caller does with this script: capture the output, take one value per key, use both.
+set -u
+resolved=$(sh "$1" --workspace "$2") || exit 2
+ws=$(printf '%s\\n' "$resolved" | sed -n 's/^workspace=//p')
+run_id=$(printf '%s\\n' "$resolved" | sed -n 's/^run_id=//p')
+mkdir -p "$ws/runs/.scratch/$run_id" || exit 2
+"""
+
+
+def test_a_shell_caller_takes_both_values_out_of_what_this_printed(tmp_workspace, tmp_path):
+    """A caller captures the output in `$(…)` and pulls each value out with `sed`. This runs that
+    extraction against what the script actually printed, rather than against a block composed here.
+
+    The consumer then makes `<workspace>/runs/.scratch/<run_id>`, the directory `fetch-posting.sh`
+    and `search-jobs.sh` write their responses into, and the checks are that this exact directory is
+    there afterwards and that it is the only one under `.scratch`. Both are needed: a run id read as
+    the empty string leaves the path at `<workspace>/runs/.scratch/`, which `mkdir -p` creates at
+    exit 0 — measured 2026-08-11.
+
+    The workspace path carries a space, which is what the quoting in the consumer is for. Measured
+    2026-08-11 on `<tmp>/a work space`, `mkdir -p $ws/runs/.scratch/<run_id>` unquoted exits 0
+    having made three directories — `a`, `work` and `space/runs/.scratch/<run_id>`, the last of them
+    under the caller's own directory — and none of them is the path the consumer asked for.
+    """
+    ws = tmp_path / "a work space"
+    shutil.copytree(str(tmp_workspace), str(ws))
+    run_id = parsed_output(run_script(OPEN_RUN, ws))["run_id"]
+
+    consumer = tmp_path / "consumer.sh"
+    consumer.write_text(CONSUMER, encoding="utf-8")
+    r = subprocess.run(["sh", str(consumer), str(RESOLVE_RUN), str(ws)],
+                       capture_output=True, text=True)
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert (ws / "runs" / ".scratch" / run_id).is_dir()
+    assert [p.name for p in (ws / "runs" / ".scratch").iterdir()] == [run_id]
+
+
+def test_an_unknown_flag_prints_the_usage_line_under_every_shell():
+    """A flag this script does not take is a caller error, not a workspace to go looking for, so it
+    stops before reading anything. Run under `dash` as well where it is installed: the argument
+    loop is `case`, `shift` and `$#`, and `dash -n` parses all three without running any of them.
+    """
+    for shell in ["sh"] + (["dash"] if shutil.which("dash") else []):
+        r = run_script(RESOLVE_RUN, "--bogus", shell=shell)
+        assert r.returncode == 2, shell + ": " + r.stdout + r.stderr
+        assert r.stdout == "", shell + ": " + r.stdout
+        assert r.stderr == "usage: resolve-run.sh [--workspace W]\n", shell + ": " + r.stderr
+
+
+@pytest.mark.skipif(not shutil.which("dash"), reason="dash is not installed here")
+def test_resolving_a_run_runs_under_dash(tmp_workspace):
+    """The fourth shipped script that runs another shipped script rather than an awk program —
+    `command grep -rn '^[^#]*sh "' skills/*/scripts/*.sh` returns four lines, this script's call on
+    `workspace-discovery.sh` among them — so it is run end to end under strict dash the way
+    `open-run.sh` and `close-run.sh` are. That `sh` call, the glob over `runs/`, the `case` that
+    checks the run-id shape and the `$((n + 1))` count are none of them exercised by `dash -n`.
+    """
+    run_id = parsed_output(run_script(OPEN_RUN, tmp_workspace))["run_id"]
+    r = run_script(RESOLVE_RUN, "--workspace", tmp_workspace, shell="dash")
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert r.stdout == "workspace=%s\nrun_id=%s\n" % (tmp_workspace, run_id)
 
 
 # ------------------------------------------------------------------------ posting-counts.sh
