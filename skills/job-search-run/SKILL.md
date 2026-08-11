@@ -23,9 +23,13 @@ first:
    brief revision. From here on, a failure closes as a `blocked` run.
 3. Run `agent-data whoami`. When `api_key_set` comes back false, close blocked: the API key is
    missing, and `agent-data init` from `agent-data-reference`'s CLI table is the fix.
-4. Run the plugin's `skills/job-search-runbook/scripts/validate-workspace.sh <workspace>`. Silence
-   means config and brief are usable; each line it prints names one file and one broken rule, so
-   close blocked and report those in plain language.
+4. Run the plugin's `skills/job-search-runbook/scripts/validate-workspace.sh <workspace>`. It
+   answers in one of two ways. A single line reading `checked <workspace> — no broken rule found`
+   means the config and the brief are both usable. Read the path in that line and confirm it is the
+   workspace you meant to check, because every valid workspace passes this check the same way, so
+   the path is the only part of the answer that tells you which one was read. One line per problem
+   instead, each naming one file and one broken rule, means the workspace is not usable: close
+   blocked and report those problems to the user in plain language.
 5. Say what this run opens with, in the shape `agent-data-reference`'s cost recipe gives, before
    searching.
 

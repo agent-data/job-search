@@ -7,10 +7,14 @@
 # must not leave behind.
 #
 # Prints one line per broken rule — `INVALID <file> <rule> [observed value]` — and exits 1. A
-# workspace with nothing wrong prints nothing and exits 0. Bad arguments or a missing workspace
-# exit 2 with a message on stderr; those are the caller's mistake, not the workspace's.
+# workspace with nothing wrong prints nothing on stdout, writes one line to stderr naming what was
+# checked, and exits 0. Bad arguments or a missing workspace exit 2 with a message on stderr; those
+# are the caller's mistake, not the workspace's.
 #
-# Usage: validate-workspace.sh WORKSPACE [--post-close RUN_ID]
+# Usage: validate-workspace.sh WORKSPACE [--post-close RUN_ID] [--quiet-when-clean]
+#   --quiet-when-clean    leave out the line about a workspace with nothing wrong, so stderr carries
+#                         only this script's own failures. The findings on stdout and the exit
+#                         status are the same either way.
 #   --post-close RUN_ID   also check run RUN_ID: that it left no started-marker and no scratch dir,
 #                         and that its record's counts and timestamps hold up. Every count the
 #                         record states is read back out of jobs.jsonl with run-counts.sh and
@@ -22,9 +26,10 @@ set -u
 
 WS=''
 POST_CLOSE=''
+QUIET_WHEN_CLEAN=no
 
 usage() {
-  printf 'usage: validate-workspace.sh WORKSPACE [--post-close RUN_ID]\n' >&2
+  printf 'usage: validate-workspace.sh WORKSPACE [--post-close RUN_ID] [--quiet-when-clean]\n' >&2
 }
 
 while [ $# -gt 0 ]; do
@@ -34,6 +39,7 @@ while [ $# -gt 0 ]; do
       POST_CLOSE=$2
       shift 2
       ;;
+    --quiet-when-clean) QUIET_WHEN_CLEAN=yes; shift ;;
     -h|--help) usage; exit 0 ;;
     -*) printf 'validate-workspace.sh: unknown option %s\n' "$1" >&2; usage; exit 2 ;;
     *)
@@ -520,5 +526,20 @@ fi
 if [ -s "$findings" ]; then
   sort "$findings"
   exit 1
+fi
+
+# Which workspace was read. Every valid workspace passes this check the same way: measured on
+# 2026-08-11 on two different valid workspaces, both exited 0 with 0 bytes on stdout and 0 bytes on
+# stderr, and `cmp` reported both streams identical, so the caller had nothing to tell them apart
+# by. That one case is what this line is for. A path that does not exist already exits 2 with a
+# message, and an existing directory that is not a workspace already exits 1 with findings — the
+# empty directory measured the same day gave 69 bytes of them.
+if [ "$QUIET_WHEN_CLEAN" = no ]; then
+  if [ -n "$POST_CLOSE" ]; then
+    printf 'validate-workspace.sh: checked %s and run %s — no broken rule found\n' \
+      "$WS" "$POST_CLOSE" >&2
+  else
+    printf 'validate-workspace.sh: checked %s — no broken rule found\n' "$WS" >&2
+  fi
 fi
 exit 0

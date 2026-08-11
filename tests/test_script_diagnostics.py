@@ -12,7 +12,9 @@ so its tests check that the rows that used to come back still do. `run-counts.sh
 and `posting-counts.sh` write the digest's numbers, the digest's rows and the home card's three
 counts, so their tests pin the whole block of stdout, byte for byte. `workspace-discovery.sh` had no
 `>&2` write on any path at all, and its three `key=value` lines are read by key, so its tests pin the
-whole block of stdout too.
+whole block of stdout too. `validate-workspace.sh` writes its findings to stdout and exits 1, so its
+new line is on the exit-0 path only and its tests check that a workspace with findings still leaves
+stderr empty.
 
 The `dedup.sh --near` tests run through POSIX `sh` and through `dash` where it is installed, the way
 `tests/test_dedup_guard.py` drives that same script. Helpers are defined here rather than imported
@@ -39,6 +41,7 @@ COUNTS = RUN_SCRIPTS / "run-counts.sh"
 MATCHES = RUN_SCRIPTS / "run-matches.sh"
 POSTINGS = ROOT / "skills" / "job-search" / "scripts" / "posting-counts.sh"
 DISCOVERY = RUNBOOK_SCRIPTS / "workspace-discovery.sh"
+VALIDATOR = RUNBOOK_SCRIPTS / "validate-workspace.sh"
 
 RID = "2026-08-05T16-47-00Z"
 
@@ -869,3 +872,117 @@ def test_the_other_precedence_paths_print_the_three_keys_they_printed_before(tmp
     assert n.returncode == 0, n.stdout + n.stderr
     assert n.stdout == keys(fresh_ws, "registry", "true"), n.stdout
     assert n.stderr == named_line(fresh_reg, fresh_ws), n.stderr
+
+
+# ------------------------------------------------------------------ validate-workspace.sh
+
+def run_validator(workspace, *args, shell="sh"):
+    """`validate-workspace.sh` over one workspace, through POSIX `sh` unless a shell is named.
+
+    A thin wrapper over `run_script` rather than an import from `tests/test_validate_workspace.py`,
+    so this file collects on its own.
+    """
+    return run_script(VALIDATOR, workspace, *args, shell=shell)
+
+
+def clean_line(workspace, run_id=None):
+    """The line this script writes when it finds nothing wrong, run id and all."""
+    if run_id is None:
+        return "validate-workspace.sh: checked %s — no broken rule found\n" % workspace
+    return ("validate-workspace.sh: checked %s and run %s — no broken rule found\n"
+            % (workspace, run_id))
+
+
+def write_clean_run(workspace, run_id=RID):
+    """A run record `--post-close` finds nothing wrong with, written into `runs/`.
+
+    The counts hold to the three sums this script checks with no log to compare against: the three
+    bands plus `filtered_out` plus `duplicates_of_another` equal `postings_reviewed`,
+    `postings_reviewed` plus `postings_unreviewed` equal `postings_surfaced`, and `by_source` sums
+    to `postings_surfaced`. The `tmp_workspace` fixture writes no `jobs.jsonl`, so `run-counts.sh`
+    prints nothing and the comparison against the log is skipped. `completed_at` is a past instant,
+    so it stays no later than the mtime of the file written here.
+    """
+    record = {
+        "run_id": run_id,
+        "trigger": "manual",
+        "close_state": "complete",
+        "started_at": "2026-08-05T16:47:00Z",
+        "completed_at": "2026-08-05T16:48:00Z",
+        "postings_surfaced": 2,
+        "postings_reviewed": 2,
+        "postings_unreviewed": 0,
+        "postings_detail_read": 1,
+        "matches": {"strong": 1, "moderate": 0, "weak": 0},
+        "filtered_out": 1,
+        "duplicates_of_another": 0,
+        "by_source": {"linkedin": 2},
+    }
+    path = workspace / "runs" / ("%s.json" % run_id)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(record, indent=2) + "\n", encoding="utf-8")
+    return path
+
+
+def test_a_clean_workspace_says_which_workspace_was_checked(tmp_workspace):
+    """Two different valid workspaces both exit 0 with zero bytes on both streams, so silence does
+    not say which one was read. Measured 2026-08-11 against the script as it stood before this line
+    existed, on two workspaces built the way the `tmp_workspace` fixture builds one: both exited 0,
+    both wrote 0 bytes to stdout and 0 bytes to stderr, and `cmp` reported both streams identical.
+
+    That is the whole of what this line adds. A path that does not exist and a directory that is
+    not a workspace were both already told apart, measured the same day: the first exits 2 with
+    `validate-workspace.sh: no such workspace: <path>` and the second exits 1 with 69 bytes of
+    findings on stdout.
+    """
+    r = run_validator(tmp_workspace)
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert r.stdout == "", r.stdout
+    assert r.stderr == clean_line(tmp_workspace), r.stderr
+
+
+def test_the_clean_line_names_the_run_when_post_close_is_given(tmp_workspace):
+    """`--post-close` checks the run's record on top of the workspace's two files, so the line names
+    the run as well. Without the run id a caller cannot tell a call that checked the record from one
+    that checked only `config.yaml` and `preferences.md`."""
+    write_clean_run(tmp_workspace)
+    r = run_validator(tmp_workspace, "--post-close", RID)
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert r.stdout == "", r.stdout
+    assert r.stderr == clean_line(tmp_workspace, RID), r.stderr
+
+
+def test_quiet_when_clean_suppresses_only_that_line(tmp_workspace):
+    """`open-run.sh` runs this script inside its own and already tells its caller the same thing
+    through its exit status, and `tests/test_mechanics_scripts.py` requires `open-run.sh` to write
+    exactly one line to stderr under a PATH with no digest command — the test there is
+    `test_a_present_brief_with_no_way_to_digest_it_is_not_called_missing` — where a second line
+    would be a `command not found` from something that PATH is missing. Redirecting the whole of
+    this script's stderr at that call site would suppress this script's own failures along with the
+    line, so the flag suppresses the line alone."""
+    r = run_validator(tmp_workspace, "--quiet-when-clean")
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert r.stdout == "", r.stdout
+    assert r.stderr == "", r.stderr
+    # A real failure of this script still reaches the caller with the flag set.
+    missing = tmp_workspace.parent / "no-such-workspace"
+    bad = run_validator(missing, "--quiet-when-clean")
+    assert bad.returncode == 2, bad.stdout + bad.stderr
+    assert bad.stdout == "", bad.stdout
+    assert bad.stderr == "validate-workspace.sh: no such workspace: %s\n" % missing, bad.stderr
+
+
+def test_a_workspace_with_findings_still_writes_nothing_to_stderr(tmp_workspace):
+    """The line is on the exit-0 path only, so it is not on this one. Two tests in
+    `tests/test_validate_workspace.py` —
+    `test_a_count_written_with_a_leading_zero_loses_no_finding` and
+    `test_the_count_and_timestamp_checks_run_under_every_shell` — require stderr to be empty over a
+    workspace this script found something wrong with, and a caller reading stderr for this script's
+    own failures would read a findings line there as one."""
+    (tmp_workspace / "config.yaml").write_text("version: 1\n", encoding="utf-8")
+    r = run_validator(tmp_workspace)
+    assert r.returncode == 1, r.stdout + r.stderr
+    assert r.stderr == "", r.stderr
+    assert r.stdout == ("INVALID config.yaml missing-key queries\n"
+                        "INVALID config.yaml missing-key schedule\n"
+                        "INVALID config.yaml missing-key search.sources\n"), r.stdout

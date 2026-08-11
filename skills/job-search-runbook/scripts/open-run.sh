@@ -124,5 +124,8 @@ if [ -z "$rev" ] && [ -f "$ws/preferences.md" ]; then
   status=1
 fi
 
-sh "$here/validate-workspace.sh" "$ws" || status=1
+# --quiet-when-clean, so this script's stderr keeps holding only this script's own failures, which is
+# what the header above promises. A clean workspace is already what exit 0 from here means, so the
+# line would repeat the exit status on a second channel.
+sh "$here/validate-workspace.sh" "$ws" --quiet-when-clean || status=1
 exit $status
