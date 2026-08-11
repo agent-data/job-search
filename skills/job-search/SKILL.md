@@ -140,7 +140,7 @@ off the card and say the workspace holds no event log yet. Then render the card:
 
 ```
 Job search — <workspace path>
-Brief: updated <date>  ·  Sources: LinkedIn + Ashby  ·  Schedule: daily  ·  Last run: healthy
+Brief: updated <date>  ·  Sources: LinkedIn  ·  Schedule: daily  ·  Last run: healthy
 
 Latest digest — <date>
   <the digest's counts line, as it is written there>

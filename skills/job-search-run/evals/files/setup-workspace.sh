@@ -11,8 +11,13 @@ DEST="$1"
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../.." && pwd)"
 mkdir -p "$DEST/runs" "$DEST/reports" "$DEST/_bin"
 cp "$REPO/skills/job-search/templates/config.example.yaml" "$DEST/config.yaml"
-# Pin freshness so dated shim fixtures do not rot with the calendar.
-sed -i.bak -e 's/freshness: "past-2-weeks"/freshness: "any"/' "$DEST/config.yaml"
+# Pin freshness so dated shim fixtures do not rot with the calendar. Pin two sources as well: the
+# template ships one source, and the cases below need a second one to have anything to fan out to,
+# lose partway, or file under the wrong name — so this harness sets what it tests instead of
+# inheriting whatever the product default happens to be.
+sed -i.bak -e 's/freshness: "past-2-weeks"/freshness: "any"/' \
+           -e 's|^  sources: \["linkedin"\].*|  sources: ["linkedin", "ashby"]   # pinned here, not inherited: these cases need a second source|' \
+           "$DEST/config.yaml"
 rm -f "$DEST/config.yaml.bak"
 cp "$REPO/skills/job-preference-interview/templates/preferences.example.md" "$DEST/preferences.md"
 : > "$DEST/jobs.jsonl"

@@ -65,6 +65,12 @@ All notable changes to this project are documented here. The format is based on
   `<source>:<source_id>` rather than the bare `source_id`. The script treats column 1 as an opaque
   id and never looks inside it, so both forms collapse the same rows; what the prefixed form buys is
   that the pairing printed back is the exact value `--same-role-as` takes.
+- **A new workspace searches LinkedIn only.** `search.sources` in the config a first run writes was
+  `["linkedin", "ashby"]` and is now `["linkedin"]`, so a two-query first run opens with two
+  searches instead of four. Ashby, Greenhouse and Lever are unchanged and still supported — add any
+  of them to `search.sources` and the run fans out to them the same way it always did, per-source
+  counts and cross-source duplicate matching included. An existing workspace keeps whatever its own
+  `config.yaml` already lists; nothing rewrites a config that is already there.
 
 ### Removed
 - **Per-posting status tracking.** Saying "mark that one applied" no longer records anything: a

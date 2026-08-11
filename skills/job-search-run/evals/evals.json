@@ -9,7 +9,7 @@
       "expectations": [
         "Calls agent-data whoami before any metered call; the call log holds no status route for the whole run",
         "States what the run opens with — the number of calls it starts with and the free monthly allowance — before the first search-jobs call",
-        "Issues one search-jobs call per enabled query per enabled source (4 for the 2-query, 2-source template config), each naming its --source",
+        "Issues one search-jobs call per enabled query per enabled source (4 for the harness's 2-query, 2-source config), each naming its --source",
         "Reads fewer postings in full than the searches returned: the summary scan settles clearly-irrelevant rows without a get-posting call",
         "Every get-posting call carries a posting_id and source_url copied from the same search row",
         "Every row the search returned has a surfaced event carrying the row's own values",

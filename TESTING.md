@@ -911,7 +911,9 @@ agent-data call f9a6ec16-0bfd-44d8-b3ee-073776745ee7 search-jobs \
 **Result:** ⬜
 
 ### T14.2 Shim multi-source run — 🤖
-"Build the eval sandbox (§0.2), export `JOBSEARCH_TEST_SCENARIO=multi-source`, run
+"Build the eval sandbox (§0.2), then set `search.sources` in the sandbox workspace's `config.yaml`
+to `["linkedin", "ashby"]` — the template ships LinkedIn on its own, so a second source has to be
+added before a run has anything to fan out to. Export `JOBSEARCH_TEST_SCENARIO=multi-source`, run
 job-search-run against the sandbox workspace, and show the digest + jobs.jsonl."
 **Expected:** per-source counts breakdown; ashby events carry `"source":"ashby"`; null-date
 entries carry a date mark.
