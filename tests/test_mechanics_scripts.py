@@ -5516,7 +5516,7 @@ def test_two_postings_that_would_share_a_pipe_joined_key_are_counted_separately(
 def test_a_hand_written_log_with_two_judgments_for_one_posting_takes_the_later_line(tmp_path):
     """No run writes this log. Both append paths refuse a second `evaluated` event for a
     `(source, source_id)` that already has one — `event-log-append.sh:21-23` states the rule and
-    `:99-105` enforces it, and `record-judgment.sh:23` reads "Exit 0: recorded, or this posting
+    `:105-111` enforces it, and `record-judgment.sh:23` reads "Exit 0: recorded, or this posting
     already carries exactly this judgment" — so only a log written or edited by hand reaches this
     case. What is pinned here is `posting-counts.awk`'s behavior, not the product's.
 

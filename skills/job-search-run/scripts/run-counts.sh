@@ -36,10 +36,16 @@
 # fallback, and counts worked out by hand are not gated by anything, so a run that works them out
 # that way says so rather than presenting them as checked.
 #
+# It also writes one line to stderr: how many of the log's lines name this run, out of how many
+# lines it read. Every key above prints whether or not the run id matched anything, so a run that
+# did nothing and a run id no event carries print the same zeroed keys, and that pair of numbers is
+# what tells the two apart. The line is written before the check that exits 1 below, so a caller
+# that got exit 1 has it too.
+#
 # Exit 0: the counts printed. Exit 1: a relevant row carries no band, named on the last line; the
-# counts are printed first. Exit 2: nothing printed — no log at that path. Any other status is awk
-# failing partway, which leaves part of the key set on stdout: read these counts after checking the
-# status, never because stdout has lines in it.
+# counts are printed first. Exit 2: no counts printed — no log at that path, named on stderr. Any
+# other status is awk failing partway, which leaves part of the key set on stdout: read these counts
+# after checking the status, never because stdout has lines in it.
 #
 # A missing operand is the exception the caller sees a shell-picked code for, the way
 # record-judgment.sh:19-21 records: measured at 1 under sh and bash and 2 under dash.

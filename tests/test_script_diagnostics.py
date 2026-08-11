@@ -23,9 +23,9 @@ and writes nothing to stdout, so its tests check that stdout stays empty on the 
 and on every one of its seven refusals.
 
 The `dedup.sh --near` tests and the failed-append test run through POSIX `sh` and through `dash`
-where it is installed, the way `tests/test_dedup_guard.py` drives that same script. Helpers are defined here rather than imported
-from `tests/test_mechanics_scripts.py` or `tests/test_dedup_guard.py`, so this file collects on its
-own.
+where it is installed, the way `tests/test_dedup_guard.py` drives that same script. Helpers are
+defined here rather than imported from `tests/test_mechanics_scripts.py` or
+`tests/test_dedup_guard.py`, so this file collects on its own.
 """
 import json
 import os
@@ -212,6 +212,24 @@ def test_near_accounts_for_every_row_it_read(shell):
                       ("linkedin:bb1", "Beta", "Analyst")], shell=shell)
     assert "with no id" not in clean.stderr, clean.stderr
     assert "the same id as one above" not in clean.stderr, clean.stderr
+
+
+@pytest.mark.parametrize("shell", SHELLS)
+def test_the_near_counts_read_as_english_when_each_of_them_is_one(shell):
+    """One row in used to read `1 rows read, 1 openings to judge`. The two counts that carry a noun
+    take the singular at one; the three that carry none read the same at every number, so the empty
+    call below still reads `0 rows read`."""
+    r = run_near([("linkedin:aa1", "Acme", "Engineer")], shell=shell)
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert r.stdout == "linkedin:aa1\n", r.stdout
+    assert ("dedup.sh --near: 1 row read, 1 opening to judge, 0 the same opening as one above"
+            in r.stderr), r.stderr
+
+    empty = run_near([], shell=shell)
+    assert empty.returncode == 0, empty.stdout + empty.stderr
+    assert empty.stdout == "", empty.stdout
+    assert ("dedup.sh --near: 0 rows read, 0 openings to judge, 0 the same opening as one above"
+            in empty.stderr), empty.stderr
 
 
 @pytest.mark.parametrize("shell", SHELLS)
@@ -648,10 +666,15 @@ def read_line(lines_read, judged, aliased):
     postings among those whose judgment names another one. `relevant` plus `filtered` plus the third
     count equals the second, which is why the third is there. `to_confirm` is not one of the terms in
     that sum, because it counts within `relevant`.
+
+    Each count carries its noun, and the noun and its verb are singular at one, which is what
+    `test_the_counts_read_as_english_when_each_of_them_is_one` holds.
     """
-    return ("posting-counts.sh: %d lines read, %d postings carry a judgment, %d of them the same "
-            "opening as another and counted under neither relevant nor filtered\n"
-            % (lines_read, judged, aliased))
+    return ("posting-counts.sh: %d %s read, %d %s a judgment, %d of those %s the same opening as "
+            "another posting, counted under neither relevant nor filtered\n"
+            % (lines_read, "line" if lines_read == 1 else "lines",
+               judged, "posting carries" if judged == 1 else "postings carry",
+               aliased, "is" if aliased == 1 else "are"))
 
 
 @pytest.mark.parametrize("shell", SHELLS)
@@ -722,11 +745,38 @@ def test_the_counts_on_the_line_account_for_the_postings_the_three_keys_leave_ou
     # where they stop adding up rather than only on this one. `posting-counts.sh` is the only text on
     # the line, and it carries no digit, so the three numbers are every digit run on it. Measured
     # 2026-08-11 with `judged++` moved below the `same_role_as` test in a copy of the script: the
-    # line reads `1 postings carry a judgment` and this comparison fails at 1 != 1 + 0 + 1.
+    # line reads `1 posting carries a judgment` and this comparison fails at 1 != 1 + 0 + 1.
     lines_read, judged, aliased = [int(n) for n in re.findall(r"[0-9]+", r.stderr)]
     relevant, _, filtered = [int(l.split("=", 1)[1]) for l in r.stdout.splitlines()]
     assert judged == relevant + filtered + aliased, r.stdout + r.stderr
     assert lines_read == 3, r.stderr
+
+
+@pytest.mark.parametrize("shell", SHELLS)
+def test_the_counts_read_as_english_when_each_of_them_is_one(tmp_path, shell):
+    """A log of one judgment used to read `1 lines read, 1 postings carry a judgment`. The noun and
+    its verb take the singular at one, and the third count is a clause with a verb of its own, so at
+    one it reads `1 of those is` and at any other number `n of those are`."""
+    one = tmp_path / "one.jsonl"
+    one.write_text('{"event":"evaluated","source":"linkedin","source_id":"r1","relevant":"true",'
+                   '"match":"strong"}\n', encoding="utf-8")
+    r = run_script(POSTINGS, one, shell=shell)
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert r.stdout == "relevant=1\nto_confirm=0\nfiltered=0\n", r.stdout
+    assert r.stderr == ("posting-counts.sh: 1 line read, 1 posting carries a judgment, 0 of those "
+                        "are the same opening as another posting, counted under neither relevant "
+                        "nor filtered\n"), r.stderr
+
+    # The third count at one, which is the only place `is` appears.
+    aliased = tmp_path / "aliased.jsonl"
+    aliased.write_text(
+        '{"event":"evaluated","source":"linkedin","source_id":"r1","relevant":"true",'
+        '"match":"strong"}\n'
+        '{"event":"evaluated","source":"linkedin","source_id":"d1","relevant":"true",'
+        '"match":"strong","same_role_as":"linkedin:r1"}\n', encoding="utf-8")
+    a = run_script(POSTINGS, aliased, shell=shell)
+    assert a.returncode == 0, a.stdout + a.stderr
+    assert "2 postings carry a judgment, 1 of those is the same opening" in a.stderr, a.stderr
 
 
 # ------------------------------------------------------------------ workspace-discovery.sh
@@ -760,13 +810,13 @@ def named_line(reg, workspace):
 def unnamed_line(reg):
     """The line for a registry file that exists and yields no workspace.
 
-    One line for two states, because the `grep` reaches both the same way: a registry holding an
-    empty `active_workspace`, and a registry that is not JSON at all. The line says so rather than
-    naming one of them, which is the most this script can report without parsing the file.
+    One line for three states, because the `grep` reaches all three the same way: a registry holding
+    an empty `active_workspace`, one whose `active_workspace` is not a string, and a registry that is
+    not JSON at all. The line reports what the `grep` established rather than naming one of the
+    three, which is the most this script can say without parsing the file.
     """
-    return ("workspace-discovery.sh: registry %s exists but names no active_workspace — grep does "
-            "not check that the file is JSON, so this line also covers a registry that is not JSON "
-            "at all; parse-check the file yourself\n" % reg)
+    return ('workspace-discovery.sh: registry %s holds no non-empty "active_workspace" string — '
+            "grep does not check that the file is JSON, so parse-check the file yourself\n" % reg)
 
 
 def no_registry_line(reg):
@@ -781,23 +831,26 @@ def keys(workspace, source, first_run):
 
 
 @pytest.mark.parametrize("shell", SHELLS)
-def test_discovery_says_which_of_the_three_registry_states_it_found(tmp_path, shell):
-    """`source=none` covers three states — no registry file, a registry naming no workspace, and a
-    registry that is not JSON — and `skills/job-search-runbook/SKILL.md` requires the caller to stop
-    the run on the third: "A registry file that exists but does not parse as JSON stops the run."
-    Measured 2026-08-11 against the script as it stood before these lines existed, with one HOME and
-    the registry file rewritten between calls: all three printed the same three keys, 0 bytes on
-    stderr, exit 0.
+def test_discovery_says_which_of_the_four_registry_states_it_found(tmp_path, shell):
+    """`source=none` covers four states — no registry file, a registry holding an empty
+    `active_workspace`, one whose `active_workspace` is not a string, and a registry that is not JSON
+    — and `skills/job-search-runbook/SKILL.md` requires the caller to stop the run on the last: "A
+    registry file that exists but does not parse as JSON stops the run." Measured 2026-08-11 with one
+    HOME and the registry file rewritten between calls: all four print the same three keys and exit
+    0, so stdout says nothing about which one happened.
 
-    The script still does not parse JSON, so the second and third states share one line. What the
-    caller gets that it did not have is whether there is a file at that path at all.
+    The script does not parse JSON, so the last three states share one line. That line says the file
+    holds no non-empty `active_workspace` string, which is what the `grep` established and is true of
+    all three; `{"active_workspace": 42}` is the state that makes "names no active_workspace" false,
+    because the key is there and the file is JSON. What the caller gets that it did not have is
+    whether there is a file at that path at all.
     """
     home = tmp_path / "h"
     (home / ".job-search").mkdir(parents=True)
     reg = registry_path(home)
     reg.parent.mkdir(parents=True)
     env = discovery_env(home)
-    # `.job-search` exists with no `config.yaml` in it, so all three calls fall through to the
+    # `.job-search` exists with no `config.yaml` in it, so all four calls fall through to the
     # first-run path and print the same three keys.
     three_keys = keys(home / ".job-search", "none", "true")
 
@@ -818,12 +871,20 @@ def test_discovery_says_which_of_the_three_registry_states_it_found(tmp_path, sh
     assert unparsed.stderr == unnamed_line(reg), unparsed.stderr
     assert unparsed.stdout == three_keys, unparsed.stdout
 
-    # stdout is byte-identical across all three, which is why the stderr line is needed. The call
-    # with no file there is separated from the other two; those two share a line, and the line says
-    # that they do.
-    assert missing.stdout == empty.stdout == unparsed.stdout
+    reg.write_text('{"active_workspace": 42}', encoding="utf-8")
+    number = run_script(DISCOVERY, shell=shell, env=env)
+    assert number.returncode == 0, number.stdout + number.stderr
+    assert number.stderr == unnamed_line(reg), number.stderr
+    assert number.stdout == three_keys, number.stdout
+    # The line has to hold for this state as well as for the other two, so it says what the `grep`
+    # found rather than that the registry names no workspace.
+    assert "names no active_workspace" not in number.stderr, number.stderr
+
+    # stdout is byte-identical across all four, which is why the stderr line is needed. The call
+    # with no file there is separated from the other three; those three share a line.
+    assert missing.stdout == empty.stdout == unparsed.stdout == number.stdout
     assert missing.stderr != empty.stderr
-    assert empty.stderr == unparsed.stderr
+    assert empty.stderr == unparsed.stderr == number.stderr
 
 
 @pytest.mark.parametrize("shell", SHELLS)
@@ -1043,8 +1104,13 @@ def surfaced_event(source_id, run_id=RID):
 
 
 def dedup_line(judged, already, repeated):
-    return ("dedup-surfaced: %d already judged, %d already surfaced by this run, "
-            "%d repeated inside this response" % (judged, already, repeated))
+    """Every count names its unit, and the unit is rows rather than postings: a response repeating a
+    posting the log already judged counts both of its rows under `already judged`, which
+    `test_the_counts_are_rows_and_a_repeat_of_a_judged_posting_is_counted_as_judged` holds."""
+    def rows(n):
+        return "%d row%s" % (n, "" if n == 1 else "s")
+    return ("dedup-surfaced: %s already judged, %s already surfaced by this run, "
+            "%s repeated inside this response" % (rows(judged), rows(already), rows(repeated)))
 
 
 def totals_line(appended, returned):
@@ -1134,13 +1200,41 @@ def test_the_three_counts_account_for_every_row_that_was_not_appended(tmp_path):
     assert second.returncode == 0, second.stdout + second.stderr
     assert dedup_line(1, 1, 1) in second.stderr, second.stderr
     assert totals_line(2, 5) in second.stderr, second.stderr
-    counts = re.search(r"dedup-surfaced: (\d+) already judged, (\d+) already surfaced by this run, "
-                       r"(\d+) repeated inside this response", second.stderr)
+    counts = re.search(r"dedup-surfaced: (\d+) rows? already judged, (\d+) rows? already surfaced "
+                       r"by this run, (\d+) rows? repeated inside this response", second.stderr)
     totals = re.search(r"record-api-response\.sh: (\d+) rows appended, (\d+) rows in the response",
                        second.stderr)
     assert counts and totals, second.stderr
     appended, returned = int(totals.group(1)), int(totals.group(2))
     assert sum(int(g) for g in counts.groups()) == returned - appended, second.stderr
+
+
+def test_the_counts_are_rows_and_a_repeat_of_a_judged_posting_is_counted_as_judged(tmp_path):
+    """The three counts are rows, not postings, and the line says `row` or `rows` so a reader is not
+    left to work out which. A response holding five rows over three postings that already carry a
+    verdict — two of the three sent twice — counts all five under `already judged` and none under
+    `repeated inside this response`, because the pair is in the set before either of a posting's
+    rows is read. Without the unit on the line, `5 already judged` over a log holding three verdicts
+    reads as a fourth and a fifth verdict nobody wrote.
+    """
+    jobs = tmp_path / "jobs.jsonl"
+    rows = api_rows()
+    three = rows[:3]
+    jobs.write_text("".join(judged_event(row["source_id"]) for row in three), encoding="utf-8")
+    body = api_body(tmp_path, "five.json", three + [rows[0], rows[1]])
+    r = record_search(jobs, body, query_id="q1")
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert dedup_line(5, 0, 0) in r.stderr, r.stderr
+    assert "5 rows already judged" in r.stderr, r.stderr
+    assert totals_line(0, 5) in r.stderr, r.stderr
+
+    # The singular at one, on the same three counts.
+    single = tmp_path / "single.jsonl"
+    single.write_text(judged_event(rows[0]["source_id"]), encoding="utf-8")
+    one = record_search(single, api_body(tmp_path, "two.json", rows[:2]), query_id="q1")
+    assert one.returncode == 0, one.stdout + one.stderr
+    assert ("dedup-surfaced: 1 row already judged, 0 rows already surfaced by this run, "
+            "0 rows repeated inside this response" in one.stderr), one.stderr
 
 
 def test_the_diagnostic_stays_off_the_stdout_that_becomes_the_event_log(tmp_path):

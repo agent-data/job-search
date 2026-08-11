@@ -31,9 +31,15 @@
 # close-run.sh carries the same paragraph about its own walk to run-counts.sh — `grep -n 'ships as
 # one directory' skills/job-search-runbook/scripts/close-run.sh`; change the two together.
 #
-# Exit 0: the three counts printed. Exit 2: nothing printed — no log at that path. Any other status
-# is awk failing partway, which leaves part of the key set on stdout: read these counts after
-# checking the status, never because stdout has lines in it.
+# It also writes one line to stderr: how many lines it read, how many postings carry a judgment, and
+# how many of those are the same opening as another posting. `relevant` plus `filtered` plus that
+# third count equals the second, so the line accounts for the postings the three keys leave out. All
+# three keys print as 0 for a log holding no judgment, for an empty log and for a file of lines that
+# are not JSON at all, and the line is what tells those apart.
+#
+# Exit 0: the three counts printed. Exit 2: no counts printed — no log at that path, named on
+# stderr. Any other status is awk failing partway, which leaves part of the key set on stdout: read
+# these counts after checking the status, never because stdout has lines in it.
 #
 # A missing operand is the exception the caller sees a shell-picked code for, the way
 # run-counts.sh's own header records — `grep -n 'missing operand'

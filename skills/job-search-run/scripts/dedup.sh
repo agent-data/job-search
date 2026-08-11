@@ -61,6 +61,10 @@ if [ "${1:-}" = --near ]; then
   # `first[company, title]` is assigned on the keep path below, so it holds the id of the row that
   # was kept for that pair — the one a later row is collapsed into. `rows` counts every line read,
   # blanks included, so `rows read` is the input size the caller handed over.
+  #
+  # The first two counts name what they count, and the noun is singular at one: a single row in
+  # reads `1 row read, 1 opening to judge, 0 the same opening as one above`. The other three counts
+  # take no noun, so they read the same at every number.
   exec awk -F'\t' '
     function norm(s) {
       s = tolower(s)
@@ -79,8 +83,9 @@ if [ "${1:-}" = --near ]; then
                                     id, first[company, title] | "cat 1>&2"
                                   next }
     { kept++; first[company, title] = id; print id }
-    END { counts = sprintf("%d rows read, %d openings to judge, %d the same opening as one above", \
-                           rows, kept, same+0)
+    END { counts = sprintf("%d row%s read, %d opening%s to judge, %d the same opening as one above", \
+                           rows+0, (rows+0 == 1 ? "" : "s"), \
+                           kept+0, (kept+0 == 1 ? "" : "s"), same+0)
           if (no_id)     counts = counts sprintf(", %d with no id", no_id)
           if (repeat_id) counts = counts sprintf(", %d the same id as one above", repeat_id)
           printf "dedup.sh --near: %s\n", counts | "cat 1>&2"

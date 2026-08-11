@@ -89,10 +89,17 @@ END {
   # equals judged on every log. to_confirm is not a term in that sum, because it counts within
   # relevant — `grep -n 'to_confirm counts over' posting-counts.sh` is where that is written down.
   #
+  # Each count names what it counts, and the noun and its verb are singular at one: a log of one
+  # judgment reads `1 line read, 1 posting carries a judgment`. The third count is a clause of its
+  # own with its own verb — `1 of those is the same opening as another posting` — and what that
+  # posting is left out of follows it after a comma, rather than hanging off the same `of those`.
+  #
   # `| "cat 1>&2"` is how an awk program in this pack writes to stderr — json-scan.awk:51-52 is the
   # precedent — and the close() is what flushes it.
-  printf "posting-counts.sh: %d lines read, %d postings carry a judgment, %d of them the same" \
-         " opening as another and counted under neither relevant nor filtered\n", \
-    NR, judged+0, aliased+0 | "cat 1>&2"
+  printf "posting-counts.sh: %d %s read, %d %s a judgment, %d of those %s the same opening as" \
+         " another posting, counted under neither relevant nor filtered\n", \
+    NR, (NR == 1 ? "line" : "lines"), \
+    judged+0, (judged+0 == 1 ? "posting carries" : "postings carry"), \
+    aliased+0, (aliased+0 == 1 ? "is" : "are") | "cat 1>&2"
   close("cat 1>&2")
 }

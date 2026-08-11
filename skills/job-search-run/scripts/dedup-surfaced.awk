@@ -25,6 +25,20 @@
 # run printed `1 rows appended, 10 rows in the response`, and three different things produce that
 # same line: nine postings that already carry a verdict, nine an earlier search of the same run
 # surfaced, and one posting the response repeated nine times.
+#
+# Each of the three counts says `row` or `rows`, because rows are what is counted and one response
+# can hold several rows for the same posting. A response repeating a posting the log already judged
+# counts both of its rows under `already judged` and neither under `repeated inside this response`,
+# because the pair is already in the set when the first of them is read: measured 2026-08-11 on a
+# response of 5 rows covering 3 postings that already carry a verdict, two of them sent twice, the
+# line read
+# `5 rows already judged, 0 rows already surfaced by this run, 0 rows repeated inside this response`.
+# Counting rows is what keeps the three adding up to `rows in the response` minus `rows appended` on
+# record-api-response.sh's line beside it, which counts rows too.
+
+# A count and its unit, with the noun singular at one. Every count on the stderr line below goes
+# through here, so all three read the same way.
+function rows(n) { return n " row" (n == 1 ? "" : "s") }
 
 BEGIN {
   while ((getline line < jobs) > 0) {
@@ -60,8 +74,8 @@ END {
   # event, so it goes to stderr, where it passes through to the caller of record-api-response.sh.
   # `| "cat 1>&2"` is how an awk program in this pack writes to stderr — json-scan.awk:51-52 is the
   # precedent — and the close() is what flushes it.
-  printf "dedup-surfaced: %d already judged, %d already surfaced by this run, %d repeated inside" \
+  printf "dedup-surfaced: %s already judged, %s already surfaced by this run, %s repeated inside" \
          " this response\n", \
-    judged+0, already+0, repeat+0 | "cat 1>&2"
+    rows(judged+0), rows(already+0), rows(repeat+0) | "cat 1>&2"
   close("cat 1>&2")
 }

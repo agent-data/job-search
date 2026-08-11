@@ -126,10 +126,12 @@ Read, all of it local: `config.yaml` (enabled queries, `search.sources`, `schedu
 of `preferences.md` (`created_at` where that is the only one), and the newest `runs/<run_id>.json`
 and the digest it points at. For the match counts, run this skill's
 `scripts/posting-counts.sh <workspace>/jobs.jsonl` rather than reading that log yourself: it prints
-`relevant`, `to_confirm` and `filtered`, one `key=value` per line. The log only grows — every run
-appends to it and nothing shortens it. Exit 2 means there is no file at that path and nothing was
-printed: leave the Matches block off the card and say the workspace holds no event log yet. Then
-render the card:
+`relevant`, `to_confirm` and `filtered` on stdout, one `key=value` per line, and writes one line to
+stderr saying how many lines it read and how many postings carry a judgment. Three zeroed counts
+over `0 lines read` is an empty log; over a line count above zero, nothing in the file was read as a
+judgment. The log only grows — every run appends to it and nothing shortens it. Exit 2 means there
+is no file at that path: no counts were printed, and stderr names the path. Leave the Matches block
+off the card and say the workspace holds no event log yet. Then render the card:
 
 ```
 Job search — <workspace path>

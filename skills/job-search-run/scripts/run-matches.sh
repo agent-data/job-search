@@ -62,8 +62,15 @@
 # and an unbanded row in none of the four bands and this script gives neither a row. So a caller can
 # check the digest against both.
 #
+# It also writes one line to stderr: how many of the log's lines name this run, out of how many
+# lines it read — the same pair run-counts.sh reports, in the same words — then the rows printed
+# under each of the four bands, the postings that are the same opening as another and so got no row,
+# and, when that last count is above zero, the postings judged relevant with no band and given no
+# row. A run that judged nothing and a run id no event carries both print no rows at all, and the
+# first pair of numbers is what tells the two apart.
+#
 # Exit 0: the listing printed. A run that judged nothing prints no rows and exits 0.
-# Exit 2: nothing printed — no log at that path.
+# Exit 2: no rows printed — no log at that path, named on stderr.
 # Any other status is awk failing partway, which leaves part of the listing on stdout: read these
 # rows after checking the status, never because stdout has lines in it.
 #

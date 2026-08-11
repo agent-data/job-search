@@ -23,6 +23,12 @@
 # duplicate evaluated event for a known (source, source_id) pair". This is the scripted form of the
 # model-run prose contract; that prose remains the no-runtime fallback.
 #
+# Nothing goes to stdout. One line goes to stderr on each of the two paths that exit 0: an append
+# says which event type it wrote and which source and source_id it wrote it for, and a skip says the
+# posting already carries that event and nothing was written. Without those two lines an event that
+# landed and a duplicate that was skipped look the same to the caller. Each refusal writes its own
+# line and exits 1.
+#
 # Usage: event-log-append.sh <jobs.jsonl>        # the single-line event JSON on stdin
 set -u
 jobs=${1:?usage: event-log-append.sh <jobs.jsonl>   (event JSON on stdin)}

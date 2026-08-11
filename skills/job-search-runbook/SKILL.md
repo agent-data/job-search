@@ -14,13 +14,18 @@ Every path below that names a file in the user's workspace is relative to the `w
 prints. The few that name a file inside the plugin instead say so where they are written. Run the
 plugin's `skills/job-search-runbook/scripts/workspace-discovery.sh`.
 
-It prints three lines:
+It prints three `key=value` lines on stdout:
 
 ```
 workspace=/Users/dana/job-search
 source=legacy
 first_run=false
 ```
+
+It writes one more line to stderr, naming the registry path and saying what it found there, so a
+terminal or a tool result that merges the two streams shows four lines. That line says whether there
+is a file at that path at all, and whether a non-empty `active_workspace` string came out of it.
+Read it together with the parse-check rule at the end of this section.
 
 `first_run=true` means that path has no `config.yaml` yet and setup creates it. `source=legacy` means
 the workspace sits at the older visible path: keep using it, and record it in the registry as
@@ -42,8 +47,9 @@ First match decides:
 4. Neither exists — first run, workspace `$H/.job-search`, which setup creates.
 
 A registry file that exists but does not parse as JSON stops the run: report that the file at that
-path cannot be read, rather than picking a workspace it might not name. The script reads it with
-`grep` and cannot tell a corrupt file from an absent one, so parse-check it yourself.
+path cannot be read, rather than picking a workspace it might not name. The script reads the file
+with `grep`, so its stderr line tells you whether there is a file at that path but never whether
+that file is JSON — parse-check it yourself.
 
 ## What each file holds
 

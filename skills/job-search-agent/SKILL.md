@@ -26,9 +26,10 @@ user arrives with.
 Every search setting is a field in the workspace's `config.yaml`: the `queries[]` entries with their
 keywords, location, limit and `enabled` flag, plus `search.sources` and `search.freshness`. Edit the
 file in place, keeping its comments and shape, then check it with the plugin's
-`skills/job-search-runbook/scripts/validate-workspace.sh <workspace>` — silence means the file is
-usable, and each line it prints names one file and one broken rule. The change takes effect on the
-next run.
+`skills/job-search-runbook/scripts/validate-workspace.sh <workspace>`. One line on stderr reading
+`checked <workspace> — no broken rule found` means the file is usable; one line per problem on
+stdout instead, each naming one file and one broken rule, means it is not. The change takes effect
+on the next run.
 
 A change that raises what a run opens with — one more query, one more source — gets its new cost
 stated before it is saved, per `agent-data-reference`'s cost recipe.

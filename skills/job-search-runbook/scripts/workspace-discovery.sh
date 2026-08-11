@@ -16,15 +16,17 @@
 #                                          source=<registry|default|legacy|none>
 #                                          first_run=<true|false>
 #
-# and one line on stderr saying what it found at the registry path. Three states fall past the
+# and one line on stderr saying what it found at the registry path. Four states fall past the
 # registry step, and the three keys above say nothing about which one happened: a registry holding an
-# empty active_workspace, a registry that is not JSON at all, and no registry file. Measured
-# 2026-08-11 on one HOME with the file rewritten between calls, all three printed the same three
-# keys, 0 bytes on stderr and exit 0. This skill's SKILL.md §"Find the workspace" requires the caller
-# to stop the run on the registry that is not JSON, and this script does not parse JSON: the `grep`
-# below reads that file and one holding an empty active_workspace the same way, so those two share
-# one stderr line, which says the file was not parsed. The state the line does separate out is no
-# registry file at that path, where the caller has nothing to parse-check.
+# empty active_workspace, one whose active_workspace is not a string at all, a registry that is not
+# JSON at all, and no registry file. Measured 2026-08-11 on one HOME with the file rewritten between
+# calls, all four printed the same three keys on stdout and exited 0, so the stderr line is the only
+# part of the answer that separates them. This skill's SKILL.md §"Find the workspace" requires the
+# caller to stop the run on the registry that is not JSON, and this script does not parse JSON: the
+# `grep` below reads the first three the same way, so those three share one stderr line, which says
+# what the grep did establish — that the file holds no non-empty active_workspace string. The state
+# the line does separate out is no registry file at that path, where the caller has nothing to
+# parse-check.
 set -u
 
 REG="${JOBSEARCH_OS_REGISTRY:-${XDG_CONFIG_HOME:-${JOBSEARCH_OS_HOME:-$HOME}/.config}/job-search/config.json}"
@@ -46,13 +48,18 @@ if [ -f "$REG" ]; then
     fi
     exit 0
   else
-    # One line for two states, because the grep above reads both the same way: a registry holding an
-    # empty active_workspace, and a registry that is not JSON at all. Saying which one it is would
-    # state something the grep never established, so the line names both and says the file was not
-    # parsed. This path does not stop here — it falls through to the two config checks below and then
+    # One line for three states, because the grep above reads all three the same way: a registry
+    # holding an empty active_workspace, one whose active_workspace is not a string — the grep
+    # matches a quoted value, and `{"active_workspace": 42}` is valid JSON holding none — and a
+    # registry that is not JSON at all. Naming one of the three would state something the grep never
+    # established, so the line reports what it did establish: the file holds no non-empty
+    # active_workspace string. Measured 2026-08-11 on a registry holding `{"active_workspace": 42}`,
+    # the script wrote this line and exited 0.
+    #
+    # This path does not stop here — it falls through to the two config checks below and then
     # to the first-run line, so the workspace on stdout is not always source=none. Measured
     # 2026-08-11 with a registry that is not JSON and a config.yaml at $H/.job-search: source=default.
-    printf 'workspace-discovery.sh: registry %s exists but names no active_workspace — grep does not check that the file is JSON, so this line also covers a registry that is not JSON at all; parse-check the file yourself\n' \
+    printf 'workspace-discovery.sh: registry %s holds no non-empty "active_workspace" string — grep does not check that the file is JSON, so parse-check the file yourself\n' \
       "$REG" >&2
   fi
 else
