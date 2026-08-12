@@ -66,7 +66,7 @@
     # `detail` events the branch above records. Assigned like rel, band and alias, so a re-judgment
     # carrying detail_read false clears the claim the earlier judgment made.
     #
-    # Nothing else reads this field. record-judgment.sh checks the flag it is handed and
+    # No other script reads this field. record-judgment.sh checks the flag it is handed and
     # record-judgment.awk writes it onto the event; run-matches.awk prints no column for it, and
     # close-run.sh and validate-workspace.sh read postings_detail_read instead. Measured 2026-08-12:
     # `grep -rlw detail_read skills/*/scripts/` names record-judgment.sh, record-judgment.awk, this
