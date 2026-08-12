@@ -70,10 +70,15 @@ done
 # it: record-api-response.sh is never handed a posting id — it gets a run id, a log path, a response
 # path, a route and a source — so the reason to check this one belongs where the path is made.
 #
-# The value comes off a surfaced row, so it is the API's rather than one an operator typed. Measured
-# 2026-08-11 on a live 10-row linkedin search, every `id` is `jp_` followed by 12 hex digits, and
-# none of the ten holds a slash or a control character. That shape is not pinned here: the API owns
-# it and a copy of it would drift out of step.
+# The value comes off a surfaced row, so it is the API's rather than one an operator typed. All 10
+# ids a live search returned were `jp_` followed by 12 hex digits, and none of them held a slash or
+# a control character — measured 2026-08-11 with:
+#
+#   agent-data call f9a6ec16-0bfd-44d8-b3ee-073776745ee7 search-jobs \
+#     --source linkedin --keywords "strategic finance" --limit 10 |
+#     python3 -c 'import json,sys; print([r["id"] for r in json.load(sys.stdin)["data"]["results"]])'
+#
+# That shape is not pinned below: the API owns it, and a copy of it here would stop matching.
 #
 # Both refusals were measured 2026-08-11 against an open run, with this check removed.
 #

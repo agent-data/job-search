@@ -13,8 +13,8 @@
 # with a call the API billed and no `call` event naming it — measured 2026-08-11 with
 # --source 'linked:in' against an open run: the saved error body carried request_id
 # req_eca95b6e566b46dca902c900 and `grep '"event":"call"'` on that run's jobs.jsonl matched only the
-# earlier search. A run's metered-call count is built from those events, so the billed call is
-# invisible to it.
+# earlier search. A run's metered-call count is built from those events, and a billed call that
+# left none is missing from it.
 #
 # The rules, and where record-api-response.sh checks each:
 #   :65-68    --route is search-jobs or get-posting
@@ -27,14 +27,14 @@
 #
 # --route is required because the last rule is the one that is not about characters and applies to
 # one route only: a search is grouped by source and query id, and a detail read is not grouped and
-# takes no query id. Without the route this script cannot tell which of the two it is guarding.
+# takes no query id. Nothing else in the arguments says which of the two calls is being guarded.
 # Measured 2026-08-11: `record-api-response.sh <run_id> <jobs> <resp> --route search-jobs
 # --query-id '' --source linkedin` exits 2 saying `--route search-jobs needs --query-id`, and the
 # jobs.jsonl path it was given is never created. `--route bogus` exits 2 the same way.
 #
 # This checks the characters in a value and never which sources exist. agent-data-reference/SKILL.md
 # names the sources the API serves, and the API refuses the rest with a 400 — a second copy here
-# would drift out of step with that one.
+# would stop matching that one.
 #
 # There is no --run-id. A wrapper takes the run id from resolve-run.sh, which prints only a name
 # matching its RUN_ID_GLOB at resolve-run.sh:62 — digits, dashes, `T` and `Z` — so a run id cannot
@@ -87,8 +87,8 @@ esac
 check --source "$src"
 check --query-id "$query_id"
 
-# Only a search needs one, and only a non-empty one counts: record-api-response.sh:130-136 takes an
-# absent --query-id and an empty one down the same branch.
+# Only a search needs one, and only a non-empty one counts: record-api-response.sh:130-136 treats
+# an absent --query-id and an empty one the same way.
 if [ "$route" = search-jobs ]; then
   [ -n "$query_id" ] || die "--route search-jobs needs a --query-id that is not empty"
 fi

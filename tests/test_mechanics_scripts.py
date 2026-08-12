@@ -6084,9 +6084,8 @@ def test_fetch_posting_refuses_a_source_record_api_response_would_refuse_before_
     record-api-response.sh matches three `case` patterns against `--source` — no control character
     and no backslash at record-api-response.sh:92-106, and neither a comma nor a colon at :112-120 —
     and every one of those checks runs before `emit_call` is even defined at :173, so it writes
-    nothing. Reading the
-    posting first and finding that out afterwards leaves a call the API billed with no `call` event
-    naming it, and a run's metered-call count is built from those events.
+    nothing. Reading the posting first and finding that out afterwards leaves a call the API billed
+    with no `call` event naming it, and a run's metered-call count is built from those events.
 
     Measured 2026-08-11 against an open run, before check-record-args.sh existed: exit 1, the saved
     error body carrying request_id req_eca95b6e566b46dca902c900, and zero `call` events with route
