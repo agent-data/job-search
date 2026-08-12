@@ -47,22 +47,27 @@ none). This pass reads those first pages and stops there — a continuation page
 run finds new.
 
 Run each search with this skill's `scripts/search-jobs.sh --query-id <the query's id> --source <the
-source you asked for> -- <the route's own parameters>`. Everything after `--` goes to the route
-unchanged, so the parameter names come from `agent-data docs` and this script never has to know
-them. It finds the workspace and the open run itself, captures both streams into
-`runs/.scratch/<run_id>/`, and records the call whether it returned or failed. It appends the call
-itself and one line per row it kept, leaving out a posting any run has already judged and one an
-earlier search of this run surfaced. `--source` is required, on a call that fails as much as on one
-that returns: `run-counts.sh` groups the search calls by source and query id, and a failed attempt
-recorded without it would land in a group of its own, where the run reports a search that never
-returned even though the retry answered. Exit 1 means the call failed or a row was unusable, and
-stderr says which — the `call` event is written either way, and nothing else is. Exit 2 means the
-arguments were wrong or there is no single open run to record against: nothing was called and
+source you asked for> -- <the route's own parameters, every value in single quotes>`. Everything
+after `--` goes to the route unchanged, so the parameter names come from `agent-data docs` and this
+script never has to know them. Put every value in single quotes: `keywords` and `location` come
+from `config.yaml` and are usually more than one word, and without the quotes only the first word
+reaches the route — `--keywords AI engineer --location United States` asks for `AI` in `United`,
+appends the rows that come back, and exits 0. It finds the workspace and the open run itself,
+captures both streams into `runs/.scratch/<run_id>/`, and records the call whether it returned or
+failed. It appends the call itself and one line per row it kept, leaving out a posting any run has
+already judged and one an earlier search of this run surfaced. `--source` is required on every
+call, including one that fails: `run-counts.sh` keys a search group `<source>:<query_id>`, so a
+failed attempt carrying no source would be a group of its own, where the run reports a search that
+never returned even though the retry answered. Exit 1 means the call failed or a row was unusable,
+and stderr says which — the `call` event is written either way, and nothing else is. Exit 2 means
+the arguments were wrong or there is no single open run to record against: nothing was called and
 nothing was written.
 
-Then check the saved response for the echoes: the source echo per `agent-data-reference`'s
-source-echo row, and the cutoff the same way, where one that comes back missing or altered means
-applying that date to the rows yourself.
+Then check the response — the file the `response=` line named on stdout — for the echoes: the
+source echo per `agent-data-reference`'s source-echo row, and the cutoff the same way, where one
+that comes back missing or altered means applying that date to the rows yourself. `data.query`
+echoes `keywords` and `location` as the route received them, so read those two back as well: `AI`
+where the query asked for `AI engineer` is a value that lost its quotes.
 
 ## Reconcile
 
@@ -128,8 +133,8 @@ these five parts, in this order:
 Both scripts find the workspace and the open run themselves, so the prompt carries no file paths.
 
 Read each posting with this skill's `scripts/fetch-posting.sh --posting-id <posting_id_at_seen>
---source-url <source_url> --source <source>`. It finds the workspace and the open run itself, so it
-takes nothing else. It records the billable call the run is charged for, and it stores the
+--source-url '<source_url>' --source <source>`. It finds the workspace and the open run itself, so
+it takes nothing else. It records the billable call the run is charged for, and it stores the
 posting's text so a later run can judge it again against a changed brief instead of paying to read
 it twice. Record what `evaluate-job-fit` returned with this skill's `scripts/record-judgment.sh`,
 which finds the workspace and the open run itself: `--detail-read true`, `--relevant` as `true` or
