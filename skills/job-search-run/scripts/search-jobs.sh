@@ -14,9 +14,10 @@
 #   --              required. Everything after it goes to the route unchanged, with two exceptions:
 #                   a call carrying no route parameters is refused, and so is any argument that is
 #                   the string --source. That second rule covers the value position as well as the
-#                   flag position — `--keywords --source` is refused the same as `--source ashby` —
-#                   because this script never learns which route parameters take a value, so it
-#                   cannot tell a flag from a value. Send that search without the offending value.
+#                   flag position — `--keywords --source` is refused the same as `--source ashby`,
+#                   and so is the `--source=ashby` form — because this script never learns which
+#                   route parameters take a value, so it cannot tell a flag from a value. Send that
+#                   search without the offending value.
 #
 # Not for any other route. Reading one posting is fetch-posting.sh.
 #

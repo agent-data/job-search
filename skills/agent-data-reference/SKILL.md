@@ -34,7 +34,8 @@ Searches and posting reads go through the `job-search-run` skill's scripts:
 call, writes the `call` event a run's billable-call count is built from, and checks the response
 before anything downstream reads it. VERY IMPORTANT: for searching and for reading postings you MUST use these two
 scripts: a direct `agent-data call` on either route is charged, missing from the count, and
-unchecked, so the run under-reports what it spent and closes degraded.
+unchecked, and nothing in the workspace can see a call that never reached the log — the record
+under-reports what the run spent and no later check flags it.
 
 The wrappers change nothing about what the routes are sent. One search still reaches one source,
 named by `--source`, and the run still does its own fan-out, merge, and duplicate check, so one
@@ -116,8 +117,8 @@ script file is missing, or the host executes commands without a POSIX sh. A wrap
 refused is not that case.
 
 IMPORTANT: A call made without the wrappers is still charged, appears in no count, and its response was never
-checked. Keep your own count of these calls and put it in the run's summary, so the digest carries
-the calls the log is missing; the run closes degraded either way.
+checked. Keep your own count of these calls and put it in the run's summary — the summary is the
+only place they can appear, because no count or check reads a call that never reached the log.
 
 Reading one posting:
 

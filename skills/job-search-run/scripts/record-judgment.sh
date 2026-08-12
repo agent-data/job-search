@@ -1,7 +1,7 @@
 #!/bin/sh
 # record-judgment.sh — record one posting's judgment.
 #
-# Usage: record-judgment.sh [<jobs.jsonl>] [--run-id ID] --source S --source-id ID \
+# Usage: record-judgment.sh [<jobs.jsonl>] [--run-id ID] [--workspace W] --source S --source-id ID \
 #          --detail-read true|false --relevant true|false [--match strong|moderate|weak] \
 #          [--needs-human-check true|false] [--dealbreakers 'a;b'] [--unknowns 'a;b'] \
 #          [--reasoning TEXT] [--same-role-as SOURCE:ID] [--posted-at-extracted DATE] [--ts TS]

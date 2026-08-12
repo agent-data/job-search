@@ -71,7 +71,8 @@
     # record-judgment.awk writes it onto the event; run-matches.awk prints no column for it, and
     # close-run.sh and validate-workspace.sh read postings_detail_read instead. Measured 2026-08-12:
     # `grep -rlw detail_read skills/*/scripts/` names record-judgment.sh, record-judgment.awk, this
-    # file, and run-counts.sh, whose header explains the key. Widened to `grep -rlw detail_read
+    # file, run-counts.sh (whose header explains the key), and close-run.sh, whose match is a
+    # measurement comment rather than a read of the field. Widened to `grep -rlw detail_read
     # skills/` it adds evals/evals.json and templates/jobs-event.example.json, which put the field
     # in eval prose and on an example event rather than reading it.
     claimed[k] = (jval($0, "detail_read") == "true")

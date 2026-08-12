@@ -4,6 +4,18 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- **Two scripts now make every metered call a run spends.** `skills/job-search-run/scripts/search-jobs.sh` runs one search and `skills/job-search-run/scripts/fetch-posting.sh` reads one posting; each makes the agent-data call, writes the `call` event the run's billable-call count is built from, and checks the response before anything reads it. They exist because the call and its record used to be separate commands, and on a live 2026-08-11 session 35 get-posting calls were made and 14 reached the log. `resolve-run.sh` and `check-record-args.sh` support them: the first reads the open run off the marker on disk, and the second refuses a value the recorder would refuse before the call is billed.
+
+### Changed
+- **The run record's shape changed: every record now carries `degraded_reasons`.** `close-run.sh` writes into it one entry per check that failed at close, `validate-workspace.sh --post-close` requires the key, and `templates/run-record.example.json` shows it. A record written by an earlier version fails the post-close check until the key is added.
+- **`run-counts.sh` prints one more key, `judgments_claiming_detail_read`,** and `record-judgment.sh` refuses a judgment claiming a posting was read when the log stores no posting text for it — the refusal names `fetch-posting.sh` as what stores it.
+- **`open-run.sh` refuses to open a second run in a workspace whose marker is still there,** printing the close and clear commands to run first, and the run skills now route a leftover marker through close-then-clear rather than deletion, so the run that died still gets a record.
+- **Detail reads are dispatched two or three postings per subagent, all subagents started at once** — batching cuts the per-posting overhead and starting them together keeps the run from taking the sum of its slowest members.
+- **`agent-data-reference` is restructured wrapper-first**: the three commands to call directly (`whoami`, `docs`, `init`), then the wrapper rule, then the quirks; the direct route recipes moved to an appendix for the case where the wrapper scripts cannot run.
+
 ## [0.9.0] — 2026-08-08
 
 ### Changed

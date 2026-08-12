@@ -164,7 +164,8 @@ inherently visible because the next front-door visit routes to onboarding.
 A run that is killed outright can't write anything, so the contract handles it from the other end:
 a run creates the empty marker `runs/.started-<run_id>` when it opens and deletes it only at close.
 A marker with no matching record means the previous run died mid-flight, and the next run says so
-before doing anything else, then clears it. The run loop that enforces all of this is
+before doing anything else, then closes and clears it — the run contract's first step, which is
+what leaves a record of the run that died. The run loop that enforces all of this is
 [../skills/job-search-run/SKILL.md](../skills/job-search-run/SKILL.md).
 
 ## 5. Headless-first — the scheduled run never blocks on a human

@@ -49,16 +49,20 @@ fi
 [ -d "$ws" ] || { printf 'resolve-run.sh: no such workspace: %s\n' "$ws" >&2; exit 2; }
 
 # The run id comes out of the marker's name, and only from a name shaped like a run id.
-# validate-workspace.sh:85 defines that shape as RUN_ID_GLOB and matches names against it at :95 and
-# :303. The digits are written out rather than as the range [0-9] because a range matched
-# Arabic-Indic digits under one locale, measured at validate-workspace.sh:73-84.
+# validate-workspace.sh defines that shape as RUN_ID_GLOB and matches names against it —
+# `grep -n RUN_ID_GLOB skills/job-search-runbook/scripts/validate-workspace.sh` prints the
+# definition and both match sites. The digits are written out rather than as the range [0-9]
+# because a range matched Arabic-Indic digits under one locale, measured in the comment above that
+# definition.
 #
 # Two kinds of name in runs/ carry the .started- prefix and name no run, and both are skipped here.
 # `.started-` with nothing after the dash is one: open-run.sh:88 skips it and keeps scanning rather
 # than refusing on it, so a workspace can hold it beside a real marker, and counting it would make
-# one open run look like two. Any other name that misses the shape is the second: the `case` at
-# close-run.sh:135 and the one at clear-run.sh:49 refuse a run id of any other shape, so printing
-# such a name would hand a caller a run id neither of them will take.
+# one open run look like two. Any other name that misses the shape is the second: the run-id
+# `case` in close-run.sh and the one in clear-run.sh — `grep -n 'case \$run_id'
+# skills/job-search-runbook/scripts/close-run.sh skills/job-search-runbook/scripts/clear-run.sh` —
+# refuse a run id of any other shape, so printing such a name would hand a caller a run id neither
+# of them will take.
 RUN_ID_GLOB='[0123456789][0123456789][0123456789][0123456789]-[0123456789][0123456789]-[0123456789][0123456789]T[0123456789][0123456789]-[0123456789][0123456789]-[0123456789][0123456789]Z'
 
 # Every marker is collected rather than the first one taken, so the refusal on two markers names

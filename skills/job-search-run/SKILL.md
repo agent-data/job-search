@@ -40,8 +40,9 @@ first:
 Read the route list once with `agent-data docs <listing id>`, which is free, and take every
 parameter name from it. One `search-jobs` call reaches one source, so each enabled query runs once
 per entry in `search.sources`: keywords, location and `limit` from the query, `source` from the
-list, `search.freshness` as the cutoff parameter the route docs name (the `any` window sends
-none). This pass reads those first pages and stops there — a continuation page holds what the next
+list, `search.freshness` as the cutoff parameter the route docs name — that parameter takes an ISO
+date, so send the day the window reaches back to, today in UTC minus the window (the `any` window
+sends none). This pass reads those first pages and stops there — a continuation page holds what the next
 run finds new.
 
 Run each search with this skill's `scripts/search-jobs.sh --query-id <the query's id> --source <the
@@ -119,7 +120,8 @@ these five parts, in this order:
 5. What to return for each posting: the title, the company, whether it is relevant, the match band,
    and the reasoning line.
 
-Both scripts find the workspace and the open run themselves, so the prompt carries no file paths.
+Both scripts find the workspace and the open run themselves, so the prompt carries no workspace or
+log paths; the two script paths are part of the commands it does carry.
 
 Read each posting with this skill's `scripts/fetch-posting.sh --posting-id <posting_id_at_seen>
 --source-url '<source_url>' --source <source>`. It records the billable call the run is charged for, and it stores the
@@ -205,11 +207,12 @@ source. `calls_searches` and `calls_detail_reads` close the line, and `calls_tot
 usage line under it. A match whose `posted_at` came back empty ends its reasoning line with the date
 the description stated, or with the fact that none is.
 
-Two more lines belong in the digest when these counts are not zero. When `postings_unreviewed` is
+More lines belong in the digest when these counts are not zero. When `postings_unreviewed` is
 not zero, say how many postings this run never judged. When `searches_never_succeeded` is not zero,
 a footnote names the searches `searches_never_succeeded_ids` lists, each written
-`<source>:<query_id>`, as searches that never returned. Footnotes carry the rest: expired detail
-links and a source lost partway.
+`<source>:<query_id>`, as searches that never returned. When `judgments_claiming_detail_read` is
+above `postings_detail_read`, say that at least the difference in billable calls is missing from
+this run's counts. Footnotes carry the rest: expired detail links and a source lost partway.
 
 ## Close
 
@@ -221,8 +224,9 @@ schedule change; `--scheduler-id` names that job; `--close-state` is the runbook
 The script fills the rest of the record from `run-counts.sh` and one clock read, so the record and
 the digest are built from the same log and cannot disagree — this skill's
 `templates/run-record.example.json` shows the fields it writes. It works out `run_health` as well,
-and prints it as `run_health=healthy` or `run_health=degraded`. Finish by saying what the run found
-and where the digest is, in plain language.
+prints it as `run_health=healthy` or `run_health=degraded`, and writes the reasons into
+`degraded_reasons` in the record. Finish by saying what the run found and where the digest is, in
+plain language.
 
 ## When a call or a run stops early
 

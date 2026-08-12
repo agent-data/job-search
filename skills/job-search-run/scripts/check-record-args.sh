@@ -1,10 +1,11 @@
 #!/bin/sh
 # check-record-args.sh — refuse a value record-api-response.sh would refuse, before the call is made.
 #
-# Usage: check-record-args.sh --route search-jobs|get-posting [--source S] [--query-id ID]
+# Usage: check-record-args.sh --route get-posting [--source S]
+#        check-record-args.sh --route search-jobs [--source S] --query-id ID
 #
 # A wrapper that spends a metered call runs this before its `agent-data call`, passing the values it
-# will later hand record-api-response.sh. fetch-posting.sh is the wrapper that does so today. The
+# will later hand record-api-response.sh. search-jobs.sh and fetch-posting.sh both do. The
 # flag names are record-api-response.sh's own, so the same arguments go to both.
 #
 # Why it has to run first. record-api-response.sh exits 2 on a value it will not take, and every one
@@ -49,7 +50,8 @@
 set -u
 
 usage() {
-  printf 'usage: check-record-args.sh --route search-jobs|get-posting [--source S] [--query-id ID]\n' >&2
+  printf 'usage: check-record-args.sh --route get-posting [--source S]\n' >&2
+  printf '       check-record-args.sh --route search-jobs [--source S] --query-id ID\n' >&2
 }
 
 die() {
