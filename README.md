@@ -1,10 +1,8 @@
 # Job Search
 
-Hyper-personalized job search that filters postings based on  what you do and don't want, your pay requirements, qualifications, and background.
+Hyper-personalized job search that filters postings based on what you do and don't want, your pay requirements, qualifications, and background.
 
 <img width="3182" height="2160" alt="Job Search digest showing reviewed matches in an agent conversation" src="https://github.com/user-attachments/assets/a3c45a7e-6a93-4afa-86f0-f522c8f8d53c" />
-
-Your preferences, reviewed postings, run logs, and digests stay in `~/.job-search/` by default. The workspace starts with a deny-all `.gitignore`, which keeps those files out of ordinary Git commits. See [Security & Privacy](docs/SECURITY.md) for the threat model and limits.
 
 ## Quickstart
 
