@@ -7049,20 +7049,30 @@ def test_a_call_event_appended_onto_a_log_the_script_just_created_writes_no_blan
 
 # ------------------------------------------------------------------- POSIX portability
 
-def test_every_script_carries_the_execute_bit():
-    """Each script has the owner-execute bit — the one bit git reads to store a file as 100755
-    rather than 100644.
+def test_git_records_every_script_as_executable():
+    """Each script is 100755 in git's index — the mode every other checkout of this repo gets.
 
     search-jobs.sh was committed at 100644 while the other 11 `.sh` files in
     skills/job-search-run/scripts/ were 100755 (`git ls-tree 683484e
     skills/job-search-run/scripts/`, measured 2026-08-11), and no test read a file mode, so the
     suite stayed green.
 
-    This reads the file in the working tree. A bit set there but never staged leaves git recording
-    100644 and this test passing, so `git ls-files -s` is what to run to see the recorded mode.
+    `git ls-files -s` is read rather than `Path.stat`, because the two disagree exactly when
+    someone changes the working-tree bit without staging it, and the mode git records is the one
+    that ships. A script git does not track prints no row here at all, which is why the paths are
+    compared as well as the modes.
     """
-    without = [str(s.relative_to(ROOT)) for s in ALL_SCRIPTS if not s.stat().st_mode & 0o100]
-    assert without == [], "git records these at 100644: %s" % without
+    rels = sorted(str(s.relative_to(ROOT)) for s in ALL_SCRIPTS)
+    r = subprocess.run(["git", "ls-files", "-s", "--", *rels],
+                       cwd=ROOT, capture_output=True, text=True)
+    assert r.returncode == 0, r.stderr
+    # `<mode> <object> <stage>\t<path>`, one line per tracked path.
+    modes = dict(reversed(line.split("\t", 1)) for line in r.stdout.splitlines())
+    modes = {path: meta.split()[0] for path, meta in modes.items()}
+    assert sorted(modes) == rels, \
+        "git does not track these: %s" % sorted(set(rels) - set(modes))
+    assert {p: m for p, m in modes.items() if m != "100755"} == {}, \
+        "git records these as non-executable: %s" % {p: m for p, m in modes.items() if m != "100755"}
 
 
 def test_scripts_pass_posix_syntax_check():
