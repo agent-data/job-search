@@ -52,11 +52,13 @@ unchanged, so the parameter names come from `agent-data docs` and this script ne
 them. It finds the workspace and the open run itself, captures both streams into
 `runs/.scratch/<run_id>/`, and records the call whether it returned or failed. It appends the call
 itself and one line per row it kept, leaving out a posting any run has already judged and one an
-earlier search of this run surfaced. Pass `--source` on every call, a failed one included:
-`run-counts.sh` groups the search calls by source and query id, and a failed attempt recorded
-without it lands in a group of its own, where the run reports a search that never returned even
-though the retry answered. A non-zero exit means the call failed or a row was unusable, and stderr
-says which — the call event is written either way, and nothing else is.
+earlier search of this run surfaced. `--source` is required, on a call that fails as much as on one
+that returns: `run-counts.sh` groups the search calls by source and query id, and a failed attempt
+recorded without it would land in a group of its own, where the run reports a search that never
+returned even though the retry answered. Exit 1 means the call failed or a row was unusable, and
+stderr says which — the `call` event is written either way, and nothing else is. Exit 2 means the
+arguments were wrong or there is no single open run to record against: nothing was called and
+nothing was written.
 
 Then check the saved response for the echoes: the source echo per `agent-data-reference`'s
 source-echo row, and the cutoff the same way, where one that comes back missing or altered means
@@ -79,19 +81,17 @@ still needs a judgment before this run can close, and "Read and judge" says how 
 
 Judge every surfaced row from what the row carries — title, company, `location_display`,
 `salary_display`, the date. A row that plainly breaks a must-have the brief names is settled here,
-with no detail read, through this skill's
-`scripts/record-judgment.sh <workspace>/jobs.jsonl --run-id <run_id> --source <source>
---source-id <source_id> --detail-read false --relevant false
---dealbreakers '<the must-have it broke>' --reasoning '<how the row breaks it>'`.
-Every other row goes on the read list with this skill's
+with no detail read, through this skill's `scripts/record-judgment.sh --source <source> --source-id
+<source_id> --detail-read false --relevant false --dealbreakers '<the must-have it broke>'
+--reasoning '<how the row breaks it>'`. Every other row goes on the read list with this skill's
 `scripts/queue-detail-read.sh <workspace>/jobs.jsonl --run-id <run_id> --source <source>
 --source-id <source_id>`, which records that the posting is one to read and nothing else.
 
 This scan is the only thing deciding whether a posting costs a detail call, so settling every row
-the row itself settles is what keeps detail reads few. Send nothing about the judgment you expect: a
-provisional band would anchor the reader before it has read anything, and naming the question it
-has to answer would stop it looking for anything else. The reader works the open question out from
-the posting and writes it into its reasoning.
+the row itself settles is what keeps detail reads few. Send nothing about the judgment you expect:
+a provisional band would anchor the subagent before it has read anything, and naming the question
+it has to answer would stop it looking for anything else. The subagent works the open question out
+from the posting and writes it into its reasoning.
 
 ## Read and judge
 
@@ -116,7 +116,8 @@ these five parts, in this order:
    `source_url`, `title` and `company_name` the read list printed.
 2. The `evaluate-job-fit` skill to load.
 3. The `fetch-posting.sh` command for each posting, written out with that posting's values already
-   in place.
+   in place, and the `--source-url` value in single quotes: a LinkedIn URL carries `?` and `&`, and
+   unquoted the shell cuts the command at the first `&`, so `--source` never reaches the script.
 4. The `record-judgment.sh` command for each posting, with `--source`, `--source-id` and
    `--detail-read true` already in place, and the remaining values named in words: `--relevant`
    takes `true` or `false`, and `--match` takes `strong`, `moderate` or `weak` and is left off when
