@@ -78,7 +78,8 @@ done
 #     --source linkedin --keywords "strategic finance" --limit 10 |
 #     python3 -c 'import json,sys; print([r["id"] for r in json.load(sys.stdin)["data"]["results"]])'
 #
-# That shape is not pinned below: the API owns it, and a copy of it here would stop matching.
+# That shape is not pinned below: the API owns it, and a copy of it here would stop matching what
+# the API returns.
 #
 # Both refusals were measured 2026-08-11 against an open run, with this check removed.
 #
