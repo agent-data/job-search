@@ -96,6 +96,21 @@ def lines(path):
     return [json.loads(l) for l in path.read_text().splitlines() if l.strip()]
 
 
+def detail_event(source_id, run_id=RID):
+    """The `detail` event a posting read leaves in the log, cut down to the four fields
+    `record-judgment.sh` matches on — `event`, `run_id`, `source` and `source_id` — plus a body and
+    a timestamp so the line reads like the event it stands in for.
+
+    `record-api-response.sh` builds the real one off the response body and puts twelve keys on it.
+    The six left out here are `employment_type`, `apply_url`, `is_listed`, `is_remote`,
+    `workplace_type` and `staleness_status`; none is read by the check this backs. The `surfaced`
+    events the cases below write are cut down the same way.
+    """
+    return ('{"event":"detail","run_id":"%s","source":"linkedin","source_id":"%s",'
+            '"description_markdown":"The full text.","ts":"%s"}\n'
+            % (run_id, source_id, "2026-08-05T16:48:00Z"))
+
+
 # ------------------------------------------------------------------ queue-detail-read.sh
 
 def test_queueing_a_posting_says_it_queued_it(tmp_path):
@@ -127,11 +142,16 @@ def test_recording_a_judgment_says_the_verdict_back(tmp_path):
     """The recorded verdict, said back from the variables this script validated rather than
     re-parsed from the line it wrote, so the caller can check the flags it passed are the fields the
     log now holds. Without it, a recorded judgment and a refused one both give nothing on stdout,
-    nothing on stderr and exit 0."""
+    nothing on stderr and exit 0.
+
+    The log carries the `detail` event as well as the surfaced row, because the verdict said back
+    here claims the posting was read and the script now refuses that claim when no such event is
+    there."""
     jobs = tmp_path / "jobs.jsonl"
     jobs.write_text(
         '{"event":"surfaced","run_id":"%s","source":"linkedin","source_id":"77",'
-        '"title":"Analyst","company_name":"Acme"}\n' % RID, encoding="utf-8")
+        '"title":"Analyst","company_name":"Acme"}\n' % RID + detail_event("77"),
+        encoding="utf-8")
     r = run_script(JUDGE, jobs, "--run-id", RID, "--source", "linkedin", "--source-id", "77",
                    "--detail-read", "true", "--relevant", "true", "--match", "moderate",
                    "--reasoning", "fits the brief")
@@ -1790,10 +1810,13 @@ def success_calls(tmp_path, workspace):
         return run_script(QUEUE, *args)
 
     def record_judgment():
+        # The `detail` event backs the `--detail-read true` below: the script refuses that claim
+        # when the log holds no such event.
         jobs = tmp_path / "judged.jsonl"
         jobs.write_text(
             '{"event":"surfaced","run_id":"%s","source":"linkedin","source_id":"77",'
-            '"title":"Analyst","company_name":"Acme"}\n' % RID, encoding="utf-8")
+            '"title":"Analyst","company_name":"Acme"}\n' % RID + detail_event("77"),
+            encoding="utf-8")
         return run_script(JUDGE, jobs, "--run-id", RID, "--source", "linkedin", "--source-id", "77",
                           "--detail-read", "true", "--relevant", "true", "--match", "moderate",
                           "--reasoning", "fits the brief")
@@ -1805,7 +1828,8 @@ def success_calls(tmp_path, workspace):
         jobs = tmp_path / "judged-twice.jsonl"
         jobs.write_text(
             '{"event":"surfaced","run_id":"%s","source":"linkedin","source_id":"78",'
-            '"title":"Analyst","company_name":"Acme"}\n' % RID, encoding="utf-8")
+            '"title":"Analyst","company_name":"Acme"}\n' % RID + detail_event("78"),
+            encoding="utf-8")
         args = (jobs, "--run-id", RID, "--source", "linkedin", "--source-id", "78",
                 "--detail-read", "true", "--relevant", "true", "--match", "moderate",
                 "--reasoning", "fits the brief")

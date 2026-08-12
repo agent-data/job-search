@@ -10,6 +10,12 @@
 # A judgment can only be about a posting a search surfaced for this run, and the title, company,
 # location, URL and date come off that surfaced event rather than from the caller.
 #
+# --detail-read true is recorded only when the log holds a `detail` event naming this posting under
+# this run id; fetch-posting.sh writes that event when it stores the posting's text. Measured
+# 2026-08-12 against a log carrying the posting's `detail` event under a later run id: exit 1, and
+# the refusal named the run id given on the command line. --detail-read false needs no such event,
+# and is what a posting judged from the summary row a search surfaced carries.
+#
 # The log path and --run-id are both optional. Left off, they come from resolve-run.sh, which reads
 # the workspace and the runs/.started-<run_id> marker from disk. What the caller passes wins over
 # what that script reports. --workspace is for the tests.
@@ -160,6 +166,19 @@ surfaced=$(grep -F '"event":"surfaced"' "$jobs" \
            | grep -F "\"source\":\"$source\"" \
            | grep -F "\"source_id\":\"$source_id\"" | tail -1)
 [ -n "$surfaced" ] || die "no surfaced posting for $source:$source_id in run $run_id"
+
+# A judgment that says the posting was read is only recorded when the read is in the log. The run
+# record's postings_detail_read counts `detail` events, so a judgment claiming a read that no detail
+# event backs leaves the log holding two different counts of how many postings this run read.
+# Measured on the 2026-08-11 opencode run: 22 judgments carried `detail_read: true` and the log held
+# 13 detail events, because this flag was only checked for being the string true or false.
+if [ "$detail_read" = true ]; then
+  detail=$(grep -F '"event":"detail"' "$jobs" \
+           | grep -F "\"run_id\":\"$run_id\"" \
+           | grep -F "\"source\":\"$source\"" \
+           | grep -F "\"source_id\":\"$source_id\"" | tail -1)
+  [ -n "$detail" ] || die "--detail-read true but no detail event for $source:$source_id in run $run_id — fetch-posting.sh reads the posting and stores its text"
+fi
 
 [ -n "$ts" ] || ts=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 

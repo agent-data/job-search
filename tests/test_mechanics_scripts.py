@@ -2101,7 +2101,7 @@ def test_a_judgment_lands_as_one_evaluated_event(tmp_path):
     turns them into the `evaluated` event Task 5 counts a run from."""
     jobs = seeded_jobs(tmp_path, "search.linkedin.json")
     row = first_surfaced(jobs)
-    r = run_script(JUDGE, *judge_args(jobs, row, detail_read="true", relevant="true",
+    r = run_script(JUDGE, *judge_args(jobs, row, detail_read="false", relevant="true",
                                       match="strong", reasoning="Clears every must-have."))
     assert r.returncode == 0, r.stderr
     ev = [e for e in lines(jobs) if e["event"] == "evaluated"]
@@ -2117,7 +2117,7 @@ def test_the_display_fields_are_copied_off_the_surfaced_event(tmp_path):
     digest can list a posting by title and company without reading the whole log."""
     jobs = seeded_jobs(tmp_path, "search.linkedin.json")
     row = first_surfaced(jobs)
-    run_script(JUDGE, *judge_args(jobs, row, detail_read="true", relevant="true", match="strong"))
+    run_script(JUDGE, *judge_args(jobs, row, detail_read="false", relevant="true", match="strong"))
     ev = [e for e in lines(jobs) if e["event"] == "evaluated"][0]
     for key in ("title", "company_name", "location_display", "source_url", "posted_at"):
         assert ev[key] == row[key], key
@@ -2152,7 +2152,7 @@ def test_the_dropped_fields_are_gone_on_purpose(tmp_path):
     view reads off a judgment."""
     jobs = seeded_jobs(tmp_path, "search.linkedin.json")
     row = first_surfaced(jobs)
-    run_script(JUDGE, *judge_args(jobs, row, detail_read="true", relevant="true", match="weak"))
+    run_script(JUDGE, *judge_args(jobs, row, detail_read="false", relevant="true", match="weak"))
     ev = [e for e in lines(jobs) if e["event"] == "evaluated"][0]
     for gone in ("first_seen", "salary_display", "query_id"):
         assert gone not in ev
@@ -2174,7 +2174,7 @@ def test_every_field_a_script_decides_on_comes_before_the_free_text(tmp_path):
     start and end from `ts`."""
     jobs = seeded_jobs(tmp_path, "search.linkedin.json")
     row = first_surfaced(jobs)
-    run_script(JUDGE, *judge_args(jobs, row, detail_read="true", relevant="true", match="strong",
+    run_script(JUDGE, *judge_args(jobs, row, detail_read="false", relevant="true", match="strong",
                                   reasoning='It pastes a config rule holding "match": "any".'))
     raw = [l for l in jobs.read_text().splitlines() if '"event":"evaluated"' in l][0]
     for key in ('"needs_human_check":', '"match":', '"relevant":', '"detail_read":', '"ts":'):
@@ -2189,7 +2189,7 @@ def test_free_text_with_quotes_backslashes_tabs_and_newlines_round_trips(tmp_pat
     through the environment: `awk -v` cannot carry a literal newline."""
     jobs = seeded_jobs(tmp_path, "search.linkedin.json")
     row = first_surfaced(jobs)
-    run_script(JUDGE, *judge_args(jobs, row, detail_read="true", relevant="true",
+    run_script(JUDGE, *judge_args(jobs, row, detail_read="false", relevant="true",
                                   match="strong", reasoning=HOSTILE,
                                   unknowns="equity;start date"))
     ev = [e for e in lines(jobs) if e["event"] == "evaluated"][0]
@@ -2204,12 +2204,12 @@ def test_the_optional_flags_reach_the_event(tmp_path):
     second judgment is the control: it passes none of them."""
     jobs = seeded_jobs(tmp_path, "search.linkedin.json")
     rows = [e for e in lines(jobs) if e["event"] == "surfaced"][:2]
-    run_script(JUDGE, *judge_args(jobs, rows[0], detail_read="true", relevant="false",
+    run_script(JUDGE, *judge_args(jobs, rows[0], detail_read="false", relevant="false",
                                   needs_human_check="true",
                                   dealbreakers="on-site five days;pay below the floor",
                                   same_role_as="ashby:abc123",
                                   posted_at_extracted="2026-07-30"))
-    run_script(JUDGE, *judge_args(jobs, rows[1], detail_read="true", relevant="false"))
+    run_script(JUDGE, *judge_args(jobs, rows[1], detail_read="false", relevant="false"))
     supplied, control = [e for e in lines(jobs) if e["event"] == "evaluated"]
     assert supplied["needs_human_check"] is True
     assert supplied["dealbreakers_hit"] == ["on-site five days", "pay below the floor"]
@@ -2230,7 +2230,7 @@ def test_a_list_entry_is_trimmed_around_the_separator(tmp_path):
     caller gets if it is not."""
     jobs = seeded_jobs(tmp_path, "search.linkedin.json")
     row = first_surfaced(jobs)
-    r = run_script(JUDGE, *judge_args(jobs, row, detail_read="true", relevant="false",
+    r = run_script(JUDGE, *judge_args(jobs, row, detail_read="false", relevant="false",
                                       dealbreakers="pay below the floor; then equity ;  ;",
                                       unknowns="  start date  "))
     assert r.returncode == 0, r.stderr
@@ -2272,7 +2272,7 @@ def test_an_awk_that_fails_keeps_the_judgment_out_of_the_log(tmp_path):
     before = jobs.read_text()
     half = ('{"event":"evaluated","run_id":%s,"source":"linkedin","source_id":%s,"title":"Fin'
             % (json.dumps(RID), json.dumps(row["source_id"])))
-    r = run_script(JUDGE, *judge_args(jobs, row, detail_read="true", relevant="true",
+    r = run_script(JUDGE, *judge_args(jobs, row, detail_read="false", relevant="true",
                                       match="strong"),
                    env=awk_shim(tmp_path, "record-judgment.awk", half))
     assert r.returncode == 1, r.stdout + r.stderr
@@ -2291,10 +2291,10 @@ def test_a_judgment_carries_the_timestamp_given_or_the_time_it_was_written(tmp_p
     jobs = seeded_jobs(tmp_path, "search.linkedin.json")
     rows = [e for e in lines(jobs) if e["event"] == "surfaced"][:2]
     given = "2026-08-06T12:00:00Z"
-    run_script(JUDGE, *judge_args(jobs, rows[0], detail_read="true", relevant="false", ts=given))
+    run_script(JUDGE, *judge_args(jobs, rows[0], detail_read="false", relevant="false", ts=given))
     fmt = "%Y-%m-%dT%H:%M:%SZ"
     before = time.strftime(fmt, time.gmtime())
-    r = run_script(JUDGE, *judge_args(jobs, rows[1], detail_read="true", relevant="false"))
+    r = run_script(JUDGE, *judge_args(jobs, rows[1], detail_read="false", relevant="false"))
     after = time.strftime(fmt, time.gmtime())
     assert r.returncode == 0, r.stderr
     stamped, clocked = [e["ts"] for e in lines(jobs) if e["event"] == "evaluated"]
@@ -2402,13 +2402,39 @@ def test_a_judgment_about_a_posting_no_search_surfaced_is_refused(tmp_path):
     assert "no surfaced posting" in r.stderr
 
 
+def test_a_read_claimed_on_a_posting_with_no_detail_event_is_refused_without_an_api_key(tmp_path):
+    """The detail-read guard, driven off a fixture log — the state CI runs in.
+
+    Every other case covering this guard is `live`-marked and `needs_api`-gated, and CI holds no
+    key. Measured 2026-08-12 with the guard deleted: `python3 -m pytest -q -m "not live"
+    --deselect <this case>` gives 1142 passed, and the same command without the deselect gives 1
+    failed, 1142 passed — the failure being this case.
+
+    Both branches are driven. The guard only runs under `if [ "$detail_read" = true ]`, and a case
+    that claimed the read and nothing else would still pass with that condition gone. Measured
+    2026-08-12 with the grep and the `die` left unconditional: the second call below is the one that
+    fails, and it fails carrying the `--detail-read true` message while having passed `false`.
+    """
+    jobs = seeded_jobs(tmp_path, "search.linkedin.json")
+    row = first_surfaced(jobs)
+    claimed = run_script(JUDGE, *judge_args(jobs, row, detail_read="true", relevant="true",
+                                            match="strong", reasoning="Reads well."))
+    assert claimed.returncode == 1, claimed.stdout + claimed.stderr
+    assert "no detail event for %s:%s" % (row["source"], row["source_id"]) in claimed.stderr
+    assert [e for e in lines(jobs) if e["event"] == "evaluated"] == []
+
+    judged_from_the_row = run_script(JUDGE, *judge_args(jobs, row, detail_read="false",
+                                                        relevant="false", reasoning="Wrong city."))
+    assert judged_from_the_row.returncode == 0, judged_from_the_row.stderr
+
+
 def test_the_same_judgment_twice_is_reported_and_skipped(tmp_path):
     """A retry. The two invocations differ only in `--ts`, and the timestamp is not part of the
     verdict, so the second one writes nothing and exits 0. A second event would count the posting
     twice in every band total Task 5 reads off the log."""
     jobs = seeded_jobs(tmp_path, "search.linkedin.json")
     row = first_surfaced(jobs)
-    base = dict(detail_read="true", relevant="true", match="strong", reasoning="Same.")
+    base = dict(detail_read="false", relevant="true", match="strong", reasoning="Same.")
     run_script(JUDGE, *judge_args(jobs, row, ts="2026-08-05T00:00:00Z", **base))
     before = len(lines(jobs))
     r = run_script(JUDGE, *judge_args(jobs, row, ts="2026-08-05T09:30:30Z", **base))
@@ -2422,10 +2448,10 @@ def test_a_different_judgment_for_the_same_posting_is_refused_with_both_lines(tm
     open the log to see how."""
     jobs = seeded_jobs(tmp_path, "search.linkedin.json")
     row = first_surfaced(jobs)
-    run_script(JUDGE, *judge_args(jobs, row, detail_read="true", relevant="true",
+    run_script(JUDGE, *judge_args(jobs, row, detail_read="false", relevant="true",
                                   match="strong", reasoning="First."))
     before = len(lines(jobs))
-    r = run_script(JUDGE, *judge_args(jobs, row, detail_read="true", relevant="true",
+    r = run_script(JUDGE, *judge_args(jobs, row, detail_read="false", relevant="true",
                                       match="weak", reasoning="Changed my mind."))
     assert r.returncode == 1
     assert "recorded:" in r.stderr and "offered:" in r.stderr
@@ -2450,7 +2476,7 @@ def test_a_judgment_written_with_spaces_after_its_colons_still_blocks_a_second_o
     a = run_sh(APPEND, [str(jobs)], input_text=prior)
     assert a.returncode == 0, a.stderr
     before = len(lines(jobs))
-    r = run_script(JUDGE, *judge_args(jobs, row, detail_read="true", relevant="true",
+    r = run_script(JUDGE, *judge_args(jobs, row, detail_read="false", relevant="true",
                                       match="weak", reasoning="Changed my mind."))
     assert r.returncode == 1, r.stdout + r.stderr
     assert "recorded:" in r.stderr and "offered:" in r.stderr, r.stderr
@@ -2477,7 +2503,7 @@ def test_a_judgment_from_an_earlier_run_blocks_a_contradictory_one_in_this_run(t
     assert a.returncode == 0, a.stderr
     before = jobs.read_text()
 
-    r = run_script(JUDGE, *judge_args(jobs, row, detail_read="true", relevant="false",
+    r = run_script(JUDGE, *judge_args(jobs, row, detail_read="false", relevant="false",
                                       reasoning="Changed my mind."))
     assert r.returncode == 1, r.stdout + r.stderr
     said = r.stderr.splitlines()[0]
@@ -2502,7 +2528,7 @@ def test_a_prior_judgment_that_names_no_run_is_refused_without_naming_one(tmp_pa
     assert a.returncode == 0, a.stderr
     before = jobs.read_text()
 
-    r = run_script(JUDGE, *judge_args(jobs, row, detail_read="true", relevant="false",
+    r = run_script(JUDGE, *judge_args(jobs, row, detail_read="false", relevant="false",
                                       reasoning="Changed my mind."))
     assert r.returncode == 1, r.stdout + r.stderr
     said = r.stderr.splitlines()[0]
@@ -2527,7 +2553,7 @@ def test_the_refusal_does_not_claim_two_verdicts_differ_when_they_are_the_same(t
     """
     jobs = seeded_jobs(tmp_path, "search.ashby.json")
     row = first_surfaced(jobs)
-    verdict = dict(detail_read="true", relevant="true", match="strong", reasoning="Solid fit.",
+    verdict = dict(detail_read="false", relevant="true", match="strong", reasoning="Solid fit.",
                    ts="2026-08-05T00:00:00Z")
     assert run_script(JUDGE, *judge_args(jobs, row, **verdict)).returncode == 0
 
@@ -2557,10 +2583,10 @@ def test_an_awk_that_fails_reading_the_recorded_judgments_writes_no_second_verdi
     has one lands in the log. The status is checked for the same reason the builder's is."""
     jobs = seeded_jobs(tmp_path, "search.ashby.json")
     row = first_surfaced(jobs)
-    run_script(JUDGE, *judge_args(jobs, row, detail_read="true", relevant="true",
+    run_script(JUDGE, *judge_args(jobs, row, detail_read="false", relevant="true",
                                   match="strong", reasoning="First."))
     before = jobs.read_text()
-    r = run_script(JUDGE, *judge_args(jobs, row, detail_read="true", relevant="true",
+    r = run_script(JUDGE, *judge_args(jobs, row, detail_read="false", relevant="true",
                                       match="weak", reasoning="Changed my mind."),
                    env=awk_shim(tmp_path, "find-judgment.awk"))
     assert r.returncode == 1, r.stdout + r.stderr
@@ -2574,7 +2600,7 @@ def test_concurrent_judgments_all_land_as_valid_json(tmp_path):
     rows = [e for e in lines(jobs) if e["event"] == "surfaced"]
     procs = [subprocess.Popen(
         ["sh", str(JUDGE), str(jobs), "--run-id", RID, "--source", row["source"],
-         "--source-id", row["source_id"], "--detail-read", "true", "--relevant", "false",
+         "--source-id", row["source_id"], "--detail-read", "false", "--relevant", "false",
          "--reasoning", "Outside the brief."],
         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL) for row in rows]
     for p in procs:
@@ -2592,7 +2618,7 @@ def test_recording_a_judgment_runs_under_dash(tmp_path):
     drives that branch under dash."""
     jobs = seeded_jobs(tmp_path, "search.linkedin.json")
     row = first_surfaced(jobs)
-    r = run_script(JUDGE, *judge_args(jobs, row, detail_read="true", relevant="true",
+    r = run_script(JUDGE, *judge_args(jobs, row, detail_read="false", relevant="true",
                                       match="moderate", reasoning=HOSTILE), shell="dash")
     assert r.returncode == 0, r.stderr
     ev = [e for e in lines(jobs) if e["event"] == "evaluated"][0]
@@ -2650,6 +2676,61 @@ def test_record_judgment_resolves_the_log_and_the_run_from_disk(live_run):
 def test_record_judgment_still_takes_the_log_and_run_id_explicitly(live_run):
     out = subprocess.run(
         ["sh", str(JUDGE), str(live_run.jobs), "--run-id", live_run.run_id,
+         "--source", live_run.row["source"], "--source-id", live_run.row["source_id"],
+         "--detail-read", "false", "--relevant", "false", "--reasoning", "Wrong city."],
+        capture_output=True, text=True)
+    assert out.returncode == 0, out.stderr
+
+
+@pytest.mark.live
+@needs_api
+def test_record_judgment_refuses_a_posting_read_claim_with_no_detail_event(live_run):
+    """The row is real and surfaced by a real search; nothing read the posting, so the claim is
+    the only thing wrong with the call."""
+    out = subprocess.run(
+        ["sh", str(JUDGE), "--workspace", str(live_run.ws),
+         "--source", live_run.row["source"], "--source-id", live_run.row["source_id"],
+         "--detail-read", "true", "--relevant", "true", "--match", "strong",
+         "--reasoning", "Reads well."],
+        capture_output=True, text=True)
+    assert out.returncode == 1
+    assert "no detail event" in out.stderr
+    assert "%s:%s" % (live_run.row["source"], live_run.row["source_id"]) in out.stderr
+    assert "evaluated" not in live_run.jobs.read_text(encoding="utf-8")
+
+
+@pytest.mark.live
+@needs_api
+def test_record_judgment_accepts_a_posting_read_claim_after_a_real_read(live_run):
+    """The same call as the case above, with one real read in front of it. fetch-posting.sh stores
+    the posting's text, and that is the event the claim is checked against."""
+    fetched = subprocess.run(
+        ["sh", str(FETCH_POSTING), "--workspace", str(live_run.ws),
+         "--posting-id", live_run.row["posting_id_at_seen"],
+         "--source-url", live_run.row["source_url"],
+         "--source", live_run.row["source"]],
+        capture_output=True, text=True)
+    assert fetched.returncode == 0, fetched.stderr
+
+    out = subprocess.run(
+        ["sh", str(JUDGE), "--workspace", str(live_run.ws),
+         "--source", live_run.row["source"], "--source-id", live_run.row["source_id"],
+         "--detail-read", "true", "--relevant", "true", "--match", "strong",
+         "--reasoning", "Reads well."],
+        capture_output=True, text=True)
+    assert out.returncode == 0, out.stderr
+    ev = [json.loads(l) for l in live_run.jobs.read_text(encoding="utf-8").splitlines()
+          if l.strip()]
+    assert [l for l in ev if l["event"] == "evaluated"][0]["detail_read"] is True
+
+
+@pytest.mark.live
+@needs_api
+def test_record_judgment_still_takes_detail_read_false_with_no_detail_event(live_run):
+    """The normal case: a posting judged from the summary row a search surfaced, with nothing read.
+    The check must only reach a call that claims a read."""
+    out = subprocess.run(
+        ["sh", str(JUDGE), "--workspace", str(live_run.ws),
          "--source", live_run.row["source"], "--source-id", live_run.row["source_id"],
          "--detail-read", "false", "--relevant", "false", "--reasoning", "Wrong city."],
         capture_output=True, text=True)
@@ -3109,9 +3190,9 @@ def test_the_bands_and_filtered_out_sum_to_reviewed(tmp_path):
     jobs = seeded_jobs(tmp_path, "search.linkedin.json")
     rows = [e for e in lines(jobs) if e["event"] == "surfaced"]
     a, b = 2, 7                                    # slice points, not row counts
-    judge_all(jobs, rows[:a], detail_read="true", relevant="true", match="strong",
+    judge_all(jobs, rows[:a], detail_read="false", relevant="true", match="strong",
               reasoning="Fits.")
-    judge_all(jobs, rows[a:b], detail_read="true", relevant="true", match="moderate",
+    judge_all(jobs, rows[a:b], detail_read="false", relevant="true", match="moderate",
               reasoning="Partly fits.")
     judge_all(jobs, rows[b:], detail_read="false", relevant="false", reasoning="Outside the brief.")
     _, c = counts(jobs)
@@ -3199,7 +3280,7 @@ def test_a_weak_judgment_lands_in_the_weak_band(tmp_path):
     """A digest reported a weak match with no weak row behind it, which is one of the wrong numbers
     this script exists to remove. A weak judgment is counted as weak and in no other band."""
     jobs = seeded_jobs(tmp_path, "search.linkedin.json")
-    judge_all(jobs, [first_surfaced(jobs)], detail_read="true", relevant="true", match="weak",
+    judge_all(jobs, [first_surfaced(jobs)], detail_read="false", relevant="true", match="weak",
               reasoning="Adjacent to the brief, not in it.")
     _, c = counts(jobs)
     assert c["match_weak"] == "1"
@@ -3365,6 +3446,13 @@ def seed_two_cities(tmp_path, alias=None):
     `--detail-read false` and the first one's verdict, which is what `job-search-run/SKILL.md` says
     to record for a posting `dedup.sh --near` left out. `alias` replaces what that judgment names,
     for the cases where the value resolves to no row.
+
+    The `detail` event is written here because the first judgment says the posting was read, and
+    `record-judgment.sh` refuses that claim when the log holds no such event. It carries the four
+    fields that check matches on — `event`, `run_id`, `source` and `source_id` — plus a body and a
+    timestamp. `record-api-response.sh` builds the real one off the response body and puts twelve
+    keys on it; the six left out here are read by neither the check nor the cases below, and no
+    committed response body names this posting anyway: the fixtures hold one for `linkedin-0000`.
     """
     jobs = seeded_jobs(tmp_path, "search.linkedin.json")
     rows = [e for e in lines(jobs) if e["event"] == "surfaced"]
@@ -3375,6 +3463,10 @@ def seed_two_cities(tmp_path, alias=None):
     assert read["location_display"] != other["location_display"], read["location_display"]
     if alias is None:
         alias = "%s:%s" % (read["source"], read["source_id"])
+    jobs.write_text(jobs.read_text() +
+        '{"event":"detail","run_id":"%s","source":"%s","source_id":"%s",'
+        '"description_markdown":"The full text.","ts":"2026-08-05T16:48:00Z"}\n'
+        % (RID, read["source"], read["source_id"]))
     judge_all(jobs, [read], detail_read="true", relevant="true", match="strong",
               reasoning="Fits the brief.")
     judge_all(jobs, [other], detail_read="false", relevant="true", match="strong",
@@ -3523,7 +3615,7 @@ def test_a_row_no_other_posting_names_carries_an_empty_last_column(tmp_path):
     splitting on tabs reads the same fields for every row."""
     jobs = seeded_jobs(tmp_path, "search.linkedin.json")
     rows = [e for e in lines(jobs) if e["event"] == "surfaced"]
-    judge_all(jobs, rows[:2], detail_read="true", relevant="true", match="strong",
+    judge_all(jobs, rows[:2], detail_read="false", relevant="true", match="strong",
               reasoning="Fits.")
     r, out = matches(jobs)
     assert r.returncode == 0, r.stderr
@@ -3540,7 +3632,7 @@ def test_a_duplicate_of_a_filtered_posting_is_a_duplicate_rather_than_a_filtered
     jobs = seeded_jobs(tmp_path, "search.linkedin.json")
     rows = [e for e in lines(jobs) if e["event"] == "surfaced"]
     read, other = rows[0], rows[1]
-    judge_all(jobs, [read], detail_read="true", relevant="false", reasoning="On-site only.")
+    judge_all(jobs, [read], detail_read="false", relevant="false", reasoning="On-site only.")
     judge_all(jobs, [other], detail_read="false", relevant="false", reasoning="On-site only.",
               same_role_as="%s:%s" % (read["source"], read["source_id"]))
     _, c = counts(jobs)
@@ -3566,7 +3658,7 @@ def test_two_postings_naming_each_other_leave_no_row_and_are_both_duplicates(tmp
     jobs = seeded_jobs(tmp_path, "search.linkedin.json")
     rows = [e for e in lines(jobs) if e["event"] == "surfaced"]
     a, b = rows[0], rows[1]
-    judge_all(jobs, [a], detail_read="true", relevant="true", match="strong", reasoning="Fits.",
+    judge_all(jobs, [a], detail_read="false", relevant="true", match="strong", reasoning="Fits.",
               same_role_as="%s:%s" % (b["source"], b["source_id"]))
     judge_all(jobs, [b], detail_read="false", relevant="true", match="strong", reasoning="Fits.",
               same_role_as="%s:%s" % (a["source"], a["source_id"]))
@@ -3635,7 +3727,7 @@ def test_an_alias_carrying_no_location_adds_nothing_to_the_column(tmp_path):
     jobs = seeded_jobs(tmp_path, "search.linkedin.json")
     rows = [e for e in lines(jobs) if e["event"] == "surfaced"]
     read = next(r for r in rows if r["source_id"] == "linkedin-0002")
-    judge_all(jobs, [read], detail_read="true", relevant="true", match="strong", reasoning="Fits.")
+    judge_all(jobs, [read], detail_read="false", relevant="true", match="strong", reasoning="Fits.")
     blank = a_third_city(jobs, read, "linkedin-9001", "")
     nulled = a_third_city(jobs, read, "linkedin-9002", None)
     kept = a_third_city(jobs, read, "linkedin-9003", "Austin, TX")
@@ -3685,7 +3777,7 @@ def test_a_source_id_carrying_a_colon_resolves_to_the_posting_it_names(tmp_path)
     """
     jobs = seed_two_greenhouse_rows(tmp_path)
     run_script(JUDGE, jobs, "--run-id", RID, "--source", "greenhouse", "--source-id", GH_READ,
-               "--detail-read", "true", "--relevant", "true", "--match", "strong",
+               "--detail-read", "false", "--relevant", "true", "--match", "strong",
                "--reasoning", "Fits.")
     r = run_script(JUDGE, jobs, "--run-id", RID, "--source", "greenhouse", "--source-id", GH_OTHER,
                    "--detail-read", "false", "--relevant", "true", "--match", "strong",
@@ -3772,7 +3864,7 @@ def matches(jobs, run_id=RID):
 def test_every_judged_posting_appears_once_with_its_band(tmp_path):
     jobs = seeded_jobs(tmp_path, "search.linkedin.json")
     rows = [e for e in lines(jobs) if e["event"] == "surfaced"]
-    judge_all(jobs, rows[:2], detail_read="true", relevant="true", match="strong", reasoning="Fits.")
+    judge_all(jobs, rows[:2], detail_read="false", relevant="true", match="strong", reasoning="Fits.")
     judge_all(jobs, rows[2:4], detail_read="false", relevant="false", reasoning="On-site only.")
     r, out = matches(jobs)
     assert r.returncode == 0, r.stderr
@@ -3784,9 +3876,9 @@ def test_the_bands_come_out_in_digest_order(tmp_path):
     jobs = seeded_jobs(tmp_path, "search.linkedin.json")
     rows = [e for e in lines(jobs) if e["event"] == "surfaced"]
     judge_all(jobs, rows[0:1], detail_read="false", relevant="false", reasoning="No.")
-    judge_all(jobs, rows[1:2], detail_read="true", relevant="true", match="weak", reasoning="Thin.")
-    judge_all(jobs, rows[2:3], detail_read="true", relevant="true", match="strong", reasoning="Yes.")
-    judge_all(jobs, rows[3:4], detail_read="true", relevant="true", match="moderate", reasoning="Ok.")
+    judge_all(jobs, rows[1:2], detail_read="false", relevant="true", match="weak", reasoning="Thin.")
+    judge_all(jobs, rows[2:3], detail_read="false", relevant="true", match="strong", reasoning="Yes.")
+    judge_all(jobs, rows[3:4], detail_read="false", relevant="true", match="moderate", reasoning="Ok.")
     _, out = matches(jobs)
     assert [o[0] for o in out] == ["strong", "moderate", "weak", "filtered"]
 
@@ -3794,7 +3886,7 @@ def test_the_bands_come_out_in_digest_order(tmp_path):
 def test_a_row_carries_what_the_digest_prints(tmp_path):
     jobs = seeded_jobs(tmp_path, "search.linkedin.json")
     row = first_surfaced(jobs)
-    run_script(JUDGE, *judge_args(jobs, row, detail_read="true", relevant="true", match="strong",
+    run_script(JUDGE, *judge_args(jobs, row, detail_read="false", relevant="true", match="strong",
                                   needs_human_check="true",
                                   reasoning="Remote within the US and the range clears the floor."))
     _, out = matches(jobs)
@@ -3810,7 +3902,7 @@ def test_a_row_carries_what_the_digest_prints(tmp_path):
 def test_reasoning_with_a_newline_stays_on_one_line(tmp_path):
     jobs = seeded_jobs(tmp_path, "search.linkedin.json")
     row = first_surfaced(jobs)
-    run_script(JUDGE, *judge_args(jobs, row, detail_read="true", relevant="true", match="strong",
+    run_script(JUDGE, *judge_args(jobs, row, detail_read="false", relevant="true", match="strong",
                                   reasoning="First line.\nSecond line."))
     r, out = matches(jobs)
     assert len(r.stdout.splitlines()) == 1
@@ -3833,7 +3925,7 @@ def test_another_runs_judgments_are_not_listed(tmp_path):
     """
     jobs = seeded_jobs(tmp_path, "search.linkedin.json")
     row = first_surfaced(jobs)
-    run_script(JUDGE, *judge_args(jobs, row, detail_read="true", relevant="true", match="strong"))
+    run_script(JUDGE, *judge_args(jobs, row, detail_read="false", relevant="true", match="strong"))
     other = (jobs.read_text().replace(RID, "2026-01-01T00-00-00Z")
              .replace('"match":"strong"', '"match":"weak"'))
     jobs.write_text(jobs.read_text() + other)
@@ -3856,7 +3948,7 @@ def test_the_listing_and_the_counts_agree(tmp_path):
     rows."""
     jobs = seeded_jobs(tmp_path, "search.linkedin.json")
     rows = [e for e in lines(jobs) if e["event"] == "surfaced"]
-    judge_all(jobs, rows[:3], detail_read="true", relevant="true", match="moderate", reasoning="Ok.")
+    judge_all(jobs, rows[:3], detail_read="false", relevant="true", match="moderate", reasoning="Ok.")
     judge_all(jobs, rows[3:], detail_read="false", relevant="false", reasoning="No.")
     _, c = counts(jobs)
     _, out = matches(jobs)
@@ -3883,7 +3975,7 @@ def test_one_bands_postings_come_out_in_the_order_they_were_judged(tmp_path):
     jobs = seeded_jobs(tmp_path, "search.linkedin.json")
     rows = [e for e in lines(jobs) if e["event"] == "surfaced"]
     judged = [rows[3], rows[0], rows[4], rows[2], rows[1]]
-    judge_all(jobs, judged, detail_read="true", relevant="true", match="strong", reasoning="Fits.")
+    judge_all(jobs, judged, detail_read="false", relevant="true", match="strong", reasoning="Fits.")
     _, out = matches(jobs)
     assert [o[2] for o in out] == [e["source_id"] for e in judged]
 
@@ -3899,7 +3991,7 @@ def test_a_judgment_for_a_posting_this_run_never_surfaced_is_not_listed(tmp_path
     """
     jobs = seeded_jobs(tmp_path, "search.linkedin.json")
     row = first_surfaced(jobs)
-    run_script(JUDGE, *judge_args(jobs, row, detail_read="true", relevant="true", match="strong"))
+    run_script(JUDGE, *judge_args(jobs, row, detail_read="false", relevant="true", match="strong"))
     jobs.write_text(jobs.read_text() +
         '{"event":"evaluated","run_id":"%s","source":"%s","source_id":"never-surfaced",'
         '"detail_read":true,"relevant":true,"match":"strong"}\n' % (RID, row["source"]))
@@ -3970,7 +4062,7 @@ def test_a_relevant_row_carrying_the_filtered_band_is_not_listed(tmp_path):
     """
     jobs = seeded_jobs(tmp_path, "search.linkedin.json")
     rows = [e for e in lines(jobs) if e["event"] == "surfaced"]
-    judge_all(jobs, rows[:1], detail_read="true", relevant="true", match="strong", reasoning="Ok.")
+    judge_all(jobs, rows[:1], detail_read="false", relevant="true", match="strong", reasoning="Ok.")
     jobs.write_text(jobs.read_text() +
         '{"event":"evaluated","run_id":"%s","source":"%s","source_id":"%s",'
         '"detail_read":true,"relevant":true,"match":"filtered"}\n'
@@ -3995,7 +4087,7 @@ def test_a_tab_in_the_reasoning_does_not_add_a_twelfth_column(tmp_path):
     """
     jobs = seeded_jobs(tmp_path, "search.linkedin.json")
     row = first_surfaced(jobs)
-    run_script(JUDGE, *judge_args(jobs, row, detail_read="true", relevant="true", match="strong",
+    run_script(JUDGE, *judge_args(jobs, row, detail_read="false", relevant="true", match="strong",
                                   reasoning=HOSTILE))
     r, out = matches(jobs)
     assert len(r.stdout.splitlines()) == 1
@@ -4023,7 +4115,7 @@ def test_two_postings_that_would_share_a_pipe_joined_key_are_both_listed(tmp_pat
         % (RID, source, source_id) for source, source_id, _ in pair))
     for source, source_id, band in pair:
         r = run_script(JUDGE, jobs, "--run-id", RID, "--source", source, "--source-id", source_id,
-                       "--detail-read", "true", "--relevant", "true", "--match", band)
+                       "--detail-read", "false", "--relevant", "true", "--match", band)
         assert r.returncode == 0, r.stderr
     _, out = matches(jobs)
     assert [(o[0], o[1], o[2]) for o in out] == [(band, source, source_id)
@@ -4037,7 +4129,7 @@ def test_an_awk_that_died_partway_is_not_reported_as_a_listing(tmp_path):
     one row and then fail, this must not exit 0."""
     jobs = seeded_jobs(tmp_path, "search.linkedin.json")
     row = first_surfaced(jobs)
-    run_script(JUDGE, *judge_args(jobs, row, detail_read="true", relevant="true", match="strong"))
+    run_script(JUDGE, *judge_args(jobs, row, detail_read="false", relevant="true", match="strong"))
     partial = "strong\t%s\t%s\tT\tC\tRemote\thttps://example/x\tfalse\t2026-07-25\tFits.\n" % (
         row["source"], row["source_id"])
     r = run_script(MATCHES, jobs, RID, env=awk_shim(tmp_path, "run-matches.awk", partial))
