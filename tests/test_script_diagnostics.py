@@ -1321,7 +1321,7 @@ def write_clean_run(workspace, run_id=RID):
     to `postings_surfaced`. The `tmp_workspace` fixture writes no `jobs.jsonl`, so `run-counts.sh`
     prints nothing and the comparison against the log is skipped. `completed_at` is a past instant,
     so it stays no later than the mtime of the file written here. `degraded_reasons` is the empty
-    list a run with nothing wrong carries, and the record is reported without it.
+    list a run with nothing wrong carries, and `--post-close` reports a record without the key.
     """
     record = {
         "run_id": run_id,

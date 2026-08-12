@@ -560,28 +560,95 @@ def test_every_broken_run_record_is_reported(tmp_workspace):
 # ------------------------------------------------------------------- degraded_reasons in a record
 
 
+# The run record as it was shipped before this branch: the same fields, values and order as
+# `git show b3ac24d:skills/job-search-run/templates/run-record.example.json`, the template at the
+# branch point, compared against it on 2026-08-12. The shipped template differs from it by
+# `degraded_reasons`, the eight count fields and three `agent_data_usage` numbers. Every record in a
+# workspace that has not run this version has these fields and no others, and nothing rewrites an
+# old record.
+PRE_BRANCH_RECORD = {
+    "run_id": "2026-07-30T15-04-02Z",
+    "trigger": "scheduled",
+    "scheduler_id": "com.job-search.daily",
+    "brief_revision": "9f2c41a7be05",
+    "close_state": "complete",
+    "run_health": "healthy",
+    "sources": ["linkedin", "ashby"],
+    "queries": ["ai-eng-remote", "ml-platform-sf"],
+    "agent_data_usage": {"searches": 4, "detail_reads": 5, "other": 1, "total_metered": 10},
+    "started_at": "2026-07-30T15:04:02Z",
+    "completed_at": "2026-07-30T15:12:47Z",
+}
+
+
 def test_a_record_with_no_degraded_reasons_key_is_invalid(tmp_workspace):
-    """`close-run.sh` writes the field on every close, the empty list included, so a reader can read
-    it without first asking whether the record has one. A record with no list at all is reported
-    rather than read as a record with no reasons.
+    """`close-run.sh` writes the field on every close, the empty list included, so a record for the
+    run being checked that has no list at all was not written by this version's close.
 
     The second half is the one-finding-per-problem shape: a degraded record that carries no list is
     one problem, and the key to add is what the caller is told.
     """
-    record = run_record()
+    only = "INVALID runs/%s.json missing-key degraded_reasons\n" % RUN_ID
+    record = full_record()
     del record["degraded_reasons"]
     write_run(tmp_workspace, record)
-    r = run_validator(tmp_workspace)
-    assert r.returncode != 0
-    assert "INVALID runs/%s.json missing-key degraded_reasons" % RUN_ID in r.stdout, r.stdout
+    # No jobs.jsonl, so the counts are held to the record's own arithmetic, which holds — this is
+    # the one field it is missing, and the whole of stdout is the one finding about it.
+    assert not (tmp_workspace / "jobs.jsonl").exists()
+    r = run_validator(tmp_workspace, "--post-close", RUN_ID)
+    assert r.returncode == 1, r.stdout + r.stderr
+    assert r.stdout == only, r.stdout
 
-    record = run_record(run_health="degraded")
+    record = full_record(run_health="degraded")
     del record["degraded_reasons"]
     write_run(tmp_workspace, record)
-    r = run_validator(tmp_workspace)
-    assert r.returncode != 0
-    assert "INVALID runs/%s.json missing-key degraded_reasons" % RUN_ID in r.stdout, r.stdout
+    r = run_validator(tmp_workspace, "--post-close", RUN_ID)
+    assert r.returncode == 1, r.stdout + r.stderr
+    assert r.stdout == only, r.stdout
     assert "degraded-with-no-reasons" not in r.stdout, r.stdout
+
+
+def test_the_degraded_reasons_key_check_is_behind_post_close(tmp_workspace):
+    """A record written before the field existed must still read as valid when the run it belongs
+    to is not the one being checked. Nothing rewrites an old record, so a rule that reported it in
+    plain validation would report it on every validation for as long as the workspace exists.
+
+    The count fields are behind the flag for this reason too, and pinned the same way — see
+    `test_the_count_checks_are_behind_post_close`. The record here is missing `degraded_reasons` and
+    nothing else, so the run without the flag passing at exit 0 is what shows the check is reached
+    only through it.
+    """
+    record = full_record()
+    del record["degraded_reasons"]
+    write_run(tmp_workspace, record)
+    plain = run_validator(tmp_workspace)          # no --post-close
+    assert plain.returncode == 0, plain.stdout + plain.stderr
+    assert plain.stdout == "", plain.stdout
+    checked = run_validator(tmp_workspace, "--post-close", RUN_ID)
+    assert checked.returncode == 1, checked.stdout + checked.stderr
+    assert checked.stdout == "INVALID runs/%s.json missing-key degraded_reasons\n" % RUN_ID, \
+        checked.stdout
+
+
+def test_a_record_written_before_the_field_existed_passes_plain_validation(tmp_workspace):
+    """The record a workspace holds when its last run was 0.8.0 — the released version this branch
+    is based on, measured off the CHANGELOG at the branch point — driven whole rather than as a
+    field taken off a current one.
+
+    The second half is the case `degraded-with-no-reasons` has to stay silent on: a record from
+    before the field existed that closed `complete` and came back `degraded` — a lost search was
+    enough — carries no list to be empty, and `json_arr_state` prints nothing for a field that is
+    not there.
+    """
+    write_run(tmp_workspace, PRE_BRANCH_RECORD)
+    r = run_validator(tmp_workspace)
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert r.stdout == "", r.stdout
+
+    write_run(tmp_workspace, dict(PRE_BRANCH_RECORD, run_health="degraded"))
+    r = run_validator(tmp_workspace)
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert r.stdout == "", r.stdout
 
 
 def test_a_degraded_record_with_an_empty_reasons_list_is_invalid(tmp_workspace):
@@ -611,17 +678,27 @@ def test_a_degraded_record_that_names_a_reason_is_valid(tmp_workspace):
     array on one line — one `printf`, measured on 2026-08-12 on a record it wrote carrying two
     reasons — so a record split this way is one written by hand, and this case is what holds the
     reader to reading that form as well.
+
+    Both modes are driven, because they read the array for different rules and only one of them can
+    see this. A reader that gave up at the end of the line would report nothing here and satisfy the
+    value rule, and `--post-close` is where that reader gets caught: it would find no array at all
+    and call the key missing.
     """
-    write_run(tmp_workspace, run_record(
+    write_run(tmp_workspace, full_record(
         run_health="degraded",
         degraded_reasons=["a relevant posting carries no band, so postings_reviewed does not add up "
                           "from matches, filtered_out and duplicates_of_another — re-judge that "
                           "posting with a --match value"]))
     body = (tmp_workspace / "runs" / ("%s.json" % RUN_ID)).read_text(encoding="utf-8")
     assert '"degraded_reasons": [\n' in body, body
-    r = run_validator(tmp_workspace)
-    assert r.returncode == 0, r.stdout + r.stderr
-    assert r.stdout == "", r.stdout
+    plain = run_validator(tmp_workspace)
+    assert plain.returncode == 0, plain.stdout + plain.stderr
+    assert plain.stdout == "", plain.stdout
+    # No jobs.jsonl here, so the counts are held to the record's own arithmetic and nothing else.
+    assert not (tmp_workspace / "jobs.jsonl").exists()
+    checked = run_validator(tmp_workspace, "--post-close", RUN_ID)
+    assert checked.returncode == 0, checked.stdout + checked.stderr
+    assert checked.stdout == "", checked.stdout
 
 
 @pytest.mark.parametrize("close_state", ["blocked", "interrupted"])
