@@ -6292,14 +6292,21 @@ def test_search_jobs_exits_1_when_the_search_worked_and_the_rows_were_refused(tm
 
     `--fields` is one of the route's own parameters (`agent-data docs <the LISTING constant>`, the
     `fields` entry under search-jobs), so it reaches the route through the passthrough like any
-    other. `--fields id,title,company_name` returns rows
-    carrying those three keys and nothing else, and record-api-response.sh:427-433 requires
-    `source`, `source_id`, `id` and `source_url` on every row, so it appends none of them and exits
-    1 at :496. agent-data-reference/SKILL.md:64-67 already tells a run not to send `--fields` for
-    this reason.
+    other. `--fields id,title,company_name` returns rows carrying those three keys and nothing
+    else, and record-api-response.sh:427-433 requires `source`, `source_id`, `id` and `source_url`
+    on every row, so it appends none of them and exits 1 at :496.
 
     The refusal follows from the field list rather than from what the search happened to return:
     every row of every response to this call is missing three of the four required keys.
+
+    agent-data-reference/SKILL.md:64-67 gives the same reason, but it is written about the other
+    route: it sits under `## Reading one posting` at :55, and
+    `command grep -n fields skills/agent-data-reference/SKILL.md` finds no search-jobs prose about
+    `--fields` at all. The mechanism does not belong to either route — record-api-response.sh runs
+    the same four checks in two places, at :427-433 on each row of a search body and at :258-277 on
+    a posting body, and a `--fields` list that leaves out `source` or `source_id` fails them either
+    way. So the warning does not cover the route this case drives, and the behavior it warns about
+    still does.
 
     Measured 2026-08-12 with `--keywords "strategic finance" --limit 3 --fields
     id,title,company_name`: `agent-data call` exited 0 with 3 rows, and the wrapper exited 1 having
@@ -6366,7 +6373,7 @@ def test_search_jobs_refuses_a_call_that_names_no_route_parameters(tmp_workspace
     failed-call branch recorded a `call` event for it anyway. That event would put one call the API
     never received into the run's metered-call count.
 
-    This case and the missing-flag case below were one parametrized test, so a red did not say
+    This case and the missing-flag case below were one parametrized test, so a failure did not say
     which of the three checks broke. Measured 2026-08-12 with the split in place: deleting
     `[ $# -ge 1 ]` fails these two argument lists under sh and dash and leaves the case below green.
     """
@@ -6405,8 +6412,13 @@ def test_search_jobs_refuses_a_call_that_omits_a_required_flag(tmp_workspace, sh
 
 
 @pytest.mark.parametrize("shell", ["sh", "dash"])
-@pytest.mark.parametrize("arg", ["--source", "--source=ashby"])
-def test_search_jobs_refuses_a_second_source_among_the_route_parameters(tmp_workspace, shell, arg):
+@pytest.mark.parametrize("passthrough,offending", [
+    (["--keywords", "strategic finance", "--source", "ashby"], "--source"),
+    (["--keywords", "strategic finance", "--source=ashby"], "--source=ashby"),
+    (["--keywords", "--source"], "--source"),
+])
+def test_search_jobs_refuses_a_second_source_among_the_route_parameters(
+        tmp_workspace, shell, passthrough, offending):
     """`--source` after `--` would search one source while the `call` event named another.
 
     The script sends `--source` to the route itself and the route takes the last value it is given.
@@ -6422,6 +6434,12 @@ def test_search_jobs_refuses_a_second_source_among_the_route_parameters(tmp_work
     LISTING constant> search-jobs --source=ashby --keywords "strategic finance" --limit 1
     --dry-run` resolves to a URL carrying `source=ashby`, measured 2026-08-12.
 
+    The third case is `--keywords --source`, where the string arrives in the value position rather
+    than the flag position. It is refused too, because the script never learns which route
+    parameters take a value and so cannot tell the two apart. That is a limit on what a caller may
+    search for, so it is written in the header at search-jobs.sh:8-10 and :14-19 and in the third
+    line of the refusal message, not only in the comment above the check.
+
     A run is open here, so without the check the script would build the path, make the call and
     write the response. Nothing is spent and no key is needed: the check runs with the other
     argument checks, before resolve-run.sh and before the scratch directory is made — which is what
@@ -6433,11 +6451,12 @@ def test_search_jobs_refuses_a_second_source_among_the_route_parameters(tmp_work
     assert opened.returncode == 0, opened.stdout + opened.stderr
 
     out = keyless_search(shell, "--workspace", tmp_workspace,
-                         "--query-id", "q", "--source", "linkedin",
-                         "--", "--keywords", "strategic finance", arg, "ashby")
+                         "--query-id", "q", "--source", "linkedin", "--", *passthrough)
     assert out.returncode == 2, out.stdout + out.stderr
-    assert "--source may not appear after --" in out.stderr
-    assert arg in out.stderr, "the message does not print the argument it refused"
+    assert "no argument after -- may be --source" in out.stderr
+    assert "cannot tell a value from a flag" in out.stderr, \
+        "the message explains only the duplicate-flag case"
+    assert offending in out.stderr, "search-jobs.sh did not print the argument it refused"
     assert out.stdout == ""
     assert not (tmp_workspace / "runs" / ".scratch").exists(), \
         "the response directory was made, so the check ran after the path was built"
@@ -6537,14 +6556,35 @@ def test_search_jobs_refuses_a_value_that_would_name_some_other_file(
 
 
 def test_the_listing_id_is_the_same_everywhere_it_is_written_down():
-    """Eight places hold the listing id, and all eight are compared here.
+    """The listing id sits on 13 tracked lines. This compares all 13.
 
-    Counted with `command grep -c f9a6ec16-0bfd-44d8-b3ee-073776745ee7 <file>` on 2026-08-12:
-    fetch-posting.sh 2 — a comment at :77 showing the search that produces a posting id, and the
-    `get-posting` call at :136; search-jobs.sh 3 — two measurement commands in the comment above
-    the second-`--source` guard, at :75 and :84, and the `search-jobs` call at :158;
-    agent-data-reference/SKILL.md 2 — the sentence at :22 that names the id, and the `get-posting`
-    recipe at :58 an agent copies. `LISTING` at the top of this file is the eighth.
+    Twelve of them are the output of
+    `git grep -c f9a6ec16-0bfd -- . ':!tests/test_mechanics_scripts.py'`, run on 2026-08-12. The
+    pattern is a prefix, so it skips the two places that mention `f9a6ec16` alone
+    (fetch-posting.sh:133 and search-jobs.sh:160); this file is excluded so that the command does
+    not count the line you are reading:
+
+      fetch-posting.sh 2               a comment at :77 showing the search that produces a posting
+                                       id, and the `get-posting` call at :136
+      search-jobs.sh 3                 two measurement commands in the comment above the
+                                       second-`--source` guard, at :80 and :89, and the
+                                       `search-jobs` call at :165
+      agent-data-reference/SKILL.md 2  the sentence at :22 that names the id, and the
+                                       `get-posting` recipe at :58 an agent copies
+      TESTING.md 4                     the `status` command at :43 and three `search-jobs`
+                                       commands at :888, :897 and :906
+      tests/test_fake_agent_data.py 1  that module's own `LISTING` at :4
+
+    The thirteenth is `LISTING` at :55 of this file.
+
+    TESTING.md and tests/test_fake_agent_data.py were added to the list on 2026-08-12, when the
+    count was measured repo-wide rather than over the three files the first version read. The two
+    do not carry the same risk, and both are held anyway: TESTING.md's four lines are commands a
+    maintainer pastes at the real API, so a stale id there fails a release check with a confusing
+    error, while test_fake_agent_data.py's constant goes to the local shim at tests/fake-agent-data
+    and never reaches the network, so drift there spends nothing — it is held so the repository
+    does not carry two ids for one listing. Each of the five files holds this uuid and no other,
+    measured the same day.
 
     Every uuid in each file is collected, not the first one. Reading only `found[0]` left the two
     lines that spend metered calls unchecked, because a comment comes before the call in
@@ -6552,21 +6592,23 @@ def test_the_listing_id_is_the_same_everywhere_it_is_written_down():
     `ids.add(found[0])`, changing fetch-posting.sh:136 to a zero uuid and running
     `python3 -m pytest -q -k listing_id` gave `1 passed`.
 
-    `LISTING` is folded in because the live fixtures below pass it to `agent-data call` directly. A
-    change that reached the two scripts and not this constant would leave those fixtures spending
-    real calls against the old listing while every wrapper called the new one.
+    This file's `LISTING` is folded in because two live cases above pass it to `agent-data call`
+    directly — the `live_run` fixture at :176 and the fetch-posting refusal case at :6138. A change
+    that reached the wrappers and not this constant would leave those two spending real calls
+    against the old listing while every wrapper called the new one.
 
-    Only `LISTING` is read out of this file. No test body or other docstring writes the id out as a
-    literal; each one names `LISTING` or writes `<the LISTING constant>` inside a quoted command.
-    The id does appear once more here, in the `grep` command quoted above, so that a reader can
-    re-run the count — nothing executes that line, and a stale copy of it would print 0 for every
-    file rather than report a wrong number.
+    This file is read through `LISTING` only; it is not scanned the way the five files are. So a
+    literal written into a docstring here would not be compared, which is why none is: every other
+    case names `LISTING` or writes `<the LISTING constant>` inside a quoted command, and the count
+    command quoted above uses a prefix rather than the whole id.
     """
     pat = re.compile(r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}")
     per_file = {"tests/test_mechanics_scripts.py (LISTING)": {LISTING}}
     for rel in ("skills/job-search-run/scripts/fetch-posting.sh",
                 "skills/job-search-run/scripts/search-jobs.sh",
-                "skills/agent-data-reference/SKILL.md"):
+                "skills/agent-data-reference/SKILL.md",
+                "TESTING.md",
+                "tests/test_fake_agent_data.py"):
         found = pat.findall((ROOT / rel).read_text(encoding="utf-8"))
         assert found, f"no listing id in {rel}"
         per_file[rel] = set(found)

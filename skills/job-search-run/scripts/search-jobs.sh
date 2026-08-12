@@ -6,12 +6,17 @@
 #                   groups a run's search calls by source and query id, so a wrong id files the
 #                   call under the wrong query.
 #   --source S      required. The source to search; one search-jobs call reaches one source. This
-#                   script passes it to the route, so a second --source after `--` is refused.
+#                   script passes it to the route itself, so no argument after `--` may be
+#                   --source. See the `--` line below for what that costs.
 #   --workspace W   resolve against W instead of asking workspace-discovery.sh. Omit it in a run;
 #                   the tests pass it, because their workspace is a temporary directory
 #                   workspace-discovery.sh would never find.
-#   --              required. Everything after it goes to the route unchanged; a call carrying no
-#                   route parameters is refused.
+#   --              required. Everything after it goes to the route unchanged, with two exceptions:
+#                   a call carrying no route parameters is refused, and so is any argument that is
+#                   the string --source. That second rule covers the value position as well as the
+#                   flag position — `--keywords --source` is refused the same as `--source ashby` —
+#                   because this script never learns which route parameters take a value, so it
+#                   cannot tell a flag from a value. Send that search without the offending value.
 #
 # Not for any other route. Reading one posting is fetch-posting.sh.
 #
@@ -86,12 +91,14 @@ done
 #
 # Every argument after `--` is matched, not only the ones in flag position, because this script never
 # learns which route parameters take a value. So a route parameter whose value is the string
-# --source is refused as well, and the message prints the argument.
+# --source is refused as well. That limit is written in the header at :8-10 and :14-19, where a
+# caller reads the usage, and the third line of the message below says it too.
 for arg do
   case $arg in
     --source|--source=*)
-      printf 'search-jobs.sh: --source may not appear after --: %s\n' "$arg" >&2
-      printf 'search-jobs.sh:   this script passes --source to the route, and the route takes the last one, so the search would run against a source the recorded call does not name\n' >&2
+      printf 'search-jobs.sh: no argument after -- may be --source: %s\n' "$arg" >&2
+      printf 'search-jobs.sh:   this script passes --source to the route, and the route takes the last one it is given, so a second flag would search a source the recorded call does not name\n' >&2
+      printf 'search-jobs.sh:   a route parameter whose value is the string --source is refused here too, because this script cannot tell a value from a flag\n' >&2
       exit 2 ;;
   esac
 done
