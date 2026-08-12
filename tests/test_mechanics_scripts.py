@@ -6285,6 +6285,62 @@ def test_search_jobs_records_the_call_when_the_api_refuses_the_search(tmp_worksp
         "the call returned no results, so nothing should have been surfaced"
 
 
+@pytest.mark.live
+@needs_api
+def test_search_jobs_exits_1_when_the_search_worked_and_the_rows_were_refused(tmp_workspace):
+    """The other half of exit 1: the API answered with rows and record-api-response.sh refused them.
+
+    `--fields` is one of the route's own parameters (`agent-data docs
+    f9a6ec16-0bfd-44d8-b3ee-073776745ee7`, the `fields` entry under search-jobs), so it reaches the
+    route through the passthrough like any other. `--fields id,title,company_name` returns rows
+    carrying those three keys and nothing else, and record-api-response.sh:427-433 requires
+    `source`, `source_id`, `id` and `source_url` on every row, so it appends none of them and exits
+    1 at :496. agent-data-reference/SKILL.md:64-67 already tells a run not to send `--fields` for
+    this reason.
+
+    The refusal follows from the field list rather than from what the search happened to return:
+    every row of every response to this call is missing three of the four required keys.
+
+    Measured 2026-08-12 with `--keywords "strategic finance" --limit 3 --fields
+    id,title,company_name`: `agent-data call` exited 0 with 3 rows, and the wrapper exited 1 having
+    printed its `response=` line and recorded one `call` event carrying ok true, rows_returned 3
+    and rows_new 0.
+
+    Without `[ "$recstatus" -eq 0 ] || exit 1` in search-jobs.sh this exits 0. Deleting that line
+    and running `python3 -m pytest -q -k "search_jobs or listing_id"` gave `21 passed` before this
+    case existed, so nothing held the line in place.
+    """
+    run_id = open_run_in(tmp_workspace)
+
+    out = subprocess.run(
+        ["sh", str(SEARCH_JOBS), "--workspace", str(tmp_workspace),
+         "--query-id", "strategic-finance", "--source", "linkedin",
+         "--", "--keywords", "strategic finance", "--limit", "3",
+         "--fields", "id,title,company_name"],
+        capture_output=True, text=True)
+    assert out.returncode == 1, out.stdout + out.stderr
+    assert "nothing was appended" in out.stderr
+    assert out.stdout.startswith("response="), \
+        "the search ran and its body is saved, so the path is printed on this failure too"
+
+    saved = json.loads(
+        pathlib.Path(out.stdout.split("=", 1)[1].strip()).read_text(encoding="utf-8"))
+    assert saved["meta"]["request_id"].startswith("req_"), \
+        "no request_id — the call never reached the API, so this is not the case under test"
+    assert saved["data"]["results"], \
+        "the search returned no rows, so there were none to refuse — widen the keywords"
+
+    rows = [json.loads(l) for l in (tmp_workspace / "jobs.jsonl").read_text(
+        encoding="utf-8").splitlines() if l.strip()]
+    calls = [x for x in rows if x["event"] == "call" and x.get("route") == "search-jobs"]
+    assert len(calls) == 1, "the billed call left no record of itself"
+    assert calls[0]["run_id"] == run_id
+    assert calls[0]["ok"] is True, "the API answered this call, so the event says so"
+    assert calls[0]["rows_new"] == 0
+    assert [x for x in rows if x["event"] == "surfaced"] == [], \
+        "the rows were refused, so none of them should have been surfaced"
+
+
 def test_search_jobs_refuses_before_calling_when_no_run_is_open(tmp_workspace):
     """Exits before any call, so this one spends nothing and needs no key."""
     out = subprocess.run(
