@@ -6247,13 +6247,15 @@ def test_search_jobs_passes_route_parameters_through_unchanged(tmp_workspace):
 @pytest.mark.live
 @needs_api
 def test_search_jobs_records_the_call_when_the_api_refuses_the_search(tmp_workspace):
-    """A refused call was still billed, so it still owes a `call` event.
+    """The API answered the call with an error and the call was still billed, so the `call` event
+    still has to be written.
 
     Measured 2026-08-11: `search-jobs --source no-such-source --keywords 'strategic finance'
     --limit 2` exits 1, writes nothing to stdout, and puts an error body on stderr carrying
     `error.status` 400, `error.code` `validation_error`, `error.request_id`, and the message
     `Unsupported source 'no-such-source' for source. Allowed values: linkedin, ashby, greenhouse,
-    lever.` The value is one no job board can ever be called, so the route cannot start accepting it.
+    lever.` No job board is named no-such-source, so the route will not start accepting the value
+    and turning this case into a search that succeeds.
 
     The assertion below reads `error.request_id` rather than the code string. This API's error codes
     have changed before — the 2026-07-06 multi-source reconciliation found them moved to
@@ -6303,8 +6305,13 @@ def test_search_jobs_refuses_before_calling_when_no_run_is_open(tmp_workspace):
 def test_search_jobs_refuses_a_call_that_names_no_route_parameters(tmp_workspace, shell, args):
     """`--` and at least one parameter after it, plus both required flags, or nothing is called.
 
-    A search-jobs call with no keywords and no location is a call the API bills for a result set
-    nothing asked for, and the two flags name what the `call` event is filed under: run-counts.sh
+    Measured 2026-08-11 with the `[ $# -ge 1 ]` check removed, against an open run: the agent-data
+    CLI refuses a parameterless call itself, writing an error body that carries "source": "cli",
+    code missing_required_param and no request_id, so the API never saw the call — and the wrapper's
+    failed-call branch recorded a `call` event for it anyway. That event would put one call the API
+    never received into the run's metered-call count.
+
+    The two flags are required because they are what the `call` event is filed under: run-counts.sh
     groups a run's search calls by source and query id.
     """
     if shell == "dash" and not shutil.which("dash"):
@@ -6322,11 +6329,16 @@ def test_search_jobs_checks_both_recorded_values_before_it_goes_looking_for_a_ru
 
     Both values go to record-api-response.sh after the call, and it exits 2 on either one carrying a
     colon before it records anything, so checking them afterwards leaves a billed call with no `call`
-    event naming it. Every live case here is `needs_api`-gated and CI holds no key, so without this
-    one the guard could be deleted and the suite would stay green.
+    event naming it. Every other case covering this guard is `live`-marked and `needs_api`-gated, and
+    CI holds no key. This one costs nothing, because the guard runs before resolve-run.sh and
+    resolve-run.sh refuses first on a workspace with no run open.
 
     The last call passes values the guard has to let through, so it cannot be passing by refusing
     everything: it gets as far as resolve-run.sh and stops there, having spent nothing.
+
+    Deleting the `check-record-args.sh` line makes both refused calls reach resolve-run.sh and print
+    `no run is open` instead of the rule, so both go red with no key involved — measured 2026-08-11
+    under sh and dash.
     """
     if shell == "dash" and not shutil.which("dash"):
         pytest.skip("dash is not installed here")
