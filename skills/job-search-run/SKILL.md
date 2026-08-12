@@ -46,17 +46,17 @@ list, `search.freshness` as the cutoff parameter the route docs name (the `any` 
 none). This pass reads those first pages and stops there — a continuation page holds what the next
 run finds new.
 
-Capture both streams of every call into `runs/.scratch/<run_id>/`, because a call that fails writes
-its body to stderr and leaves stdout empty: `agent-data call … > <name>.json 2> <name>.err`. Then
-hand whichever file got written — the `.json` when the call returned, the `.err` when it failed — to
-this skill's `scripts/record-api-response.sh <run_id> <workspace>/jobs.jsonl <response>
---route search-jobs --query-id <the query's id> --source <the source you asked for>`. That appends
-the call itself and one line per row it kept, leaving out a posting any run has already judged and
-one an earlier search of this run surfaced. Pass `--source` on every call, a failed one
-included: `run-counts.sh` groups the search calls by source and query id, and a failed attempt
-recorded without it lands in a group of its own, where the run reports a search that never returned
-even though the retry answered. A non-zero exit means the call failed or a row was unusable, and
-stderr says which — the call event is written either way, and nothing else is.
+Run each search with this skill's `scripts/search-jobs.sh --query-id <the query's id> --source <the
+source you asked for> -- <the route's own parameters>`. Everything after `--` goes to the route
+unchanged, so the parameter names come from `agent-data docs` and this script never has to know
+them. It finds the workspace and the open run itself, captures both streams into
+`runs/.scratch/<run_id>/`, and records the call whether it returned or failed. It appends the call
+itself and one line per row it kept, leaving out a posting any run has already judged and one an
+earlier search of this run surfaced. Pass `--source` on every call, a failed one included:
+`run-counts.sh` groups the search calls by source and query id, and a failed attempt recorded
+without it lands in a group of its own, where the run reports a search that never returned even
+though the retry answered. A non-zero exit means the call failed or a row was unusable, and stderr
+says which — the call event is written either way, and nothing else is.
 
 Then check the saved response for the echoes: the source echo per `agent-data-reference`'s
 source-echo row, and the cutoff the same way, where one that comes back missing or altered means
@@ -101,31 +101,49 @@ which prints one tab-separated line per posting this run queued and has not judg
 stderr as well: how many lines of the log name this run, then how many postings the run queued, how
 many of those already carry a judgment, and how many are left to read. Read that line every time no
 row comes back, because a queue worked all the way off and a mistyped run id both print nothing —
-`0 of <n> lines … name run` is the mistyped id. Where your host has
-subagents, dispatch one per posting, in parallel: each posting is judged in its own fresh context,
-leaving this session's for coordinating the run. Where your host has none, work the list in order.
-Both paths run on the host's own model.
+`0 of <n> lines … name run` is the mistyped id. Where your host has subagents, give each subagent
+two or three postings, and start every subagent in one step, before any of them has returned. Fewer
+than four postings go to one subagent. Each subagent judges its postings in its own fresh context,
+which leaves this session's context for coordinating the run. Starting some subagents and waiting
+for them to return before starting the rest makes the run take as long as the slowest subagent in
+each group, added up over the groups. Where your host has none, work the list in order. Both paths
+run on the host's own model.
 
-A reader has none of this session's context, so its line is the whole brief. Hand it that line as it
-came off the list — `posting_id_at_seen` and `source_url` are the pair `get-posting` needs, and
-`agent-data-reference`'s recipe for that route is how the call is written — along with the path to
-`preferences.md` and the `evaluate-job-fit` skill to follow.
+A subagent cannot see this session, so its prompt is everything it gets. Write each prompt with
+these five parts, in this order:
 
-Capture each detail response the way a search is captured, then send it through
-`scripts/record-api-response.sh <run_id> <workspace>/jobs.jsonl <response> --route get-posting
---source <source>`, which stores the posting's text on a `detail` event so a later run can judge it
-again against a changed brief instead of paying to read it twice. Record what `evaluate-job-fit`
-returned with `record-judgment.sh`: `--detail-read true`, `--relevant true|false`,
-`--match strong|moderate|weak` on a relevant posting and no `--match` on one that is not,
-`--needs-human-check true` when the judgment leaves the user a question, `--dealbreakers` and
-`--unknowns` as semicolon-separated lists, and `--reasoning` as the line the digest prints. The
-script writes the JSON, so nothing a reasoning line says has to be escaped, and it copies the title,
-company, location, URL and date off the row that surfaced the posting rather than taking them from
-you. Two more flags cover what a row left open: `--posted-at-extracted <date>` when the row carried
-no date and the description states one, and `--same-role-as <source>:<source_id>` on a posting
-`dedup.sh --near` left out, naming the row that was read and carrying its judgment with
-`--detail-read false`. Each of those two flags is the only thing that writes its field, so a
-judgment recorded without them carries neither.
+1. Its job postings, one block each, carrying the `source`, `source_id`, `posting_id_at_seen`,
+   `source_url`, `title` and `company_name` the read list printed.
+2. The `evaluate-job-fit` skill to load.
+3. The `fetch-posting.sh` command for each posting, written out with that posting's values already
+   in place.
+4. The `record-judgment.sh` command for each posting, with `--source`, `--source-id` and
+   `--detail-read true` already in place, and the remaining values named in words: `--relevant`
+   takes `true` or `false`, and `--match` takes `strong`, `moderate` or `weak` and is left off when
+   `--relevant` is `false`.
+5. What to return for each posting: the title, the company, whether it is relevant, the match band,
+   and the reasoning line.
+
+Both scripts find the workspace and the open run themselves, so the prompt carries no file paths.
+
+Read each posting with this skill's `scripts/fetch-posting.sh --posting-id <posting_id_at_seen>
+--source-url <source_url> --source <source>`. It finds the workspace and the open run itself, so it
+takes nothing else. It records the billable call the run is charged for, and it stores the
+posting's text so a later run can judge it again against a changed brief instead of paying to read
+it twice. Record what `evaluate-job-fit` returned with this skill's `scripts/record-judgment.sh`,
+which finds the workspace and the open run itself: `--detail-read true`, `--relevant` as `true` or
+`false`, `--match` as `strong`, `moderate` or `weak` on a relevant posting and no `--match` on one
+that is not, `--needs-human-check true` when the judgment leaves the user a question,
+`--dealbreakers` and `--unknowns` as semicolon-separated lists, and `--reasoning` as the line the
+digest prints. The script writes the JSON, so nothing a reasoning line says has to be escaped, and
+it copies the title, company, location, URL and date off the row that surfaced the posting rather
+than taking them from you. Two more flags cover what a row left open: `--posted-at-extracted
+<date>` when the row carried no date and the description states one, and `--same-role-as
+<source>:<source_id>` on a posting `dedup.sh --near` left out, naming the row that was read and
+carrying its judgment with `--detail-read false`. Each of those two flags is the only thing that
+writes its field, so a judgment recorded without them carries neither. `--detail-read true` needs
+the posting's text already stored, which `fetch-posting.sh` does; a judgment claiming a read with
+nothing stored is refused.
 
 This skill's `templates/jobs-event.example.json` holds one line of each of the five event types a
 run writes — `call`, `surfaced`, `queued`, `detail`, `evaluated` — each in the shape and field order
