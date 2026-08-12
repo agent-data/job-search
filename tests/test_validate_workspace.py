@@ -586,7 +586,8 @@ def test_a_record_with_no_degraded_reasons_key_is_invalid(tmp_workspace):
     run being checked that has no list at all was not written by this version's close.
 
     The second half is the one-finding-per-problem shape: a degraded record that carries no list is
-    one problem, and the key to add is what the caller is told.
+    one problem, and the key to add is what the caller is told. `only` is the whole of stdout there,
+    so `degraded-with-no-reasons` printing alongside it would fail this case.
     """
     only = "INVALID runs/%s.json missing-key degraded_reasons\n" % RUN_ID
     record = full_record()
@@ -605,7 +606,6 @@ def test_a_record_with_no_degraded_reasons_key_is_invalid(tmp_workspace):
     r = run_validator(tmp_workspace, "--post-close", RUN_ID)
     assert r.returncode == 1, r.stdout + r.stderr
     assert r.stdout == only, r.stdout
-    assert "degraded-with-no-reasons" not in r.stdout, r.stdout
 
 
 def test_the_degraded_reasons_key_check_is_behind_post_close(tmp_workspace):

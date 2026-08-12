@@ -335,11 +335,11 @@ fi
 # Check the fields a run record must get right. Keys these rules do not name pass: the record gains
 # fields over time, and a record written by a newer version has to read here too.
 #
-# A field only a close this version wrote can carry is required under --post-close instead, which
-# reads the one record the caller names. Every record in runs/ is read here, most of them written
-# long before and never rewritten by anything, so a rule about a new field would report them on
-# every validation for as long as the workspace exists. degraded_reasons is required there; what is
-# in it is checked here, on a record that has it.
+# Some fields only a close this version wrote can carry. Those are required under --post-close,
+# which reads the one record the caller names. Every record in runs/ is read here, most of them
+# written long before and never rewritten by anything, so a rule about a new field would report them
+# on every validation for as long as the workspace exists. degraded_reasons is required there; what
+# is in it is checked here, on a record that has it.
 if [ -d "$WS/runs" ]; then
   for record in "$WS"/runs/*.json; do
     [ -f "$record" ] || continue
@@ -371,18 +371,18 @@ if [ -d "$WS/runs" ]; then
 
     # An empty degraded_reasons on a complete close that came back degraded has lost what the close
     # found. close-run.sh works run_health out from five things and three of them write a reason —
-    # a search that never returned, a relevant posting carrying no band, and a judgment claiming a
-    # posting read the log holds no stored posting for. The other two write none: a close_state that
-    # is not complete, and a posting left unjudged. Measured on 2026-08-12, `close-run.sh <ws>
-    # <run_id> --trigger manual --close-state interrupted --sources linkedin` over an empty log
-    # wrote run_health degraded and degraded_reasons [], so a rule that skipped the close_state term
-    # would report a record close-run.sh had just written. The unjudged posting needs no term of its
-    # own: close-run.sh refuses a complete close while any posting is unjudged — `grep -n
-    # 'close_state complete, but' skills/job-search-runbook/scripts/close-run.sh`, one line — so no
-    # record it writes is both.
+    # a search that never returned, a relevant posting carrying no band, and a judgment saying the
+    # posting's text was read when the log holds no stored posting for it. The other two write none:
+    # a close_state that is not complete, and a posting left unjudged. Measured on 2026-08-12,
+    # `close-run.sh <ws> <run_id> --trigger manual --close-state interrupted --sources linkedin`
+    # over an empty log wrote run_health degraded and degraded_reasons [], so a rule that skipped
+    # the close_state term would report a record close-run.sh had just written. The unjudged posting
+    # needs no term of its own: close-run.sh refuses a complete close while any posting is unjudged
+    # — `grep -n 'close_state complete, but' skills/job-search-runbook/scripts/close-run.sh`, one
+    # line — so no record it writes is both.
     #
-    # A record with no degraded_reasons at all is not this rule's business. json_arr_state prints
-    # nothing for an absent field, so this stays quiet on a record written before the field existed,
+    # This rule says nothing about a record with no degraded_reasons at all. json_arr_state prints
+    # nothing for an absent field, so it stays quiet on a record written before the field existed,
     # and --post-close is where the field itself is required.
     run_health=$(json_str "$record" run_health)
     reasonlist=$(json_arr_state "$record" degraded_reasons)
@@ -445,6 +445,14 @@ if [ -n "$POST_CLOSE" ]; then
     # and for the same reason: a record written before the field existed is reported when the run it
     # belongs to is the one being checked, and passes when it is not. The run-records section says
     # why.
+    #
+    # A key that is there holding something other than an array — null, a string, a number — is
+    # reported as a missing key, because json_arr_state reads a value it cannot use as no value.
+    # That is how this script already reports a wrong-typed value in the fields it reads one at a
+    # time. Measured on 2026-08-12 on records carrying `"close_state": null`, `"trigger": 7` and
+    # `"postings_surfaced": "many"`: missing-key close_state, missing-key trigger and missing-key
+    # postings_surfaced, one finding each, with all three keys in the file. A rule of its own here
+    # would make degraded_reasons the one field that tells the two apart.
     [ -n "$(json_arr_state "$record" degraded_reasons)" ] || \
       invalid "$rel" "missing-key degraded_reasons"
 
