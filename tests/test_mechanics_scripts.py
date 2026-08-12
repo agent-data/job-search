@@ -51,10 +51,12 @@ POSTINGS = SEARCH_SCRIPTS / "posting-counts.sh"
 RESOLVE_RUN = RUN_SCRIPTS / "resolve-run.sh"
 FETCH_POSTING = RUN_SCRIPTS / "fetch-posting.sh"
 CHECK_ARGS = RUN_SCRIPTS / "check-record-args.sh"
+SEARCH_JOBS = RUN_SCRIPTS / "search-jobs.sh"
 LISTING = "f9a6ec16-0bfd-44d8-b3ee-073776745ee7"
 
 ALL_SCRIPTS = [DEDUP, APPEND, SCHEDULE, DISCOVERY, VALIDATE, RECORD_API, QUEUE, LIST_QUEUE,
-               JUDGE, COUNTS, MATCHES, OPEN_RUN, CLOSE_RUN, CLEAR_RUN, POSTINGS]
+               JUDGE, COUNTS, MATCHES, OPEN_RUN, CLOSE_RUN, CLEAR_RUN, POSTINGS,
+               RESOLVE_RUN, FETCH_POSTING, CHECK_ARGS, SEARCH_JOBS]
 
 
 # A contract-valid single-line `evaluated` event, in the shape
@@ -153,7 +155,8 @@ def live_run(tmp_workspace):
     back `runs/.started-` — the marker that names no run — as if it were a run id. `Path.glob`
     returns its names in no defined order, so which one came back would vary.
 
-    This calls agent-data directly rather than through search-jobs.sh, which arrives in Task 4.
+    This calls agent-data directly rather than through search-jobs.sh, so a break in that script
+    fails its own cases and leaves the fetch-posting.sh cases below reporting what they are about.
     Task 7 runs the same chain through both wrappers.
     """
     opened = subprocess.run(["sh", str(OPEN_RUN), str(tmp_workspace)],
@@ -6160,6 +6163,238 @@ def test_fetch_posting_exits_1_when_the_call_worked_and_the_response_was_refused
     assert len(calls) == 1, "the billed call left no record of itself"
     assert [x for x in rows if x["event"] == "detail"] == [], \
         "the response was refused, so no posting text should have been stored"
+
+
+# ------------------------------------------------------------------------------------ search-jobs.sh
+
+def open_run_in(ws):
+    """Open a run in `ws`, empty its log, and return the run id resolve-run.sh reports.
+
+    The run id comes from resolve-run.sh for the reason the `live_run` fixture gives: a glob over
+    `runs/` repeats the run-id-shape filter that script applies at resolve-run.sh:62, and can hand
+    back `runs/.started-` — the marker that names no run — as if it were a run id.
+    """
+    opened = subprocess.run(["sh", str(OPEN_RUN), str(ws)], capture_output=True, text=True)
+    assert opened.returncode == 0, opened.stdout + opened.stderr
+    (ws / "jobs.jsonl").write_text("", encoding="utf-8")
+    resolved = subprocess.run(["sh", str(RESOLVE_RUN), "--workspace", str(ws)],
+                              capture_output=True, text=True)
+    assert resolved.returncode == 0, resolved.stderr
+    return dict(l.split("=", 1) for l in resolved.stdout.splitlines() if "=" in l)["run_id"]
+
+
+def keyless_search(shell, *args):
+    """Run search-jobs.sh with agent-data unreachable, the way CI runs the suite."""
+    return subprocess.run([shell, str(SEARCH_JOBS), *[str(a) for a in args]],
+                          capture_output=True, text=True, env={"PATH": KEYLESS_PATH})
+
+
+@pytest.mark.live
+@needs_api
+def test_search_jobs_records_the_call_and_the_surfaced_rows(tmp_workspace):
+    run_id = open_run_in(tmp_workspace)
+
+    out = subprocess.run(
+        ["sh", str(SEARCH_JOBS), "--workspace", str(tmp_workspace),
+         "--query-id", "strategic-finance", "--source", "linkedin",
+         "--", "--keywords", "strategic finance", "--limit", "5"],
+        capture_output=True, text=True)
+    assert out.returncode == 0, out.stderr
+    assert out.stdout.startswith("response=")
+
+    saved = json.loads(
+        pathlib.Path(out.stdout.split("=", 1)[1].strip()).read_text(encoding="utf-8"))
+    assert saved["meta"]["request_id"].startswith("req_"), \
+        "no request_id — the wrapper did not reach the API"
+
+    rows = [json.loads(l) for l in (tmp_workspace / "jobs.jsonl").read_text(
+        encoding="utf-8").splitlines() if l.strip()]
+    calls = [x for x in rows if x["event"] == "call" and x.get("route") == "search-jobs"]
+    surfaced = [x for x in rows if x["event"] == "surfaced"]
+    assert len(calls) == 1
+    assert calls[0]["run_id"] == run_id
+    assert calls[0]["query_id"] == "strategic-finance"
+    assert surfaced, "the live search surfaced no rows — widen the keywords"
+
+
+@pytest.mark.live
+@needs_api
+def test_search_jobs_passes_route_parameters_through_unchanged(tmp_workspace):
+    """The API echoes the parameters it received under data.query, so the passthrough is checked
+    against what the route actually got, not against what the script was handed.
+
+    Measured 2026-08-11: a live search-jobs response carries
+    data.query = {keywords, location, source, published_on_or_after}.
+    """
+    open_run_in(tmp_workspace)
+
+    out = subprocess.run(
+        ["sh", str(SEARCH_JOBS), "--workspace", str(tmp_workspace),
+         "--query-id", "q", "--source", "linkedin",
+         "--", "--keywords", "strategic finance", "--limit", "3",
+         "--published_on_or_after", "2026-07-28"],
+        capture_output=True, text=True)
+    assert out.returncode == 0, out.stderr
+
+    saved = json.loads(
+        pathlib.Path(out.stdout.split("=", 1)[1].strip()).read_text(encoding="utf-8"))
+    q = saved["data"]["query"]
+    assert q["keywords"] == "strategic finance"   # the space survived word splitting
+    assert q["source"] == "linkedin"
+    assert q["published_on_or_after"] == "2026-07-28"
+
+
+@pytest.mark.live
+@needs_api
+def test_search_jobs_records_the_call_when_the_api_refuses_the_search(tmp_workspace):
+    """A refused call was still billed, so it still owes a `call` event.
+
+    Measured 2026-08-11: `search-jobs --source no-such-source --keywords 'strategic finance'
+    --limit 2` exits 1, writes nothing to stdout, and puts an error body on stderr carrying
+    `error.status` 400, `error.code` `validation_error`, `error.request_id`, and the message
+    `Unsupported source 'no-such-source' for source. Allowed values: linkedin, ashby, greenhouse,
+    lever.` The value is one no job board can ever be called, so the route cannot start accepting it.
+
+    The assertion below reads `error.request_id` rather than the code string. This API's error codes
+    have changed before — the 2026-07-06 multi-source reconciliation found them moved to
+    `validation_error` and `503` — so pinning a code would make this test fail on a change that does
+    not affect what it is checking: that a refused call still left a `call` event.
+    """
+    run_id = open_run_in(tmp_workspace)
+
+    out = subprocess.run(
+        ["sh", str(SEARCH_JOBS), "--workspace", str(tmp_workspace),
+         "--query-id", "strategic-finance", "--source", "no-such-source",
+         "--", "--keywords", "strategic finance", "--limit", "2"],
+        capture_output=True, text=True)
+    assert out.returncode == 1, out.stdout + out.stderr
+    assert out.stdout == "", "a call that never returned a body printed a path to one"
+    body = json_object_in(out.stderr)
+    assert body["error"]["request_id"].startswith("req_"), \
+        "no request_id in the error body — this did not reach the API"
+
+    rows = [json.loads(l) for l in (tmp_workspace / "jobs.jsonl").read_text(
+        encoding="utf-8").splitlines() if l.strip()]
+    calls = [x for x in rows if x["event"] == "call" and x.get("route") == "search-jobs"]
+    assert len(calls) == 1, "the failed call was billed and left no record of itself"
+    assert calls[0]["run_id"] == run_id
+    assert calls[0]["query_id"] == "strategic-finance"
+    assert [x for x in rows if x["event"] == "surfaced"] == [], \
+        "the call returned no results, so nothing should have been surfaced"
+
+
+def test_search_jobs_refuses_before_calling_when_no_run_is_open(tmp_workspace):
+    """Exits before any call, so this one spends nothing and needs no key."""
+    out = subprocess.run(
+        ["sh", str(SEARCH_JOBS), "--workspace", str(tmp_workspace),
+         "--query-id", "q", "--source", "linkedin", "--", "--keywords", "x"],
+        capture_output=True, text=True)
+    assert out.returncode == 2
+    assert "no run is open" in out.stderr
+
+
+@pytest.mark.parametrize("shell", ["sh", "dash"])
+@pytest.mark.parametrize("args", [
+    ["--query-id", "q", "--source", "linkedin"],
+    ["--query-id", "q", "--source", "linkedin", "--"],
+    ["--source", "linkedin", "--", "--keywords", "x"],
+    ["--query-id", "q", "--", "--keywords", "x"],
+])
+def test_search_jobs_refuses_a_call_that_names_no_route_parameters(tmp_workspace, shell, args):
+    """`--` and at least one parameter after it, plus both required flags, or nothing is called.
+
+    A search-jobs call with no keywords and no location is a call the API bills for a result set
+    nothing asked for, and the two flags name what the `call` event is filed under: run-counts.sh
+    groups a run's search calls by source and query id.
+    """
+    if shell == "dash" and not shutil.which("dash"):
+        pytest.skip("dash is not installed here")
+    out = keyless_search(shell, "--workspace", tmp_workspace, *args)
+    assert out.returncode == 2, out.stdout + out.stderr
+    assert "usage: search-jobs.sh" in out.stderr
+    assert out.stdout == ""
+
+
+@pytest.mark.parametrize("shell", ["sh", "dash"])
+def test_search_jobs_checks_both_recorded_values_before_it_goes_looking_for_a_run(
+        tmp_workspace, shell):
+    """The `--source` and `--query-id` guard, with no API key and no run open — the state CI runs in.
+
+    Both values go to record-api-response.sh after the call, and it exits 2 on either one carrying a
+    colon before it records anything, so checking them afterwards leaves a billed call with no `call`
+    event naming it. Every live case here is `needs_api`-gated and CI holds no key, so without this
+    one the guard could be deleted and the suite would stay green.
+
+    The last call passes values the guard has to let through, so it cannot be passing by refusing
+    everything: it gets as far as resolve-run.sh and stops there, having spent nothing.
+    """
+    if shell == "dash" and not shutil.which("dash"):
+        pytest.skip("dash is not installed here")
+    assert shutil.which("agent-data", path=KEYLESS_PATH) is None, \
+        "agent-data is on this PATH, so this case is not running in the state it exists for"
+
+    for args in (["--query-id", "q", "--source", "linked:in"],
+                 ["--query-id", "a:b", "--source", "linkedin"]):
+        refused = keyless_search(shell, "--workspace", tmp_workspace, *args,
+                                 "--", "--keywords", "x")
+        assert refused.returncode == 2, refused.stdout + refused.stderr
+        assert "may hold neither a comma nor a colon" in refused.stderr
+        assert "no run is open" not in refused.stderr, \
+            "the guard ran after resolve-run.sh, so in a workspace with a run open the call comes first"
+
+    allowed = keyless_search(shell, "--workspace", tmp_workspace,
+                             "--query-id", "strategic-finance", "--source", "linkedin",
+                             "--", "--keywords", "x")
+    assert allowed.returncode == 2, allowed.stdout + allowed.stderr
+    assert "no run is open" in allowed.stderr
+    assert "may hold" not in allowed.stderr
+
+
+@pytest.mark.parametrize("shell", ["sh", "dash"])
+@pytest.mark.parametrize("args,rule", [
+    (["--query-id", "../../escaped", "--source", "linkedin"], "--query-id may hold no slash"),
+    (["--query-id", "a/b", "--source", "linkedin"], "--query-id may hold no slash"),
+    (["--query-id", "q", "--source", "a/b"], "--source may hold no slash"),
+])
+def test_search_jobs_refuses_a_value_that_would_name_some_other_file(
+        tmp_workspace, shell, args, rule):
+    """Both values name the response file, and neither may hold a slash.
+
+    check-record-args.sh does not cover this: record-api-response.sh takes a slash in either value,
+    so the reason to refuse one belongs where the path is built, the same way fetch-posting.sh checks
+    `--posting-id`.
+
+    A run is open here, so without the check the script would build the path, make the call and try
+    to write the response into it.
+
+    Nothing is spent and no key is needed: the check runs with the other argument checks, before
+    resolve-run.sh and before the scratch directory is made — which is what the last assertion holds.
+    """
+    if shell == "dash" and not shutil.which("dash"):
+        pytest.skip("dash is not installed here")
+    opened = run_script(OPEN_RUN, tmp_workspace)
+    assert opened.returncode == 0, opened.stdout + opened.stderr
+
+    out = keyless_search(shell, "--workspace", tmp_workspace, *args, "--", "--keywords", "x")
+    assert out.returncode == 2, out.stdout + out.stderr
+    assert rule in out.stderr
+    assert out.stdout == ""
+    assert not (tmp_workspace / "runs" / ".scratch").exists(), \
+        "the response directory was made, so the check ran after the path was built"
+    assert not (tmp_workspace / "jobs.jsonl").exists(), "the log gained a file"
+
+
+def test_the_listing_id_is_the_same_in_both_wrappers_and_in_the_reference():
+    """One listing id, three files. A change lands in all three or this test goes red."""
+    pat = re.compile(r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}")
+    ids = set()
+    for rel in ("skills/job-search-run/scripts/fetch-posting.sh",
+                "skills/job-search-run/scripts/search-jobs.sh",
+                "skills/agent-data-reference/SKILL.md"):
+        found = pat.findall((ROOT / rel).read_text(encoding="utf-8"))
+        assert found, f"no listing id in {rel}"
+        ids.add(found[0])
+    assert len(ids) == 1, f"listing ids disagree: {ids}"
 
 
 # ------------------------------------------------------------------------ posting-counts.sh
