@@ -36,12 +36,13 @@
 # Exit 0: the posting was read and both events are in the log.
 # Exit 1: the call failed, or record-api-response.sh refused the response. The `call` event is
 #         recorded either way, because a failed call was still charged. The two differ in what the
-#         streams carry. A failed call prints nothing on stdout and puts the error body on stderr.
-#         A refused response prints the response= line on stdout and puts record-api-response.sh's
-#         own diagnostic on stderr, with no body after it. The body is in the file the response=
-#         line names.
-# Exit 2: bad arguments, a --source record-api-response.sh would refuse, or no single open run to
-#         record against. Nothing was called.
+#         streams carry, measured 2026-08-11 by driving both against a live run. A failed call
+#         prints nothing on stdout, and stderr carries record-api-response.sh's diagnostic followed
+#         by the error body. A refused response prints the response= line on stdout, and stderr
+#         carries record-api-response.sh's diagnostic and nothing after it — the body is in the file
+#         that response= line names.
+# Exit 2: bad arguments, a --posting-id this script will not take, a --source record-api-response.sh
+#         will not take, or no single open run to record against. Nothing was called.
 set -u
 
 here=$(dirname "$0")
@@ -64,14 +65,45 @@ done
 [ -n "$source_url" ] || { usage; exit 2; }
 [ -n "$src" ]        || { usage; exit 2; }
 
-# Before the call, not after it. record-api-response.sh refuses four characters in --source and
-# every one of those checks runs before it writes anything, so handing it a refused value after the
-# call has been made leaves the call billed and no `call` event naming it — the exact loss this
-# script exists to prevent. check-record-args.sh holds the rules and the measurement.
+# The posting id supplies the name of the file this script writes the response to, so it is checked
+# here, before that path is built and before anything is spent. check-record-args.sh does not check
+# it: record-api-response.sh is never handed a posting id — it gets a run id, a log path, a response
+# path, a route and a source — so the reason to check this one belongs where the path is made.
+#
+# The value comes off a surfaced row, so it is the API's rather than one an operator typed. Measured
+# 2026-08-11 on a live 10-row linkedin search, every `id` is `jp_` followed by 12 hex digits, and
+# none of the ten holds a slash or a control character. That shape is not pinned here: the API owns
+# it and a copy of it would drift out of step.
+#
+# Both refusals were measured 2026-08-11 against an open run, with this check removed.
+#
+# A slash: `--posting-id ../../../escaped` left the shell unable to open
+# runs/.scratch/<run_id>/detail-../../../escaped.json, so agent-data never ran, and the failed-call
+# branch below then ran against an error file that was never created. Three lines on stderr, exit 1,
+# and not one of them says which argument was wrong.
+#
+# A control character: `--posting-id jp_a<newline>jp_b` created the file
+# detail-jp_a<newline>jp_b.json, and the response= line below then printed as two lines, so
+# `sed -n 's/^response=//p'` handed the caller a path that stopped at the newline and named no file.
+case $posting_id in
+  */*)
+    printf 'fetch-posting.sh: --posting-id may hold no slash: %s\n' "$posting_id" >&2
+    printf 'fetch-posting.sh:   it supplies a file name under this run, not a path\n' >&2
+    exit 2 ;;
+  *[[:cntrl:]]*)
+    printf 'fetch-posting.sh: --posting-id may hold no control character\n' >&2
+    printf 'fetch-posting.sh:   it supplies a file name under this run, and the response= line naming that file is one line\n' >&2
+    exit 2 ;;
+esac
+
+# Before the call, not after it. record-api-response.sh exits 2 on a --route or a --source it will
+# not take, and every one of those checks runs before it writes anything, so handing it a refused
+# value once the call has been made leaves the call billed and no `call` event naming it — the exact
+# loss this script exists to prevent. check-record-args.sh holds the rules and the measurement.
 #
 # This sits with the argument checks rather than after resolve-run.sh, so a bad --source is named
-# whether or not a run is open, and nothing is read from disk before it is.
-sh "$here/check-record-args.sh" --source "$src" || exit 2
+# whether or not a run is open.
+sh "$here/check-record-args.sh" --route get-posting --source "$src" || exit 2
 
 # --workspace is passed on only when the caller gave one, so resolve-run.sh asks
 # workspace-discovery.sh in a run and takes the temporary directory in a test. The expansion is

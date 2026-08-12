@@ -1,48 +1,64 @@
 #!/bin/sh
 # check-record-args.sh — refuse a value record-api-response.sh would refuse, before the call is made.
 #
-# Usage: check-record-args.sh [--source S] [--query-id ID]
+# Usage: check-record-args.sh --route search-jobs|get-posting [--source S] [--query-id ID]
 #
-# The wrappers that spend a metered call — fetch-posting.sh and search-jobs.sh — run this before
-# their `agent-data call`, and pass on the same values they will later hand record-api-response.sh.
+# A wrapper that spends a metered call runs this before its `agent-data call`, passing the values it
+# will later hand record-api-response.sh. fetch-posting.sh is the wrapper that does so today. The
+# flag names are record-api-response.sh's own, so the same arguments go to both.
 #
-# Why it has to run first. record-api-response.sh refuses four characters in --source and
-# --query-id: a control character and a backslash at record-api-response.sh:92-106, and a comma and
-# a colon at :112-120. All four checks exit 2 there, and all four run before `emit_call` is so much
-# as defined at :173, so nothing is written to jobs.jsonl. A wrapper that spends the call and finds
-# out afterwards is left with a call the API billed and no `call` event naming it — measured
-# 2026-08-11 with --source 'linked:in' against an open run: the saved error body carried
-# request_id req_eca95b6e566b46dca902c900 and `grep '"event":"call"'` on that run's jobs.jsonl
-# matched only the earlier search. A run's metered-call count is built from those events, so the
-# billed call is invisible to it.
+# Why it has to run first. record-api-response.sh exits 2 on a value it will not take, and every one
+# of those checks runs before `emit_call` is even defined at record-api-response.sh:173, so a refused
+# value leaves nothing in jobs.jsonl. A wrapper that spends the call and finds out afterwards is left
+# with a call the API billed and no `call` event naming it — measured 2026-08-11 with
+# --source 'linked:in' against an open run: the saved error body carried request_id
+# req_eca95b6e566b46dca902c900 and `grep '"event":"call"'` on that run's jobs.jsonl matched only the
+# earlier search. A run's metered-call count is built from those events, so the billed call is
+# invisible to it.
+#
+# The rules, and where record-api-response.sh checks each:
+#   :65-68    --route is search-jobs or get-posting
+#   :92-106   --source and --query-id hold no control character and no backslash
+#   :112-120  --source and --query-id hold neither a comma nor a colon
+#   :130-136  --route search-jobs is given a --query-id that is not empty
 #
 # The rules are repeated here; the reasons they exist are not. Each is written out in
 # record-api-response.sh above the check it belongs to, and that is the one place to read them.
 #
-# This checks the characters in a value and never which sources exist. agent-data-reference/SKILL.md
-# names the four sources the API serves, and the API refuses the rest with a 400 — a second list
-# here would be a copy to drift.
+# --route is required because the last rule is the one that is not about characters and applies to
+# one route only: a search is grouped by source and query id, and a detail read is not grouped and
+# takes no query id. Without the route this script cannot tell which of the two it is guarding.
+# Measured 2026-08-11: `record-api-response.sh <run_id> <jobs> <resp> --route search-jobs
+# --query-id '' --source linkedin` exits 2 saying `--route search-jobs needs --query-id`, and the
+# jobs.jsonl path it was given is never created. `--route bogus` exits 2 the same way.
 #
-# There is no --run-id. Both wrappers take the run id from resolve-run.sh, which prints only a name
+# This checks the characters in a value and never which sources exist. agent-data-reference/SKILL.md
+# names the sources the API serves, and the API refuses the rest with a 400 — a second copy here
+# would drift out of step with that one.
+#
+# There is no --run-id. A wrapper takes the run id from resolve-run.sh, which prints only a name
 # matching its RUN_ID_GLOB at resolve-run.sh:62 — digits, dashes, `T` and `Z` — so a run id cannot
-# hold any of the four characters. record-api-response.sh checks it at :104 anyway, because it takes
+# hold any of the characters above. record-api-response.sh checks it at :104 anyway, because it takes
 # the run id from its caller rather than from that script.
 #
-# Exit 0: record-api-response.sh accepts every value given.
-# Exit 2: it would refuse one, or this script's own arguments are wrong. stderr names the rule.
+# Exit 0: nothing given here is a value record-api-response.sh refuses. It can still exit 2 over
+#         something this script is not given: the run id it takes from its own caller, the response
+#         file, or mktemp.
+# Exit 2: record-api-response.sh would refuse one of these values, or this script's own arguments are
+#         wrong. stderr names the rule.
 set -u
 
 usage() {
-  printf 'usage: check-record-args.sh [--source S] [--query-id ID]\n' >&2
+  printf 'usage: check-record-args.sh --route search-jobs|get-posting [--source S] [--query-id ID]\n' >&2
 }
 
 die() {
   printf 'check-record-args.sh: %s\n' "$1" >&2
-  printf 'check-record-args.sh:   record-api-response.sh refuses this value before it records anything, so the call would be billed and no `call` event would name it\n' >&2
+  printf 'check-record-args.sh:   record-api-response.sh checks this before it records anything, so the call would be billed and no `call` event would name it\n' >&2
   exit 2
 }
 
-# The same three `case` patterns record-api-response.sh matches, in the same order.
+# The same `case` patterns record-api-response.sh matches, at :92-106 and :112-120.
 check() {
   case $2 in
     *[[:cntrl:]]*) die "$1 may hold no control character" ;;
@@ -51,12 +67,30 @@ check() {
   esac
 }
 
+route='' src='' query_id=''
 while [ $# -gt 0 ]; do
   case $1 in
-    --source)   [ $# -ge 2 ] || { usage; exit 2; }; check --source "$2";   shift 2 ;;
-    --query-id) [ $# -ge 2 ] || { usage; exit 2; }; check --query-id "$2"; shift 2 ;;
+    --route)    [ $# -ge 2 ] || { usage; exit 2; }; route=$2;    shift 2 ;;
+    --source)   [ $# -ge 2 ] || { usage; exit 2; }; src=$2;      shift 2 ;;
+    --query-id) [ $# -ge 2 ] || { usage; exit 2; }; query_id=$2; shift 2 ;;
     *) usage; exit 2 ;;
   esac
 done
+
+# The order below is record-api-response.sh's: the route at :65-68, the characters at :92-120,
+# then the query id at :130-136.
+case $route in
+  search-jobs|get-posting) ;;
+  *) die "--route must be search-jobs or get-posting" ;;
+esac
+
+check --source "$src"
+check --query-id "$query_id"
+
+# Only a search needs one, and only a non-empty one counts: record-api-response.sh:130-136 takes an
+# absent --query-id and an empty one down the same branch.
+if [ "$route" = search-jobs ]; then
+  [ -n "$query_id" ] || die "--route search-jobs needs a --query-id that is not empty"
+fi
 
 exit 0

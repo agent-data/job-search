@@ -149,8 +149,9 @@ def live_run(tmp_workspace):
     state the API never produced.
 
     The run id comes from resolve-run.sh, the script that owns finding it. A glob over `runs/`
-    would repeat the run-id-shape filter that script applies at resolve-run.sh:62, and would hand
-    back `runs/.started-` — the marker that names no run — as if it were a run id.
+    would repeat the run-id-shape filter that script applies at resolve-run.sh:62, and could hand
+    back `runs/.started-` — the marker that names no run — as if it were a run id. `Path.glob`
+    returns its names in no defined order, so which one came back would vary.
 
     This calls agent-data directly rather than through search-jobs.sh, which arrives in Task 4.
     Task 7 runs the same chain through both wrappers.
@@ -5789,15 +5790,20 @@ def test_resolving_a_run_runs_under_dash(tmp_workspace):
     ("linked\nin", "may hold no control character"),
 ])
 def test_check_record_args_refuses_what_record_api_response_refuses(shell, value, rule):
-    """The four characters record-api-response.sh refuses in `--source`, checked without a call.
+    """The characters record-api-response.sh refuses in `--source`, checked without a call.
 
-    This script exists so fetch-posting.sh and search-jobs.sh can apply these rules before spending
-    the metered call rather than after, and it is run directly here as well as through the wrapper,
-    because both wrappers depend on it and only one of them exists yet.
+    Four values are driven against the three `case` patterns record-api-response.sh matches: a
+    control character and a backslash at record-api-response.sh:92-106, and a comma or a colon at
+    :112-120.
+
+    This script exists so a wrapper can apply these rules before spending the metered call rather
+    than after, and it is run directly here as well as through fetch-posting.sh, because the rules
+    are the script's whole product.
     """
     if shell == "dash" and not shutil.which("dash"):
         pytest.skip("dash is not installed here")
-    r = subprocess.run([shell, str(CHECK_ARGS), "--source", value], capture_output=True, text=True)
+    r = subprocess.run([shell, str(CHECK_ARGS), "--route", "get-posting", "--source", value],
+                       capture_output=True, text=True)
     assert r.returncode == 2
     assert rule in r.stderr
     assert "no `call` event would name it" in r.stderr
@@ -5806,16 +5812,95 @@ def test_check_record_args_refuses_what_record_api_response_refuses(shell, value
 @pytest.mark.parametrize("shell", ["sh", "dash"])
 def test_check_record_args_accepts_the_values_a_run_actually_passes(shell):
     """A real source and a real query id go through, so the guard cannot be passing by refusing
-    everything. The four sources are not listed here or in the script — agent-data-reference/SKILL.md
+    everything. The sources are not listed here or in the script — agent-data-reference/SKILL.md
     owns that set and the API refuses the rest."""
     if shell == "dash" and not shutil.which("dash"):
         pytest.skip("dash is not installed here")
     r = subprocess.run(
-        [shell, str(CHECK_ARGS), "--source", "linkedin", "--query-id", "strategic-finance"],
+        [shell, str(CHECK_ARGS), "--route", "search-jobs",
+         "--source", "linkedin", "--query-id", "strategic-finance"],
         capture_output=True, text=True)
     assert r.returncode == 0, r.stderr
     assert r.stdout == ""
     assert r.stderr == ""
+
+
+@pytest.mark.parametrize("shell", ["sh", "dash"])
+def test_check_record_args_wants_a_query_id_for_a_search_and_not_for_a_detail_read(shell):
+    """The one rule that is not about characters, and the one that is conditional on the route.
+
+    record-api-response.sh:130-136 refuses `--route search-jobs` with no query id, and that check
+    runs before `emit_call` is defined at :173, so it writes nothing — which for a wrapper that has
+    already spent the call is a billed call with no `call` event naming it. A detail read is not
+    grouped by query id and takes none, so the same missing value is fine there.
+
+    Both halves are asserted. A case that only drove the refusal would still pass if the guard
+    demanded a query id on every route, which would then refuse every legitimate detail read.
+    """
+    if shell == "dash" and not shutil.which("dash"):
+        pytest.skip("dash is not installed here")
+    for args in (["--route", "search-jobs", "--source", "linkedin"],
+                 ["--route", "search-jobs", "--source", "linkedin", "--query-id", ""]):
+        r = subprocess.run([shell, str(CHECK_ARGS), *args], capture_output=True, text=True)
+        assert r.returncode == 2, "%s: %s" % (args, r.stdout + r.stderr)
+        assert "--route search-jobs needs a --query-id" in r.stderr
+
+    r = subprocess.run([shell, str(CHECK_ARGS), "--route", "get-posting", "--source", "linkedin"],
+                       capture_output=True, text=True)
+    assert r.returncode == 0, r.stderr
+    assert r.stderr == ""
+
+
+# Every (route, source, query-id) combination below is passed to both scripts unchanged, because the
+# guard takes record-api-response.sh's own flag names. The second value is whether
+# record-api-response.sh accepts the values.
+GUARD_AGREEMENT_CASES = [
+    (["--route", "get-posting", "--source", "linkedin"], True),
+    (["--route", "get-posting"], True),
+    (["--route", "get-posting", "--source", ""], True),
+    (["--route", "search-jobs", "--source", "linkedin", "--query-id", "strategic-finance"], True),
+    (["--route", "search-jobs", "--source", "linkedin", "--query-id", ""], False),
+    (["--route", "search-jobs", "--source", "linkedin"], False),
+    (["--route", "get-posting", "--source", "linked:in"], False),
+    (["--route", "get-posting", "--source", "linked,in"], False),
+    (["--route", "get-posting", "--source", "linked\\in"], False),
+    (["--route", "get-posting", "--source", "linked\nin"], False),
+    (["--route", "search-jobs", "--source", "linkedin", "--query-id", "a:b"], False),
+    (["--route", "search-jobs", "--source", "linkedin", "--query-id", "a\\b"], False),
+    (["--route", "bogus", "--source", "linkedin"], False),
+    (["--source", "linkedin"], False),
+]
+
+
+@pytest.mark.parametrize("args,accepted", GUARD_AGREEMENT_CASES)
+def test_the_guard_and_record_api_response_agree_on_the_same_values(args, accepted, tmp_path):
+    """Whatever this guard lets through, record-api-response.sh must take — checked by running both.
+
+    The guard's only product is a claim about what another script does, so it is checked against that
+    script rather than against a list written here. Round 1 shipped it checking characters and
+    nothing else while its header said record-api-response.sh accepted every value it passed:
+    `--query-id ''` went through the guard and exited 2 there, before `emit_call` at
+    record-api-response.sh:173. For a wrapper that had already spent the call that is a billed call
+    with no `call` event naming it.
+
+    record-api-response.sh is handed a response path that does not exist, so it reaches its
+    missing-file check at record-api-response.sh:138 only once it has accepted every value ahead of
+    it. That message is the discriminator: present when the values passed, absent when one was
+    refused. Nothing is called and no key is needed — the check at :138 also runs before the log file
+    is created at :140, which is why jobs.jsonl is still absent either way.
+    """
+    guard = subprocess.run(["sh", str(CHECK_ARGS), *args], capture_output=True, text=True)
+    assert (guard.returncode == 0) is accepted, "%s: guard said %d\n%s" % (
+        args, guard.returncode, guard.stderr)
+
+    jobs = tmp_path / "jobs.jsonl"
+    record = subprocess.run(
+        ["sh", str(RECORD_API), "2026-08-11T00-00-00Z", str(jobs),
+         str(tmp_path / "no-such-response.json"), *args],
+        capture_output=True, text=True)
+    assert record.returncode == 2, record.stdout + record.stderr
+    assert ("no such file" in record.stderr) is accepted, "%s: %s" % (args, record.stderr)
+    assert not jobs.exists(), "record-api-response.sh logged an event on a path that makes no call"
 
 
 # ---------------------------------------------------------------------------------- fetch-posting.sh
@@ -5858,6 +5943,107 @@ def test_fetch_posting_refuses_before_calling_when_no_run_is_open(tmp_workspace)
     assert "no run is open" in out.stderr
 
 
+# The state CI runs the mechanics suite in: no agent-data anywhere on PATH. A case given this
+# environment cannot reach the API even if the guard it is checking were deleted.
+KEYLESS_PATH = "/usr/bin:/bin:/usr/sbin:/sbin"
+
+
+def keyless(shell, *args):
+    """Run fetch-posting.sh with agent-data unreachable."""
+    return subprocess.run([shell, str(FETCH_POSTING), *[str(a) for a in args]],
+                          capture_output=True, text=True, env={"PATH": KEYLESS_PATH})
+
+
+@pytest.mark.parametrize("shell", ["sh", "dash"])
+def test_fetch_posting_checks_the_source_before_it_goes_looking_for_a_run(tmp_workspace, shell):
+    """The `--source` guard, with no API key and no run open — the state CI runs in.
+
+    Every other case covering this guard is `live`-marked and `needs_api`-gated, so with agent-data
+    off PATH the whole suite stayed green with the guard deleted, and CI holds no key. This one costs
+    nothing, because the guard runs before resolve-run.sh and resolve-run.sh refuses first on a
+    workspace with no run open.
+
+    Both branches are asserted. A case that drove only the refused source would still pass if the
+    guard refused every value, so the second call passes a source the guard has to let through and
+    checks that the script got as far as resolve-run.sh.
+
+    Deleting the `check-record-args.sh` line makes the first call reach resolve-run.sh and print
+    `no run is open` instead of the rule, so the first assertion goes red with no key involved.
+    """
+    if shell == "dash" and not shutil.which("dash"):
+        pytest.skip("dash is not installed here")
+    assert shutil.which("agent-data", path=KEYLESS_PATH) is None, \
+        "agent-data is on this PATH, so this case is not running in the state it exists for"
+
+    refused = keyless(shell, "--workspace", tmp_workspace, "--posting-id", "jp_000000000000",
+                      "--source-url", "https://example.test/1", "--source", "a:b")
+    assert refused.returncode == 2, refused.stdout + refused.stderr
+    assert "may hold neither a comma nor a colon" in refused.stderr
+    assert "no run is open" not in refused.stderr, \
+        "the guard ran after resolve-run.sh, so in a workspace with a run open the call comes first"
+
+    allowed = keyless(shell, "--workspace", tmp_workspace, "--posting-id", "jp_000000000000",
+                      "--source-url", "https://example.test/1", "--source", "linkedin")
+    assert allowed.returncode == 2, allowed.stdout + allowed.stderr
+    assert "no run is open" in allowed.stderr
+    assert "may hold" not in allowed.stderr
+
+
+@pytest.mark.parametrize("shell", ["sh", "dash"])
+@pytest.mark.parametrize("posting_id,rule", [
+    ("../../../escaped", "may hold no slash"),
+    ("a/b", "may hold no slash"),
+    ("jp_a\njp_b", "may hold no control character"),
+])
+def test_fetch_posting_refuses_a_posting_id_that_would_name_some_other_file(
+        tmp_workspace, shell, posting_id, rule):
+    """The posting id supplies a file name, and it arrives from the API rather than from an operator.
+
+    A run is open here, so without the check the script would build the path, make the call and write
+    the response. Measured 2026-08-11 with the check removed and agent-data off PATH,
+    `--posting-id ../../../escaped` left the shell unable to open
+    `runs/.scratch/<run_id>/detail-../../../escaped.json`, and the script then ran its failed-call
+    branch on an error file that was never created: exit 1, nothing on stdout, and three lines on
+    stderr, not one of which says which argument was wrong. `jp_a<newline>jp_b` created the file
+    `detail-jp_a<newline>jp_b.json`, and the `response=` line then printed as two lines, so
+    `sed -n 's/^response=//p'` handed the caller a path that stopped at the newline and named no
+    file.
+
+    Nothing is spent and no key is needed: the check runs with the other argument checks, before
+    resolve-run.sh and before the scratch directory is made — which is what the last assertion holds.
+    """
+    if shell == "dash" and not shutil.which("dash"):
+        pytest.skip("dash is not installed here")
+    opened = run_script(OPEN_RUN, tmp_workspace)
+    assert opened.returncode == 0, opened.stdout + opened.stderr
+
+    out = keyless(shell, "--workspace", tmp_workspace, "--posting-id", posting_id,
+                  "--source-url", "https://example.test/1", "--source", "linkedin")
+    assert out.returncode == 2, out.stdout + out.stderr
+    assert rule in out.stderr
+    assert out.stdout == ""
+    assert not (tmp_workspace / "runs" / ".scratch").exists(), \
+        "the response directory was made, so the check ran after the path was built"
+    assert not (tmp_workspace / "jobs.jsonl").exists(), "the log gained a file"
+
+
+@pytest.mark.parametrize("shell", ["sh", "dash"])
+def test_fetch_posting_takes_the_posting_id_shape_the_api_returns(tmp_workspace, shell):
+    """The other half of the case above: an id shaped the way live rows are shaped gets past the
+    check, so it cannot be passing by refusing everything.
+
+    `jp_` and 12 hex digits is the shape every `id` carried on a live 10-row linkedin search measured
+    2026-08-11. No run is open, so the script stops at resolve-run.sh having spent nothing.
+    """
+    if shell == "dash" and not shutil.which("dash"):
+        pytest.skip("dash is not installed here")
+    out = keyless(shell, "--workspace", tmp_workspace, "--posting-id", "jp_a319f60ebe3f",
+                  "--source-url", "https://example.test/1", "--source", "linkedin")
+    assert out.returncode == 2, out.stdout + out.stderr
+    assert "no run is open" in out.stderr
+    assert "--posting-id" not in out.stderr
+
+
 @pytest.mark.live
 @needs_api
 def test_fetch_posting_records_the_call_when_the_api_refuses_the_posting(live_run):
@@ -5895,9 +6081,10 @@ def test_fetch_posting_records_the_call_when_the_api_refuses_the_posting(live_ru
 def test_fetch_posting_refuses_a_source_record_api_response_would_refuse_before_calling(live_run):
     """A `--source` carrying a colon, checked before the call rather than after it.
 
-    record-api-response.sh refuses four characters in `--source` — a control character and a
-    backslash at record-api-response.sh:92-106, a comma and a colon at :112-120 — and every one of
-    those checks runs before `emit_call` is even defined at :173, so it writes nothing. Reading the
+    record-api-response.sh matches three `case` patterns against `--source` — no control character
+    and no backslash at record-api-response.sh:92-106, and neither a comma nor a colon at :112-120 —
+    and every one of those checks runs before `emit_call` is even defined at :173, so it writes
+    nothing. Reading the
     posting first and finding that out afterwards leaves a call the API billed with no `call` event
     naming it, and a run's metered-call count is built from those events.
 
