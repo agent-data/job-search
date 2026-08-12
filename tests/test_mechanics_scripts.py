@@ -6994,9 +6994,9 @@ def test_a_subagent_needs_only_the_posting_row(tmp_workspace):
     passed to any of the three scripts.
 
     Each of them asks resolve-run.sh, which reads the run id off the runs/.started-<run_id> marker
-    on disk. That is what lets a subagent do a detail read with nothing in hand but one posting row.
-    In a run resolve-run.sh asks workspace-discovery.sh for the workspace as well; `--workspace`
-    stands in for that here, because this workspace is a temporary directory discovery never finds.
+    on disk. That is what lets a subagent do a detail read with nothing but one posting row. In a
+    run resolve-run.sh asks workspace-discovery.sh for the workspace as well; `--workspace` stands
+    in for that here, because this workspace is a temporary directory discovery never finds.
 
     The `live_run` fixture is not used. It calls agent-data directly and hands the response to
     record-api-response.sh, so a chain built on it would leave search-jobs.sh out of the one case
@@ -7008,10 +7008,18 @@ def test_a_subagent_needs_only_the_posting_row(tmp_workspace):
     Both response paths are read off the `response=` line the script printed rather than rebuilt
     from the run id, and the three values the fetch is given come off the surfaced row.
 
-    The counts are what this chain did: one search call and one get-posting call, the two metered
-    calls between them, and one posting whose text the run stored. postings_reviewed is asserted as
-    well because it is the only one of these that reads the judgment, and it is 1 only when
+    The counts are what this chain did: one search call, one get-posting call, and those two are
+    every metered call the run made. One posting had its text stored. postings_reviewed is asserted
+    as well because it is the only one of these that reads the judgment, and it is 1 only when
     record-judgment.sh wrote the evaluated event under the run that surfaced the posting.
+
+    The second open-run.sh call is not a check on open-run.sh. It is the only thing here that ties
+    the run id these counts are read under to the marker on disk. Every other assertion would still
+    hold if resolve-run.sh reported a run id no marker carries: all three scripts would record under
+    that id, run-counts.sh is handed the same id, and the numbers would then agree with each other
+    and with no run in the workspace. Measured 2026-08-12 with resolve-run.sh's last printf changed
+    to report 2026-01-01T00-00-00Z: with these three lines deleted the case passes, and with them in
+    place it fails on the last of them, printing that id against the one the marker names.
     """
     run_id = open_run_in(tmp_workspace)
     jobs = tmp_workspace / "jobs.jsonl"
