@@ -47,8 +47,8 @@
 # other status is awk failing partway, which leaves part of the key set on stdout: read these counts
 # after checking the status, never because stdout has lines in it.
 #
-# A missing operand is the exception the caller sees a shell-picked code for, the way
-# record-judgment.sh:19-21 records: measured at 1 under sh and bash and 2 under dash.
+# A missing operand is the exception the caller sees a shell-picked code for rather than one this
+# script chose: measured at 1 under sh and bash and 2 under dash.
 set -u
 
 here=$(dirname "$0")

@@ -75,7 +75,7 @@
 # rows after checking the status, never because stdout has lines in it.
 #
 # A missing operand is the one case where the shell picks the status rather than this script:
-# measured at 1 under sh and bash and 2 under dash. record-judgment.sh:19-21 records the same.
+# measured at 1 under sh and bash and 2 under dash.
 set -u
 
 here=$(dirname "$0")

@@ -11,8 +11,9 @@
 #
 # A posting is keyed by its source and its source_id joined with SUBSEP, the 0x1c byte, which
 # cannot reach a value — the reason written out at run-counts.awk:14-16. A source_id may hold a
-# `|`, so joining on one would let two postings share a key: record-judgment.sh:76-81 refuses only
-# a control character and a backslash, and measured, source `s` with source_id `x|y` and source
+# `|`, so joining on one would let two postings share a key: `reject_id` in record-judgment.sh —
+# `grep -n 'reject_id()' skills/job-search-run/scripts/record-judgment.sh` — refuses only a
+# control character and a backslash, and measured, source `s` with source_id `x|y` and source
 # `s|x` with source_id `y` were both recorded at exit 0 and both join to `s|x|y`. With the key
 # joined on `|`, this script printed one row for those two postings instead of two.
 #
