@@ -1,6 +1,6 @@
 # Job Search
 
-Turn your coding agent into a job-search assistant. Describe what you want in plain English. Job Search finds postings on LinkedIn, judges each role against your preferences, and writes a filtered digest. Add Ashby, Greenhouse or Lever to search company job boards as well. Run it on demand or on a schedule.
+Hyper-personalized job search that filters postings based on  what you do and don't want, your pay requirements, qualifications, and background.
 
 <img width="3182" height="2160" alt="Job Search digest showing reviewed matches in an agent conversation" src="https://github.com/user-attachments/assets/a3c45a7e-6a93-4afa-86f0-f522c8f8d53c" />
 
@@ -13,27 +13,30 @@ Your preferences, reviewed postings, run logs, and digests stay in `~/.job-searc
 
    > **Set up my job search. I'm looking for** a senior product-design role, remote in the US, at a mission-driven company.
 
-The agent checks its prerequisites, creates `~/.job-search/`, documents your preferences, and searches live postings. If useful roles are available, it shows the first fully reviewed matches while it continues through the rest.
+The agent then:
+- Checks its prerequisites
+- Documents your preferences, and 
+- Searches live postings. 
 
-   > **Checkpoint:** setup worked when the agent summarizes what it understood and either shows a reviewed match or explains why the search returned none. It then writes the complete digest to your local workspace.
+If useful roles are available, it shows the first fully reviewed matches while it continues through the rest.
 
-A sentence or two is enough to begin. You can also share relevant material, such as a resume, cover letter, or notes from previous applications. Refine the search after you see the first results.
+A sentence or two is enough to begin. You can also share relevant material, such as a resume, cover letter, or notes from previous applications.
 
 ## Before the first search: agent-data
 
 Job Search gets live postings through the [agent-data](https://agent-data.dev) command-line tool. Onboarding handles the setup:
 
-1. If the CLI is missing, the agent offers to install it with `npm install -g agent-data`. If a global install needs different permissions, it gives you the exact command to run.
-2. If authentication is missing, the agent helps you create an API key, runs `agent-data init --api-key <KEY> -y`, and verifies it with `agent-data whoami`. The agent-data CLI stores the key in its own config, outside this repository.
+1. If the CLI is missing, the agent offers to install it with `npm install -g agent-data`.
+2. If authentication is missing, the agent helps you create an API key and verify authentication.
 
-Agent-data offers a 100-call monthly free tier; the example below uses 9 metered calls. Before a choice increases expected usage, Job Search previews the change. After each run, it reports actual attempts. Any dollar amount is labeled as a pay-as-you-go equivalent, not an account charge. See [what a run spends](skills/agent-data-reference/SKILL.md) or your [billing page](https://agent-data.motie.dev/settings/billing) for current details.
+Agent-data offers a 100-call monthly free tier (no credit card required). Typical runs consume ~10-30 calls. See [what a run spends](skills/agent-data-reference/SKILL.md) or your [billing page](https://agent-data.motie.dev/settings/billing) for additional details.
 
 ## What a run looks like
 
 ```text
 You: Run a search now.
 
-Job Search: Searching LinkedIn for "senior product designer"...
+Job Search: Searching for "senior product designer"...
 Found 42 postings. 9 are new. Reading the promising ones in full...
 
 Here are the first strong matches while I keep reviewing the rest:
@@ -48,7 +51,7 @@ Job search digest — 2026-06-05
 Agent-data usage: 9 metered calls this run · about $0.072 pay-as-you-go equivalent
 ```
 
-See the [complete sample digest](examples/sample-digest.md), written by a workspace that searches Ashby as well as LinkedIn — which is why its counts line breaks the postings down by source and its rows carry a source name.
+See the [complete sample digest](examples/sample-digest.md).
 
 ## What you can ask
 
@@ -62,7 +65,7 @@ See the [complete sample digest](examples/sample-digest.md), written by a worksp
 | Review a match | “Why is this a strong match?” or “Does this posting fit what I want?” |
 | Pause or stop | “Pause my schedule,” or “stop scheduling.” |
 
-Natural language is the main interface. Commands such as `/job-search` and `$job-search` are shortcuts when your agent supports them.
+Commands such as `/job-search` and `$job-search` are shortcuts when your agent supports them.
 
 ## Support matrix
 
