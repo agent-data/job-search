@@ -6907,8 +6907,9 @@ def test_search_jobs_exits_1_when_the_search_worked_and_the_rows_were_refused(tm
     The refusal follows from the field list rather than from what the search happened to return:
     every row of every response to this call is missing three of the four required keys.
 
-    agent-data-reference/SKILL.md:64-67 gives the same reason, but it is written about the other
-    route: it sits under `## Reading one posting` at :55, and
+    agent-data-reference/SKILL.md gives the same reason in the paragraph that starts "The route
+    docs offer `--fields` to trim the response", but it is written about the other route: it sits
+    under `## Reading one posting`, and
     `command grep -n fields skills/agent-data-reference/SKILL.md` finds no search-jobs prose about
     `--fields` at all. The mechanism does not belong to either route — record-api-response.sh runs
     the same four checks in two places, at :427-433 on each row of a search body and at :258-277 on
