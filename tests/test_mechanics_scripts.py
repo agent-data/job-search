@@ -6396,17 +6396,35 @@ def test_search_jobs_refuses_a_value_that_would_name_some_other_file(
     assert not (tmp_workspace / "jobs.jsonl").exists(), "the log gained a file"
 
 
-def test_the_listing_id_is_the_same_in_both_wrappers_and_in_the_reference():
-    """One listing id, three files. A change lands in all three or this test goes red."""
+def test_the_listing_id_is_the_same_everywhere_it_is_written_down():
+    """Six places hold the listing id, and all six are compared here.
+
+    Counted with `command grep -c f9a6ec16 <file>`: fetch-posting.sh 2 — a comment at :77 showing
+    the search that produces a posting id, and the `get-posting` call at :136; search-jobs.sh 1 —
+    the `search-jobs` call at :132; agent-data-reference/SKILL.md 2 — the sentence at :22 that
+    names the id, and the `get-posting` recipe at :58 an agent copies; and `LISTING` at the top of
+    this file.
+
+    Every uuid in each file is collected, not the first one. Reading only `found[0]` left the two
+    lines that spend metered calls unchecked, because a comment comes before the call in
+    fetch-posting.sh and prose comes before the recipe in SKILL.md. Measured 2026-08-12: with
+    `ids.add(found[0])`, changing fetch-posting.sh:136 to a zero uuid and running
+    `python3 -m pytest -q -k listing_id` gave `1 passed`.
+
+    `LISTING` is folded in because the live fixtures below run `agent-data call LISTING …`
+    directly. A change that reached the two scripts and not this constant would leave those
+    fixtures spending real calls against the old listing while every wrapper called the new one.
+    """
     pat = re.compile(r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}")
-    ids = set()
+    per_file = {"tests/test_mechanics_scripts.py (LISTING)": {LISTING}}
     for rel in ("skills/job-search-run/scripts/fetch-posting.sh",
                 "skills/job-search-run/scripts/search-jobs.sh",
                 "skills/agent-data-reference/SKILL.md"):
         found = pat.findall((ROOT / rel).read_text(encoding="utf-8"))
         assert found, f"no listing id in {rel}"
-        ids.add(found[0])
-    assert len(ids) == 1, f"listing ids disagree: {ids}"
+        per_file[rel] = set(found)
+    ids = set().union(*per_file.values())
+    assert len(ids) == 1, f"listing ids disagree: {per_file}"
 
 
 # ------------------------------------------------------------------------ posting-counts.sh
