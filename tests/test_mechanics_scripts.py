@@ -4890,8 +4890,8 @@ RECORD_FIELDS = {
 #
 # `judgments_claiming_detail_read` 13 sits above `postings_detail_read` 9, so this set carries a
 # posting-read gap and `close-run.sh` writes a reason for it. That is forced rather than picked: 1
-# through 9 are all taken already, so no free number sits at or below 9, and 13 is the smallest one
-# left. It costs the cases below nothing: measured 2026-08-12, the six `close` calls below that hand
+# through 9 are all taken already and 0 is out by the rule just above, so nothing at or below 9 is
+# free and 13 is the smallest number left. It costs the cases below nothing: measured 2026-08-12, the six `close` calls below that hand
 # this set to `close-run.sh` through `awk_shim` all pass `--close-state interrupted`, which is
 # degraded whatever the counts say, and four of the six exit 1 before `run_health` is worked out at
 # all. The set already fails two other health terms the same way, carrying `postings_unreviewed` 7
@@ -5167,6 +5167,57 @@ def test_a_lost_search_is_named_whole(tmp_workspace):
     assert r.returncode == 0, r.stderr
     assert record_of(tmp_workspace, o["run_id"])["run_health"] == "degraded"
     assert "ashby:role=staff" in r.stderr, r.stderr
+    # On stderr and not in the record. The case below is why.
+    assert "role=staff" not in json.dumps(record_of(tmp_workspace, o["run_id"])["degraded_reasons"])
+
+
+def test_a_query_id_holding_a_byte_that_is_not_utf8_still_leaves_a_record_that_parses(tmp_workspace):
+    """`searches_never_succeeded_ids` is the one value read out of the counts that is not a number,
+    and it is the reason the lost-search entry in `degraded_reasons` names the count rather than the
+    ids. `record-api-response.sh` refuses a control character and a backslash in `--query-id` and
+    takes any other byte, and a lone 0x80 is neither under `LC_ALL=C`, so it reaches the log. `esc`
+    rewrites the 32 characters JSON forbids inside a string and leaves that byte raw.
+
+    Measured 2026-08-12 with the ids written into the entry: `close-run.sh` exited 0 and wrote
+    `runs/<run_id>.json` under `LC_ALL=C` in sh and dash, and `json.loads` on that file raised
+    `UnicodeDecodeError: invalid start byte` — a record on disk that nothing which reads a run
+    record can open. The operator still gets the ids, on their own stderr line.
+
+    `LC_ALL=C` throughout, because under `LC_ALL=en_US.UTF-8` awk dies reading the byte and
+    `run-counts.sh` exits 2 before any of this: measured on the same log, exit 1 with nothing
+    written, both before this entry existed and after. That is a different refusal, and this case
+    would pass on it without ever reaching what it is about.
+
+    Bytes rather than `text=True`, because decoding that stderr as UTF-8 raises before any assertion
+    runs.
+    """
+    o = opened(tmp_workspace)
+    jobs = tmp_workspace / "jobs.jsonl"
+    jobs.write_text("")
+    env = dict(os.environ, LC_ALL="C")
+    # A lone 0x80 after `os.fsencode`, which is how subprocess encodes an argument on POSIX. Written
+    # as "\x80" it would reach the script as the two bytes 0xc2 0x80, which is valid UTF-8 and would
+    # prove nothing — the assertion below is what holds that apart.
+    qid = "role\udc80staff"
+    for _ in range(3):
+        subprocess.run(["sh", str(RECORD_API), o["run_id"], str(jobs),
+                        str(FIXTURES / "detail.error.json"), "--route", "search-jobs",
+                        "--query-id", qid, "--source", "ashby"], capture_output=True, env=env)
+    raw = jobs.read_bytes()
+    assert raw.count(b'"event":"call"') == 3, raw
+    assert b"\x80" in raw and b"\xc2\x80" not in raw, raw
+    with pytest.raises(UnicodeDecodeError):
+        raw.decode("utf-8")
+
+    r = subprocess.run(["sh", str(CLOSE_RUN), str(tmp_workspace), o["run_id"], "--trigger", "manual",
+                        "--close-state", "complete"], capture_output=True, env=env)
+    assert r.returncode == 0, r.stderr
+    assert b"the searches that never returned: ashby:role\x80staff" in r.stderr, r.stderr
+    record = (tmp_workspace / "runs" / (o["run_id"] + ".json")).read_bytes()
+    rec = json.loads(record.decode("utf-8"))       # the whole point: the record still opens
+    assert rec["run_health"] == "degraded"
+    assert len(rec["degraded_reasons"]) == 1, rec["degraded_reasons"]
+    assert rec["degraded_reasons"][0].startswith("1 search(es)"), rec["degraded_reasons"]
 
 
 def test_a_relevant_row_with_no_band_closes_the_run_and_degrades_it(tmp_workspace):
@@ -5198,6 +5249,11 @@ def test_a_relevant_row_with_no_band_closes_the_run_and_degrades_it(tmp_workspac
     rec = record_of(tmp_workspace, o["run_id"])
     assert rec["run_health"] == "degraded"
     assert rec["close_state"] == "complete"     # the finding does not block the close
+    # The reason this check writes, in the record and not only on stderr. `run_health` says the run
+    # was degraded and this says by what: the record is all a reader has once the close is over.
+    assert len(rec["degraded_reasons"]) == 1, rec["degraded_reasons"]
+    assert "--match" in rec["degraded_reasons"][0], rec["degraded_reasons"]
+    assert rec["degraded_reasons"][0] in r.stderr, r.stderr
     # The counts printed alongside the finding, pinned by hand: two postings, both judged, both
     # relevant, one of them in no band and so in neither `matches` nor `filtered_out`.
     assert rec["postings_surfaced"] == 2
@@ -5507,6 +5563,10 @@ def test_a_search_that_never_returned_degrades_the_run_without_blocking_the_clos
     The second half is the same three attempts with the last one answering. That is a retry
     sequence, not a lost search, and it must not degrade the run: without it, `run_health` keyed on
     any failed call at all would pass the first half.
+
+    The reason is read out of the record as well as off stderr. The search ids are on stderr only —
+    `test_a_query_id_holding_a_byte_that_is_not_utf8_still_leaves_a_record_that_parses` is why —
+    so what the record carries is the count and what to do about it.
     """
     o = opened(tmp_workspace)
     jobs = tmp_workspace / "jobs.jsonl"
@@ -5519,6 +5579,10 @@ def test_a_search_that_never_returned_degrades_the_run_without_blocking_the_clos
     assert rec["agent_data_usage"]["searches"] == 3
     assert rec["postings_surfaced"] == 0
     assert "ashby:q2" in r.stderr, r.stderr
+    assert len(rec["degraded_reasons"]) == 1, rec["degraded_reasons"]
+    assert "never returned" in rec["degraded_reasons"][0], rec["degraded_reasons"]
+    assert rec["degraded_reasons"][0].startswith("1 search(es)"), rec["degraded_reasons"]
+    assert rec["degraded_reasons"][0] in r.stderr, r.stderr
 
     retried = "2026-07-30T09-00-00Z"
     jobs.write_text(jobs.read_text()
@@ -5529,6 +5593,7 @@ def test_a_search_that_never_returned_degrades_the_run_without_blocking_the_clos
     assert rec2["run_health"] == "healthy"
     assert rec2["agent_data_usage"]["searches"] == 3
     assert "ashby:q2" not in r2.stderr, r2.stderr
+    assert rec2["degraded_reasons"] == []
 
 
 def test_sources_and_queries_land_as_json_arrays(tmp_workspace):

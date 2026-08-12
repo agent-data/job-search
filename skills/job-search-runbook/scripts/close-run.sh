@@ -49,8 +49,9 @@
 # what the run spent, or the reads did not happen and the judgments say they did. Measured on the
 # 2026-08-11 opencode run and recorded at record-judgment.sh — `grep -n '2026-08-11 opencode run'
 # skills/job-search-run/scripts/record-judgment.sh` — 22 judgments carried detail_read true against
-# 13 detail events in the log. Until this term existed nothing here read either count, so a run of
-# that shape closed healthy.
+# 13 detail events in the log. Until this term existed nothing here compared the two —
+# postings_detail_read went into the record and judgments_claiming_detail_read was read nowhere — so
+# a run of that shape closed healthy.
 #
 # Only a claim count above postings_detail_read is the gap. A posting read and then judged
 # --detail-read false leaves postings_detail_read at 1 with a claim count of 0, and nothing is
@@ -266,8 +267,17 @@ done
 # both sh and dash, and passes the bytes through under LC_ALL=C. Only searches_never_succeeded_ids
 # can carry such a byte — every other key run-counts.awk prints comes out of `printf "%d"`, and its
 # whole output was byte-identical and all ASCII under the three locales — and that list goes to
-# stderr for the operator and is in no field of the record, so an empty one costs a diagnostic and
-# no number. GNU cut, which is what Ubuntu CI has, was not measured; there is no GNU cut here.
+# stderr for the operator and reaches no field of the record and no reason below it, so an empty one
+# costs a diagnostic and no number. GNU cut, which is what Ubuntu CI has, was not measured; there is
+# no GNU cut here.
+#
+# Keeping the list out of the reasons is what the paragraph above rests on, and it was measured on
+# 2026-08-12 by putting it in one: with a lone 0x80 in a query id and that search never returning,
+# a reason carrying the list wrote runs/<run_id>.json at exit 0 under LC_ALL=C in sh and dash, and
+# that file is not valid UTF-8, so nothing that reads a run record can parse it. The same log stops
+# the close under LC_ALL=en_US.UTF-8 in both shells, before and after that measurement, and not
+# here: run-counts.sh exits 2 because BSD awk dies reading the byte, and close-run.sh writes
+# nothing.
 get() { printf '%s\n' "$counts" | grep "^$1=" | cut -d= -f2-; }
 unreviewed=$(get postings_unreviewed)
 lost=$(get searches_never_succeeded)
@@ -305,6 +315,13 @@ fi
 # Every reason is printed on stderr as it is found and kept in one newline-separated list, which
 # the record carries. The stderr line is gone by the time anyone asks why a run was degraded; the
 # record is what is left. Each reason names the check that failed and what to do about it.
+#
+# The only values put into a reason are $claimed, $detailread, their difference and $lost, and each
+# of those is a run of digits that the four case statements above have already checked. So a reason
+# can hold no newline, which is what lets the list be newline-separated, and no byte that would stop
+# a reader parsing the record. searches_never_succeeded_ids is the one count value that is not a
+# number, and it stays out of the reasons for that reason — the paragraph above it measures what
+# putting it in one costs. It goes to the operator on its own stderr line below.
 nl='
 '
 reasons=''
@@ -319,8 +336,10 @@ if [ "$claimed" -gt "$detailread" ]; then
 fi
 [ "$unbanded" = no ] || \
   add_reason "a relevant posting carries no band, so postings_reviewed does not add up from matches, filtered_out and duplicates_of_another — re-judge that posting with a --match value"
-[ "$lost" -eq 0 ] || \
-  add_reason "$lost search(es) never returned and are not in these counts: $lostids — run those searches again to reach what they would have found"
+[ "$lost" -eq 0 ] || {
+  add_reason "$lost search(es) never returned and are not in these counts — run those searches again to reach what they would have found"
+  printf 'close-run:   the searches that never returned: %s\n' "$lostids" >&2
+}
 
 # The rule as it is written down: complete, nothing left unjudged, every search that was attempted
 # answered at least once, no relevant row carrying a missing band, and no judgment claiming a
@@ -370,9 +389,11 @@ awk -v run_id="$run_id" -v trigger="$trigger" -v sched="$scheduler_id" \
     for (i = 1; i <= n; i++) { if (i > 1) out = out ", "; out = out jstr(p[i]) }
     return out "]"
   }
-  # The reasons are separated by newlines and not by commas, because a reason is a sentence and
-  # every one of them holds commas: jarr would cut each reason into several entries. The escaping
-  # is the same, since both call jstr.
+  # The reasons are separated by newlines and not by commas, because a reason is a sentence and two
+  # of the three hold commas: measured 2026-08-12, the posting-read reason holds two and the
+  # unbanded reason two, so jarr would cut each of those into three entries. The lost-search reason
+  # holds none. No reason can hold a newline — see the paragraph on what goes into one — so the
+  # newline separates them and nothing else does. The escaping is the same, since both call jstr.
   function jlines(s,   n, p, i, out) {
     if (s == "") return "[]"
     n = split(s, p, "\n")
