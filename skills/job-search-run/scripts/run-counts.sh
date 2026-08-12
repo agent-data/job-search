@@ -32,6 +32,16 @@
 # by source and query and counts the groups where none of the attempts returned — one failed attempt
 # inside a group that later answered is not a lost search.
 #
+# judgments_claiming_detail_read counts the postings whose last judgment carries detail_read true.
+# It pairs with postings_detail_read, which counts `detail` events. The two are equal on a run that
+# read each posting through fetch-posting.sh and judged it on that text: that script stores the text
+# as a `detail` event, and record-judgment.sh refuses --detail-read true for a posting the log holds
+# no `detail` event for. So a claim count above the event count comes from a log written before that
+# check existed, or by something other than these scripts, and it says the run judged postings on
+# text the log does not hold. Measured on the 2026-08-11 opencode run: 22 judgments carried
+# detail_read true against 13 detail events, and of the 35 get-posting calls made, 14 reached the
+# workspace log — so calls_detail_reads and calls_total_metered were short by the 21 that did not.
+#
 # This is the scripted form of the model-run prose contract; that prose remains the no-runtime
 # fallback, and counts worked out by hand are not gated by anything, so a run that works them out
 # that way says so rather than presenting them as checked.

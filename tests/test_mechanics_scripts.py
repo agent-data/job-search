@@ -3411,6 +3411,60 @@ def test_postings_detail_read_counts_postings_not_calls(tmp_path):
     assert c["calls_detail_reads"] == "2"
 
 
+def test_run_counts_reports_judgments_claiming_a_posting_read(tmp_path):
+    """`judgments_claiming_detail_read` counts what the judgments say about having read a posting;
+    `postings_detail_read` counts the `detail` events. Two postings are judged as read here and one
+    of them was stored, so the run's numbers report 2 claims against 1 stored posting rather than
+    reporting the 1 on its own.
+
+    The second judgment is written straight to the log because `record-judgment.sh` refuses to write
+    it: `--detail-read true` with no `detail` event behind it is what its check rejects. A log
+    written before that check existed can hold any number of them, and so can a log written by
+    something other than these scripts. Measured on the 2026-08-11 opencode run: 22 judgments
+    carried `detail_read: true` and the log held 13 detail events.
+    """
+    jobs = seeded_jobs(tmp_path, "search.ashby.json")
+    rows = [e for e in lines(jobs) if e["event"] == "surfaced"]
+    stored, unstored = rows[0], rows[1]
+    jobs.write_text(jobs.read_text() + detail_line(RID, stored["source"], stored["source_id"]))
+    judge_all(jobs, [stored], detail_read="true", relevant="true", match="strong",
+              reasoning="Fits.")
+    # `evaluated` carries "detail_read":true; the run id goes on the end because run-counts.awk
+    # skips every line naming another run.
+    jobs.write_text(jobs.read_text()
+                    + evaluated(unstored["source"], unstored["source_id"],
+                                extra=',"run_id":"%s"' % RID) + "\n")
+    _, c = counts(jobs)
+    assert c["postings_detail_read"] == "1"
+    assert c["judgments_claiming_detail_read"] == "2"
+
+
+def test_a_re_judgment_without_the_claim_clears_it(tmp_path):
+    """The last judgment this run recorded for a posting decides the claim, the way it already
+    decides `relevant`, the band and `same_role_as`. A posting judged as read and then judged again
+    without the claim is not counted.
+
+    `postings_detail_read` stays at 1 across both judgments: the stored posting is still in the log,
+    and no judgment can take a `detail` event out of that count or put one into it.
+
+    The second judgment is written straight to the log because `record-judgment.sh` refuses a second
+    judgment for a posting this run already judged.
+    """
+    jobs = seeded_jobs(tmp_path, "search.ashby.json")
+    row = first_surfaced(jobs)
+    jobs.write_text(jobs.read_text() + detail_line(RID, row["source"], row["source_id"]))
+    judge_all(jobs, [row], detail_read="true", relevant="true", match="strong", reasoning="Fits.")
+    _, first = counts(jobs)
+    assert first["judgments_claiming_detail_read"] == "1"
+    jobs.write_text(jobs.read_text() +
+        '{"event":"evaluated","run_id":"%s","source":"%s","source_id":"%s",'
+        '"detail_read":false,"relevant":true,"match":"weak"}\n'
+        % (RID, row["source"], row["source_id"]))
+    _, c = counts(jobs)
+    assert c["judgments_claiming_detail_read"] == "0"
+    assert c["postings_detail_read"] == "1"
+
+
 def test_a_search_that_failed_then_succeeded_is_not_a_lost_search(tmp_path):
     """A transient 503 that the retry cleared. The failed attempt is counted as a failed call, and
     the search still returned, so nothing about it degrades the run."""

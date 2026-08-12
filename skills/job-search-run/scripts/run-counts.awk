@@ -61,6 +61,17 @@
     # no such field and jval reads it as an empty string.
     rel[k] = jval($0, "relevant"); band[k] = jval($0, "match"); judged[k] = 1
     alias[k] = jval($0, "same_role_as")
+    # Whether this judgment says the posting was read in full. The END block counts it into
+    # judgments_claiming_detail_read, which is not postings_detail_read: that key counts the
+    # `detail` events the branch above records. Assigned like rel, band and alias, so a re-judgment
+    # carrying detail_read false clears the claim the earlier judgment made.
+    #
+    # Nothing else reads this field. record-judgment.sh checks the flag it is handed and
+    # record-judgment.awk writes it onto the event; run-matches.awk prints no column for it, and
+    # close-run.sh and validate-workspace.sh read postings_detail_read instead. Measured 2026-08-12
+    # with `grep -rlw detail_read skills/*/scripts/`: those two scripts, this file, and
+    # run-counts.sh, whose header explains the key.
+    claimed[k] = (jval($0, "detail_read") == "true")
   }
 }
 
@@ -70,6 +81,7 @@ END {
   for (i = 1; i <= count; i++) {
     k = keys[i]
     if (k in hasdetail) detailread++
+    if (claimed[k]) claimset++
     if (!(k in judged)) { unreviewed++; continue }
     reviewed++
     # One opening posted in two cities comes back as two rows, and the judgment on the second names
@@ -99,6 +111,7 @@ END {
   printf "postings_reviewed=%d\n",    reviewed+0
   printf "postings_unreviewed=%d\n",  unreviewed+0
   printf "postings_detail_read=%d\n", detailread+0
+  printf "judgments_claiming_detail_read=%d\n", claimset+0
   printf "match_strong=%d\n",         strong+0
   printf "match_moderate=%d\n",       moderate+0
   printf "match_weak=%d\n",           weak+0
@@ -114,7 +127,7 @@ END {
   printf "searches_never_succeeded_ids=%s\n", lostids
   printf "rows_new_total=%d\n",       rowsnew+0
   # Every key above prints whether or not the run id matched anything, so a run that did nothing and
-  # a run id no event in the log carries print the same zeroed lines: 332 bytes, measured 2026-08-11
+  # a run id no event in the log carries print the same zeroed lines: 365 bytes, measured 2026-08-12
   # with `run-counts.sh <log> <a-run-id-the-log-does-not-carry> | wc -c`. This line says which of
   # the two happened. NR is every line read and notmine is the lines the run_id guard turned away,
   # so the difference is the lines that name this run.

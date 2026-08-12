@@ -502,6 +502,7 @@ WORKED_STDOUT = (
     "postings_reviewed=1\n"
     "postings_unreviewed=1\n"
     "postings_detail_read=1\n"
+    "judgments_claiming_detail_read=0\n"
     "match_strong=1\n"
     "match_moderate=0\n"
     "match_weak=0\n"
@@ -518,14 +519,15 @@ WORKED_STDOUT = (
     "rows_new_total=2\n"
 )
 
-# The same keys with every number zeroed, which is what a run id no event carries prints: 332 bytes
-# over 17 lines. The one key missing is `by_source_linkedin` — no posting surfaced, so no source is
+# The same keys with every number zeroed, which is what a run id no event carries prints: 365 bytes
+# over 18 lines. The one key missing is `by_source_linkedin` — no posting surfaced, so no source is
 # named.
 ZEROED_STDOUT = (
     "postings_surfaced=0\n"
     "postings_reviewed=0\n"
     "postings_unreviewed=0\n"
     "postings_detail_read=0\n"
+    "judgments_claiming_detail_read=0\n"
     "match_strong=0\n"
     "match_moderate=0\n"
     "match_weak=0\n"
@@ -545,8 +547,8 @@ ZEROED_STDOUT = (
 @pytest.mark.parametrize("shell", SHELLS)
 def test_run_counts_says_how_many_lines_of_the_log_name_the_run(tmp_path, shell):
     """Every key prints whether or not the run id matched anything, so a run that did nothing and a
-    run id no event carries both printed the same 332 bytes on stdout, 0 bytes on stderr and exit 0
-    (measured 2026-08-11 with `sh skills/job-search-run/scripts/run-counts.sh <log>
+    run id no event carries both printed the same 365 bytes on stdout, 0 bytes on stderr and exit 0
+    (measured 2026-08-12 with `sh skills/job-search-run/scripts/run-counts.sh <log>
     2026-01-01T00-00-00Z | wc -c`). This line says which of the two happened."""
     jobs = tmp_path / "jobs.jsonl"
     jobs.write_text(WORKED_LOG, encoding="utf-8")
@@ -588,6 +590,7 @@ def test_run_counts_writes_the_line_on_the_path_that_exits_1(tmp_path, shell):
         "postings_reviewed=1\n"
         "postings_unreviewed=0\n"
         "postings_detail_read=0\n"
+        "judgments_claiming_detail_read=0\n"
         "match_strong=0\n"
         "match_moderate=0\n"
         "match_weak=0\n"
