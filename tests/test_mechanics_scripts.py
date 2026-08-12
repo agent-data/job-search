@@ -6891,6 +6891,22 @@ def test_a_call_event_appended_onto_a_log_the_script_just_created_writes_no_blan
 
 # ------------------------------------------------------------------- POSIX portability
 
+def test_every_script_carries_the_execute_bit():
+    """Each script has the owner-execute bit — the one bit git reads to store a file as 100755
+    rather than 100644.
+
+    search-jobs.sh was committed at 100644 while the other 11 `.sh` files in
+    skills/job-search-run/scripts/ were 100755 (`git ls-tree 683484e
+    skills/job-search-run/scripts/`, measured 2026-08-11), and no test read a file mode, so the
+    suite stayed green.
+
+    This reads the file in the working tree. A bit set there but never staged leaves git recording
+    100644 and this test passing, so `git ls-files -s` is what to run to see the recorded mode.
+    """
+    without = [str(s.relative_to(ROOT)) for s in ALL_SCRIPTS if not s.stat().st_mode & 0o100]
+    assert without == [], "git records these at 100644: %s" % without
+
+
 def test_scripts_pass_posix_syntax_check():
     """Each script is POSIX `sh` (not bash-only): `sh -n` and strict `dash -n` both clean."""
     shells = ["sh"]
