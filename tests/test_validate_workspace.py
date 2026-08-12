@@ -94,13 +94,15 @@ def config_text(detail_model=None, drop_blocks=(), sources='["linkedin", "ashby"
 
 
 def run_record(run_id=RUN_ID, **overrides):
-    """A run record carrying the fields the slim schema and the current schema agree on."""
+    """A run record the validator passes with no `--post-close`: every field those rules require,
+    and none of the count fields, which only that flag reaches."""
     record = {
         "run_id": run_id,
         "trigger": "manual",
         "scheduler_id": None,
         "close_state": "complete",
         "run_health": "healthy",
+        "degraded_reasons": [],
         "sources": ["linkedin", "ashby"],
         "queries": ["ai-eng-remote"],
         "agent_data_usage": {
@@ -555,6 +557,99 @@ def test_every_broken_run_record_is_reported(tmp_workspace):
     assert "INVALID runs/%s.json close-state-unknown finished" % other in r.stdout
 
 
+# ------------------------------------------------------------------- degraded_reasons in a record
+
+
+def test_a_record_with_no_degraded_reasons_key_is_invalid(tmp_workspace):
+    """`close-run.sh` writes the field on every close, the empty list included, so a reader can read
+    it without first asking whether the record has one. A record with no list at all is reported
+    rather than read as a record with no reasons.
+
+    The second half is the one-finding-per-problem shape: a degraded record that carries no list is
+    one problem, and the key to add is what the caller is told.
+    """
+    record = run_record()
+    del record["degraded_reasons"]
+    write_run(tmp_workspace, record)
+    r = run_validator(tmp_workspace)
+    assert r.returncode != 0
+    assert "INVALID runs/%s.json missing-key degraded_reasons" % RUN_ID in r.stdout, r.stdout
+
+    record = run_record(run_health="degraded")
+    del record["degraded_reasons"]
+    write_run(tmp_workspace, record)
+    r = run_validator(tmp_workspace)
+    assert r.returncode != 0
+    assert "INVALID runs/%s.json missing-key degraded_reasons" % RUN_ID in r.stdout, r.stdout
+    assert "degraded-with-no-reasons" not in r.stdout, r.stdout
+
+
+def test_a_degraded_record_with_an_empty_reasons_list_is_invalid(tmp_workspace):
+    """A run that completed and still came back degraded was degraded by one of the three checks
+    that write a reason, so a record that says degraded and names nothing is missing the reason its
+    close found. `close-run.sh` prints each reason on stderr as it finds it and puts the same lines
+    in this field, because the stderr is gone by the time anyone asks."""
+    write_run(tmp_workspace, run_record(run_health="degraded", degraded_reasons=[]))
+    r = run_validator(tmp_workspace)
+    assert r.returncode != 0
+    assert "INVALID runs/%s.json degraded-with-no-reasons" % RUN_ID in r.stdout, r.stdout
+
+
+def test_a_healthy_record_with_an_empty_reasons_list_is_valid(tmp_workspace):
+    """The empty list is what a run with nothing wrong carries — the ordinary record, not a rule
+    anyone broke."""
+    write_run(tmp_workspace, run_record(run_health="healthy", degraded_reasons=[]))
+    r = run_validator(tmp_workspace)
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert r.stdout == "", r.stdout
+
+
+def test_a_degraded_record_that_names_a_reason_is_valid(tmp_workspace):
+    """The other half of the rule: what it asks for is a reason, so a record carrying one passes.
+
+    `write_run` writes a list holding one string across three lines. `close-run.sh` writes the whole
+    array on one line — one `printf`, measured on 2026-08-12 on a record it wrote carrying two
+    reasons — so a record split this way is one written by hand, and this case is what holds the
+    reader to reading that form as well.
+    """
+    write_run(tmp_workspace, run_record(
+        run_health="degraded",
+        degraded_reasons=["a relevant posting carries no band, so postings_reviewed does not add up "
+                          "from matches, filtered_out and duplicates_of_another — re-judge that "
+                          "posting with a --match value"]))
+    body = (tmp_workspace / "runs" / ("%s.json" % RUN_ID)).read_text(encoding="utf-8")
+    assert '"degraded_reasons": [\n' in body, body
+    r = run_validator(tmp_workspace)
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert r.stdout == "", r.stdout
+
+
+@pytest.mark.parametrize("close_state", ["blocked", "interrupted"])
+def test_a_close_that_did_not_complete_may_carry_no_reasons(tmp_workspace, close_state):
+    """A close that is not `complete` is degraded whatever else the run did, and that term writes no
+    reason — so `close-run.sh` writes `run_health: degraded` alongside `degraded_reasons: []`, and
+    the rule above must not report a record its own writer produced.
+
+    The record is written by that script rather than by hand, which is what makes this a record a
+    real close leaves behind. The other health term that writes no reason is a posting left
+    unjudged, and it needs no case of its own: `close-run.sh` refuses a `complete` close while any
+    posting is unjudged — `grep -n 'close_state complete, but'
+    skills/job-search-runbook/scripts/close-run.sh`, one line — so no record it writes is both.
+    """
+    seed_log(tmp_workspace)
+    c = subprocess.run(["sh", str(CLOSE_RUN), str(tmp_workspace), RUN_ID,
+                        "--trigger", "manual", "--close-state", close_state,
+                        "--sources", "linkedin"], capture_output=True, text=True)
+    assert c.returncode == 0, c.stdout + c.stderr
+    assert "run_health=degraded" in c.stdout, c.stdout
+    written = json.loads((tmp_workspace / "runs" / ("%s.json" % RUN_ID)).read_text())
+    assert written["run_health"] == "degraded", written
+    assert written["degraded_reasons"] == [], written
+    r = run_validator(tmp_workspace, "--post-close", RUN_ID)
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert r.stdout == "", r.stdout
+
+
 # ------------------------------------------------------------------------------------ post-close
 
 
@@ -630,10 +725,11 @@ def test_the_seeded_log_holds_the_numbers_these_cases_assume(tmp_workspace):
 
 
 def test_a_record_without_the_count_fields_fails(tmp_workspace):
-    """The record shape this branch replaces. Every count field is named, one finding each, so a
-    caller sees which fields to add rather than the first one missing."""
+    """A record with no count field on it. Every count field is named, one finding each, so a caller
+    sees which fields to add rather than the first one missing — which is what a workspace holding a
+    record from before those fields existed gets."""
     seed_log(tmp_workspace)
-    write_run(tmp_workspace, run_record())          # the pre-change field set
+    write_run(tmp_workspace, run_record())          # no count fields
     r = run_validator(tmp_workspace, "--post-close", RUN_ID)
     assert r.returncode != 0
     for field in ("postings_surfaced", "postings_reviewed", "postings_unreviewed",

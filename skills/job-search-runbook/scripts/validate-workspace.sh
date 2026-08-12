@@ -130,6 +130,45 @@ json_num() {
     | head -1 | sed 's/.*:[[:space:]]*//; s/^\(-\{0,1\}\)0*\([0-9]\)/\1\2/'
 }
 
+# Whether one top-level key holds a JSON array and whether that array holds anything: `empty` for an
+# array with nothing in it, `filled` for one holding anything at all, and nothing at all when the key
+# is absent or its value is not an array. What is in the array is never read — no rule here is about
+# the text of a reason.
+#
+# awk reads the file itself rather than through the `tr '\n' ' ' |` the object reader below uses,
+# because `tr` is otherwise run only under --post-close and this reader runs on every record. Either
+# way the record's lines are joined into one string, which this reader needs: close-run.sh writes the
+# whole array on one line, a record written by hand splits it over several, and the two have to read
+# the same.
+#
+# The key has to be followed by a colon and then an opening bracket, and every occurrence is tried
+# until one is, for the reason the object reader gives below: `sources` and `queries` hold
+# model-supplied words, so the key's name can appear in the record as a value as well.
+#
+# The first `]` after that bracket ends the array. A string holding one would end it early, and the
+# verdict is the same either way: the text between the two brackets is either nothing, which is an
+# empty array, or something, which is not.
+json_arr_state() {
+  awk -v want="$2" '
+    { s = s $0 " " }
+    END {
+      while ((i = index(s, "\"" want "\"")) > 0) {
+        rest = substr(s, i + length(want) + 2)
+        s = rest
+        if (rest !~ /^[ \t]*:/) continue
+        sub(/^[ \t]*:[ \t]*/, "", rest)
+        if (substr(rest, 1, 1) != "[") continue
+        e = index(rest, "]")
+        if (e == 0) exit
+        body = substr(rest, 2, e - 2)
+        gsub(/[ \t]/, "", body)
+        if (body == "") print "empty"
+        else print "filled"
+        exit
+      }
+    }' "$1" 2>/dev/null
+}
+
 # Every `"<key>": <number>` member of the object one top-level key names, printed as one
 # `<key>=<number>` line each. `matches` and `by_source` are the two objects the record has.
 #
@@ -293,8 +332,12 @@ else
 fi
 
 # ------------------------------------------------------------------------------------ run records
-# Check the fields every version of the run record shares. Extra keys pass: the record gains fields
-# over time, and records written by older versions must still be readable.
+# Check the fields a run record must get right. Keys these rules do not name pass: the record gains
+# fields over time, and a record written by a newer version has to read here too.
+#
+# A record written before close-run.sh started writing degraded_reasons is reported until that field
+# is added, and every record has a right value for it: an empty list is what a run with nothing
+# wrong carries.
 if [ -d "$WS/runs" ]; then
   for record in "$WS"/runs/*.json; do
     [ -f "$record" ] || continue
@@ -323,6 +366,29 @@ if [ -d "$WS/runs" ]; then
       '') invalid "$rel" "missing-key close_state" ;;
       *)  invalid "$rel" "close-state-unknown $close_state" ;;
     esac
+
+    # degraded_reasons is one sentence per check that failed, and an empty list on a run with
+    # nothing wrong, so a reader can read the field without first asking whether the record has one.
+    # close-run.sh writes it on every close, which is why a record without the key is reported.
+    #
+    # The empty list is a broken rule only on a complete close. close-run.sh works run_health out
+    # from five things and three of them write a reason — a search that never returned, a relevant
+    # posting carrying no band, and a judgment claiming a posting read the log holds no stored
+    # posting for. The other two write none: a close_state that is not complete, and a posting left
+    # unjudged. Measured on 2026-08-12, `close-run.sh <ws> <run_id> --trigger manual --close-state
+    # interrupted --sources linkedin` over an empty log wrote run_health degraded and
+    # degraded_reasons [], so a rule that skipped the close_state term would report a record
+    # close-run.sh had just written. The unjudged posting needs no term of its own: close-run.sh
+    # refuses a complete close while any posting is unjudged — `grep -n 'close_state complete, but'
+    # skills/job-search-runbook/scripts/close-run.sh`, one line — so no record it writes is both.
+    run_health=$(json_str "$record" run_health)
+    reasonlist=$(json_arr_state "$record" degraded_reasons)
+    if [ -z "$reasonlist" ]; then
+      invalid "$rel" "missing-key degraded_reasons"
+    elif [ "$reasonlist" = empty ] && [ "$close_state" = complete ] \
+         && [ "$run_health" = degraded ]; then
+      invalid "$rel" "degraded-with-no-reasons"
+    fi
 
     for field in started_at completed_at; do
       # An absent field and a JSON null both read as empty; the rule is about how a timestamp that

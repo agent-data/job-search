@@ -1320,12 +1320,14 @@ def write_clean_run(workspace, run_id=RID):
     `postings_reviewed` plus `postings_unreviewed` equal `postings_surfaced`, and `by_source` sums
     to `postings_surfaced`. The `tmp_workspace` fixture writes no `jobs.jsonl`, so `run-counts.sh`
     prints nothing and the comparison against the log is skipped. `completed_at` is a past instant,
-    so it stays no later than the mtime of the file written here.
+    so it stays no later than the mtime of the file written here. `degraded_reasons` is the empty
+    list a run with nothing wrong carries, and the record is reported without it.
     """
     record = {
         "run_id": run_id,
         "trigger": "manual",
         "close_state": "complete",
+        "degraded_reasons": [],
         "started_at": "2026-08-05T16:47:00Z",
         "completed_at": "2026-08-05T16:48:00Z",
         "postings_surfaced": 2,
