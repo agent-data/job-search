@@ -14,11 +14,16 @@
 # the workspace and the runs/.started-<run_id> marker from disk. What the caller passes wins over
 # what that script reports. --workspace is for the tests.
 #
-# Leaving either one off calls resolve-run.sh, and it refuses when no run is open. So replaying an
-# older run means passing both: `record-judgment.sh <log> --run-id <the older run> --source S
-# --source-id ID ...`. Measured 2026-08-12 against a workspace with no open run: `--run-id` on
-# its own, with the log left off, exits 2 with `resolve-run.sh: no run is open in <workspace>`,
-# and the same call with the log passed as well records the judgment under the older run at exit 0.
+# Leaving either one off calls resolve-run.sh, and that call needs a run to be open. So how a replay
+# of an older run is written depends on whether a run is open in the workspace. With one open,
+# `--run-id <the older run>` on its own is enough: the log comes from the workspace and the run id
+# from the command line. With none open there is nothing for resolve-run.sh to read, so the log has
+# to be passed as well.
+#
+# Measured 2026-08-12 against one workspace, judging with `--run-id 2026-08-05T16-47-00Z` and no log
+# path: with a run open it recorded the judgment under 2026-08-05T16-47-00Z at exit 0; with the
+# marker removed the same call exited 2 with `resolve-run.sh: no run is open in <workspace>`, and
+# passing the log as well recorded it at exit 0.
 #
 # A semicolon separates one dealbreaker or unknown from the next, so a dealbreaker that contains a
 # semicolon has to be reworded. Spaces around the semicolon are trimmed, so `pay; then equity` and
@@ -105,10 +110,10 @@ done
 # --workspace is passed on only when the caller gave one, so resolve-run.sh asks
 # workspace-discovery.sh in a run and takes the temporary directory in a test. The expansion is
 # unquoted so that an empty ws_flag adds no argument at all; the inner quotes still hold a workspace
-# path with a space together. fetch-posting.sh and search-jobs.sh write the same line, each with its
-# own measurement. Measured here 2026-08-12 under dash against a workspace directory named
-# `a work space`: as written, resolve-run.sh named that directory; with the inner quotes taken off,
-# the path reached it as two arguments and it answered `usage: resolve-run.sh [--workspace W]`.
+# path with a space together. fetch-posting.sh and search-jobs.sh write the same line. Measured here
+# 2026-08-12 under dash against a workspace directory named `a work space`: as written,
+# resolve-run.sh named that directory; with the inner quotes taken off, the path reached it as two
+# arguments and it answered `usage: resolve-run.sh [--workspace W]`.
 if [ -z "$jobs" ] || [ -z "$run_id" ]; then
   resolved=$(sh "$here/resolve-run.sh" ${ws_flag:+--workspace "$ws_flag"}) || exit 2
   [ -n "$jobs" ]   || jobs=$(printf '%s\n' "$resolved" | sed -n 's/^workspace=//p')/jobs.jsonl
@@ -284,8 +289,9 @@ status=$?
 # The status is taken before the printf and given back after it, so when the append fails the caller
 # still gets its non-zero exit status. Before this block was added, the `cat` above was the last
 # command in the file and the script ended with the append's status, so `exit "$status"` gives back
-# the status the script would have exited with anyway. The EXIT trap at :40 still removes the
-# temporary file when the script ends at an explicit `exit` — measured under sh, dash and bash.
+# the status the script would have exited with anyway. The EXIT trap near the top of this file —
+# `grep -n '^trap ' skills/job-search-run/scripts/record-judgment.sh` — still removes the temporary
+# file when the script ends at an explicit `exit`, measured under sh, dash and bash.
 if [ "$status" -eq 0 ]; then
   verdict="relevant $relevant"
   [ -z "$band" ] || verdict="$verdict, match $band"

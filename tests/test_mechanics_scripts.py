@@ -149,9 +149,8 @@ def open_run_in(ws):
     `runs/` repeats the run-id-shape filter that script applies at resolve-run.sh:62, and can hand
     back `runs/.started-` — the marker that names no run — as if it were a run id.
 
-    It sits with the live harness rather than in one script's section because three of them use it:
-    the record-judgment cases that need a run open, the search-jobs cases, and nothing else has to
-    know how a run is opened.
+    It sits with the live harness rather than in one script's section because the record-judgment
+    cases and the search-jobs cases both use it.
     """
     opened = subprocess.run(["sh", str(OPEN_RUN), str(ws)], capture_output=True, text=True)
     assert opened.returncode == 0, opened.stdout + opened.stderr
@@ -2681,6 +2680,10 @@ def test_an_explicit_run_id_wins_over_the_open_run(tmp_workspace):
     """Replaying an older run: another run is open, and `--run-id` names the run this judgment
     belongs to. The log path is left off, so resolve-run.sh supplies that and only that.
 
+    Leaving the log off works here because a run is open for resolve-run.sh to answer from. With
+    none open the same call exits 2 instead, and the replay has to pass the log as well; the
+    script's header carries both halves and the measurement behind them.
+
     Measured 2026-08-12 with `[ -n "$run_id" ] ||` dropped from the resolve block, so the open run
     always overwrote the caller's: exit 1, `record-judgment: no surfaced posting for linkedin:77 in
     run <the id open-run.sh had just written>` rather than the one on the command line, and no
@@ -2729,8 +2732,8 @@ def test_an_empty_run_id_is_refused_rather_than_read_as_one_left_off(tmp_workspa
 
     A run is open and the log holds a posting that run surfaced, which is the state where the
     accident is quietest. Measured 2026-08-12 before this check: the judgment was recorded under the
-    open run at exit 0, `record-judgment: recorded linkedin:77 for run 2026-08-12T06-48-05Z`, with
-    nothing said about the run id on the command line having been dropped. The whole stderr line is
+    open run at exit 0, `record-judgment: recorded linkedin:77 for run <the open run>`, with nothing
+    said about the run id on the command line having been dropped. The whole stderr line is
     asserted, because the two refusals this script now has for an empty value differ only in wording.
     """
     run_id = open_run_in(tmp_workspace)
