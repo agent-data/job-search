@@ -16,7 +16,7 @@ The agent then:
 - Documents your preferences, and 
 - Searches live postings. 
 
-If useful roles are available, it shows the first fully reviewed matches while it continues through the rest.
+If useful roles are available, it shows only the ones matching your preferences.
 
 A sentence or two is enough to begin. You can also share relevant material, such as a resume, cover letter, or notes from previous applications.
 
