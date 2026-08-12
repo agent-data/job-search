@@ -142,6 +142,26 @@ def json_object_in(text):
     raise AssertionError("no JSON object in:\n%s" % text)
 
 
+def open_run_in(ws):
+    """Open a run in `ws`, empty its log, and return the run id resolve-run.sh reports.
+
+    The run id comes from resolve-run.sh for the reason the `live_run` fixture gives: a glob over
+    `runs/` repeats the run-id-shape filter that script applies at resolve-run.sh:62, and can hand
+    back `runs/.started-` — the marker that names no run — as if it were a run id.
+
+    It sits with the live harness rather than in one script's section because three of them use it:
+    the record-judgment cases that need a run open, the search-jobs cases, and nothing else has to
+    know how a run is opened.
+    """
+    opened = subprocess.run(["sh", str(OPEN_RUN), str(ws)], capture_output=True, text=True)
+    assert opened.returncode == 0, opened.stdout + opened.stderr
+    (ws / "jobs.jsonl").write_text("", encoding="utf-8")
+    resolved = subprocess.run(["sh", str(RESOLVE_RUN), "--workspace", str(ws)],
+                              capture_output=True, text=True)
+    assert resolved.returncode == 0, resolved.stderr
+    return dict(l.split("=", 1) for l in resolved.stdout.splitlines() if "=" in l)["run_id"]
+
+
 @pytest.fixture
 def live_run(tmp_workspace):
     """A workspace with an open run and one live search already recorded.
@@ -2590,9 +2610,9 @@ def test_resolving_the_log_and_the_run_runs_under_dash(tmp_path):
     inner quotes removed: `usage: resolve-run.sh [--workspace W]`, exit 2 — the same status the
     shipped script gives here, so the message is the only thing that separates the two.
 
-    This spends nothing: the directory holds no open run, so the script exits before it reads a
-    posting. resolve-run.sh checks only that the workspace directory exists, so `runs/` beside it is
-    all this needs.
+    This spends nothing: the workspace holds no open run, so the script exits before it reads a
+    posting. resolve-run.sh checks that the workspace directory is there and then looks for a marker
+    in the `runs/` directory inside it, so an empty `runs/` is all this workspace needs.
     """
     ws = tmp_path / "a work space"
     (ws / "runs").mkdir(parents=True)
@@ -2638,8 +2658,11 @@ def test_record_judgment_still_takes_the_log_and_run_id_explicitly(live_run):
 
 
 def test_record_judgment_says_so_when_nothing_identifies_the_run(tmp_workspace):
-    """No run is open and no run id was given, so this exits before reading any posting."""
-    (tmp_workspace / "jobs.jsonl").write_text("", encoding="utf-8")
+    """No run is open and no run id was given, so this exits before reading any posting.
+
+    The workspace holds no jobs.jsonl on purpose: the script exits at the resolve step, above the
+    check that the log is there, so a log file would never be opened.
+    """
     out = subprocess.run(
         ["sh", str(JUDGE), "--workspace", str(tmp_workspace),
          "--source", "linkedin", "--source-id", "42",
@@ -2663,9 +2686,7 @@ def test_an_explicit_run_id_wins_over_the_open_run(tmp_workspace):
     run <the id open-run.sh had just written>` rather than the one on the command line, and no
     evaluated event in the log.
     """
-    opened = subprocess.run(["sh", str(OPEN_RUN), str(tmp_workspace)],
-                            capture_output=True, text=True)
-    assert opened.returncode == 0, opened.stdout + opened.stderr
+    open_run_in(tmp_workspace)
     jobs = tmp_workspace / "jobs.jsonl"
     jobs.write_text(_surfaced_row(RID), encoding="utf-8")
 
@@ -2687,16 +2708,8 @@ def test_an_explicit_log_path_wins_over_the_workspace_log(tmp_path, tmp_workspac
     Measured 2026-08-12 with `[ -n "$jobs" ] ||` dropped: exit 1, `record-judgment: no surfaced
     posting for linkedin:77 in run <the open run>`, and neither file gained an evaluated event.
     """
-    opened = subprocess.run(["sh", str(OPEN_RUN), str(tmp_workspace)],
-                            capture_output=True, text=True)
-    assert opened.returncode == 0, opened.stdout + opened.stderr
-    resolved = subprocess.run(["sh", str(RESOLVE_RUN), "--workspace", str(tmp_workspace)],
-                              capture_output=True, text=True)
-    assert resolved.returncode == 0, resolved.stderr
-    run_id = dict(l.split("=", 1) for l in resolved.stdout.splitlines() if "=" in l)["run_id"]
-
+    run_id = open_run_in(tmp_workspace)      # which also leaves the workspace log empty
     inside = tmp_workspace / "jobs.jsonl"
-    inside.write_text("", encoding="utf-8")
     outside = tmp_path / "elsewhere.jsonl"
     outside.write_text(_surfaced_row(run_id), encoding="utf-8")
 
@@ -2708,6 +2721,47 @@ def test_an_explicit_log_path_wins_over_the_workspace_log(tmp_path, tmp_workspac
     assert len(ev) == 1
     assert ev[0]["run_id"] == run_id
     assert inside.read_text(encoding="utf-8") == ""
+
+
+def test_an_empty_run_id_is_refused_rather_than_read_as_one_left_off(tmp_workspace):
+    """`--run-id ''` is a caller whose variable did not expand, not a caller that left the flag off,
+    and the two now get different answers.
+
+    A run is open and the log holds a posting that run surfaced, which is the state where the
+    accident is quietest. Measured 2026-08-12 before this check: the judgment was recorded under the
+    open run at exit 0, `record-judgment: recorded linkedin:77 for run 2026-08-12T06-48-05Z`, with
+    nothing said about the run id on the command line having been dropped. The whole stderr line is
+    asserted, because the two refusals this script now has for an empty value differ only in wording.
+    """
+    run_id = open_run_in(tmp_workspace)
+    jobs = tmp_workspace / "jobs.jsonl"
+    jobs.write_text(_surfaced_row(run_id), encoding="utf-8")
+
+    r = run_script(JUDGE, "--workspace", tmp_workspace, "--run-id", "",
+                   "--source", "linkedin", "--source-id", "77",
+                   "--detail-read", "false", "--relevant", "false")
+    assert r.returncode == 1, r.stdout + r.stderr
+    assert r.stderr == ("record-judgment: --run-id was given an empty value; "
+                        "leave it off to take the run that is open\n")
+    assert [e for e in lines(jobs) if e["event"] == "evaluated"] == []
+
+
+def test_an_empty_first_argument_is_refused_rather_than_read_as_a_flag(tmp_workspace):
+    """The operand pattern used to be `''|--*`, so an empty first argument matched the flag arm, was
+    not shifted off, and reached the flag loop. The caller was then told `record-judgment: unknown
+    option ` with nothing after the words — measured 2026-08-12 at exit 1, a message naming no
+    argument at all.
+
+    No run is open here, so a call that got past this refusal would exit 2 at the resolve step
+    rather than exit 1: the status alone separates the two, and the message says which argument was
+    empty.
+    """
+    r = run_script(JUDGE, "", "--workspace", tmp_workspace,
+                   "--source", "linkedin", "--source-id", "77",
+                   "--detail-read", "false", "--relevant", "false")
+    assert r.returncode == 1, r.stdout + r.stderr
+    assert r.stderr == ("record-judgment: the first argument is an empty log path; "
+                        "leave it off instead\n")
 
 
 def _scrub_module():
@@ -6303,21 +6357,6 @@ def test_fetch_posting_exits_1_when_the_call_worked_and_the_response_was_refused
 
 
 # ------------------------------------------------------------------------------------ search-jobs.sh
-
-def open_run_in(ws):
-    """Open a run in `ws`, empty its log, and return the run id resolve-run.sh reports.
-
-    The run id comes from resolve-run.sh for the reason the `live_run` fixture gives: a glob over
-    `runs/` repeats the run-id-shape filter that script applies at resolve-run.sh:62, and can hand
-    back `runs/.started-` — the marker that names no run — as if it were a run id.
-    """
-    opened = subprocess.run(["sh", str(OPEN_RUN), str(ws)], capture_output=True, text=True)
-    assert opened.returncode == 0, opened.stdout + opened.stderr
-    (ws / "jobs.jsonl").write_text("", encoding="utf-8")
-    resolved = subprocess.run(["sh", str(RESOLVE_RUN), "--workspace", str(ws)],
-                              capture_output=True, text=True)
-    assert resolved.returncode == 0, resolved.stderr
-    return dict(l.split("=", 1) for l in resolved.stdout.splitlines() if "=" in l)["run_id"]
 
 
 def keyless_search(shell, *args):

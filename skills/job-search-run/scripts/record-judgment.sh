@@ -11,8 +11,14 @@
 # location, URL and date come off that surfaced event rather than from the caller.
 #
 # The log path and --run-id are both optional. Left off, they come from resolve-run.sh, which reads
-# the workspace and the runs/.started-<run_id> marker from disk. Passing either still works and
-# still wins, which is what replaying an older run needs. --workspace is for the tests.
+# the workspace and the runs/.started-<run_id> marker from disk. What the caller passes wins over
+# what that script reports. --workspace is for the tests.
+#
+# Leaving either one off calls resolve-run.sh, and it refuses when no run is open. So replaying an
+# older run means passing both: `record-judgment.sh <log> --run-id <the older run> --source S
+# --source-id ID ...`. Measured 2026-08-12 against a workspace with no open run: `--run-id` on
+# its own, with the log left off, exits 2 with `resolve-run.sh: no run is open in <workspace>`,
+# and the same call with the log passed as well records the judgment under the older run at exit 0.
 #
 # A semicolon separates one dealbreaker or unknown from the next, so a dealbreaker that contains a
 # semicolon has to be reworded. Spaces around the semicolon are trimmed, so `pay; then equity` and
@@ -27,31 +33,44 @@
 # Exit 0: recorded, or this posting already carries exactly this judgment.
 # Exit 1: nothing written; stderr names the problem.
 # Exit 2: nothing was written — no temporary file could be made, or the log path or the run id was
-#         left off and resolve-run.sh found no workspace, no open run, or more than one. A flag
-#         given without its value is the one case where the shell picks the status rather than this
-#         script: measured 2026-08-12 on `--run-id` with nothing after it, at 1 under sh and bash
-#         and 2 under dash.
+#         left off and resolve-run.sh could not answer. It has five reasons for that, and its
+#         message on stderr says which: it could not find workspace-discovery.sh, that script named
+#         no workspace, the workspace directory is not there, no run is open in it, or more than one
+#         is. A flag given without its value is the one case where the shell picks the status rather
+#         than this script: measured 2026-08-12 on `--run-id` with nothing after it, at 1 under sh
+#         and bash and 2 under dash.
 set -u
 
 here=$(dirname "$0")
-# The first operand is the log only when it is not a flag, so the whole call can be flags.
-jobs=''
-case ${1-} in
-  ''|--*) ;;
-  *) jobs=$1; shift ;;
-esac
-
-run_id='' ws_flag='' source='' source_id='' detail_read='' relevant='' band=''
-nhc=false dealbreakers='' unknowns='' reasoning='' same_role='' posted_extracted='' ts=''
 
 die() { printf 'record-judgment: %s\n' "$1" >&2; exit 1; }
+
+# The first operand is the log. It is taken only when it is not a flag, so the whole call can be
+# flags, and the three arms are the three things the first word can be:
+#   --*   a flag, so no log was given and the loop below reads it
+#   ''    either no arguments at all, or a log path that came out empty; the second is refused
+#   *     the log path
+# The pattern used to be `''|--*`, so an empty first argument matched the flag arm, was not shifted
+# off, and reached the loop — where the caller was told `record-judgment: unknown option ` with
+# nothing after the words, measured 2026-08-12 at exit 1. An empty path means the caller built it
+# from a variable that did not expand, and refusing it is what tells that apart from a call that
+# left the log off on purpose.
+jobs=''
+case ${1-} in
+  --*) ;;
+  '')  [ $# -eq 0 ] || die 'the first argument is an empty log path; leave it off instead' ;;
+  *)   jobs=$1; shift ;;
+esac
+
+run_id='' run_id_given='' ws_flag='' source='' source_id='' detail_read='' relevant='' band=''
+nhc=false dealbreakers='' unknowns='' reasoning='' same_role='' posted_extracted='' ts=''
 
 line=$(mktemp) || exit 2
 trap 'rm -f "$line"' EXIT INT HUP TERM
 
 while [ $# -gt 0 ]; do
   case $1 in
-    --run-id)              run_id=${2?}; shift 2 ;;
+    --run-id)              run_id=${2?}; run_id_given=1; shift 2 ;;
     --source)              source=${2?}; shift 2 ;;
     --source-id)           source_id=${2?}; shift 2 ;;
     --detail-read)         detail_read=${2?}; shift 2 ;;
@@ -72,8 +91,24 @@ done
 [ -n "$source" ]    || die 'missing --source'
 [ -n "$source_id" ] || die 'missing --source-id'
 
+# `--run-id ''` and no --run-id at all are different calls and get different answers. The first is
+# refused here; the second is resolved below. `run_id_given` is what separates them, because by this
+# point both leave `run_id` empty. Measured 2026-08-12 with `--run-id ''` against an open run,
+# before this check: the judgment was recorded under the open run at exit 0, and nothing said the
+# run id on the command line had been dropped.
+[ -z "$run_id_given" ] || [ -n "$run_id" ] \
+  || die '--run-id was given an empty value; leave it off to take the run that is open'
+
 # One call to resolve-run.sh answers both, and only when something is missing, so a caller that
 # passed everything does not depend on a workspace being discoverable.
+#
+# --workspace is passed on only when the caller gave one, so resolve-run.sh asks
+# workspace-discovery.sh in a run and takes the temporary directory in a test. The expansion is
+# unquoted so that an empty ws_flag adds no argument at all; the inner quotes still hold a workspace
+# path with a space together. fetch-posting.sh and search-jobs.sh write the same line, each with its
+# own measurement. Measured here 2026-08-12 under dash against a workspace directory named
+# `a work space`: as written, resolve-run.sh named that directory; with the inner quotes taken off,
+# the path reached it as two arguments and it answered `usage: resolve-run.sh [--workspace W]`.
 if [ -z "$jobs" ] || [ -z "$run_id" ]; then
   resolved=$(sh "$here/resolve-run.sh" ${ws_flag:+--workspace "$ws_flag"}) || exit 2
   [ -n "$jobs" ]   || jobs=$(printf '%s\n' "$resolved" | sed -n 's/^workspace=//p')/jobs.jsonl
