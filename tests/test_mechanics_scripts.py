@@ -2587,8 +2587,8 @@ def test_resolving_the_log_and_the_run_runs_under_dash(tmp_path):
 
     The directory name holds a space, so a broken expansion splits it and resolve-run.sh answers
     with its usage line instead of naming the directory. Measured 2026-08-12 under dash with the
-    inner quotes removed: `usage: resolve-run.sh [--workspace W]`, exit 2 — the same status as the
-    line asserted below, so the message is what separates the two.
+    inner quotes removed: `usage: resolve-run.sh [--workspace W]`, exit 2 — the same status the
+    shipped script gives here, so the message is the only thing that separates the two.
 
     This spends nothing: the directory holds no open run, so the script exits before it reads a
     posting. resolve-run.sh checks only that the workspace directory exists, so `runs/` beside it is
@@ -2605,6 +2605,14 @@ def test_resolving_the_log_and_the_run_runs_under_dash(tmp_path):
 @pytest.mark.live
 @needs_api
 def test_record_judgment_resolves_the_log_and_the_run_from_disk(live_run):
+    """The call a subagent makes: a verdict, and nothing about where the run keeps its files. On the
+    2026-08-11 opencode run, 15 of 36 recording calls supplied no log path and none supplied a run
+    id, because no subagent had been given either.
+
+    Measured before this change, with the same arguments: `record-judgment: unknown option
+    <the workspace path>`, exit 1, because `--workspace` was taken as the log path and the path
+    after it then reached the flag loop.
+    """
     out = subprocess.run(
         ["sh", str(JUDGE), "--workspace", str(live_run.ws),
          "--source", live_run.row["source"], "--source-id", live_run.row["source_id"],
@@ -2652,7 +2660,7 @@ def test_an_explicit_run_id_wins_over_the_open_run(tmp_workspace):
 
     Measured 2026-08-12 with `[ -n "$run_id" ] ||` dropped from the resolve block, so the open run
     always overwrote the caller's: exit 1, `record-judgment: no surfaced posting for linkedin:77 in
-    run 2026-08-12T06-11-38Z` — the open run rather than the one on the command line — and no
+    run <the id open-run.sh had just written>` rather than the one on the command line, and no
     evaluated event in the log.
     """
     opened = subprocess.run(["sh", str(OPEN_RUN), str(tmp_workspace)],
@@ -2677,8 +2685,7 @@ def test_an_explicit_log_path_wins_over_the_workspace_log(tmp_path, tmp_workspac
     one the judgment landed in.
 
     Measured 2026-08-12 with `[ -n "$jobs" ] ||` dropped: exit 1, `record-judgment: no surfaced
-    posting for linkedin:77 in run 2026-08-12T06-11-38Z`, and neither file gained an evaluated
-    event.
+    posting for linkedin:77 in run <the open run>`, and neither file gained an evaluated event.
     """
     opened = subprocess.run(["sh", str(OPEN_RUN), str(tmp_workspace)],
                             capture_output=True, text=True)
