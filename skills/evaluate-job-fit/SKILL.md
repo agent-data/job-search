@@ -11,10 +11,10 @@ Judge ONE job posting against the user's prose Job Preferences Brief. Output is 
 relevance judgment** — never a numeric score, never category weights.
 
 ## Inputs
-- The brief: preferences live at the path `workspace.preferences_path` names in `config.yaml`
-  (default `preferences.md`) inside the workspace the registry names (default `~/.job-search`); a
-  caller that hands you the path names it directly. With no workspace yet, judge against a brief
-  the user pastes.
+- The brief: VERY IMPORTANT: run the plugin's `skills/job-search-runbook/scripts/workspace-discovery.sh` and read
+  its `workspace=` line; the brief is at the path `workspace.preferences_path` names in that
+  workspace's `config.yaml`, default `preferences.md`.
+  When discovery prints `first_run=true`, there is no brief yet; judge against a brief the user pastes.
 - The posting: a pasted job description, a saved `source_id` from `jobs.jsonl`, or a row's
   `source`, `posting_id` and `source_url` to read fresh. That read is one command:
   `skills/job-search-run/scripts/fetch-posting.sh --posting-id <posting_id> --source-url
