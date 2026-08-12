@@ -1,37 +1,50 @@
 ---
 name: agent-data-reference
-description: "Not user-facing; job-search-agent takes user questions. What the job-search skills read before calling the job-postings API: agent-data CLI, listing id, per-source quirks, get-posting, retries, cost."
+description: "Not user-facing; job-search-agent takes user questions. What the job-search skills read before calling the job-postings API: wrapper scripts, direct CLI commands, per-source quirks, retries, cost."
 ---
 
 # agent-data-reference — the job-postings API
 <!-- reference-resolution-marker:8f2a4c1e-single-home — the job-postings reference lives in this file and nowhere else; a sibling skill reaches it by invoking this skill. Asserted by tests/test_reference_resolution.py; do not remove. -->
 
-One marketplace listing serves four job sources. This file carries what the route docs leave out:
-the per-source behavior that changes a query or a judgment, what each call costs, and what to tell
-the user before spending one. Route shapes here were read from `agent-data docs` on 2026-07-31.
+One marketplace listing serves four job sources. Searching and reading postings go through two
+scripts in the `job-search-run` skill; the ONLY agent-data commands to call directly are the three
+in the table below. The appendix at the end covers the one case where a metered route is
+called without its script. This file carries what the route docs leave out: the per-source
+behavior that changes a query or a judgment, what each call costs, and what to tell the user
+before spending one. Route shapes here were read from `agent-data docs` on 2026-07-31.
 
-## The CLI
+## Direct agent-data commands
 
 | Command | What it returns | Cost |
 |---|---|---|
 | `agent-data whoami` | the resolved config, including `api_key_set` | local, free |
 | `agent-data docs <listing-id>` | the live route list, every parameter, every response field | free |
-| `agent-data call <listing-id> <slug> [--flag value ...]` | one route's results | one metered call per attempt |
 | `agent-data init --api-key <KEY> -y` | writes the key to `~/.agent-data/config.json` | local, free |
 
-The listing id is `f9a6ec16-0bfd-44d8-b3ee-073776745ee7`, and it serves all four sources. Route
-parameters ride as flags after the slug, one flag per parameter.
+These three are the only agent-data commands to call directly, and none of them spends a metered
+call. The listing id is `f9a6ec16-0bfd-44d8-b3ee-073776745ee7`, and it serves all four sources.
 
 `agent-data docs <listing-id>` is the authority on which routes exist, what each parameter is
 called, and which fields come back. It is free, so read it once per run and take the shapes from
-that output rather than from memory. The listing has three routes: `search-jobs` returns a page of
-summary rows in `data.results[]`, `get-posting` returns one posting's full text, and `status`
-reports service health. Adding `--dry-run` to a `call` prints the resolved request and spends
-nothing.
+that output rather than from memory.
 
-One call reaches one source, named by `--source` (linkedin, ashby, greenhouse, or lever). Omit the
-flag and the search runs against linkedin. The run does its own fan-out, merge, and duplicate
-check, so one query across three enabled sources is three calls.
+## Searching and reading postings — use the wrappers
+
+Searches and posting reads go through the `job-search-run` skill's scripts:
+`skills/job-search-run/scripts/search-jobs.sh` runs one search, and
+`skills/job-search-run/scripts/fetch-posting.sh` reads one posting. Each makes the agent-data
+call, writes the `call` event a run's billable-call count is built from, and checks the response
+before anything downstream reads it. VERY IMPORTANT: for searching and for reading postings you MUST use these two
+scripts: a direct `agent-data call` on either route is charged, missing from the count, and
+unchecked, so the run under-reports what it spent and closes degraded.
+
+The wrappers change nothing about what the routes are sent. One search still reaches one source,
+named by `--source`, and the run still does its own fan-out, merge, and duplicate check, so one
+query across three enabled sources is three calls. Every route parameter still comes from
+`agent-data docs`: `search-jobs.sh` passes everything after `--` to the route unchanged, one flag
+per parameter, and `fetch-posting.sh` takes its three values off one queued row. How to invoke
+each script — flags, quoting, what it prints — is in the `job-search-run` skill and in the header
+comment at the top of each script.
 
 ## Quirks that change a call
 
@@ -51,46 +64,15 @@ check, so one query across three enabled sources is three calls.
 | `source_url` on ashby, greenhouse, and lever is the live apply page; LinkedIn's carries tracking params | Link it as where the user applies |
 | The `status` route bills a metered call, and what it reports is one global health number rather than per-source readiness | `whoami` answers the preflight question (`api_key_set`) locally and free, which is what a run needs before its first search |
 | The free tier includes 100 calls a month; once it is spent the API answers `403 insufficient_credits`, and that rejected call is unmetered | Stop metered work and tell the user the allowance has been reached, so this run cannot continue until calls are available; their saved matches are unaffected, and their account at https://agent-data.motie.dev/settings/billing is where to check |
-
-## Reading one posting
-
-```sh
-agent-data call f9a6ec16-0bfd-44d8-b3ee-073776745ee7 get-posting \
-  --posting_id '<id from the row>' \
-  --source_url '<source_url from that same row>' \
-  --source '<source from that same row>' \
-  > posting.json 2> posting.err
-```
-
-Single-quote all three values. A LinkedIn `source_url` carries `?` and `&`, and unquoted the shell
-cuts the command at the first `&`: the shortened call still runs and is still billed, its response
-goes to the terminal instead of `posting.json`, and `--source` never reaches the route. Measured
-2026-08-12 on a LinkedIn row — exit 127, `posting.json` 0 bytes, and the billed call came back as
-`req_7882fee3f9774771b42049db`.
-
-`posting_id` and `source_url` are both required. `--source` is optional, and passing the row's own
-value removes an inference step. The route docs offer `--fields` to trim the response: VERY IMPORTANT DO NOT use
-`--fields`. The response comes back holding only the keys the list names: measured 2026-08-12,
-`--fields id,title,company_name` returned 214 bytes carrying those three keys and nothing else,
-against 7,645 bytes for the same posting unfiltered. Nearly all of a posting's bytes are the
-description and the salary text, which a reader needs, and a response with no `source` or
-`source_id` does not say which posting it is. In a run `record-api-response.sh` refuses that
-response, and the posting is then read again, and billed again.
-
-Inside a run, call agent-data through the `job-search-run` skill's scripts:
-`skills/job-search-run/scripts/search-jobs.sh` for a search,
-`skills/job-search-run/scripts/fetch-posting.sh` for a posting. Never call `agent-data` directly
-for those two routes in a run. A run's billable-call count is built from the events those scripts
-write, so a direct call is charged, missing from the count, and closes the run degraded. The
-commands in this skill are how `evaluate-job-fit` reads one posting when no run is open.
+| The route docs offer `--fields` on both routes to trim the response, and `record-api-response.sh` refuses a body whose rows or posting are missing `source` or `source_id` — a trimmed search page loses every row of a metered call, and a trimmed posting is read again, and billed again. Trimming saves little: measured 2026-08-12, `--fields id,title,company_name` returned 214 bytes against 7,645 for the same posting unfiltered, and nearly all of a posting's bytes are the description and the salary text, which a reader needs | VERY IMPORTANT: DO NOT send `--fields`, on either route, through the wrappers or without them |
 
 ## When a call fails
 
-A failed call writes its body to stderr and exits non-zero, and stdout stays empty. Redirect both
-streams on every call you make directly — `agent-data call … > resp.json 2> resp.err` — because a
-call captured with `>` alone leaves an empty file and no copy of the error, and `retryable`, `code`
-and `param` are only in that body. In a run, `search-jobs.sh` and `fetch-posting.sh` redirect both
-streams themselves.
+A failed call exits non-zero with the error body on stderr and nothing on stdout, and `retryable`,
+`code` and `param` are only in that body. The wrappers capture both streams into
+`runs/.scratch/<run_id>/` themselves: a failed `search-jobs.sh` or `fetch-posting.sh` exits 1 and
+puts the body on its own stderr, and the `call` event is written either way, because a failed call
+was still charged.
 
 On a success the request id is at `meta.request_id`, and on a failure it is at `error.request_id`;
 neither response carries one at the top level. `error.source` names what rejected the call — it
@@ -100,9 +82,10 @@ an error body.
 Branch on the response's `retryable` boolean. The service collapses most 4xx failures into
 `validation_error` and names the offending field in `error.param`, so several different problems
 share one code string, while the boolean carries the one thing that decides the next move: whether
-trying again can work. When `retryable` is true — the 503 upstream failures — make up to 3 attempts
-in all, waiting about 1s and then about 3s between them, adding jitter to each wait. When
-`retryable` is false, change the request before calling again, or drop that step.
+trying again can work. When `retryable` is true — the 503 upstream failures — make up to 3
+attempts in all, waiting about 1s and then about 3s between them, adding jitter to each wait; an
+attempt is one more run of the same wrapper command, and each attempt writes its own `call` event.
+When `retryable` is false, change the request before calling again, or drop that step.
 
 Every attempt bills, retries included, so a failure that keeps repeating keeps costing calls. A
 call counts as failed once its 3 attempts are spent, and two retryable failures in a row on one
@@ -138,3 +121,42 @@ titles and summary rows first, then read full text only for the postings that su
 
 A change that raises B for every future run — one more query, one more source, a faster cadence —
 gets its new B and the size of the increase stated before it is saved.
+
+## Appendix — if the wrappers fail
+
+Call `search-jobs` or `get-posting` yourself only when the wrapper scripts cannot run at all — the
+script file is missing, or the host executes commands without a POSIX sh. A wrapper that ran and refused is not
+that case: an exit 2 named a bad argument or the absent open run, and an exit 1 recorded the call
+it made. Read the message and act on it.
+
+IMPORTANT: A call made without the wrappers is still charged, appears in no count, and its response was never
+checked. Keep your own count of these calls and put it in the run's summary, so the digest carries
+the calls the log is missing; the run closes degraded either way.
+
+Reading one posting:
+
+```sh
+agent-data call f9a6ec16-0bfd-44d8-b3ee-073776745ee7 get-posting \
+  --posting_id '<id from the row>' \
+  --source_url '<source_url from that same row>' \
+  --source '<source from that same row>' \
+  > posting.json 2> posting.err
+```
+
+Single-quote all three values. A LinkedIn `source_url` carries `?` and `&`, and unquoted the shell
+cuts the command at the first `&`: the shortened call still runs and is still billed, its response
+goes to the terminal instead of `posting.json`, and `--source` never reaches the route. Measured
+2026-08-12 on a LinkedIn row — exit 127, `posting.json` 0 bytes, and the billed call came back as
+`req_7882fee3f9774771b42049db`.
+
+`posting_id` and `source_url` are both required. `--source` is optional, and passing the row's own
+value removes an inference step.
+
+Running one search is the same command with the `search-jobs` slug and the parameters
+`agent-data docs` names, every value single-quoted. Omit `--source` and the search runs against
+linkedin.
+
+Redirect both streams on every call — `> resp.json 2> resp.err` — because a call captured with `>`
+alone leaves an empty file and no copy of the error. Adding `--dry-run` to a `call` prints the
+resolved request and spends nothing, which is worth doing before spending a call on a command you
+composed yourself. The `--fields` row above applies unchanged.

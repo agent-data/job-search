@@ -16,8 +16,8 @@
 # response and this exits 1. Take the three values from one line of what list-detail-read-queue.sh
 # prints rather than composing them.
 #
-# Not for reading a posting outside a run: there is no run to bill the call to and no log to record
-# it in. That case is the `get-posting` recipe in the agent-data-reference skill.
+# Not for reading a posting with no run open: there is no run to bill the call to and no log to
+# record it in, so this exits 2 before anything is spent.
 #
 # Prints one line on stdout: response=<path to the saved body>. It is printed whenever the call
 # itself succeeded, including when record-api-response.sh then refuses the body and this exits 1 —

@@ -48,8 +48,8 @@ run finds new.
 
 Run each search with this skill's `scripts/search-jobs.sh --query-id <the query's id> --source <the
 source you asked for> -- <the route's own parameters, every value in single quotes>`. Everything
-after `--` goes to the route unchanged, so the parameter names come from `agent-data docs` and this
-script never has to know them. Put every value in single quotes: `keywords` and `location` come
+after `--` goes to the route unchanged, so the parameter names come from `agent-data docs`. 
+Put every value in single quotes: `keywords` and `location` come
 from `config.yaml` and are usually more than one word, and without the quotes only the first word
 reaches the route — `--keywords AI engineer --location United States` asks for `AI` in `United`,
 appends the rows that come back, and exits 0. It finds the workspace and the open run itself,

@@ -17,13 +17,15 @@ Scope: exactly one posting. Batches are job-search-run's job — it invokes this
   (default `preferences.md`) inside the workspace the registry names (default `~/.job-search`); a
   caller that hands you the path — job-search-run briefs every detail worker with one — names it
   directly. With no workspace yet, judge against a brief the user pastes.
-- The posting: a pasted job description, a saved `source_id` from `jobs.jsonl`, or a `source_url`+`posting_id`
-  pair to read fresh. That read is the `get-posting` recipe in the `agent-data-reference` skill:
-  read it there and send the call in the shape it gives, and say you are reading one posting before you
-  do. A read that comes back rejected does not stop the judgment — judge that posting from what the
-  request already carries, its title, company and location, record everything the full text would have
-  settled as an unknown, and set `needs_human_check: true`. After two rejections in a row, judge the
-  postings that are left the same way, without another read.
+- The posting: a pasted job description, a saved `source_id` from `jobs.jsonl`, or a row's
+  `source`, `posting_id` and `source_url` to read fresh. That read is one command:
+  `skills/job-search-run/scripts/fetch-posting.sh --posting-id <posting_id> --source-url
+  '<source_url>' --source <source>`, which makes the call and records it in one step — the
+  `agent-data-reference` skill carries what the call costs and how a failure reads. Say you are
+  reading one posting before you run it. A read that fails does not stop the judgment — judge that
+  posting from what the request already carries, its title, company and location, record everything
+  the full text would have settled as an unknown, and set `needs_human_check: true`. After two
+  failed reads in a row, judge the postings that are left the same way, without another read.
 
 ## Method (model inference — read, reason, judge)
 1. Read the brief's **must-haves/dealbreakers, strong preferences, nice-to-haves, red flags**.
