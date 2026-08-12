@@ -150,7 +150,7 @@ def open_run_in(ws):
     back `runs/.started-` — the marker that names no run — as if it were a run id.
 
     It sits with the live harness rather than in one script's section because the record-judgment
-    cases and the search-jobs cases both use it.
+    cases, the search-jobs cases and test_a_subagent_needs_only_the_posting_row all use it.
     """
     opened = subprocess.run(["sh", str(OPEN_RUN), str(ws)], capture_output=True, text=True)
     assert opened.returncode == 0, opened.stdout + opened.stderr
@@ -6983,6 +6983,88 @@ def test_the_listing_id_is_the_same_everywhere_it_is_written_down():
         per_file[rel] = set(found)
     ids = set().union(*per_file.values())
     assert len(ids) == 1, f"listing ids disagree: {per_file}"
+
+
+# ------------------------ search-jobs.sh, fetch-posting.sh and record-judgment.sh together
+
+@pytest.mark.live
+@needs_api
+def test_a_subagent_needs_only_the_posting_row(tmp_workspace):
+    """One posting searched, read and judged against the real API, with no run id and no log path
+    passed to any of the three scripts.
+
+    Each of them asks resolve-run.sh, which reads the run id off the runs/.started-<run_id> marker
+    on disk. That is what lets a subagent do a detail read with nothing in hand but one posting row.
+    In a run resolve-run.sh asks workspace-discovery.sh for the workspace as well; `--workspace`
+    stands in for that here, because this workspace is a temporary directory discovery never finds.
+
+    The `live_run` fixture is not used. It calls agent-data directly and hands the response to
+    record-api-response.sh, so a chain built on it would leave search-jobs.sh out of the one case
+    that is about the three scripts composing.
+
+    The fetch runs before the judgment because record-judgment.sh records `--detail-read true` only
+    when the log already holds a `detail` event for that posting under this run.
+
+    Both response paths are read off the `response=` line the script printed rather than rebuilt
+    from the run id, and the three values the fetch is given come off the surfaced row.
+
+    The counts are what this chain did: one search call and one get-posting call, the two metered
+    calls between them, and one posting whose text the run stored. postings_reviewed is asserted as
+    well because it is the only one of these that reads the judgment, and it is 1 only when
+    record-judgment.sh wrote the evaluated event under the run that surfaced the posting.
+    """
+    run_id = open_run_in(tmp_workspace)
+    jobs = tmp_workspace / "jobs.jsonl"
+
+    searched = subprocess.run(
+        ["sh", str(SEARCH_JOBS), "--workspace", str(tmp_workspace),
+         "--query-id", "strategic-finance", "--source", "linkedin",
+         "--", "--keywords", "strategic finance", "--limit", "5"],
+        capture_output=True, text=True)
+    assert searched.returncode == 0, searched.stderr
+    assert searched.stdout.startswith("response=")
+    body = json.loads(
+        pathlib.Path(searched.stdout.split("=", 1)[1].strip()).read_text(encoding="utf-8"))
+    assert body["meta"]["request_id"].startswith("req_"), \
+        "no request_id — the search did not reach the API"
+
+    rows = [json.loads(l) for l in jobs.read_text(encoding="utf-8").splitlines() if l.strip()]
+    surfaced = [x for x in rows if x["event"] == "surfaced"]
+    assert surfaced, "the live search surfaced no rows — widen the keywords"
+    row = surfaced[0]
+
+    fetched = subprocess.run(
+        ["sh", str(FETCH_POSTING), "--workspace", str(tmp_workspace),
+         "--posting-id", row["posting_id_at_seen"], "--source-url", row["source_url"],
+         "--source", row["source"]],
+        capture_output=True, text=True)
+    assert fetched.returncode == 0, fetched.stderr
+    assert fetched.stdout.startswith("response=")
+    posting = json.loads(
+        pathlib.Path(fetched.stdout.split("=", 1)[1].strip()).read_text(encoding="utf-8"))
+    assert posting["meta"]["request_id"].startswith("req_"), \
+        "no request_id — the posting read did not reach the API"
+
+    judged = subprocess.run(
+        ["sh", str(JUDGE), "--workspace", str(tmp_workspace),
+         "--source", row["source"], "--source-id", row["source_id"],
+         "--detail-read", "true", "--relevant", "true", "--match", "strong",
+         "--reasoning", "Owns the model."],
+        capture_output=True, text=True)
+    assert judged.returncode == 0, judged.stderr
+
+    reopened = run_script(OPEN_RUN, tmp_workspace)
+    assert reopened.returncode == 2, \
+        "a second run opened over the one the three scripts recorded against"
+    assert run_id in reopened.stderr, reopened.stderr
+
+    r, kv = counts(jobs, run_id)
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert kv["calls_searches"] == "1"
+    assert kv["calls_detail_reads"] == "1"
+    assert kv["calls_total_metered"] == "2"
+    assert kv["postings_detail_read"] == "1"
+    assert kv["postings_reviewed"] == "1"
 
 
 # ------------------------------------------------------------------------ posting-counts.sh
