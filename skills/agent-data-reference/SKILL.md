@@ -66,6 +66,13 @@ value removes an inference step. The route docs offer `--fields` to trim the res
 and a list that leaves out `source` or `source_id` is refused by `record-api-response.sh` — the
 posting is then read again, and billed again.
 
+Inside a run, call agent-data through the `job-search-run` skill's scripts:
+`skills/job-search-run/scripts/search-jobs.sh` for a search,
+`skills/job-search-run/scripts/fetch-posting.sh` for a posting. Never call `agent-data` directly
+for those two routes in a run. A run's billable-call count is built from the events those scripts
+write, so a direct call is charged, missing from the count, and closes the run degraded. The
+commands in this skill are how `evaluate-job-fit` reads one posting when no run is open.
+
 ## When a call fails
 
 A failed call writes its body to stderr and exits non-zero, and stdout stays empty. Redirect both
