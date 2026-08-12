@@ -28,9 +28,9 @@
 # Exit 1: nothing written; stderr names the problem.
 # Exit 2: nothing was written — no temporary file could be made, or the log path or the run id was
 #         left off and resolve-run.sh found no workspace, no open run, or more than one. A flag
-#         given without its value is the one status the shell picks rather than this script:
-#         measured 2026-08-12 on `--run-id` with nothing after it, at 1 under sh and bash and 2
-#         under dash.
+#         given without its value is the one case where the shell picks the status rather than this
+#         script: measured 2026-08-12 on `--run-id` with nothing after it, at 1 under sh and bash
+#         and 2 under dash.
 set -u
 
 here=$(dirname "$0")
