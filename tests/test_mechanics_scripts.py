@@ -6379,6 +6379,64 @@ def test_search_jobs_refuses_a_call_that_names_no_route_parameters(tmp_workspace
 
 
 @pytest.mark.parametrize("shell", ["sh", "dash"])
+@pytest.mark.parametrize("arg", ["--source", "--source=ashby"])
+def test_search_jobs_refuses_a_second_source_among_the_route_parameters(tmp_workspace, shell, arg):
+    """`--source` after `--` would search one source while the `call` event named another.
+
+    The script sends `--source` to the route itself and the route takes the last value it is given.
+    Measured 2026-08-11: `agent-data call f9a6ec16-0bfd-44d8-b3ee-073776745ee7 search-jobs --source
+    linkedin --source ashby --keywords "strategic finance" --limit 1` exits 0 with
+    data.query.source `ashby` and an ashby row. The wrapper would have written that body to
+    search-q-linkedin.json and handed record-api-response.sh `--source linkedin`. A search with rows
+    is still filed under the source that answered — record-api-response.sh:489-490 takes the source
+    off the first surfaced row — but a search that returned none falls back to the flag and is filed
+    under a source nothing searched.
+
+    `--source=ashby` is the same call in the form the CLI also accepts: `agent-data call <listing>
+    search-jobs --source=ashby --keywords "strategic finance" --limit 1 --dry-run` resolves to a URL
+    carrying `source=ashby`, measured 2026-08-12.
+
+    A run is open here, so without the check the script would build the path, make the call and
+    write the response. Nothing is spent and no key is needed: the check runs with the other
+    argument checks, before resolve-run.sh and before the scratch directory is made — which is what
+    the last two assertions hold.
+    """
+    if shell == "dash" and not shutil.which("dash"):
+        pytest.skip("dash is not installed here")
+    opened = run_script(OPEN_RUN, tmp_workspace)
+    assert opened.returncode == 0, opened.stdout + opened.stderr
+
+    out = keyless_search(shell, "--workspace", tmp_workspace,
+                         "--query-id", "q", "--source", "linkedin",
+                         "--", "--keywords", "strategic finance", arg, "ashby")
+    assert out.returncode == 2, out.stdout + out.stderr
+    assert "--source may not appear after --" in out.stderr
+    assert arg in out.stderr, "the message does not print the argument it refused"
+    assert out.stdout == ""
+    assert not (tmp_workspace / "runs" / ".scratch").exists(), \
+        "the response directory was made, so the check ran after the path was built"
+    assert not (tmp_workspace / "jobs.jsonl").exists(), "jobs.jsonl was created"
+
+
+@pytest.mark.parametrize("shell", ["sh", "dash"])
+def test_search_jobs_takes_the_route_parameters_that_are_not_a_source(tmp_workspace, shell):
+    """The other half of the case above: a passthrough with no `--source` in it gets through.
+
+    Without this, the guard could refuse everything after `--` and the case above would still pass.
+    No run is open, so the script stops at resolve-run.sh having spent nothing.
+    """
+    if shell == "dash" and not shutil.which("dash"):
+        pytest.skip("dash is not installed here")
+    out = keyless_search(shell, "--workspace", tmp_workspace,
+                         "--query-id", "q", "--source", "linkedin",
+                         "--", "--keywords", "strategic finance", "--limit", "3",
+                         "--fields", "id,source,source_id,source_url")
+    assert out.returncode == 2, out.stdout + out.stderr
+    assert "no run is open" in out.stderr
+    assert "--source may not appear" not in out.stderr
+
+
+@pytest.mark.parametrize("shell", ["sh", "dash"])
 def test_search_jobs_checks_both_recorded_values_before_it_goes_looking_for_a_run(
         tmp_workspace, shell):
     """The `--source` and `--query-id` guard, with no API key and no run open — the state CI runs in.

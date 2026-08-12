@@ -6,7 +6,7 @@
 #                   groups a run's search calls by source and query id, so a wrong id files the
 #                   call under the wrong query.
 #   --source S      required. The source to search; one search-jobs call reaches one source. This
-#                   script passes it to the route, so it is not one of the parameters after `--`.
+#                   script passes it to the route, so a second --source after `--` is refused.
 #   --workspace W   resolve against W instead of asking workspace-discovery.sh. Omit it in a run;
 #                   the tests pass it, because their workspace is a temporary directory
 #                   workspace-discovery.sh would never find.
@@ -69,6 +69,32 @@ done
 # saw the call. The failed-call branch below still recorded a `call` event for it, which would put
 # one call the API never received into the run's metered-call count.
 [ $# -ge 1 ]       || { usage; exit 2; }
+
+# This script sends --source to the route itself, and the route takes the last value it is given, so
+# a second --source after `--` changes which source is searched and nothing else. Measured
+# 2026-08-11: `agent-data call f9a6ec16-0bfd-44d8-b3ee-073776745ee7 search-jobs --source linkedin
+# --source ashby --keywords "strategic finance" --limit 1` exits 0 and comes back with
+# data.query.source "ashby" and an ashby row. This script would have named the response file after
+# linkedin and handed record-api-response.sh --source linkedin. A search that returned rows is still
+# filed under the source that answered, because record-api-response.sh:489-490 reads the source off
+# the first surfaced row, but a search that returned none falls back to the --source flag and is
+# filed under a source nothing searched.
+#
+# `--source=ashby` is refused too: the CLI accepts that form — `agent-data call <listing-id>
+# search-jobs --source=ashby --keywords "strategic finance" --limit 1 --dry-run` resolves to a URL
+# carrying source=ashby, measured 2026-08-12.
+#
+# Every argument after `--` is matched, not only the ones in flag position, because this script never
+# learns which route parameters take a value. So a route parameter whose value is the string
+# --source is refused as well, and the message prints the argument.
+for arg do
+  case $arg in
+    --source|--source=*)
+      printf 'search-jobs.sh: --source may not appear after --: %s\n' "$arg" >&2
+      printf 'search-jobs.sh:   this script passes --source to the route, and the route takes the last one, so the search would run against a source the recorded call does not name\n' >&2
+      exit 2 ;;
+  esac
+done
 
 # Both values supply part of the name of the file this script writes the response to, so both are
 # checked here, before that path is built and before anything is spent. check-record-args.sh below
