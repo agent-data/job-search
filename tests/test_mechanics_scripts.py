@@ -1955,6 +1955,23 @@ def judge_args(jobs, row, **kw):
     return args
 
 
+def detail_line(run_id, source, source_id):
+    """The `detail` event a stored posting leaves in the log, as one line ready to append.
+
+    `record-api-response.sh` builds the real one off the response body and puts twelve keys on it.
+    The six left out here — `employment_type`, `apply_url`, `is_listed`, `is_remote`,
+    `workplace_type` and `staleness_status` — are read by nothing that reads this event.
+
+    The separators are not a style choice. `record-judgment.sh` finds this event with `grep -F` on
+    `"run_id":"…"`, with no space after the colon, so a line built by `json.dumps` with its default
+    separators matches none of the chain and the script reports no detail event for a posting whose
+    event is right there.
+    """
+    return json.dumps({"event": "detail", "run_id": run_id, "source": source,
+                       "source_id": source_id, "description_markdown": "The full text.",
+                       "ts": "2026-08-05T16:48:00Z"}, separators=(",", ":")) + "\n"
+
+
 @pytest.mark.parametrize("bad,says", [
     ("a\vb", "control character"),
     ("a\nb", "control character"),
@@ -2405,15 +2422,16 @@ def test_a_judgment_about_a_posting_no_search_surfaced_is_refused(tmp_path):
 def test_a_read_claimed_on_a_posting_with_no_detail_event_is_refused_without_an_api_key(tmp_path):
     """The detail-read guard, driven off a fixture log — the state CI runs in.
 
-    Every other case covering this guard is `live`-marked and `needs_api`-gated, and CI holds no
-    key. Measured 2026-08-12 with the guard deleted: `python3 -m pytest -q -m "not live"
-    --deselect <this case>` gives 1142 passed, and the same command without the deselect gives 1
-    failed, 1142 passed — the failure being this case.
+    Every live case covering this guard is `needs_api`-gated and CI holds no key. Measured
+    2026-08-12 with the whole guard deleted: `python3 -m pytest -q -m "not live"` gives 4 failed,
+    1143 passed, and the four are this case and the three wrong-scope cases below.
 
-    Both branches are driven. The guard only runs under `if [ "$detail_read" = true ]`, and a case
-    that claimed the read and nothing else would still pass with that condition gone. Measured
-    2026-08-12 with the grep and the `die` left unconditional: the second call below is the one that
-    fails, and it fails carrying the `--detail-read true` message while having passed `false`.
+    The second call is what makes this case self-contained: it is the one that goes red against a
+    guard that refuses every claim rather than only an unbacked one. Measured 2026-08-12 with the
+    `if [ "$detail_read" = true ]` condition removed and the grep and `die` left unconditional: this
+    case fails at that second call, carrying the `--detail-read true` message having passed `false`.
+    That mutation takes 56 cases down across the two test files, because it makes every judgment
+    need a `detail` event, so this case is not the only thing holding the condition.
     """
     jobs = seeded_jobs(tmp_path, "search.linkedin.json")
     row = first_surfaced(jobs)
@@ -2426,6 +2444,68 @@ def test_a_read_claimed_on_a_posting_with_no_detail_event_is_refused_without_an_
     judged_from_the_row = run_script(JUDGE, *judge_args(jobs, row, detail_read="false",
                                                         relevant="false", reasoning="Wrong city."))
     assert judged_from_the_row.returncode == 0, judged_from_the_row.stderr
+
+
+# A `detail` event that differs from the judgment in exactly one of the three fields the lookup is
+# scoped by. Each case is the only thing holding its own grep: measured 2026-08-12 by dropping one
+# grep at a time from the detail lookup in `record-judgment.sh`, each case goes red on its own grep
+# and on neither of the others, and the rest of the module stays green either way.
+WRONG_SCOPE = {
+    "another run":     ("run_id",    "2026-09-01T00-00-00Z"),
+    "another source":  ("source",    "ashby"),
+    "another posting": ("source_id", "linkedin-0024"),
+}
+
+
+@pytest.mark.parametrize("case", sorted(WRONG_SCOPE), ids=lambda c: c.replace(" ", "-"))
+def test_a_detail_event_naming_something_else_does_not_back_a_read_claim(tmp_path, case):
+    """A posting read in another run, a posting read under another source, and a different posting
+    read in this one. None of the three is a read of the posting being judged, so none may let the
+    claim through.
+
+    `run-counts.awk` counts `postings_detail_read` from `detail` events keyed by source and
+    source_id and skips any event carrying another run's id, so a claim let through by a
+    wrong-scope event is exactly the divergence this guard exists to stop: the judgment says the
+    posting was read and the count says it was not. Task 8 reads that gap.
+
+    The refusal reads the same in all three cases, because what the caller has to do about it is
+    the same: read the posting it is judging.
+    """
+    field, wrong = WRONG_SCOPE[case]
+    jobs = seeded_jobs(tmp_path, "search.linkedin.json")
+    row = first_surfaced(jobs)
+    scope = {"run_id": RID, "source": row["source"], "source_id": row["source_id"]}
+    assert scope[field] != wrong, (field, wrong)
+    scope[field] = wrong
+    jobs.write_text(jobs.read_text() + detail_line(**scope))
+
+    r = run_script(JUDGE, *judge_args(jobs, row, detail_read="true", relevant="true",
+                                      match="strong", reasoning="Reads well."))
+    assert r.returncode == 1, r.stdout + r.stderr
+    assert "no detail event for %s:%s in run %s" % (row["source"], row["source_id"], RID) \
+        in r.stderr, r.stderr
+    assert [e for e in lines(jobs) if e["event"] == "evaluated"] == []
+
+
+def test_a_detail_event_for_this_posting_and_run_backs_the_claim(tmp_path):
+    """The control for the three cases above. They would all pass against a guard that refused
+    every claim, and this is the call that fails then: one `detail` event, scoped to this posting
+    and this run, and the judgment is recorded.
+
+    The event is written by hand rather than recorded through `record-api-response.sh`, because the
+    only committed get-posting body names `linkedin-0000`; that is the posting judged here, so the
+    fixture would work, and `detail_line` is used anyway so the three cases above and this one
+    differ in the one field under test and in nothing else.
+    """
+    jobs = seeded_jobs(tmp_path, "search.linkedin.json")
+    row = first_surfaced(jobs)
+    jobs.write_text(jobs.read_text() + detail_line(RID, row["source"], row["source_id"]))
+
+    r = run_script(JUDGE, *judge_args(jobs, row, detail_read="true", relevant="true",
+                                      match="strong", reasoning="Reads well."))
+    assert r.returncode == 0, r.stdout + r.stderr
+    ev = [e for e in lines(jobs) if e["event"] == "evaluated"]
+    assert len(ev) == 1 and ev[0]["detail_read"] is True
 
 
 def test_the_same_judgment_twice_is_reported_and_skipped(tmp_path):
@@ -3186,11 +3266,28 @@ def test_a_run_killed_after_the_search_reports_everything_unreviewed(tmp_path):
 
 def test_the_bands_and_filtered_out_sum_to_reviewed(tmp_path):
     """The two sums the output contract holds to: the three bands plus filtered_out equal reviewed,
-    and reviewed plus unreviewed equal surfaced."""
+    and reviewed plus unreviewed equal surfaced.
+
+    The last assertion is a third property: `postings_detail_read` is counted from `detail` events
+    and not from what a judgment claims. rows[0]'s judgment is written by hand, carrying
+    `"detail_read":true` with no `detail` event anywhere in the log — the state
+    `record-judgment.sh` now refuses, and the state every log written before that check landed can
+    hold. Counting the claim instead would report one posting read where none was, which is the
+    22-against-13 divergence that check was added for.
+
+    Measured 2026-08-12 with `run-counts.awk` setting `hasdetail[k]` when an `evaluated` event
+    carries `"detail_read":true`: this test fails and the rest of the module passes. Measured with
+    rows[0] judged through `record-judgment.sh` at `--detail-read false` instead, so the log holds
+    no claim at all: the same mutation leaves the whole module green.
+    """
     jobs = seeded_jobs(tmp_path, "search.linkedin.json")
     rows = [e for e in lines(jobs) if e["event"] == "surfaced"]
     a, b = 2, 7                                    # slice points, not row counts
-    judge_all(jobs, rows[:a], detail_read="false", relevant="true", match="strong",
+    # `evaluated` carries "detail_read":true, "relevant":true and "match":"strong"; the run id goes
+    # on the end because run-counts.awk skips every line naming another run.
+    jobs.write_text(jobs.read_text() + evaluated(rows[0]["source"], rows[0]["source_id"],
+                                                 extra=',"run_id":"%s"' % RID) + "\n")
+    judge_all(jobs, rows[1:a], detail_read="false", relevant="true", match="strong",
               reasoning="Fits.")
     judge_all(jobs, rows[a:b], detail_read="false", relevant="true", match="moderate",
               reasoning="Partly fits.")
@@ -3200,11 +3297,12 @@ def test_the_bands_and_filtered_out_sum_to_reviewed(tmp_path):
     assert (int(c["match_strong"]) + int(c["match_moderate"]) + int(c["match_weak"])
             + int(c["filtered_out"])) == reviewed
     assert reviewed + int(c["postings_unreviewed"]) == int(c["postings_surfaced"])
-    assert int(c["match_strong"]) == a
+    assert int(c["match_strong"]) == a             # rows[0] by hand, rows[1:a] through the script
     assert int(c["match_moderate"]) == b - a
     assert int(c["match_weak"]) == 0
     assert int(c["filtered_out"]) == len(rows) - b
-    assert c["postings_detail_read"] == "0"        # no detail events recorded
+    # One judgment claims a read and the log holds no `detail` event, so the count is 0.
+    assert c["postings_detail_read"] == "0"
 
 
 def test_by_source_sums_to_surfaced(tmp_path):

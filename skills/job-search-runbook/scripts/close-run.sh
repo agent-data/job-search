@@ -370,10 +370,9 @@ buildstatus=$?
 
 # Both the status and the file, the way record-judgment.sh checks both after building its event —
 # `grep -n 'Both the status and the file' skills/job-search-run/scripts/record-judgment.sh` finds
-# it. An awk that died before
-# printing leaves this file empty; one that failed partway leaves a record that stops mid-field,
-# and a half-written record at the real path would be worse than none. The marker and the scratch
-# are still there to try again from.
+# it. An awk that died before printing leaves this file empty; one that failed partway leaves a
+# record that stops mid-field, and a half-written record at the real path would be worse than none.
+# The marker and the scratch are still there to try again from.
 if [ "$buildstatus" -ne 0 ] || [ ! -s "$tmp" ]; then
   rm -f "$tmp"
   die 'building the record failed — nothing written, the marker and the scratch are untouched'
