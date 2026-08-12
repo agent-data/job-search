@@ -6290,9 +6290,9 @@ def test_search_jobs_records_the_call_when_the_api_refuses_the_search(tmp_worksp
 def test_search_jobs_exits_1_when_the_search_worked_and_the_rows_were_refused(tmp_workspace):
     """The other half of exit 1: the API answered with rows and record-api-response.sh refused them.
 
-    `--fields` is one of the route's own parameters (`agent-data docs
-    f9a6ec16-0bfd-44d8-b3ee-073776745ee7`, the `fields` entry under search-jobs), so it reaches the
-    route through the passthrough like any other. `--fields id,title,company_name` returns rows
+    `--fields` is one of the route's own parameters (`agent-data docs <the LISTING constant>`, the
+    `fields` entry under search-jobs), so it reaches the route through the passthrough like any
+    other. `--fields id,title,company_name` returns rows
     carrying those three keys and nothing else, and record-api-response.sh:427-433 requires
     `source`, `source_id`, `id` and `source_url` on every row, so it appends none of them and exits
     1 at :496. agent-data-reference/SKILL.md:64-67 already tells a run not to send `--fields` for
@@ -6410,17 +6410,17 @@ def test_search_jobs_refuses_a_second_source_among_the_route_parameters(tmp_work
     """`--source` after `--` would search one source while the `call` event named another.
 
     The script sends `--source` to the route itself and the route takes the last value it is given.
-    Measured 2026-08-11: `agent-data call f9a6ec16-0bfd-44d8-b3ee-073776745ee7 search-jobs --source
-    linkedin --source ashby --keywords "strategic finance" --limit 1` exits 0 with
-    data.query.source `ashby` and an ashby row. The wrapper would have written that body to
-    search-q-linkedin.json and handed record-api-response.sh `--source linkedin`. A search with rows
-    is still filed under the source that answered — record-api-response.sh:489-490 takes the source
-    off the first surfaced row — but a search that returned none falls back to the flag and is filed
-    under a source nothing searched.
+    Measured 2026-08-11: `agent-data call <the LISTING constant> search-jobs --source linkedin
+    --source ashby --keywords "strategic finance" --limit 1` exits 0 with data.query.source `ashby`
+    and an ashby row. The wrapper would have written that body to search-q-linkedin.json and handed
+    record-api-response.sh `--source linkedin`. A search with rows is still filed under the source
+    that answered — record-api-response.sh:489-490 takes the source off the first surfaced row —
+    but a search that returned none falls back to the flag and is filed under a source nothing
+    searched.
 
-    `--source=ashby` is the same call in the form the CLI also accepts: `agent-data call <listing>
-    search-jobs --source=ashby --keywords "strategic finance" --limit 1 --dry-run` resolves to a URL
-    carrying `source=ashby`, measured 2026-08-12.
+    `--source=ashby` is the same call in the form the CLI also accepts: `agent-data call <the
+    LISTING constant> search-jobs --source=ashby --keywords "strategic finance" --limit 1
+    --dry-run` resolves to a URL carrying `source=ashby`, measured 2026-08-12.
 
     A run is open here, so without the check the script would build the path, make the call and
     write the response. Nothing is spent and no key is needed: the check runs with the other
@@ -6537,13 +6537,14 @@ def test_search_jobs_refuses_a_value_that_would_name_some_other_file(
 
 
 def test_the_listing_id_is_the_same_everywhere_it_is_written_down():
-    """Six places hold the listing id, and all six are compared here.
+    """Eight places hold the listing id, and all eight are compared here.
 
-    Counted with `command grep -c f9a6ec16 <file>`: fetch-posting.sh 2 — a comment at :77 showing
-    the search that produces a posting id, and the `get-posting` call at :136; search-jobs.sh 1 —
-    the `search-jobs` call at :132; agent-data-reference/SKILL.md 2 — the sentence at :22 that
-    names the id, and the `get-posting` recipe at :58 an agent copies; and `LISTING` at the top of
-    this file.
+    Counted with `command grep -c f9a6ec16-0bfd-44d8-b3ee-073776745ee7 <file>` on 2026-08-12:
+    fetch-posting.sh 2 — a comment at :77 showing the search that produces a posting id, and the
+    `get-posting` call at :136; search-jobs.sh 3 — two measurement commands in the comment above
+    the second-`--source` guard, at :75 and :84, and the `search-jobs` call at :158;
+    agent-data-reference/SKILL.md 2 — the sentence at :22 that names the id, and the `get-posting`
+    recipe at :58 an agent copies. `LISTING` at the top of this file is the eighth.
 
     Every uuid in each file is collected, not the first one. Reading only `found[0]` left the two
     lines that spend metered calls unchecked, because a comment comes before the call in
@@ -6551,9 +6552,15 @@ def test_the_listing_id_is_the_same_everywhere_it_is_written_down():
     `ids.add(found[0])`, changing fetch-posting.sh:136 to a zero uuid and running
     `python3 -m pytest -q -k listing_id` gave `1 passed`.
 
-    `LISTING` is folded in because the live fixtures below run `agent-data call LISTING …`
-    directly. A change that reached the two scripts and not this constant would leave those
-    fixtures spending real calls against the old listing while every wrapper called the new one.
+    `LISTING` is folded in because the live fixtures below pass it to `agent-data call` directly. A
+    change that reached the two scripts and not this constant would leave those fixtures spending
+    real calls against the old listing while every wrapper called the new one.
+
+    Only `LISTING` is read out of this file. No test body or other docstring writes the id out as a
+    literal; each one names `LISTING` or writes `<the LISTING constant>` inside a quoted command.
+    The id does appear once more here, in the `grep` command quoted above, so that a reader can
+    re-run the count — nothing executes that line, and a stale copy of it would print 0 for every
+    file rather than report a wrong number.
     """
     pat = re.compile(r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}")
     per_file = {"tests/test_mechanics_scripts.py (LISTING)": {LISTING}}

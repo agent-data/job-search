@@ -80,9 +80,9 @@ done
 # the first surfaced row, but a search that returned none falls back to the --source flag and is
 # filed under a source nothing searched.
 #
-# `--source=ashby` is refused too: the CLI accepts that form — `agent-data call <listing-id>
-# search-jobs --source=ashby --keywords "strategic finance" --limit 1 --dry-run` resolves to a URL
-# carrying source=ashby, measured 2026-08-12.
+# `--source=ashby` is refused too: the CLI accepts that form — `agent-data call
+# f9a6ec16-0bfd-44d8-b3ee-073776745ee7 search-jobs --source=ashby --keywords "strategic finance"
+# --limit 1 --dry-run` resolves to a URL carrying source=ashby, measured 2026-08-12.
 #
 # Every argument after `--` is matched, not only the ones in flag position, because this script never
 # learns which route parameters take a value. So a route parameter whose value is the string
