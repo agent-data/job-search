@@ -26,10 +26,11 @@
     if (ok != "true") failed++
     if (route == "search-jobs") {
       searches++
-      # A retry sequence lands as several events in one group: agent-data-reference:74 says a call
-      # counts as failed once its three attempts are spent, so the group is the search and a group
-      # with no ok:true member is a search that never returned. A single failed attempt in a group
-      # that later answered is not one.
+      # A retry sequence lands as several events in one group: agent-data-reference says a call
+      # counts as failed once its three attempts are spent — `command grep -n 'counts as failed'
+      # skills/agent-data-reference/SKILL.md` finds the sentence — so the group is the search and a
+      # group with no ok:true member is a search that never returned. A single failed attempt in a
+      # group that later answered is not one.
       g = jval($0, "source") ":" jval($0, "query_id")
       if (!(g in group)) { group[g] = 1; ngroup++; grouporder[ngroup] = g }
       if (ok == "true") answered[g] = 1
