@@ -14,13 +14,17 @@ Every path below that names a file in the user's workspace is relative to the `w
 prints. The few that name a file inside the plugin instead say so where they are written. Run the
 plugin's `skills/job-search-runbook/scripts/workspace-discovery.sh`.
 
-It prints three lines:
+It prints three `key=value` lines on stdout:
 
 ```
 workspace=/Users/dana/job-search
 source=legacy
 first_run=false
 ```
+
+It writes one more line to stderr, naming the registry path and saying what it found there, so a
+terminal or a tool result that merges the two streams shows four lines. Read it together with the
+parse-check rule at the end of this section.
 
 `first_run=true` means that path has no `config.yaml` yet and setup creates it. `source=legacy` means
 the workspace sits at the older visible path: keep using it, and record it in the registry as
@@ -42,8 +46,9 @@ First match decides:
 4. Neither exists — first run, workspace `$H/.job-search`, which setup creates.
 
 A registry file that exists but does not parse as JSON stops the run: report that the file at that
-path cannot be read, rather than picking a workspace it might not name. The script reads it with
-`grep` and cannot tell a corrupt file from an absent one, so parse-check it yourself.
+path cannot be read, rather than picking a workspace it might not name. A registry the script could
+not look at stops the run the same way, and the workspace on stdout came from the rules below
+rather than from the registry.
 
 ## What each file holds
 
@@ -51,9 +56,9 @@ path cannot be read, rather than picking a workspace it might not name. The scri
 |---|---|---|
 | `config.yaml` — queries, sources, schedule | setup, then the user by hand | every run, the home view |
 | `preferences.md` — the brief, in prose | the preference interview | every run, every fit judgment |
-| `jobs.jsonl` — append-only event log, one JSON object per line; a posting's current state is the fold of its events by `source` + `source_id` | every run | the home view, the pipeline, duplicate checks |
-| `runs/<run_id>.json` — one record per run | a run at close | the home view, the agent skill |
-| `runs/.started-<run_id>` — empty marker: this run is open | a run at start, deleted at close | the next run |
+| `jobs.jsonl` — append-only event log, one JSON object per line. A run writes a `call` event for each agent-data request and `surfaced`, `queued`, `detail` and `evaluated` events about postings. A posting has several lines, all carrying the same `source` and `source_id`, and its current state is its last `evaluated` line. | every run | the home view, duplicate checks |
+| `runs/<run_id>.json` — one record per run; `<run_id>` is the run's UTC start time with dashes for the colons, like `2026-07-30T15-04-02Z`, so it works as a filename | `skills/job-search-runbook/scripts/close-run.sh` | the home view, the agent skill |
+| `runs/.started-<run_id>` — empty marker: this run is open | `skills/job-search-runbook/scripts/open-run.sh`, deleted by `skills/job-search-runbook/scripts/clear-run.sh` | the next run |
 | `reports/<date>-digest.md` — the digest the user reads | a run at close | the user, the home view |
 | `.gitignore` — copied from the plugin's `skills/job-search/templates/workspace.gitignore`; denies everything but itself | setup | git |
 | `~/.config/job-search/config.json` — the registry, which sits outside the workspace: `active_workspace`, plus `scheduling` holding the booleans `installed` and `verified` — both true only after a canary proved the job — and the strings `mechanism` (cron, launchd, or the host's own) and `scheduler_id` | setup, schedule changes | discovery, the home view |
@@ -61,24 +66,40 @@ path cannot be read, rather than picking a workspace it might not name. The scri
 ## One run, start to close
 
 1. **Look for a leftover marker** — `ls <workspace>/runs/.started-* 2>/dev/null`. A marker there
-   belongs to a run that stopped before it could close. Say that the last run did not finish,
-   delete the marker, and go on with this run.
-2. **Open the run.** `run_id` is the current UTC time written like `2026-07-30T15-04-02Z` — an ISO
-   timestamp with dashes in place of the colons, so it works as a filename. Create the empty marker
-   `runs/.started-<run_id>`, then read the brief's revision before anything can edit it:
-   `shasum -a 256 <workspace>/preferences.md | cut -c1-12` (or `sha256sum` — same digest).
-3. **Do the run's work**, appending to `jobs.jsonl` as you go.
-4. **Close.** Write `runs/<run_id>.json` — every field, with realistic values, is in the plugin's
-   `skills/job-search-run/templates/run-record.example.json`. `brief_revision` is the digest from step 2.
-   `trigger` is `manual` when the user asked for this run and `scheduled` when a scheduler started
-   it, and `scheduler_id` names that scheduler or is `null` for a manual run. `agent_data_usage`
-   counts metered calls: `searches`, `detail_reads`, everything else in `other`, and their sum in
-   `total_metered`. Then write `reports/<date>-digest.md`. Then delete `runs/.started-<run_id>` and
-   `runs/.scratch/<run_id>/`.
-5. **Check the close** — run the plugin's
-   `skills/job-search-runbook/scripts/validate-workspace.sh <workspace> --post-close <run_id>`.
-   It prints nothing and exits 0 when the workspace is right; each line it does print names one
-   file and one broken rule to fix.
+   belongs to a run that stopped before it could close. Say that the last run did not finish, then
+   close and clear it before going on with this run: first
+   `skills/job-search-runbook/scripts/close-run.sh <workspace> <run_id> --trigger manual
+   --close-state interrupted`, then `skills/job-search-runbook/scripts/clear-run.sh <workspace>
+   <run_id>`, taking `<run_id>` off the marker's name. Pass `manual` because nothing on disk records
+   what started a run that never closed — `trigger` is written only into the run record, which is
+   the file that run never wrote — and `scheduled` is what the scheduling canary reads as proof the
+   scheduler ran. Deleting the marker instead leaves nothing recording that the run happened, which
+   is why `skills/job-search-runbook/scripts/clear-run.sh` refuses a run with no record.
+2. **Open the run** — run the plugin's `skills/job-search-runbook/scripts/open-run.sh <workspace>`.
+   It prints `run_id`, `started_at` and `brief_revision` on stdout, in that order; carry all three
+   through the run. Exit 1 means the run is open — the marker is on disk and those three lines are
+   printed — and something is wrong that this run cannot fix: read stdout after the three lines for
+   the findings about the workspace files, and stderr for the case where the brief's revision could
+   not be taken. Report whichever you got in plain language and close the run `blocked`. Exit 2
+   means the run did not open and nothing was written; stderr says why. A run already open means an
+   earlier run's marker is still in `runs/`: go back to step 1, which says what to tell the user,
+   then open this one.
+3. **Do the run's work**, recording events as you go.
+4. **Close, in this order.** First
+   `skills/job-search-runbook/scripts/close-run.sh <workspace> <run_id> --trigger … --close-state …`,
+   with `--brief-revision` from step 2, `--sources` and `--queries` from the run, and
+   `--scheduler-id` when a scheduler started it. It works out `run_health` and prints it. Then the
+   digest, which the run skill defines. Then
+   `skills/job-search-runbook/scripts/clear-run.sh <workspace> <run_id>`, which deletes the marker
+   and the scratch directory. Then
+   `skills/job-search-runbook/scripts/validate-workspace.sh <workspace> --post-close <run_id>`,
+   fixing whatever it prints on stdout.
+
+The digest is written between the record and the clearing because it carries `run_health` off the
+record and may still need the responses in the scratch directory.
+
+`trigger`, `scheduler_id` and `close_state` are the only values in the record you decide. Every
+count and both timestamps come from `jobs.jsonl` and the clock.
 
 A run that has to stop early closes the same way: `close_state` is `blocked` when you can name what
 stopped it, and `interrupted` when it ends unfinished and its work cannot be reconstructed.
@@ -94,10 +115,12 @@ in the same shape: this pack's run skill, permission to write the workspace, cre
 
 ## Scratch
 
-A run's own working files go in `runs/.scratch/<run_id>/`, which step 4 deletes: each search row as
-it arrived, `id` and `source_url` paired for the detail read, plus the posting lines you cite.
+A run's own working files go in `runs/.scratch/<run_id>/`: each search row as it arrived, `id` and
+`source_url` paired for the detail read.
 
 ## What stays off disk
 
 The workspace holds a private job search. Write none of these to a file: API keys and auth headers,
-pagination cursors, full job descriptions, preference text anywhere but `preferences.md`.
+pagination cursors, preference text anywhere but `preferences.md`. A posting's own text is not on
+that list: it is stored on the posting's `detail` event, so a changed brief can be re-applied by
+judging that stored text again instead of paying to read the same postings a second time.

@@ -13,6 +13,18 @@ preferences.md
 resumes/
 reports/
 
-# Eval run outputs — transcripts, captured workspaces, per-run grading. They carry machine paths
-# and live posting text; only the aggregate numbers in evals/baseline/ are committed.
-evals/results/
+# The live behavior evals — the driver scripts, the case and seed definitions, the baseline
+# numbers, and every run's output. Untracked on 2026-08-10: the results carry machine paths and
+# live posting text, and nothing else in here is something a user of the plugin needs to read.
+# They still run from the working copy. tests/fixtures/seed-workspace/ is the tracked seed the
+# workspace validator's own test reads.
+#
+# The leading slash anchors this to the repository root. Written bare as `evals/` it also matches
+# skills/<skill>/evals/. The 14 files already tracked there stay tracked, because a gitignore rule
+# never applies to an indexed path (`git ls-files 'skills/*/evals/*' | wc -l` gives 14), but a NEW
+# eval file added under any skill would be silently ignored. scripts/eval_harness.py:26 globs
+# skills/*/evals/evals.json off the filesystem, so the harness would pass locally while that file
+# never reached a commit. Measured with a probe:
+# `git check-ignore -v skills/job-search/evals/__probe.json` matched the bare rule and does not
+# match the anchored one.
+/evals/

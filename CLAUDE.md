@@ -1,8 +1,8 @@
 # CLAUDE.md
 
 Coding agents working on this repo: read **[AGENTS.md](AGENTS.md)** — the entry-point map. It
-points to the architecture, the agent-first core beliefs, the design/exec plans, and the runtime
-single source of truth in the `job-search-runbook` and `agent-data-reference` skills.
+points to the architecture, the agent-first core beliefs, and the runtime single source of truth in
+the `job-search-runbook` and `agent-data-reference` skills.
 
 ## Write concretely — never swap a concrete thing for an abstraction
 
@@ -63,7 +63,7 @@ This applies inside plans and design docs, not only in chat. Eleven blocking def
 audit-remediation plan came from sentences like "the invariants are already in `run-lifecycle.md`" (13
 of the 14 were not), "the two files over 5,000 words" (there are four), and "nineteen substrings"
 (there are eighteen). Each was one command away from being caught, and each was written as settled
-fact. The full set is in `docs/superpowers/reviews/2026-07-22-plan-conflict-sweep.md` on branch
-`feat/recall-oriented-query-strategy` (unmerged).
+fact. The full set was written up in the 2026-07-22 plan conflict sweep, which is kept with the
+rest of the authoring notes rather than in this repository.
 
 When you cite a measurement, cite the command that produced it, so a reader can re-run it.

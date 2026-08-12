@@ -5,6 +5,11 @@ Two jobs: (1) prove the REAL five evals.json are coherent, carry a discovery sce
 mark the named judgment-heavy scenarios stochastic with a control arm, and hold no pack-authored `gpt-5*`
 literal from the pinned regression family; (2) unit-test the deterministic helpers the off-CI live harness
 feeds observed pass/fail into (aggregate_reps / control_delta).
+
+The scheduler check on evals/run_eval.py was tested here until 2026-08-10, when it was deleted
+ahead of removing the top-level evals/ directory from version control. That check imported
+evals/run_eval.py by path while this module loaded, so in a checkout without that file pytest
+fails collection and runs no tests at all, instead of failing only the tests that needed it.
 """
 import json
 import pathlib
@@ -272,11 +277,13 @@ def _artifacts_workspace(tmp_path):
     (ws / "runs" / f"{run_id}.json").write_text(json.dumps(record), encoding="utf-8")
     events = [
         {"event": "evaluated", "source": "linkedin", "source_id": "4012345678",
-         "run_id": run_id, "status": "new"},
+         "run_id": run_id},
         {"event": "evaluated", "source": "ashby", "source_id": "a1b2c3d4",
-         "run_id": run_id, "status": "new"},
-        {"event": "status_changed", "source": "linkedin", "source_id": "4012345678",
-         "status": "interested"},
+         "run_id": run_id},
+        # A third posting the same run could not judge from the search row, so it queued a detail
+        # read. The field names come from queue-detail-read.sh:104-105, which writes this event.
+        {"event": "queued", "source": "linkedin", "source_id": "4012349999",
+         "run_id": run_id},
     ]
     (ws / "jobs.jsonl").write_text(
         "\n".join(json.dumps(r) for r in events), encoding="utf-8"
@@ -303,7 +310,7 @@ def _all_kinds_evidence(ws, run_id):
              "field": "agent_data_usage.total_metered", "equals": 10},
             # default field ("event"), against the append-only log a run writes
             {"kind": "jsonl_event_sequence", "path": "jobs.jsonl",
-             "sequence": ["evaluated", "status_changed"]},
+             "sequence": ["evaluated", "queued"]},
             {"kind": "text_absent", "path": "reports/2026-07-17-digest.md",
              "pattern": "Here's what I found so far"},
             {"kind": "text_matches", "path": "config.yaml",
@@ -347,7 +354,7 @@ def test_check_artifacts_jsonl_sequence_out_of_order_fails(tmp_path):
     ws, _ = _artifacts_workspace(tmp_path)
     evidence = {"workspace": str(ws), "assertions": [
         {"kind": "jsonl_event_sequence", "path": "jobs.jsonl",
-         "sequence": ["status_changed", "evaluated"]}]}
+         "sequence": ["queued", "evaluated"]}]}
     assert len(eh.check_artifacts(evidence)) == 1
 
 
@@ -391,10 +398,10 @@ def test_check_artifacts_jsonl_malformed_line_fails_closed(tmp_path):
     (ws / "jobs.jsonl").write_text(
         '{"event": "evaluated", "source": "linkedin"}\n'
         "{not valid json here\n"
-        '{"event": "status_changed", "source": "linkedin"}\n', encoding="utf-8")
+        '{"event": "queued", "source": "linkedin"}\n', encoding="utf-8")
     evidence = {"workspace": str(ws), "assertions": [
         {"kind": "jsonl_event_sequence", "path": "jobs.jsonl",
-         "sequence": ["evaluated", "status_changed"]}]}
+         "sequence": ["evaluated", "queued"]}]}
     hits = eh.check_artifacts(evidence)
     assert len(hits) == 1 and "malformed" in hits[0]
 

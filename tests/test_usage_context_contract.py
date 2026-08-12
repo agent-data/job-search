@@ -2,8 +2,8 @@
 
 Everything here reads a machine-readable surface: a config template or fenced config example, a
 shell fixture, or an entry in a skill's evals.json. How the surrounding guidance prose reads is
-graded by the behavior evals in evals/ — never by substring assertions here. The marked-block
-parses this file used to carry went with the references that held them on 2026-07-31.
+graded by the maintainer's live behavior evals — never by substring assertions here. The
+marked-block parses this file used to carry went with the references that held them on 2026-07-31.
 """
 
 from pathlib import Path

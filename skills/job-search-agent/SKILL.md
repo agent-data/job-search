@@ -26,25 +26,26 @@ user arrives with.
 Every search setting is a field in the workspace's `config.yaml`: the `queries[]` entries with their
 keywords, location, limit and `enabled` flag, plus `search.sources` and `search.freshness`. Edit the
 file in place, keeping its comments and shape, then check it with the plugin's
-`skills/job-search-runbook/scripts/validate-workspace.sh <workspace>` — silence means the file is
-usable, and each line it prints names one file and one broken rule. The change takes effect on the
-next run.
+`skills/job-search-runbook/scripts/validate-workspace.sh <workspace>`. The change takes effect
+on the next run.
 
 A change that raises what a run opens with — one more query, one more source — gets its new cost
 stated before it is saved, per `agent-data-reference`'s cost recipe.
 
 Changing how often the search runs goes through the `job-search` skill, which composes the cadence,
-installs the recurring job, and canaries it. A new or changed job counts as running once a canary
-has left a run record whose `trigger` is `scheduled` and whose close is healthy.
+installs the recurring job, and canaries it.
 
 ## Explaining what a run spent
 
 Read the newest `runs/<run_id>.json` in the workspace and report its `agent_data_usage`: `searches`,
-`detail_reads`, `other`, and `total_metered`. That read is local and spends nothing.
+`detail_reads`, `other`, and `total_metered`, which is the first three added together. That read is
+local and spends nothing. `close-run.sh` counts all four at close from the `call` events in
+`jobs.jsonl`, and the run wrote one of those events for every attempt it made: `searches` counts
+every `call` event whose route is `search-jobs`, a retried one included, which is why it can come
+out above the `B` below.
 `agent-data-reference` carries the rest — how many calls a month are free, the per-call rates past
-that, and `B = enabled queries × enabled sources` as what one run opens with. A call count times a rate is an
-estimate; what the user was actually billed sits on their account at
-https://agent-data.motie.dev/settings/billing.
+that, and `B = enabled queries × enabled sources` as what one run opens with. What the user was
+actually billed sits on their account at https://agent-data.motie.dev/settings/billing.
 
 ## Symptom → fix
 
@@ -55,4 +56,5 @@ https://agent-data.motie.dev/settings/billing.
 | The run closed blocked and its digest names the monthly allowance | the free calls for the month are spent, so agent-data is refusing further calls | Check the account at https://agent-data.motie.dev/settings/billing; the matches already saved are unaffected |
 | The schedule stopped firing | the installed job was removed, or the machine it runs on was asleep | Read `scheduling` in the registry the runbook's file map names, look for that job in the host's own scheduler, and reinstall it through the `job-search` skill, which canaries it |
 | The home view keeps offering to refresh the brief | `preferences.md` has not been updated in a long time, and runs have happened since | Run `job-preference-interview`, which moves `updated_at` to today |
-| A run died mid-flight | it stopped before it could close, leaving its `runs/.started-*` marker behind | Say the last run did not finish, delete that marker, and run again — the first step of the runbook's run contract |
+| A run died mid-flight | it stopped before it could close, leaving its `runs/.started-*` marker behind | Say the last run did not finish, then close and clear it before running again — the first step of the runbook's run contract, which gives both commands and where the `<run_id>` comes from |
+| The digest says the run left postings unjudged | it stopped before judging everything it found; `close-run.sh` refuses a `complete` close over unjudged postings, so that record reads `blocked` or `interrupted` | Its `postings_unreviewed` is how many; run the search again, which offers those postings once more because a posting carrying no judgment is not treated as one already seen |

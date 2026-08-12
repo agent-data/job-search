@@ -13,9 +13,10 @@ those rules is decided by
 [skills/job-search-runbook/scripts/validate-workspace.sh](../skills/job-search-runbook/scripts/validate-workspace.sh).
 When a number or a literal matters, follow the link to its source of truth.
 
-For the principles behind these mechanisms see
-[design-docs/core-beliefs.md](design-docs/core-beliefs.md); for the structural map see
-[../ARCHITECTURE.md](../ARCHITECTURE.md).
+The design choice behind §2 and §4 — no silent failures, every blocked path named where it is
+hit — is stated in
+[../CONTRIBUTING.md](../CONTRIBUTING.md#project-philosophy-please-dont-regress-these); for the
+structural map see [../ARCHITECTURE.md](../ARCHITECTURE.md).
 
 **TL;DR (reading this mid-incident).** Run-health states and *how a blocked run surfaces without a
 trustworthy exit code* both live in [§4](#4-run-health--blocked-surfacing--visible-without-the-exit-code).
@@ -38,31 +39,37 @@ words, into its record and its digest. The record's shape is
 ## 1. Determinism — the core is a pinned contract and reproducible
 
 The mechanics that must never improvise — workspace discovery, registry writes, the schedule
-line, dedup, the event-log fold — are **pinned written contracts**: exact precedence rules,
+line, dedup, working out a posting's current state from its lines — are **pinned written
+contracts**: exact precedence rules,
 portable shell one-liners, and byte-level write rules that Claude Code executes natively with
 no runtime dependency (no Python on the user's machine). The *specification* is deterministic —
-the same frequency always composes the same schedule line, and the same event log always folds
-to the same current state — while the *executor* is the model following the contract verbatim.
+the same frequency always composes the same schedule line, and the same event log always gives
+the same current state — while the *executor* is the model following the contract verbatim.
 Two layers verify this. `tests/test_mechanics_scripts.py` drives each script through `sh` against a
 temp fixture, and `tests/test_validate_workspace.py` drives the validator against workspaces built
 per case — so the file rules and the scripted operations are unit-tested. What a *run* does with
-them end to end is graded by the live behavior evals in [../evals/](../evals/) and the
-[../TESTING.md](../TESTING.md) matrix, because that part is the model following the contract.
+them end to end is graded by the live behavior evals the maintainer runs against the real API and by
+the [../TESTING.md](../TESTING.md) matrix, because that part is the model following the contract.
 
 State is an **append-only event log**, not a mutable record: `jobs.jsonl` is a sequence of
-events, and current state is computed by folding them by dedup key (last-write-wins per field).
+events, and a posting's current state is its last `evaluated` line for its `source` and
+`source_id`. A posting carries at most one such line: both append paths refuse a second
+`evaluated` event for a pair that already has one.
+[`event-log-append.sh`](../skills/job-search-run/scripts/event-log-append.sh) skips it, and
+[`record-judgment.sh`](../skills/job-search-run/scripts/record-judgment.sh) writes nothing —
+exiting 0 when the line it was asked to write is the one already recorded, and 1 with both lines
+on stderr when it is not.
 Re-running is therefore safe — nothing is overwritten in place, and a crash mid-run can at
 worst leave a trailing partial line, never a corrupted record. What each workspace file holds, the
 registry write rules, the workspace-discovery precedence, and the scheduling marker are all owned by
 the `job-search-runbook` skill; one event line's exact
 fields are [`jobs-event.example.json`](../skills/job-search-run/templates/jobs-event.example.json), and
-the known-ids and append operations are the scripts under
+the scripts that append every line and read the counts back out are under
 [../skills/job-search-run/scripts/](../skills/job-search-run/scripts/).
 
 Because the deterministic pieces are isolated from the LLM judgment, the parts that *can* be
 proven correct *are* — the model is left to do only what genuinely needs judgment (relevance),
-and everything else is testable. See the **Deterministic, testable, headless** belief in
-[design-docs/core-beliefs.md](design-docs/core-beliefs.md#6-deterministic-testable-headless).
+and everything else is testable.
 
 Deeper company-board coverage adds two bounded state rules. Pagination stops a stream when its
 cursor or page signature stops making trustworthy progress, so a bad continuation cannot loop or
@@ -84,7 +91,7 @@ were retired on 2026-07-31 along with the reference file that held them, because
 what the user read — the sentence next to the failing step was. Each skill now names the failures its
 own flow can hit, right beside the step that hits them, and the run's `close_state` (`complete` /
 `blocked` / `interrupted`) is what a later reader keys off. That means what a failure "is" is checked
-by reading the digest and the record, not by matching a token: the live behavior evals in `evals/`
+by reading the digest and the record, not by matching a token: the maintainer's live behavior evals
 grade exactly that.
 
 An interrupted continuation is degraded rather than hidden: the run keeps trustworthy postings
@@ -92,9 +99,11 @@ already scanned, marks the affected stream and overall depth incomplete, continu
 and says in the digest that coverage was partial. It never claims exhaustive coverage or persists a
 cursor for later resumption.
 
-That "name it, never swallow it" rule is a core belief, enforced in review and by the linters —
-see **No silent failures — named errors** in
-[design-docs/core-beliefs.md](design-docs/core-beliefs.md#4-no-silent-failures--named-errors).
+That "name it, never swallow it" rule is one of the design choices a change must not regress,
+stated in [../CONTRIBUTING.md](../CONTRIBUTING.md#project-philosophy-please-dont-regress-these).
+No linter checks it. What holds it is review, the scenarios in
+`skills/job-search-run/evals/evals.json` that assert a blocked close writes both the record and a
+digest carrying the cause and the fix, and the maintainer's live behavior evals.
 
 ## 3. Retry & circuit-breaker — patient, then it stops
 
@@ -155,7 +164,8 @@ inherently visible because the next front-door visit routes to onboarding.
 A run that is killed outright can't write anything, so the contract handles it from the other end:
 a run creates the empty marker `runs/.started-<run_id>` when it opens and deletes it only at close.
 A marker with no matching record means the previous run died mid-flight, and the next run says so
-before doing anything else, then clears it. The run loop that enforces all of this is
+before doing anything else, then closes and clears it — the run contract's first step, which is
+what leaves a record of the run that died. The run loop that enforces all of this is
 [../skills/job-search-run/SKILL.md](../skills/job-search-run/SKILL.md).
 
 ## 5. Headless-first — the scheduled run never blocks on a human
@@ -180,20 +190,24 @@ Reliability claims are only as good as their tests. Four layers back this system
 - **The workspace validator** ([skills/job-search-runbook/scripts/validate-workspace.sh](../skills/job-search-runbook/scripts/validate-workspace.sh)),
   self-tested by `tests/test_validate_workspace.py`, is what turns the file rules into something
   mechanical: config keys, the brief's front matter, run-record fields and UTC timestamps, and —
-  with `--post-close <run_id>` — that the run left no started-marker and no scratch behind. Those
+  with `--post-close <run_id>` — that the run left no started-marker and no scratch behind, that
+  its record carries `degraded_reasons`, that every count in its record is the number
+  `run-counts.sh` reads back out of `jobs.jsonl`, each match band and each source the log names
+  included, that the record's own three sums hold with or without a log, and that its
+  `completed_at` is neither earlier than `started_at` nor later than the record's own mtime. Those
   rules used to be prose in the skills, which meant nothing checked them.
 - **A credit-free fake `agent-data` shim** (a PATH shim under [../tests/](../tests/)) lets a
   whole run be driven with deterministic, injectable upstream behavior — a spent allowance, an
   outage, stale links, a degraded service, cursor chains, malformed pagination — with **no network
   and no metered calls**, so the failure, progress, and retry paths in §2–§4 can be exercised
   repeatedly and for free.
-- **The live behavior evals** in [../evals/](../evals/) check the *model's* behavior against the
-  real API: `run_eval.py` spawns a real session, captures the transcript and the workspace it
-  produced, and a grader reads them. `behaviors.md` maps sixteen behaviors B1–B16 onto
-  the seven cases. This is the layer that proves the reliability claims above — that a blocked gate
-  really does close the run and say what stopped it, that a killed run is reported on the next
-  pass, that judgment stays qualitative. Scenario suites in the five user-facing skills, at
-  `skills/<skill>/evals/evals.json`, cover routing and narrower flows against the shim.
+- **The live behavior evals** the maintainer runs check the *model's* behavior against the real
+  API: each spawns a real session, captures the transcript and the workspace it produced, and a
+  grader reads them. They are not in this repository. This is the layer that proves the reliability
+  claims above — that a blocked gate really does close the run and say what stopped it, that a
+  killed run is reported on the next pass, that judgment stays qualitative. Scenario suites in the
+  five user-facing skills, at `skills/<skill>/evals/evals.json`, cover routing and narrower flows
+  against the shim.
 - **CI** ([../.github/workflows/ci.yml](../.github/workflows/ci.yml)) runs four gates on every
   change: the pytest suite, the philosophy guard, the doc linter, and the release-integrity check.
   `scripts/eval_harness.py`, which checks that those five scenario files are well formed, is a
@@ -202,9 +216,9 @@ Reliability claims are only as good as their tests. Four layers back this system
 Honest scope (per [QUALITY_SCORE.md](QUALITY_SCORE.md)): both eval layers and the live acceptance
 pass run **outside CI**, because a behavior eval spends real metered calls against the live Job
 Postings API. So CI proves the dev tooling, the file rules, and the docs; the release gate that
-proves runtime behavior is a local run of `evals/` before tagging. That split is deliberate and
-tracked, not papered over. The green-gate commands and the contributor workflow are in
-[../CONTRIBUTING.md](../CONTRIBUTING.md); the full acceptance matrix is
+proves runtime behavior is a local run of the behavior evals before tagging. That split is
+deliberate and tracked, not papered over. The green-gate commands and the contributor workflow are
+in [../CONTRIBUTING.md](../CONTRIBUTING.md); the full acceptance matrix is
 [../TESTING.md](../TESTING.md).
 
 ## 7. Reliability of the docs themselves

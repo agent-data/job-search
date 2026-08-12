@@ -261,7 +261,7 @@ Report to the user:
 1. `CONFIG="$(hermes config path)"`; `HERMES_HOME="$(dirname "$CONFIG")"`.
 2. In `$CONFIG`, remove every `skills.external_dirs` entry that resolves to
    `$HERMES_HOME/plugins/job-search/skills` — the relative form, the absolute
-   form, and any `~`/`${VAR}` spelling of the same directory. Preserve every
+   form, and any `~` or `${VAR}` form of the same directory. Preserve every
    other entry and every other setting.
 3. Also remove `job-search` from `plugins.enabled` (and from
    `plugins.disabled` if present): `hermes plugins remove` deletes files only

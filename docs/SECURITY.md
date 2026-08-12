@@ -107,7 +107,6 @@ committed to the public repo**. The guarantee rests on two things: the deny-all 
 must have been copied in by first-run setup), and human review of any PR that touches
 `examples/` or a skill's `templates/`.
 
-This honest limit is acknowledged in [`design-docs/core-beliefs.md`](design-docs/core-beliefs.md)
-under "Private & local" (Belief 3): "Beyond the template this is **cultural** — there is no CI
-check that scans for committed PII, so review must catch it." Do not claim stronger protection
-than this.
+Do not claim stronger protection than this. The "private and local" rule that this limit qualifies
+is stated in
+[`../CONTRIBUTING.md`](../CONTRIBUTING.md#project-philosophy-please-dont-regress-these).

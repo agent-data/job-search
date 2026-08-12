@@ -1,9 +1,9 @@
 # Product Sense
 
 This document captures **product judgment**: who the user is, the stances that shape every
-feature decision, and — most importantly — what we deliberately refuse to build and why. For the
-*engineering and agent-first principles* that enforce these stances mechanically, see
-[docs/design-docs/core-beliefs.md](design-docs/core-beliefs.md).
+feature decision, and — most importantly — what we deliberately refuse to build and why. The two
+scripts that enforce these stances mechanically are named in
+[How product sense is kept honest](#how-product-sense-is-kept-honest).
 
 **Read the [Non-goals](#non-goals-yagni--the-heart-of-this-doc) section first — it is the heart of
 this doc.** The stances tell you what the product *is*; the non-goals tell you what it
@@ -35,8 +35,8 @@ Job fit is a judgment, not arithmetic. The system decides **relevant or not**, a
 **weak / moderate / strong** — always accompanied by plain-language reasoning citing the posting
 against the brief. There are no fit scores, no category weights, no per-criterion points. The
 reasoning carries the weight; the band locates it in the digest. This stance is mechanically
-enforced — see the **Qualitative, never numeric** and **Prose over knobs** beliefs in
-[docs/design-docs/core-beliefs.md](design-docs/core-beliefs.md).
+enforced: `scripts/philosophy_guard.py` fails the build if a fit score, a category weight, or
+per-criterion points reach shipped output.
 
 ### Usage context, not budget controls
 
@@ -48,26 +48,26 @@ but a `budget`, `credits`, or `cost` config field and a hard monetary cap are no
 and metering facts live in
 the `agent-data-reference` skill; what a run says when the
 monthly allowance is spent is written where the run hits it, in
-[`skills/job-search-run/SKILL.md`](../skills/job-search-run/SKILL.md). See the **Usage context,
-not budget controls** belief in [docs/design-docs/core-beliefs.md](design-docs/core-beliefs.md).
+[`skills/job-search-run/SKILL.md`](../skills/job-search-run/SKILL.md).
 
 ### Privacy as a promise
 
 The workspace is the user's private data — preferences, matched postings, run logs, resumes. It
 ships with a deny-all `.gitignore` and setup refuses to scaffold inside a directory whose `.git`
 points at a public remote. The workspace layout and the "never committed" contract are owned by
-the `job-search-runbook` skill. For how this is enforced
-(culturally and mechanically), see the **Private & local** belief in
-[docs/design-docs/core-beliefs.md](design-docs/core-beliefs.md).
+the `job-search-runbook` skill. The deny-all template is the whole of the mechanical enforcement —
+no CI check scans for committed PII, so review has to catch it, which
+[SECURITY.md](SECURITY.md#residual-risks-and-honest-limits) says plainly.
 
 ### Prose over knobs
 
 Preferences are a brief — a short prose document with must-haves, strong preferences,
 nice-to-haves, and red flags — not a rubric with weights attached. A preference's importance
 lives in which bucket it sits in, not in a number. Users change preferences by talking to the
-agent; hand-editing `config.yaml` is an escape hatch, not a requirement. The brief shape and
-the conversational-first configuration principle are both captured in
-[docs/design-docs/core-beliefs.md](design-docs/core-beliefs.md).
+agent; hand-editing `config.yaml` is an escape hatch, not a requirement. The brief's shape is the
+copyable [preferences.example.md](../skills/job-preference-interview/templates/preferences.example.md),
+and the file that escape hatch edits is
+[config.example.yaml](../skills/job-search/templates/config.example.yaml).
 
 ### The magical moment and zero-friction T0
 
@@ -75,16 +75,16 @@ Within about five minutes of installing, the user sees real, live postings judge
 own brief — strong, moderate, or weak, with reasoning — without writing a single file by hand.
 That first digest is the **magical moment**: the product stops being abstract and starts being
 useful. Every step in onboarding either directly builds toward that moment or gates it safely.
-The full onboarding flow, TTFV target, and friction-killer decisions are specified in
-[docs/product-specs/new-user-onboarding.md](product-specs/new-user-onboarding.md).
+The onboarding flow itself — every step, in order — is the `job-search` skill:
+[skills/job-search/SKILL.md](../skills/job-search/SKILL.md).
 
 ### Docs-as-product
 
 The documentation, the named errors, and the knowledge base are part of the product surface, not
 an afterthought. Every failure mode is named and carries its own fix; every pillar doc is
 mechanically checked for broken links and drift from the shared-references source of truth.
-This stance is enforced by the philosophy guard and `doc_lint` — see the **Docs-as-product**
-belief in [docs/design-docs/core-beliefs.md](design-docs/core-beliefs.md).
+This stance is enforced by the philosophy guard and `doc_lint`, both of which run in CI
+([.github/workflows/ci.yml](../.github/workflows/ci.yml)).
 
 ---
 
@@ -156,4 +156,4 @@ domain and architectural layer against known gaps — re-graded as the code chan
 on-demand product-health snapshot.
 
 For the full system rationale, the OS model, and the layer map, see
-[ARCHITECTURE.md](../ARCHITECTURE.md) and [docs/design-docs/index.md](design-docs/index.md).
+[ARCHITECTURE.md](../ARCHITECTURE.md).

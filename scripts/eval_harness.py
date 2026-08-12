@@ -275,8 +275,8 @@ def control_delta(guided_results, control_results):
 # Opt-in developer modes (T6.1): artifact assertions + result aggregation over LOCAL,
 # UNTRACKED evidence.
 #
-# The off-CI live canary harness records two evidence files under docs-private/ (gitignored,
-# never shipped): current-artifacts.json (a workspace + assertions about the artifacts a real
+# The off-CI live canary harness records two evidence files in a local gitignored directory
+# (never shipped): current-artifacts.json (a workspace + assertions about the artifacts a real
 # scheduled-path fire produced) and current-results.json (per-scenario guided vs control reps).
 # These modes are invoked only with an explicit path, so the free, deterministic --root CI run
 # never requires either file. Both schema-validate their input (a malformed file is never
@@ -298,8 +298,8 @@ ARTIFACT_KINDS = {
 #
 # The companion `internal_record` surface was retired on 2026-07-31. It required a run record to
 # retain a raw E-* code, and the 2026-07-30 overhaul left no shipped file that writes one
-# (`git grep -nE "E-[A-Z]+" -- skills/ examples/ .claude-plugin/ .codex-plugin/
-# evals/` returns nothing), so the rule demanded a shape the product cannot produce.
+# (`git grep -nE "E-[A-Z]+" -- skills/ examples/ .claude-plugin/ .codex-plugin/` returns nothing),
+# so the rule demanded a shape the product cannot produce.
 SURFACES = ("user_facing",)
 # A canonical E-* code: E- then an uppercase-alnum segment, optionally more hyphen-joined
 # segments (E-QUOTA, E-NO-AUTH, E-UPSTREAM-STRETCH). Bounded lowercase internal classes are

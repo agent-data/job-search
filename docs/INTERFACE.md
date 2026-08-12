@@ -38,21 +38,19 @@ For the exact config recipes (how to add a query, change frequency, update the b
 review depth) and the preview arithmetic,
 see the `job-search-runbook` skill.
 
-For the product philosophy behind this (prose-over-knobs, conversational-first),
-see [`design-docs/core-beliefs.md`](design-docs/core-beliefs.md).
+For the product judgment behind this — preferences as prose, configuration by conversation — see
+[`PRODUCT_SENSE.md`](PRODUCT_SENSE.md#prose-over-knobs).
 
 How skills speak — plain English, outcome first, no internal vocabulary, briefs and digests
 rendered inline rather than described — is carried by each skill's own `SKILL.md`, and graded by
-behavior rows B1 and B2 in [`../evals/behaviors.md`](../evals/behaviors.md) rather than pinned in a
-style reference.
+the maintainer's live behavior evals rather than pinned in a style reference.
 
 ---
 
 ## The front door and home view
 
-`/job-search` is the entry point for all user interactions. On first run it routes to
-onboarding (see [`product-specs/new-user-onboarding.md`](product-specs/new-user-onboarding.md));
-for a returning user it routes to the home view described in
+`/job-search` is the entry point for all user interactions. On first run it routes to onboarding;
+for a returning user it routes to the home view. Both flows are described in
 [`../skills/job-search/SKILL.md`](../skills/job-search/SKILL.md).
 
 The home view is a compact, glanceable dashboard — not a log dump. A returning user

@@ -4,6 +4,130 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project follows
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.0] — 2026-08-12
+
+### Added
+- **Two scripts now make every metered call a run spends.**
+  `skills/job-search-run/scripts/search-jobs.sh` runs one search and
+  `skills/job-search-run/scripts/fetch-posting.sh` reads one posting; each makes the agent-data call,
+  writes the `call` event the run's billable-call count is built from, and checks the response before
+  anything reads it. They exist because the call and its record used to be separate commands, and on
+  a live 2026-08-11 session 35 get-posting calls were made and 14 reached the log. `resolve-run.sh`
+  and `check-record-args.sh` support them: the first reads the open run off the marker on disk, and
+  the second refuses a value the recorder would refuse before the call is billed.
+
+### Changed
+- **A run's digest counts from the event log it wrote, not from the agent's memory of the run.**
+  Every number the digest reports — how many searches went out, how many new postings they
+  surfaced, how many were read in full, how each was judged, and how many calls the run spent — is
+  now produced by a script reading `jobs.jsonl` after the fact. The run record copies those values, so the two
+  cannot disagree, and the postings the digest names come from a second script reading the same
+  log, so the section headed "3 strong" holds three postings and they are the three the log says
+  are strong. Re-run
+  `skills/job-search-run/scripts/run-counts.sh <workspace>/jobs.jsonl <run_id>` a year later and
+  you get the numbers that run reported, because every event is selected by that run's id.
+- **One opening posted in several cities is counted once.** One job a company posts in three cities
+  comes back from the sources as three postings. The search judges one of them and records the other
+  two as the same opening: the digest gives it one row, names the other places it was posted on that
+  row, and counts it once, and the home card counts it once too. Both screens decide whether a
+  posting is the same opening as another from the last judgment written for that posting, so a
+  posting whose latest judgment names no other posting keeps its own row and its own place in the
+  counts.
+- **The run writes its log through scripts instead of composing JSON lines by hand.** Each
+  agent-data response goes to `record-api-response.sh`, which appends the call and one line per new
+  posting; a posting the summary scan cannot settle from the row goes on a read list through
+  `queue-detail-read.sh`; and `record-judgment.sh` writes each verdict, escaping the free text so a
+  reasoning line with a quote or a tab in it cannot corrupt the log. What is still to read is read
+  back out of the log by `list-detail-read-queue.sh` rather than carried in the session, so the list
+  survives however long the run gets.
+- **The home card says what the filtering found.** Where it used to show a Pipeline block counting
+  postings by status, it now shows a **Matches** block: how many relevant postings the search found,
+  how many of those need your confirmation, and how many were filtered out. A posting needs your
+  confirmation when the search could not settle one of your must-haves from the posting itself: it
+  keeps the posting rather than rejecting it and flags it, so those are the ones worth reading first.
+  The three numbers come from `skills/job-search/scripts/posting-counts.sh <workspace>/jobs.jsonl`,
+  which prints `relevant`, `to_confirm` and `filtered`, one `key=value` per line — run it yourself
+  and you get the same numbers the card shows.
+- **Ten of the scripts a run calls now say what they did.** A script that appended the event,
+  recorded the verdict, or found nothing left to read used to finish without printing anything about
+  it, so the search could not tell a call that worked from a call that did nothing. In the run this
+  was measured on, that cost four bash calls over 31 seconds on `dedup.sh --near`, three of them
+  re-deriving an answer the first call had already given correctly. Between them those ten scripts
+  now write one sentence to stderr on twenty branches that exit 0 —
+  `queue-detail-read: queued <source>:<source_id> for run <run_id>`, `run-counts.sh: <n> of <n>
+  lines in <log> name run <run_id>`, `workspace-discovery.sh: no registry file at <path> — nothing
+  to parse-check`. What each script prints on stdout is unchanged byte for byte, and so is every
+  exit code, so anything reading these scripts by key or by column reads what it read before. One
+  test runs an invocation per branch and checks the line is still there, so a later edit cannot drop
+  one without the suite going red.
+- **Three scripts now report a fact they used to work out and throw away.** `dedup.sh --near`
+  collapses the several postings of one opening down to the one worth reading; it now names on
+  stderr each posting it left out and the one it matched that posting to, written in the form
+  `record-judgment.sh --same-role-as` takes, so the search no longer has to derive that pairing by
+  differencing its own input against the output. `dedup-surfaced.awk`, which runs inside
+  `record-api-response.sh`, says why the rows it dropped were dropped — already judged, already
+  surfaced by this run, or repeated inside the one response — where its caller used to get two
+  totals and no breakdown. And `list-detail-read-queue.sh` says how many lines of the log name the
+  run, then how many postings the run queued to read, how many of those already carry a judgment,
+  and how many are left, so a queue that has been worked off, a run that queued nothing, and a
+  mistyped run id no longer give the same empty answer. One input convention moved
+  with the first of those: column 1 of the rows piped into `dedup.sh --near` now carries
+  `<source>:<source_id>` rather than the bare `source_id`. The script treats column 1 as an opaque
+  id and never looks inside it, so both forms collapse the same rows; what the prefixed form buys is
+  that the pairing printed back is the exact value `--same-role-as` takes.
+- **A new workspace searches LinkedIn only.** `search.sources` in the config a first run writes was
+  `["linkedin", "ashby"]` and is now `["linkedin"]`, so a two-query first run opens with two
+  searches instead of four. Ashby, Greenhouse and Lever are unchanged and still supported — add any
+  of them to `search.sources` and the run fans out to them the same way it always did, per-source
+  counts and cross-source duplicate matching included. An existing workspace keeps whatever its own
+  `config.yaml` already lists; nothing rewrites a config that is already there.
+- **The run record's shape changed: every record now carries `degraded_reasons`.** `close-run.sh`
+  writes into it one entry per check that failed at close, `validate-workspace.sh --post-close`
+  requires the key, and `templates/run-record.example.json` shows it. A record written by an earlier
+  version fails the post-close check until the key is added.
+- **`run-counts.sh` prints one more key, `judgments_claiming_detail_read`,** and `record-judgment.sh`
+  refuses a judgment claiming a posting was read when the log stores no posting text for it — the
+  refusal names `fetch-posting.sh` as what stores it.
+- **Detail reads are dispatched two or three postings per subagent, all subagents started at once** —
+  batching cuts the per-posting overhead and starting them together keeps the run from taking the sum
+  of its slowest members.
+- **`agent-data-reference` is restructured wrapper-first**: the three commands to call directly
+  (`whoami`, `docs`, `init`), then the wrapper rule, then the quirks; the direct route recipes moved
+  to an appendix for the case where the wrapper scripts cannot run.
+
+### Removed
+- **Per-posting status tracking.** Saying "mark that one applied" no longer records anything: a
+  posting is either relevant, needing confirmation, or filtered out, and there are no further states
+  it moves through. The `status` field is gone from every job event the search writes, and the
+  separate event that a status change used to append is gone with it. You do not need to change
+  anything: a posting is still never shown twice, because a run skips any posting that already
+  carries a judgment, and that never depended on status. An existing `jobs.jsonl` keeps every line
+  it has, and the removed field is ignored where it appears. Tracking applications is still wanted,
+  but as its own thing rather than a field on a job posting — what this pack does right now is work
+  out which postings are worth reading.
+
+### Fixed
+- **A second run can no longer open on top of a run that is already open.** Opening a run wrote its
+  marker into `runs/` without looking for one already there, so two runs started a second apart both
+  opened and the workspace carried two run ids at once. Every event the newer run recorded was then
+  missing from the older run's counts, and the older run's record reported fewer agent-data calls
+  than were billed for it. Measured on a run where this happened: 29 events, and a second copy of 25
+  postings the first run had already surfaced, went into the log under a run id the first run knew
+  nothing about. A run now refuses to open while `runs/` holds a marker naming a run, and says on
+  stderr which run is open and the two commands that close and clear it. This includes the marker
+  left behind by a run that stopped before it could close, which a new run used to open straight
+  over: close that run `interrupted` and clear it, and the next run opens. The runbook's first step
+  now says to close and clear it too, where it used to say to delete the marker — deleting it leaves
+  nothing recording that the run happened, which is why clearing a run that has no record has always
+  been refused.
+- **An event can no longer be lost by landing on the end of the previous one.** If `jobs.jsonl`
+  ended without a newline — a hand edit, a truncated copy, an editor that does not end its files
+  with one — the next event the run appended was written onto that last line, and every reader
+  takes a key's first occurrence, so the joined line read as the earlier event and the new one was
+  gone. Measured on a posting whose judgment landed this way, the run reported it as unreviewed,
+  named it in no match list, and counted it in nothing. Every script that appends to the log now
+  ends the last line first.
+
 ## [0.8.0] — 2026-07-31
 
 ### Changed
@@ -56,8 +180,8 @@ Two of these you will notice as a user:
   (`git grep -niE "update available|newer version" -- skills/ README.md` returns nothing),
   because the check read the build stamp, which went with the build step. Until it comes
   back, get updates the way your host offers them — `/plugin` in Claude Code, `codex plugin add`, and
-  so on, per the install section in the README. Tracked as `TODO-UPDATE-AVAILABLE` in
-  `docs/exec-plans/tech-debt-tracker.md`.
+  so on, per the install section in the README. Tracked as `TODO-UPDATE-AVAILABLE` in the
+  maintainer's tech-debt tracker.
 - **"Create a support summary" is gone.** In 0.7.0 you could ask for a local, whitelist-only
   diagnostic file to attach to a bug report. To report a problem now, ask "why did my last run fail?"
   — the agent reads the run record and digest already on your machine and explains what happened —

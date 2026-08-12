@@ -30,8 +30,8 @@ The exact *shape* of each workspace file is not prose in either one: it is a cop
 **Edit the source:**
 
 - The two references live in **`skills/job-search-runbook/SKILL.md`** and
-  **`skills/agent-data-reference/SKILL.md`** (dev tooling lives in `scripts/` and `evals/` — the Python
-  linters, the release-integrity check, and the eval runners; none of it ships in the skills).
+  **`skills/agent-data-reference/SKILL.md`** (dev tooling lives in `scripts/` — the Python linters,
+  the release-integrity check, and the scenario-suite validator; none of it ships in the skills).
 - Edit one of those two files and you're done — every skill that invokes that reference sees the
   change, because there is only one copy of it to edit.
 
@@ -40,16 +40,18 @@ Nothing is generated into `skills/`: there is no build step, and no file there i
 A skill's own `SKILL.md` and its `evals/` are **authored originals**, not generated — edit them in
 place.
 
-## Keep the agent-facing corpus under 10,000 words
+## Keep the agent-facing corpus near 10,000 words
 
 The seven `SKILL.md` files are what every run reads before it can do anything, so their
 combined length is a product cost, not a style question. Measure before and after any change to them:
 
 ```bash
-wc -w skills/*/SKILL.md   # 9,092 total; the budget is 10,000
+wc -w skills/*/SKILL.md   # 10,619 total on 2026-08-10
 ```
 
-If a change needs more words there, cut somewhere else in the same PR. Detail that only a contributor needs
+10,000 is the figure to aim at, not a gate: no check fails for going over it, and the corpus is over it
+today. So a change that needs more words there is a judgment call — look for something to cut in the same
+PR, and say in the PR why the words earn their place if you keep them. Detail that only a contributor needs
 belongs in this repo's docs, which no run reads.
 
 ## Before you open a PR: everything must be green
@@ -58,7 +60,7 @@ Run all of these and make sure they pass:
 
 ```bash
 # Unit tests — the doc linter, the philosophy guard, the release-integrity checks, the
-# mechanics scripts, validate-workspace.sh, the eval-case lint, and the shims. No API calls.
+# mechanics scripts, validate-workspace.sh, and the shims. No API calls.
 python3 -m pytest -q
 
 # Philosophy guard (shipped output) + doc-lint (knowledge base)
@@ -85,16 +87,9 @@ file. They are **credit-free** — every `agent-data` call goes through the fake
 is billed. Keep them that way: if you add a skill or a code path that talks to `agent-data`, route the
 scenario through the shim rather than the live CLI.
 
-The **live behavior evals** in `evals/` are the release gate. `evals/behaviors.md` maps sixteen
-behaviors B1–B16 onto the seven cases in `evals/cases/`, and each case runs on two models:
-
-```bash
-python3 evals/run_eval.py --case fit --model sonnet
-```
-
-Each run spawns a real session against the live Job Postings API, so it needs your API key and spends
-metered calls — that is why CI only checks that the case config is coherent (`tests/test_eval_cases.py`).
-Run the full matrix before tagging a release; TESTING.md § Behavior evals has the details.
+Beyond those, the maintainer runs a set of live behavior evals against the real Job Postings API
+before tagging a release. Each spawns a real session and spends metered calls, so they are not in
+this repository and a contributor does not run them.
 
 If a test or eval fails, fix it (or update it deliberately, explaining why in the PR) before requesting
 review. Don't mark work complete on a red suite.

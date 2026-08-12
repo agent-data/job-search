@@ -1,4 +1,0 @@
-# Eval run outputs (transcripts, captured workspaces) stay local: transcripts carry
-# machine paths, and only aggregate numbers belong in the committed baseline.
-*
-!.gitignore

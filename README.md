@@ -1,6 +1,6 @@
 # Job Search
 
-Turn your coding agent into a job-search assistant. Describe what you want in plain English. Job Search finds postings from LinkedIn and ATS platforms like Ashby and Greenhouse, judges each role against your preferences, and writes a filtered digest. Run it on demand or on a schedule.
+Turn your coding agent into a job-search assistant. Describe what you want in plain English. Job Search finds postings on LinkedIn, judges each role against your preferences, and writes a filtered digest. Add Ashby, Greenhouse or Lever to search company job boards as well. Run it on demand or on a schedule.
 
 <img width="3182" height="2160" alt="Job Search digest showing reviewed matches in an agent conversation" src="https://github.com/user-attachments/assets/a3c45a7e-6a93-4afa-86f0-f522c8f8d53c" />
 
@@ -33,7 +33,7 @@ Agent-data offers a 100-call monthly free tier; the example below uses 9 metered
 ```text
 You: Run a search now.
 
-Job Search: Searching LinkedIn and Ashby for "senior product designer"...
+Job Search: Searching LinkedIn for "senior product designer"...
 Found 42 postings. 9 are new. Reading the promising ones in full...
 
 Here are the first strong matches while I keep reviewing the rest:
@@ -44,11 +44,11 @@ Here are the first strong matches while I keep reviewing the rest:
 ...still reviewing the remaining postings...
 
 Job search digest — 2026-06-05
-9 new postings (6 LinkedIn · 3 Ashby) · 2 strong · 2 moderate · 2 weak · 3 filtered out
+9 new postings · 2 strong · 2 moderate · 2 weak · 3 filtered out
 Agent-data usage: 9 metered calls this run · about $0.072 pay-as-you-go equivalent
 ```
 
-See the [complete sample digest](examples/sample-digest.md).
+See the [complete sample digest](examples/sample-digest.md), written by a workspace that searches Ashby as well as LinkedIn — which is why its counts line breaks the postings down by source and its rows carry a source name.
 
 ## What you can ask
 

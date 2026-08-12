@@ -16,9 +16,11 @@
     {
       "id": 2,
       "scenario": "explain what the last run spent",
-      "prompt": "Seed a workspace with setup-workspace.sh and three run records, the newest carrying agent_data_usage of searches 4, detail_reads 5, other 1, total_metered 10. Leave JOBSEARCH_TEST_CALL_LOG empty. The user says: 'Explain my agent-data usage.'",
+      "prompt": "Seed a workspace with setup-workspace.sh and three run records, the newest carrying agent_data_usage of searches 4, detail_reads 5, other 1, total_metered 10, and a jobs.jsonl holding the ten call events that add up to those four numbers under the newest record's run_id — four search-jobs, five get-posting and one on another route. Leave JOBSEARCH_TEST_CALL_LOG empty. The user says: 'Explain my agent-data usage.'",
       "expectations": [
         "The newest run record is read and its four counts are reported as they are stored: 4 searches, 5 detail reads, 1 other, 10 metered calls in all",
+        "Those four numbers are the ten call events in jobs.jsonl for that run, which run-counts.sh <workspace>/jobs.jsonl <run_id> prints as calls_searches, calls_detail_reads, calls_other and calls_total_metered",
+        "No count is worked out from the digest text or from the transcript of the reply: the record is what is read, and the log is what backs it",
         "The free monthly calls and the per-call rate come from the agent-data-reference skill, and a dollar figure derived from them is called an estimate rather than an actual charge",
         "Account, plan and billing questions are sent to https://agent-data.motie.dev/settings/billing",
         "The read is local: calls.jsonl stays empty, and config.yaml and the registry are byte-for-byte unchanged"

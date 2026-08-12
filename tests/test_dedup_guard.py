@@ -4,8 +4,12 @@ A company that posts one opening in several locations shows up as several search
 different source_ids and titles that differ only by a location parenthetical. Reading each of
 them bills a detail call for a posting already read (3 such billed reads across the 2026-07-30
 evals). `dedup.sh --near` collapses those rows within one run: candidate rows arrive on stdin as
-`source_id<TAB>company<TAB>title`, and the source_ids of the openings to judge come back on
+`<source>:<source_id><TAB>company<TAB>title`, and the ids of the openings to judge come back on
 stdout — the first row of each same-company, same-normalized-title group.
+
+`--near` reads column 1 as an opaque id: it prints the column back as written and never splits it
+on the colon. So the rows below carry a bare id where a run carries the `<source>:<source_id>`
+form, and every assertion reads the same either way.
 
 Driven through POSIX `sh` (and strict `dash` where present), like every other bundled script.
 """
@@ -22,7 +26,7 @@ SHELLS = ["sh"] + (["dash"] if shutil.which("dash") else [])
 
 
 def run_near(rows, shell="sh"):
-    """Run `dedup.sh --near` with `rows` (list of (source_id, company, title)) on stdin."""
+    """Run `dedup.sh --near` with `rows` (list of (id, company, title)) on stdin."""
     stdin = "".join("%s\t%s\t%s\n" % row for row in rows)
     return subprocess.run([shell, str(DEDUP), "--near"], input=stdin,
                           capture_output=True, text=True)
