@@ -1,7 +1,7 @@
 #!/bin/sh
 # record-judgment.sh — record one posting's judgment.
 #
-# Usage: record-judgment.sh <jobs.jsonl> --run-id ID --source S --source-id ID \
+# Usage: record-judgment.sh [<jobs.jsonl>] [--run-id ID] --source S --source-id ID \
 #          --detail-read true|false --relevant true|false [--match strong|moderate|weak] \
 #          [--needs-human-check true|false] [--dealbreakers 'a;b'] [--unknowns 'a;b'] \
 #          [--reasoning TEXT] [--same-role-as SOURCE:ID] [--posted-at-extracted DATE] [--ts TS]
@@ -9,6 +9,10 @@
 # The script writes the JSON, so nothing the judgment says has to be escaped by whoever is calling.
 # A judgment can only be about a posting a search surfaced for this run, and the title, company,
 # location, URL and date come off that surfaced event rather than from the caller.
+#
+# The log path and --run-id are both optional. Left off, they come from resolve-run.sh, which reads
+# the workspace and the runs/.started-<run_id> marker from disk. Passing either still works and
+# still wins, which is what replaying an older run needs. --workspace is for the tests.
 #
 # A semicolon separates one dealbreaker or unknown from the next, so a dealbreaker that contains a
 # semicolon has to be reworded. Spaces around the semicolon are trimmed, so `pay; then equity` and
@@ -22,16 +26,22 @@
 #
 # Exit 0: recorded, or this posting already carries exactly this judgment.
 # Exit 1: nothing written; stderr names the problem.
-# Exit 2: nothing was attempted — no operand at all, or no temporary file could be made. The shell
-#         picks the code when the operand is missing, so that case is 2 under dash and 1 under sh
-#         and bash; every exit this script chooses itself is 0 or 1.
+# Exit 2: nothing was written — no temporary file could be made, or the log path or the run id was
+#         left off and resolve-run.sh found no workspace, no open run, or more than one. A flag
+#         given without its value is the one status the shell picks rather than this script:
+#         measured 2026-08-12 on `--run-id` with nothing after it, at 1 under sh and bash and 2
+#         under dash.
 set -u
 
 here=$(dirname "$0")
-jobs=${1:?usage: record-judgment.sh <jobs.jsonl> --run-id ID --source S --source-id ID ...}
-shift
+# The first operand is the log only when it is not a flag, so the whole call can be flags.
+jobs=''
+case ${1-} in
+  ''|--*) ;;
+  *) jobs=$1; shift ;;
+esac
 
-run_id='' source='' source_id='' detail_read='' relevant='' band=''
+run_id='' ws_flag='' source='' source_id='' detail_read='' relevant='' band=''
 nhc=false dealbreakers='' unknowns='' reasoning='' same_role='' posted_extracted='' ts=''
 
 die() { printf 'record-judgment: %s\n' "$1" >&2; exit 1; }
@@ -54,14 +64,22 @@ while [ $# -gt 0 ]; do
     --same-role-as)        same_role=${2?}; shift 2 ;;
     --posted-at-extracted) posted_extracted=${2?}; shift 2 ;;
     --ts)                  ts=${2?}; shift 2 ;;
+    --workspace)           ws_flag=${2?}; shift 2 ;;
     *) die "unknown option $1" ;;
   esac
 done
 
-[ -n "$run_id" ]    || die 'missing --run-id'
 [ -n "$source" ]    || die 'missing --source'
 [ -n "$source_id" ] || die 'missing --source-id'
-[ -f "$jobs" ]      || die "no such file: $jobs"
+
+# One call to resolve-run.sh answers both, and only when something is missing, so a caller that
+# passed everything does not depend on a workspace being discoverable.
+if [ -z "$jobs" ] || [ -z "$run_id" ]; then
+  resolved=$(sh "$here/resolve-run.sh" ${ws_flag:+--workspace "$ws_flag"}) || exit 2
+  [ -n "$jobs" ]   || jobs=$(printf '%s\n' "$resolved" | sed -n 's/^workspace=//p')/jobs.jsonl
+  [ -n "$run_id" ] || run_id=$(printf '%s\n' "$resolved" | sed -n 's/^run_id=//p')
+fi
+[ -f "$jobs" ] || die "no such log: $jobs"
 
 case $detail_read in true|false) ;; *) die '--detail-read must be true or false' ;; esac
 case $relevant in true|false) ;; *) die '--relevant must be true or false' ;; esac

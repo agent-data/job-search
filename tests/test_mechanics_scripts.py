@@ -2300,13 +2300,18 @@ def test_a_boolean_flag_that_is_not_true_or_false_is_refused(tmp_path, flag):
     assert [e for e in lines(jobs) if e["event"] == "evaluated"] == []
 
 
-@pytest.mark.parametrize("drop", ["--run-id", "--source", "--source-id"])
+@pytest.mark.parametrize("drop", ["--source", "--source-id"])
 def test_a_judgment_missing_a_flag_names_it_rather_than_the_posting(tmp_path, drop):
     """Each case asserts the whole stderr line, not only the exit code, because both paths exit 1.
-    Measured with the `--run-id` guard removed: the empty value reaches the grep chain, matches
-    nothing, and the caller is told `record-judgment: no surfaced posting for
-    linkedin:linkedin-0000 in run` — which sends it to the run's search results when the fault is
-    on the command line.
+    Measured 2026-08-12 with both guards removed: the empty value reaches the grep chain, matches
+    nothing, and the caller is told `record-judgment: no surfaced posting for :linkedin-0000 in run
+    2026-08-05T16-47-00Z` with `--source` dropped, and `no surfaced posting for linkedin: in run
+    2026-08-05T16-47-00Z` with `--source-id` dropped — which sends it to the run's search results
+    when the fault is on the command line.
+
+    `--run-id` was a third case here until it became optional. Left off, it comes from
+    resolve-run.sh, and `test_record_judgment_resolves_the_log_and_the_run_from_disk` is the case
+    that covers it.
 
     The name differs from the queue script's case of the same shape on purpose: two test functions
     with one name in a module leaves only the second, and pytest reports no clash."""
@@ -2330,7 +2335,7 @@ def test_recording_against_a_missing_log_names_the_path(tmp_path):
     r = run_script(JUDGE, jobs, "--run-id", RID, "--source", "ashby", "--source-id", "a",
                    "--detail-read", "true", "--relevant", "false")
     assert r.returncode == 1, r.stdout + r.stderr
-    assert r.stderr == "record-judgment: no such file: %s\n" % jobs
+    assert r.stderr == "record-judgment: no such log: %s\n" % jobs
     assert not jobs.exists()
 
 
@@ -2562,8 +2567,10 @@ def test_concurrent_judgments_all_land_as_valid_json(tmp_path):
 @pytest.mark.skipif(not shutil.which("dash"), reason="dash is not installed here")
 def test_recording_a_judgment_runs_under_dash(tmp_path):
     """`sh -n` and `dash -n` check syntax only, so the script is also run end to end under strict
-    dash: it uses `${1:?}`, `${2?}`, `mktemp`, a trap, and a prefixed environment assignment in
-    front of `awk`, and none of those is exercised by a syntax check."""
+    dash: it uses `${1-}`, `${2?}`, `mktemp`, a trap, and a prefixed environment assignment in
+    front of `awk`, and none of those is exercised by a syntax check. The log path and the run id
+    are both passed here, so this case never reaches the resolve-run.sh branch; the case below
+    drives that branch under dash."""
     jobs = seeded_jobs(tmp_path, "search.linkedin.json")
     row = first_surfaced(jobs)
     r = run_script(JUDGE, *judge_args(jobs, row, detail_read="true", relevant="true",
@@ -2571,6 +2578,129 @@ def test_recording_a_judgment_runs_under_dash(tmp_path):
     assert r.returncode == 0, r.stderr
     ev = [e for e in lines(jobs) if e["event"] == "evaluated"][0]
     assert ev["reasoning"] == HOSTILE and ev["title"] == row["title"]
+
+
+@pytest.mark.skipif(not shutil.which("dash"), reason="dash is not installed here")
+def test_resolving_the_log_and_the_run_runs_under_dash(tmp_path):
+    """The branch the case above never reaches, under strict dash: `case ${1-}` with no operand at
+    all, and `${ws_flag:+--workspace "$ws_flag"}`, which has to add two arguments or none.
+
+    The directory name holds a space, so a broken expansion splits it and resolve-run.sh answers
+    with its usage line instead of naming the directory. Measured 2026-08-12 under dash with the
+    inner quotes removed: `usage: resolve-run.sh [--workspace W]`, exit 2 — the same status as the
+    line asserted below, so the message is what separates the two.
+
+    This spends nothing: the directory holds no open run, so the script exits before it reads a
+    posting. resolve-run.sh checks only that the workspace directory exists, so `runs/` beside it is
+    all this needs.
+    """
+    ws = tmp_path / "a work space"
+    (ws / "runs").mkdir(parents=True)
+    r = run_script(JUDGE, "--workspace", ws, "--source", "linkedin", "--source-id", "42",
+                   "--detail-read", "false", "--relevant", "false", shell="dash")
+    assert r.returncode == 2, r.stdout + r.stderr
+    assert "resolve-run.sh: no run is open in %s" % ws in r.stderr, r.stderr
+
+
+@pytest.mark.live
+@needs_api
+def test_record_judgment_resolves_the_log_and_the_run_from_disk(live_run):
+    out = subprocess.run(
+        ["sh", str(JUDGE), "--workspace", str(live_run.ws),
+         "--source", live_run.row["source"], "--source-id", live_run.row["source_id"],
+         "--detail-read", "false", "--relevant", "false", "--reasoning", "Wrong city."],
+        capture_output=True, text=True)
+    assert out.returncode == 0, out.stderr
+    ev = [json.loads(l) for l in live_run.jobs.read_text(encoding="utf-8").splitlines()
+          if l.strip()]
+    judged = [l for l in ev if l["event"] == "evaluated"]
+    assert len(judged) == 1
+    assert judged[0]["run_id"] == live_run.run_id
+
+
+@pytest.mark.live
+@needs_api
+def test_record_judgment_still_takes_the_log_and_run_id_explicitly(live_run):
+    out = subprocess.run(
+        ["sh", str(JUDGE), str(live_run.jobs), "--run-id", live_run.run_id,
+         "--source", live_run.row["source"], "--source-id", live_run.row["source_id"],
+         "--detail-read", "false", "--relevant", "false", "--reasoning", "Wrong city."],
+        capture_output=True, text=True)
+    assert out.returncode == 0, out.stderr
+
+
+def test_record_judgment_says_so_when_nothing_identifies_the_run(tmp_workspace):
+    """No run is open and no run id was given, so this exits before reading any posting."""
+    (tmp_workspace / "jobs.jsonl").write_text("", encoding="utf-8")
+    out = subprocess.run(
+        ["sh", str(JUDGE), "--workspace", str(tmp_workspace),
+         "--source", "linkedin", "--source-id", "42",
+         "--detail-read", "false", "--relevant", "false"],
+        capture_output=True, text=True)
+    assert out.returncode == 2
+    assert "no run is open" in out.stderr
+
+
+def _surfaced_row(run_id):
+    return ('{"event":"surfaced","run_id":"%s","source":"linkedin","source_id":"77",'
+            '"title":"Analyst","company_name":"Acme"}\n' % run_id)
+
+
+def test_an_explicit_run_id_wins_over_the_open_run(tmp_workspace):
+    """Replaying an older run: another run is open, and `--run-id` names the run this judgment
+    belongs to. The log path is left off, so resolve-run.sh supplies that and only that.
+
+    Measured 2026-08-12 with `[ -n "$run_id" ] ||` dropped from the resolve block, so the open run
+    always overwrote the caller's: exit 1, `record-judgment: no surfaced posting for linkedin:77 in
+    run 2026-08-12T06-11-38Z` — the open run rather than the one on the command line — and no
+    evaluated event in the log.
+    """
+    opened = subprocess.run(["sh", str(OPEN_RUN), str(tmp_workspace)],
+                            capture_output=True, text=True)
+    assert opened.returncode == 0, opened.stdout + opened.stderr
+    jobs = tmp_workspace / "jobs.jsonl"
+    jobs.write_text(_surfaced_row(RID), encoding="utf-8")
+
+    r = run_script(JUDGE, "--workspace", tmp_workspace, "--run-id", RID,
+                   "--source", "linkedin", "--source-id", "77",
+                   "--detail-read", "false", "--relevant", "false")
+    assert r.returncode == 0, r.stdout + r.stderr
+    ev = [e for e in lines(jobs) if e["event"] == "evaluated"]
+    assert len(ev) == 1
+    assert ev[0]["run_id"] == RID
+
+
+def test_an_explicit_log_path_wins_over_the_workspace_log(tmp_path, tmp_workspace):
+    """The other half. The log is given and the run id is left off, so resolve-run.sh supplies the
+    run id alone. The log sits outside the workspace, so a resolve block that overwrote it would
+    read the workspace's own jobs.jsonl instead, and both files are checked afterwards to say which
+    one the judgment landed in.
+
+    Measured 2026-08-12 with `[ -n "$jobs" ] ||` dropped: exit 1, `record-judgment: no surfaced
+    posting for linkedin:77 in run 2026-08-12T06-11-38Z`, and neither file gained an evaluated
+    event.
+    """
+    opened = subprocess.run(["sh", str(OPEN_RUN), str(tmp_workspace)],
+                            capture_output=True, text=True)
+    assert opened.returncode == 0, opened.stdout + opened.stderr
+    resolved = subprocess.run(["sh", str(RESOLVE_RUN), "--workspace", str(tmp_workspace)],
+                              capture_output=True, text=True)
+    assert resolved.returncode == 0, resolved.stderr
+    run_id = dict(l.split("=", 1) for l in resolved.stdout.splitlines() if "=" in l)["run_id"]
+
+    inside = tmp_workspace / "jobs.jsonl"
+    inside.write_text("", encoding="utf-8")
+    outside = tmp_path / "elsewhere.jsonl"
+    outside.write_text(_surfaced_row(run_id), encoding="utf-8")
+
+    r = run_script(JUDGE, outside, "--workspace", tmp_workspace,
+                   "--source", "linkedin", "--source-id", "77",
+                   "--detail-read", "false", "--relevant", "false")
+    assert r.returncode == 0, r.stdout + r.stderr
+    ev = [e for e in lines(outside) if e["event"] == "evaluated"]
+    assert len(ev) == 1
+    assert ev[0]["run_id"] == run_id
+    assert inside.read_text(encoding="utf-8") == ""
 
 
 def _scrub_module():
