@@ -547,9 +547,9 @@ ZEROED_STDOUT = (
 @pytest.mark.parametrize("shell", SHELLS)
 def test_run_counts_says_how_many_lines_of_the_log_name_the_run(tmp_path, shell):
     """Every key prints whether or not the run id matched anything, so a run that did nothing and a
-    run id no event carries both printed the same 365 bytes on stdout, 0 bytes on stderr and exit 0
-    (measured 2026-08-12 with `sh skills/job-search-run/scripts/run-counts.sh <log>
-    2026-01-01T00-00-00Z | wc -c`). This line says which of the two happened."""
+    run id no event carries print the same 365 bytes on stdout and exit 0 (measured 2026-08-12 with
+    `sh skills/job-search-run/scripts/run-counts.sh <log> 2026-01-01T00-00-00Z | wc -c`, which
+    counts stdout and not stderr). This line says which of the two happened."""
     jobs = tmp_path / "jobs.jsonl"
     jobs.write_text(WORKED_LOG, encoding="utf-8")
     r = run_script(COUNTS, jobs, RID, shell=shell)

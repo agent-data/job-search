@@ -3276,9 +3276,12 @@ def test_the_bands_and_filtered_out_sum_to_reviewed(tmp_path):
     22-against-13 divergence that check was added for.
 
     Measured 2026-08-12 with `run-counts.awk` setting `hasdetail[k]` when an `evaluated` event
-    carries `"detail_read":true`: this test fails and the rest of the module passes. Measured with
-    rows[0] judged through `record-judgment.sh` at `--detail-read false` instead, so the log holds
-    no claim at all: the same mutation leaves the whole module green.
+    carries `"detail_read":true`: this test fails at the last assertion, and
+    `test_run_counts_reports_judgments_claiming_a_posting_read` fails with it because that case
+    carries a hand-written claim of its own — 2 failed, 591 passed over the module. Measured with
+    rows[0] judged through `record-judgment.sh` at `--detail-read false` instead, so this log holds
+    no claim at all: the same mutation leaves this test green and takes down only that other
+    case — 1 failed, 592 passed.
     """
     jobs = seeded_jobs(tmp_path, "search.linkedin.json")
     rows = [e for e in lines(jobs) if e["event"] == "surfaced"]

@@ -40,7 +40,9 @@
 # check existed, or by something other than these scripts, and it says the run judged postings on
 # text the log does not hold. Measured on the 2026-08-11 opencode run: 22 judgments carried
 # detail_read true against 13 detail events, and of the 35 get-posting calls made, 14 reached the
-# workspace log — so calls_detail_reads and calls_total_metered were short by the 21 that did not.
+# workspace log — so calls_detail_reads was short by the 21 that did not, and calls_total_metered,
+# which includes it, by at least as many: that run's record reported 20 metered calls against
+# roughly 41 made.
 #
 # This is the scripted form of the model-run prose contract; that prose remains the no-runtime
 # fallback, and counts worked out by hand are not gated by anything, so a run that works them out
