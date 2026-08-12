@@ -6910,9 +6910,9 @@ def test_two_postings_that_would_share_a_pipe_joined_key_are_counted_separately(
 def test_a_hand_written_log_with_two_judgments_for_one_posting_takes_the_later_line(tmp_path):
     """No run writes this log. Both append paths refuse a second `evaluated` event for a
     `(source, source_id)` that already has one — `event-log-append.sh:21-23` states the rule and
-    `:105-111` enforces it, and `record-judgment.sh:23` reads "Exit 0: recorded, or this posting
-    already carries exactly this judgment" — so only a log written or edited by hand reaches this
-    case. What is pinned here is `posting-counts.awk`'s behavior, not the product's.
+    `:105-111` enforces it, and `record-judgment.sh`'s exit list reads "Exit 0: recorded, or this
+    posting already carries exactly this judgment" — so only a log written or edited by hand
+    reaches this case. What is pinned here is `posting-counts.awk`'s behavior, not the product's.
 
     It is pinned because the awk's header states it: the three assignments in the main block are
     unconditional, so a hand-edited log with two judgments for one posting takes the later line.
