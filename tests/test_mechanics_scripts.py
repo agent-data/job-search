@@ -6027,7 +6027,7 @@ def test_fetch_posting_refuses_a_posting_id_that_would_name_some_other_file(
     assert out.stdout == ""
     assert not (tmp_workspace / "runs" / ".scratch").exists(), \
         "the response directory was made, so the check ran after the path was built"
-    assert not (tmp_workspace / "jobs.jsonl").exists(), "the log gained a file"
+    assert not (tmp_workspace / "jobs.jsonl").exists(), "jobs.jsonl was created"
 
 
 @pytest.mark.parametrize("shell", ["sh", "dash"])
@@ -6513,7 +6513,7 @@ def test_search_jobs_refuses_a_value_that_would_name_some_other_file(
     """Both values name the response file, and neither may hold a slash.
 
     check-record-args.sh does not cover this: record-api-response.sh takes a slash in either value,
-    so the reason to refuse one belongs where the path is built, the same way fetch-posting.sh checks
+    so the check has to run where the path is built, the same way fetch-posting.sh checks
     `--posting-id`.
 
     A run is open here, so without the check the script would build the path, make the call and try
@@ -6533,7 +6533,7 @@ def test_search_jobs_refuses_a_value_that_would_name_some_other_file(
     assert out.stdout == ""
     assert not (tmp_workspace / "runs" / ".scratch").exists(), \
         "the response directory was made, so the check ran after the path was built"
-    assert not (tmp_workspace / "jobs.jsonl").exists(), "the log gained a file"
+    assert not (tmp_workspace / "jobs.jsonl").exists(), "jobs.jsonl was created"
 
 
 def test_the_listing_id_is_the_same_everywhere_it_is_written_down():

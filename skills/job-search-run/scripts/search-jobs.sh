@@ -98,9 +98,9 @@ done
 
 # Both values supply part of the name of the file this script writes the response to, so both are
 # checked here, before that path is built and before anything is spent. check-record-args.sh below
-# does not cover this rule: record-api-response.sh takes a slash in either value, so the reason to
-# refuse one belongs where the path is made. fetch-posting.sh checks its --posting-id in the same
-# place for the same reason.
+# does not cover this rule: record-api-response.sh takes a slash in either value, so the check has
+# to run here, where the path is made. fetch-posting.sh checks its --posting-id in the same place
+# for the same reason.
 #
 # Measured 2026-08-11 against an open run, with this check removed and agent-data off PATH:
 # `--query-id ../../escaped` left the shell unable to open

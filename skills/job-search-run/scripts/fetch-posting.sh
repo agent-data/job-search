@@ -68,7 +68,7 @@ done
 # The posting id supplies the name of the file this script writes the response to, so it is checked
 # here, before that path is built and before anything is spent. check-record-args.sh does not check
 # it: record-api-response.sh is never handed a posting id — it gets a run id, a log path, a response
-# path, a route and a source — so the reason to check this one belongs where the path is made.
+# path, a route and a source — so the check has to run here, where the path is made.
 #
 # The value comes off a surfaced row, so it is the API's rather than one an operator typed. All 10
 # ids a live search returned were `jp_` followed by 12 hex digits, and none of them held a slash or
