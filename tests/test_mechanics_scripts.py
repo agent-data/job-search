@@ -6355,23 +6355,49 @@ def test_search_jobs_refuses_before_calling_when_no_run_is_open(tmp_workspace):
 @pytest.mark.parametrize("args", [
     ["--query-id", "q", "--source", "linkedin"],
     ["--query-id", "q", "--source", "linkedin", "--"],
-    ["--source", "linkedin", "--", "--keywords", "x"],
-    ["--query-id", "q", "--", "--keywords", "x"],
 ])
 def test_search_jobs_refuses_a_call_that_names_no_route_parameters(tmp_workspace, shell, args):
-    """`--` and at least one parameter after it, plus both required flags, or nothing is called.
+    """No `--` at all and `--` with nothing after it both reach `[ $# -ge 1 ]` with no arguments
+    left, and neither is called.
 
-    Measured 2026-08-11 with the `[ $# -ge 1 ]` check removed, against an open run: the agent-data
-    CLI refuses a parameterless call itself, writing an error body that carries "source": "cli",
-    code missing_required_param and no request_id, so the API never saw the call — and the wrapper's
+    Measured 2026-08-11 with that check removed, against an open run: the agent-data CLI refuses a
+    parameterless call itself, writing an error body that carries "source": "cli", code
+    missing_required_param and no request_id, so the API never saw the call — and the wrapper's
     failed-call branch recorded a `call` event for it anyway. That event would put one call the API
     never received into the run's metered-call count.
 
-    The two flags are required because they are what the `call` event is filed under: run-counts.sh
-    groups a run's search calls by source and query id.
+    This case and the missing-flag case below were one parametrized test, so a red did not say
+    which of the three checks broke. Measured 2026-08-12 with the split in place: deleting
+    `[ $# -ge 1 ]` fails these two argument lists under sh and dash and leaves the case below green.
     """
     if shell == "dash" and not shutil.which("dash"):
         pytest.skip("dash is not installed here")
+    out = keyless_search(shell, "--workspace", tmp_workspace, *args)
+    assert out.returncode == 2, out.stdout + out.stderr
+    assert "usage: search-jobs.sh" in out.stderr
+    assert out.stdout == ""
+
+
+@pytest.mark.parametrize("shell", ["sh", "dash"])
+@pytest.mark.parametrize("args,absent", [
+    (["--source", "linkedin", "--", "--keywords", "x"], "--query-id"),
+    (["--query-id", "q", "--", "--keywords", "x"], "--source"),
+])
+def test_search_jobs_refuses_a_call_that_omits_a_required_flag(tmp_workspace, shell, args, absent):
+    """Both flags are required because they are what the `call` event is filed under: run-counts.sh
+    groups a run's search calls by source and query id, so a call recorded without one lands in the
+    wrong group.
+
+    One check per flag — `[ -n "$query_id" ]` and `[ -n "$src" ]` — and each holds only its own
+    argument list. Measured 2026-08-12: deleting `[ -n "$query_id" ]` fails the two `--query-id`
+    cases (check-record-args.sh then refuses the empty query id and prints its own rule instead of
+    the usage line), and deleting `[ -n "$src" ]` fails the two `--source` cases (the script gets as
+    far as resolve-run.sh and prints `no run is open`). Neither deletion touches the other flag's
+    cases.
+    """
+    if shell == "dash" and not shutil.which("dash"):
+        pytest.skip("dash is not installed here")
+    assert absent not in args, "this case is about the flag being absent"
     out = keyless_search(shell, "--workspace", tmp_workspace, *args)
     assert out.returncode == 2, out.stdout + out.stderr
     assert "usage: search-jobs.sh" in out.stderr
