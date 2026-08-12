@@ -56,9 +56,17 @@ check, so one query across three enabled sources is three calls.
 
 ```sh
 agent-data call f9a6ec16-0bfd-44d8-b3ee-073776745ee7 get-posting \
-  --posting_id <the row's id> --source_url <the same row's source_url> --source <the row's source> \
+  --posting_id '<id from the row>' \
+  --source_url '<source_url from that same row>' \
+  --source '<source from that same row>' \
   > posting.json 2> posting.err
 ```
+
+Single-quote all three values. A LinkedIn `source_url` carries `?` and `&`, and unquoted the shell
+cuts the command at the first `&`: the shortened call still runs and is still billed, its response
+goes to the terminal instead of `posting.json`, and `--source` never reaches the route. Measured
+2026-08-12 on a LinkedIn row — exit 127, `posting.json` 0 bytes, and the billed call came back as
+`req_7882fee3f9774771b42049db`.
 
 `posting_id` and `source_url` are both required. `--source` is optional, and passing the row's own
 value removes an inference step. The route docs offer `--fields` to trim the response: VERY IMPORTANT DO NOT use
