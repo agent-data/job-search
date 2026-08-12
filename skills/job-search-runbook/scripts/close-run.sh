@@ -14,9 +14,21 @@
 # Every count comes from run-counts.sh and completed_at from a clock read here, so no number in the
 # record is anyone's account of the run. run_health is worked out the same way: healthy means the
 # run closed complete, left no posting unjudged, had every search it attempted answer at least once,
-# and had no relevant row carrying a missing band. A single failed attempt inside a retry sequence
-# that then succeeded is not a lost search, and a failed detail read is not a search — that posting
-# gets judged from its summary row.
+# had no relevant row carrying a missing band, and had no judgment claiming a posting read the log
+# holds no stored posting for. A single failed attempt inside a retry sequence that then succeeded
+# is not a lost search, and a failed detail read is not a search — that posting gets judged from
+# its summary row.
+#
+# Each of the last three terms writes a line naming what failed and what to do about it: on stderr
+# as it is found, and into degraded_reasons in the record, which is what a reader has days later
+# when the stderr is gone. A healthy run carries an empty degraded_reasons, so a reader can read the
+# field without first testing whether the key is there.
+#
+# The first two terms write no line, and a record degraded by one of them alone carries an empty
+# degraded_reasons. They need none: close_state and postings_unreviewed are fields of the record
+# already, so a reader can see that the run closed interrupted, or closed with postings left
+# unjudged. No field holds a lost search, an unbanded row or the claim count, which is what the
+# three lines are for.
 #
 # The fourth term is what carries the unbanded row into the record. Such a row is counted in
 # postings_reviewed and in none of the five keys that add up to it — the three bands, filtered_out
@@ -30,6 +42,20 @@
 # stderr line below is gone; the validator names the same record separately, for a reader checking
 # the close rather than writing it.
 #
+# The fifth term is the posting-read gap. judgments_claiming_detail_read counts the postings whose
+# last judgment says the text was read, and postings_detail_read counts the postings the log holds a
+# `detail` event for. A claim count above it means the log says two different things about the same
+# postings: either the reads happened and no call was recorded for them, so the record undercounts
+# what the run spent, or the reads did not happen and the judgments say they did. Measured on the
+# 2026-08-11 opencode run and recorded at record-judgment.sh — `grep -n '2026-08-11 opencode run'
+# skills/job-search-run/scripts/record-judgment.sh` — 22 judgments carried detail_read true against
+# 13 detail events in the log. Until this term existed nothing here read either count, so a run of
+# that shape closed healthy.
+#
+# Only a claim count above postings_detail_read is the gap. A posting read and then judged
+# --detail-read false leaves postings_detail_read at 1 with a claim count of 0, and nothing is
+# missing from that run: the call was made and it is in the counts.
+#
 # A close_state of complete over unjudged postings is refused and nothing is written: a run that
 # did not finish must not read as one that did. A lost search does not block the close; the run
 # finished the work it could reach, and the record says degraded.
@@ -40,10 +66,11 @@
 #     block prints every count line first and that line last — `grep -n 'printf .postings_surfaced'
 #     skills/job-search-run/scripts/run-counts.awk` gives a lower line number than `grep -n
 #     'printf .INVALID' skills/job-search-run/scripts/run-counts.awk` — so seeing it last
-#     means the whole count set reached stdout. Measured against a two-line log of that shape —
-#     one surfaced posting, one judgment relevant with match null: eighteen count lines, then the
-#     INVALID line, status 1. The record is written, the finding goes to stderr, and the run closes
-#     degraded.
+#     means the whole count set reached stdout. Measured on 2026-08-12 against a two-line log of
+#     that shape — one surfaced posting, one judgment relevant with match null — with
+#     `run-counts.sh <log> <run_id> 2>/dev/null | grep -vc '^INVALID'`: nineteen count lines, then
+#     the INVALID line, status 1. The record is written, the finding goes to stderr, and the run
+#     closes degraded.
 #   a failure — any other non-zero status. Status 2 is no log at that path, and run-counts.sh runs
 #     its awk with `exec`, so an awk that stops partway hands back its own status having already
 #     written part of the key set to stdout. Reading keys off that would put numbers in the record
@@ -54,8 +81,9 @@
 # settled for a broken workspace: a run opens anyway so that it can close with a record.
 #
 # A third case shows up in neither status: a reader that exits 0 having left a key out. An absent
-# key reaches awk's `printf "%d"` as 0, so the fourteen keys this record is built from are checked
-# for presence before anything is written.
+# key reaches awk's `printf "%d"` as 0 and the shell reads it as the empty string, so the fifteen
+# keys this record and its health decision are built from are checked for presence before anything
+# is written.
 #
 # `../../job-search-run/scripts` is where run-counts.sh lives, and the walk out of this skill and
 # into the next one holds because `skills/` ships as one directory in every packaging in this repo:
@@ -208,18 +236,20 @@ if [ "$counts_status" -ne 0 ]; then
     1:INVALID\ relevant-row-without-a-band=*)
       # run-counts.awk prints this line only when at least one relevant row carries no band, so
       # whether the line is there is all this branch needs. The number on it is printed to stderr
-      # for the operator and nothing here reads it.
+      # for the operator and nothing here reads it. What such a row does to the record is said
+      # further down, by the reason `unbanded` adds to degraded_reasons.
       unbanded=yes
-      printf 'close-run: run-counts.sh reported: %s\n' "$last" >&2
-      printf 'close-run:   a relevant row with no band is counted in postings_reviewed and in none of matches, filtered_out and duplicates_of_another, so the record would not add up — this run closes degraded\n' >&2 ;;
+      printf 'close-run: run-counts.sh reported: %s\n' "$last" >&2 ;;
     *)
       die "run-counts.sh exited $counts_status, so this run's numbers are not known — nothing written, the marker and the scratch are untouched" ;;
   esac
 fi
 
-# The fourteen keys the record and the two checks below are built from. by_source_* is not among
-# them: a run that surfaced nothing prints none.
+# The fifteen keys the record and the three checks below are built from — the refusal over unjudged
+# postings, the lost-search reason and the posting-read gap. by_source_* is not among them: a run
+# that surfaced nothing prints none.
 for key in postings_surfaced postings_reviewed postings_unreviewed postings_detail_read \
+           judgments_claiming_detail_read \
            match_strong match_moderate match_weak filtered_out duplicates_of_another \
            calls_searches calls_detail_reads calls_other calls_total_metered \
            searches_never_succeeded; do
@@ -242,6 +272,8 @@ get() { printf '%s\n' "$counts" | grep "^$1=" | cut -d= -f2-; }
 unreviewed=$(get postings_unreviewed)
 lost=$(get searches_never_succeeded)
 lostids=$(get searches_never_succeeded_ids)
+detailread=$(get postings_detail_read)
+claimed=$(get judgments_claiming_detail_read)
 
 # `[ "$x" -ne 0 ]` on a value that is not a number writes a diagnostic and exits non-zero, so the
 # surrounding `if` runs its else branch. Measured on 2026-08-06 with x=many and with x=٢, under sh,
@@ -257,30 +289,50 @@ lostids=$(get searches_never_succeeded_ids)
 # Arabic-Indic ٢, `*[!0-9]*` called it a number under LC_ALL=ar_SA.UTF-8 in sh and in bash, and
 # not a number under LC_ALL=C, under
 # LC_ALL=en_US.UTF-8 and in dash; `*[!0123456789]*` called it not a number in all nine combinations
-# and still called 23 a number in all nine. End to end with `[!0-9]` in these two lines and a
-# run-counts.sh shimmed to print postings_unreviewed=٢: under LC_ALL=ar_SA.UTF-8 in sh, close-run.sh
-# exited 0 having written runs/2026-07-30T15-04-02Z.json with close_state complete and
+# and still called 23 a number in all nine. End to end with `[!0-9]` in the postings_unreviewed line
+# and a run-counts.sh shimmed to print postings_unreviewed=٢: under LC_ALL=ar_SA.UTF-8 in sh,
+# close-run.sh exited 0 having written runs/2026-07-30T15-04-02Z.json with close_state complete and
 # postings_unreviewed 0, over a count set saying two postings were never judged.
 case $unreviewed in ''|*[!0123456789]*) die "postings_unreviewed is not a number: $unreviewed" ;; esac
 case $lost in ''|*[!0123456789]*) die "searches_never_succeeded is not a number: $lost" ;; esac
+case $detailread in ''|*[!0123456789]*) die "postings_detail_read is not a number: $detailread" ;; esac
+case $claimed in ''|*[!0123456789]*) die "judgments_claiming_detail_read is not a number: $claimed" ;; esac
 
 if [ "$close_state" = complete ] && [ "$unreviewed" -ne 0 ]; then
   die "close_state complete, but $unreviewed postings were never judged — close interrupted, or judge them"
 fi
 
+# Every reason is printed on stderr as it is found and kept in one newline-separated list, which
+# the record carries. The stderr line is gone by the time anyone asks why a run was degraded; the
+# record is what is left. Each reason names the check that failed and what to do about it.
+nl='
+'
+reasons=''
+add_reason() {
+  printf 'close-run: %s\n' "$1" >&2
+  reasons=$reasons${reasons:+$nl}$1
+}
+readgap=no
+if [ "$claimed" -gt "$detailread" ]; then
+  readgap=yes
+  add_reason "$claimed judgment(s) say the posting's text was read and the log holds $detailread stored posting(s), so at least $((claimed - detailread)) billable call(s) are missing from this run's counts — read postings with job-search-run's scripts/fetch-posting.sh, which stores the text and records the call"
+fi
+[ "$unbanded" = no ] || \
+  add_reason "a relevant posting carries no band, so postings_reviewed does not add up from matches, filtered_out and duplicates_of_another — re-judge that posting with a --match value"
+[ "$lost" -eq 0 ] || \
+  add_reason "$lost search(es) never returned and are not in these counts: $lostids — run those searches again to reach what they would have found"
+
 # The rule as it is written down: complete, nothing left unjudged, every search that was attempted
-# answered at least once, and no relevant row carrying a missing band. The second term decides
-# nothing on its own — the refusal above has already stopped a complete close over unjudged
-# postings, so reaching here with close_state complete means unreviewed is 0 — and it is spelled out
-# anyway so the line reads as the rule.
+# answered at least once, no relevant row carrying a missing band, and no judgment claiming a
+# posting read the log holds no stored posting for. The second term decides nothing on its own —
+# the refusal above has already stopped a complete close over unjudged postings, so reaching here
+# with close_state complete means unreviewed is 0 — and it is spelled out anyway so the line reads
+# as the rule.
 run_health=degraded
 if [ "$close_state" = complete ] && [ "$unreviewed" -eq 0 ] && [ "$lost" -eq 0 ] \
-   && [ "$unbanded" = no ]; then
+   && [ "$unbanded" = no ] && [ "$readgap" = no ]; then
   run_health=healthy
 fi
-[ "$lost" -eq 0 ] || \
-  printf 'close-run: %s search(es) never returned and are not in these counts: %s\n' \
-    "$lost" "$lostids" >&2
 
 completed_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 started_at=$(printf '%s\n' "$run_id" | sed 's/T\(..\)-\(..\)-\(..\)Z$/T\1:\2:\3Z/')
@@ -290,7 +342,7 @@ tmp=$record.tmp
 
 # No apostrophe may appear anywhere in this awk program: it is inside a single-quoted shell string,
 # so one would end that string and the rest would be read as shell.
-CR_COUNTS=$counts CR_SOURCES=$sources CR_QUERIES=$queries \
+CR_COUNTS=$counts CR_SOURCES=$sources CR_QUERIES=$queries CR_REASONS=$reasons \
 awk -v run_id="$run_id" -v trigger="$trigger" -v sched="$scheduler_id" \
     -v close_state="$close_state" -v run_health="$run_health" -v brief_rev="$brief_rev" \
     -v started_at="$started_at" -v completed_at="$completed_at" '
@@ -318,6 +370,16 @@ awk -v run_id="$run_id" -v trigger="$trigger" -v sched="$scheduler_id" \
     for (i = 1; i <= n; i++) { if (i > 1) out = out ", "; out = out jstr(p[i]) }
     return out "]"
   }
+  # The reasons are separated by newlines and not by commas, because a reason is a sentence and
+  # every one of them holds commas: jarr would cut each reason into several entries. The escaping
+  # is the same, since both call jstr.
+  function jlines(s,   n, p, i, out) {
+    if (s == "") return "[]"
+    n = split(s, p, "\n")
+    out = "["
+    for (i = 1; i <= n; i++) { if (i > 1) out = out ", "; out = out jstr(p[i]) }
+    return out "]"
+  }
   BEGIN {
     # The = is found with index rather than with split(rows[i], kv, "="), so a value keeps every
     # character after the first = rather than only the run up to the second one:
@@ -340,6 +402,7 @@ awk -v run_id="$run_id" -v trigger="$trigger" -v sched="$scheduler_id" \
     printf "  \"brief_revision\": %s,\n", (brief_rev == "" ? "null" : jstr(brief_rev))
     printf "  \"close_state\": %s,\n", jstr(close_state)
     printf "  \"run_health\": %s,\n", jstr(run_health)
+    printf "  \"degraded_reasons\": %s,\n", jlines(ENVIRON["CR_REASONS"])
     printf "  \"sources\": %s,\n", jarr(ENVIRON["CR_SOURCES"])
     printf "  \"queries\": %s,\n", jarr(ENVIRON["CR_QUERIES"])
     printf "  \"postings_surfaced\": %d,\n", c["postings_surfaced"]

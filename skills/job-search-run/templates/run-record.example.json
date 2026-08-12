@@ -5,6 +5,7 @@
   "brief_revision": "9f2c41a7be05",
   "close_state": "complete",
   "run_health": "healthy",
+  "degraded_reasons": [],
   "sources": ["linkedin", "ashby"],
   "queries": ["ai-eng-remote", "ml-platform-sf"],
   "postings_surfaced": 50,

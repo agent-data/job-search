@@ -4868,16 +4868,16 @@ def record_of(ws, run_id):
 # rather than passing quietly.
 RECORD_FIELDS = {
     "run_id", "trigger", "scheduler_id", "brief_revision", "close_state", "run_health",
-    "sources", "queries", "postings_surfaced", "postings_reviewed", "postings_unreviewed",
-    "postings_detail_read", "matches", "filtered_out", "duplicates_of_another", "by_source",
-    "agent_data_usage", "started_at", "completed_at",
+    "degraded_reasons", "sources", "queries", "postings_surfaced", "postings_reviewed",
+    "postings_unreviewed", "postings_detail_read", "matches", "filtered_out",
+    "duplicates_of_another", "by_source", "agent_data_usage", "started_at", "completed_at",
 }
 
 # One count set the tests below hand to the reader, in the order and spelling `run-counts.sh`
 # prints. Every numeric value is different from every other, so a field that reads the wrong key
-# lands on a number that cannot be the right one. The 18 numbers are 1, 2, 3, 4, 5, 6, 7, 8, 9, 10,
-# 11, 12, 14, 21, 26, 29, 33, 40 — the distinctness is asserted below rather than left to be read
-# off.
+# lands on a number that cannot be the right one. The 19 numbers are 1, 2, 3, 4, 5, 6, 7, 8, 9, 10,
+# 11, 12, 13, 14, 21, 26, 29, 33, 40 — the distinctness is asserted below rather than left to be
+# read off.
 #
 # Every relation the record asserts holds: 2 + 4 + 5 + 12 + 10 = 33 reviewed, 33 + 7 = 40 surfaced,
 # 29 + 11 = 40 by source, 6 + 14 + 1 = 21 metered. `rows_new_total` is the one number deliberately
@@ -4887,11 +4887,21 @@ RECORD_FIELDS = {
 # `duplicates_of_another` is 10 rather than 0 for the same reason no other key is 0: an absent key
 # reaches `printf "%d"` as 0, so a record that never read this key would carry the right number and
 # the cases below would pass over a reader that dropped it.
+#
+# `judgments_claiming_detail_read` 13 sits above `postings_detail_read` 9, so this set carries a
+# posting-read gap and `close-run.sh` writes a reason for it. That is forced rather than picked: 1
+# through 9 are all taken already, so no free number sits at or below 9, and 13 is the smallest one
+# left. It costs the cases below nothing: measured 2026-08-12, the six `close` calls below that hand
+# this set to `close-run.sh` through `awk_shim` all pass `--close-state interrupted`, which is
+# degraded whatever the counts say, and four of the six exit 1 before `run_health` is worked out at
+# all. The set already fails two other health terms the same way, carrying `postings_unreviewed` 7
+# and `searches_never_succeeded` 8.
 WHOLE_COUNT_SET = (
     "postings_surfaced=40\n"
     "postings_reviewed=33\n"
     "postings_unreviewed=7\n"
     "postings_detail_read=9\n"
+    "judgments_claiming_detail_read=13\n"
     "match_strong=2\n"
     "match_moderate=4\n"
     "match_weak=5\n"
@@ -4920,10 +4930,13 @@ def test_the_hand_written_count_set_gives_every_key_a_different_number():
     """
     values = [l.split("=", 1) for l in WHOLE_COUNT_SET.splitlines()]
     numbers = [v for _, v in values if v.isdigit()]
-    assert len(numbers) == 18, values
-    assert len(set(numbers)) == 18, sorted(numbers)
+    assert len(numbers) == 19, values
+    assert len(set(numbers)) == 19, sorted(numbers)
     c = dict(values)
     n = {k: int(v) for k, v in c.items() if v.isdigit()}
+    # The posting-read gap this set carries, pinned so it stays a decision and not an accident: the
+    # cases fed this set close `interrupted` or exit 1, so none of them turns on it either way.
+    assert n["judgments_claiming_detail_read"] > n["postings_detail_read"]
     assert n["match_strong"] + n["match_moderate"] + n["match_weak"] + n["filtered_out"] \
         + n["duplicates_of_another"] == n["postings_reviewed"]
     assert n["postings_reviewed"] + n["postings_unreviewed"] == n["postings_surfaced"]
@@ -5002,6 +5015,7 @@ def test_the_record_reads_each_count_into_the_field_that_names_it(tmp_workspace,
 
 
 @pytest.mark.parametrize("absent", ["postings_unreviewed", "searches_never_succeeded",
+                                    "judgments_claiming_detail_read",
                                     "calls_detail_reads", "match_moderate",
                                     "duplicates_of_another"])
 def test_a_count_the_record_needs_but_never_arrived_stops_the_close(tmp_workspace, tmp_path,
@@ -5011,7 +5025,7 @@ def test_a_count_the_record_needs_but_never_arrived_stops_the_close(tmp_workspac
     would carry a number no log supports and `run_health` would come out healthy off a count that
     was never taken — which is the failure `searches_never_succeeded` was added to catch.
 
-    Five keys rather than one: two the shell branches on and three only the record reads.
+    Six keys rather than one: three the shell branches on and three only the record reads.
 
     The close is `interrupted` here and in the two cases below it, so the only thing in the script
     that can produce exit 1 is the check under test. `WHOLE_COUNT_SET` carries a non-zero
@@ -5031,7 +5045,8 @@ def test_a_count_the_record_needs_but_never_arrived_stops_the_close(tmp_workspac
     assert (tmp_workspace / "runs" / (".started-" + o["run_id"])).exists()
 
 
-@pytest.mark.parametrize("key", ["postings_unreviewed", "searches_never_succeeded"])
+@pytest.mark.parametrize("key", ["postings_unreviewed", "searches_never_succeeded",
+                                 "postings_detail_read", "judgments_claiming_detail_read"])
 def test_a_count_the_close_branches_on_that_is_not_a_number_stops_the_close(tmp_workspace,
                                                                            tmp_path, key):
     """`[ "$x" -ne 0 ]` on a value that is not a number writes a diagnostic and exits non-zero, so
@@ -5040,6 +5055,10 @@ def test_a_count_the_close_branches_on_that_is_not_a_number_stops_the_close(tmp_
     `postings_unreviewed` would then read as no posting left unjudged and let a `complete` close
     through, and an unreadable `searches_never_succeeded` as no lost search — both of them closing a
     run healthy off a count nobody could read.
+
+    `[ "$claimed" -gt "$detailread" ]` fails the same way, and the else branch there is `readgap`
+    staying `no`: a run whose judgments claim more reads than the log has stored postings would
+    close healthy because one of the two counts could not be read.
     """
     o = opened(tmp_workspace)
     (tmp_workspace / "jobs.jsonl").write_text("")
@@ -5372,6 +5391,104 @@ def test_a_failed_detail_read_does_not_degrade_a_finished_run(tmp_workspace):
     assert rec["postings_surfaced"] == len(surfaced)
     assert rec["postings_unreviewed"] == 0
     assert rec["postings_detail_read"] == 0      # the read failed, so no posting was stored in full
+
+
+def write_event_log(path, rows):
+    """Write `rows` as one JSON object per line, in the compact form the log is written in."""
+    path.write_text("".join(json.dumps(r, separators=(",", ":")) + "\n" for r in rows),
+                    encoding="utf-8")
+
+
+def test_close_run_degrades_and_records_the_reason_on_a_posting_read_gap(tmp_workspace):
+    """Two postings, both judged with `detail_read` true, and the log holds a `detail` event for
+    only one of them. `postings_detail_read` comes out 1 and `judgments_claiming_detail_read` 2, so
+    one posting was judged as if its text had been read with no call that read it. The run closes
+    degraded, and the record carries the reason rather than only stderr: stderr is gone by the time
+    anyone asks why a run was degraded.
+
+    The log is written by hand because `record-judgment.sh` refuses `--detail-read true` for a
+    posting with no `detail` event in the log — `grep -n 'no detail event for'
+    skills/job-search-run/scripts/record-judgment.sh` finds the refusal — so the writer cannot
+    produce this gap any more. Logs written before that check still hold it, and this case is what
+    closing one of them does.
+    """
+    o = opened(tmp_workspace)
+    rid = o["run_id"]
+    write_event_log(tmp_workspace / "jobs.jsonl", [
+        {"event": "surfaced", "run_id": rid, "source": "linkedin", "source_id": "1"},
+        {"event": "detail", "run_id": rid, "source": "linkedin", "source_id": "1"},
+        {"event": "evaluated", "run_id": rid, "source": "linkedin", "source_id": "1",
+         "detail_read": True, "relevant": True, "match": "strong"},
+        {"event": "surfaced", "run_id": rid, "source": "linkedin", "source_id": "2"},
+        {"event": "evaluated", "run_id": rid, "source": "linkedin", "source_id": "2",
+         "detail_read": True, "relevant": True, "match": "weak"},
+    ])
+    r = close(tmp_workspace, rid)
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert "run_health=degraded" in r.stdout.splitlines(), r.stdout
+    assert "billable call" in r.stderr, r.stderr
+    rec = record_of(tmp_workspace, rid)
+    assert rec["run_health"] == "degraded"
+    assert rec["close_state"] == "complete"      # the gap does not block the close
+    assert rec["postings_detail_read"] == 1
+    assert isinstance(rec["degraded_reasons"], list)
+    assert len(rec["degraded_reasons"]) == 1     # one failed check, one reason
+    assert "fetch-posting.sh" in rec["degraded_reasons"][0]
+    # The same words on stderr and in the record, so a reader of either is reading the same reason.
+    assert rec["degraded_reasons"][0] in r.stderr, r.stderr
+
+
+def test_close_run_stays_healthy_and_records_no_reasons_when_the_counts_agree(tmp_workspace):
+    """The contrast the case above needs. One posting, a `detail` event for it, and a judgment
+    claiming the read: the claim count and the stored-posting count are both 1 and nothing else in
+    the log is wrong, so the run is healthy. Without this, a `run_health` that degraded on any
+    judgment claiming a read at all would pass the case above.
+
+    `degraded_reasons` is `[]` rather than absent, so a reader can read the field without first
+    testing whether the key is there.
+    """
+    o = opened(tmp_workspace)
+    rid = o["run_id"]
+    write_event_log(tmp_workspace / "jobs.jsonl", [
+        {"event": "surfaced", "run_id": rid, "source": "linkedin", "source_id": "1"},
+        {"event": "detail", "run_id": rid, "source": "linkedin", "source_id": "1"},
+        {"event": "evaluated", "run_id": rid, "source": "linkedin", "source_id": "1",
+         "detail_read": True, "relevant": True, "match": "strong"},
+    ])
+    r = close(tmp_workspace, rid)
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert "run_health=healthy" in r.stdout.splitlines(), r.stdout
+    assert "billable call" not in r.stderr, r.stderr
+    rec = record_of(tmp_workspace, rid)
+    assert rec["run_health"] == "healthy"
+    assert rec["postings_detail_read"] == 1
+    assert rec["degraded_reasons"] == []
+
+
+def test_a_stored_posting_the_judgment_says_it_did_not_read_is_not_a_gap(tmp_workspace):
+    """The other direction across the same two counts. The posting was read and stored and the
+    judgment that followed says the text was not used, so `postings_detail_read` is 1 against a
+    claim count of 0. Nothing is missing from the run: the call was made and it is in the counts.
+
+    Only a claim count above the stored count is the gap. A check written as `-ne` would degrade
+    this run, so this is the case that holds the comparison to one direction.
+    """
+    o = opened(tmp_workspace)
+    rid = o["run_id"]
+    write_event_log(tmp_workspace / "jobs.jsonl", [
+        {"event": "surfaced", "run_id": rid, "source": "linkedin", "source_id": "1"},
+        {"event": "detail", "run_id": rid, "source": "linkedin", "source_id": "1"},
+        {"event": "evaluated", "run_id": rid, "source": "linkedin", "source_id": "1",
+         "detail_read": False, "relevant": False},
+    ])
+    r = close(tmp_workspace, rid)
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert "run_health=healthy" in r.stdout.splitlines(), r.stdout
+    rec = record_of(tmp_workspace, rid)
+    assert rec["postings_detail_read"] == 1
+    assert rec["filtered_out"] == 1               # the judgment really was recorded
+    assert rec["run_health"] == "healthy"
+    assert rec["degraded_reasons"] == []
 
 
 def failed_search_events(run_id, oks):
@@ -5966,7 +6083,7 @@ def test_the_record_matches_the_template_field_set(tmp_workspace):
     close(tmp_workspace, o["run_id"])
     rec = record_of(tmp_workspace, o["run_id"])
     template = json.loads((RUN_SCRIPTS.parent / "templates" / "run-record.example.json").read_text())
-    assert len(RECORD_FIELDS) == 19
+    assert len(RECORD_FIELDS) == 20
     assert set(rec) == RECORD_FIELDS
     assert set(template) == RECORD_FIELDS
     assert set(rec) == set(template)
