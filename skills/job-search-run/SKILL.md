@@ -18,9 +18,8 @@ first:
 1. Find the workspace with the runbook's discovery step. On a first run — the one with no
    `config.yaml` yet — say that setup happens in the job-search skill, and stop there: this run
    has no workspace to write into.
-2. Open the run as the runbook's run contract does: a leftover marker means the last run stopped
-   before it could close, so say that and delete it; then create this run's marker and take the
-   brief revision. From here on, a failure closes as a `blocked` run.
+2. Open the run as the runbook's run contract does. From here on, a failure closes as a `blocked`
+   run.
 3. Run `agent-data whoami`. When `api_key_set` comes back false, close blocked: the API key is
    missing, and `agent-data init` from `agent-data-reference`'s CLI table is the fix.
 4. Run the plugin's `skills/job-search-runbook/scripts/validate-workspace.sh <workspace>`, and keep
@@ -32,8 +31,7 @@ first:
    answer that tells you which one was read. One line per problem on stdout instead, each naming one
    file and one broken rule, at exit 1, means the workspace is not usable: close blocked and report
    those problems to the user in plain language. Exit 2 with a message on stderr means the command
-   was wrong rather than the workspace — a path that is no workspace, or a flag the script does not
-   take — so fix the command and run it again.
+   was wrong rather than the workspace, so fix the command and run it again.
 5. Say what this run opens with, in the shape `agent-data-reference`'s cost recipe gives, before
    searching.
 
@@ -48,20 +46,14 @@ run finds new.
 
 Run each search with this skill's `scripts/search-jobs.sh --query-id <the query's id> --source <the
 source you asked for> -- <the route's own parameters, every value in single quotes>`. Everything
-after `--` goes to the route unchanged, so the parameter names come from `agent-data docs`. 
+after `--` goes to the route unchanged.
 Put every value in single quotes: `keywords` and `location` come
 from `config.yaml` and are usually more than one word, and without the quotes only the first word
 reaches the route — `--keywords AI engineer --location United States` asks for `AI` in `United`,
 appends the rows that come back, and exits 0. It finds the workspace and the open run itself,
 captures both streams into `runs/.scratch/<run_id>/`, and records the call whether it returned or
 failed. It appends the call itself and one line per row it kept, leaving out a posting any run has
-already judged and one an earlier search of this run surfaced. `--source` is required on every
-call, including one that fails: `run-counts.sh` keys a search group `<source>:<query_id>`, so a
-failed attempt carrying no source would be a group of its own, where the run reports a search that
-never returned even though the retry answered. Exit 1 means the call failed or a row was unusable,
-and stderr says which — the `call` event is written either way, and nothing else is. Exit 2 means
-the arguments were wrong or there is no single open run to record against: nothing was called and
-nothing was written.
+already judged and one an earlier search of this run surfaced.
 
 Then check the response — the file the `response=` line named on stdout — for the echoes: the
 source echo per `agent-data-reference`'s source-echo row, and the cutoff the same way, where one
@@ -103,12 +95,11 @@ from the posting and writes it into its reasoning.
 The read list is this skill's `scripts/list-detail-read-queue.sh <workspace>/jobs.jsonl <run_id>`,
 which prints one tab-separated line per posting this run queued and has not judged yet: `source`,
 `source_id`, `posting_id_at_seen`, `source_url`, `title`, `company_name`. It writes one line to
-stderr as well: how many lines of the log name this run, then how many postings the run queued, how
-many of those already carry a judgment, and how many are left to read. Read that line every time no
+stderr as well. Read that line every time no
 row comes back, because a queue worked all the way off and a mistyped run id both print nothing —
 `0 of <n> lines … name run` is the mistyped id. Where your host has subagents, give each subagent
-two or three postings, and start every subagent in one step, before any of them has returned. Fewer
-than four postings go to one subagent. Each subagent judges its postings in its own fresh context,
+two or three postings, and start every subagent in one step, before any of them has returned. Each
+subagent judges its postings in its own fresh context,
 which leaves this session's context for coordinating the run. Starting some subagents and waiting
 for them to return before starting the rest makes the run take as long as the slowest subagent in
 each group, added up over the groups. Where your host has none, work the list in order. Both paths
@@ -124,20 +115,17 @@ these five parts, in this order:
    in place, and the `--source-url` value in single quotes: a LinkedIn URL carries `?` and `&`, and
    unquoted the shell cuts the command at the first `&`, so `--source` never reaches the script.
 4. The `record-judgment.sh` command for each posting, with `--source`, `--source-id` and
-   `--detail-read true` already in place, and the remaining values named in words: `--relevant`
-   takes `true` or `false`, and `--match` takes `strong`, `moderate` or `weak` and is left off when
-   `--relevant` is `false`.
+   `--detail-read true` already in place, and the remaining values named in words.
 5. What to return for each posting: the title, the company, whether it is relevant, the match band,
    and the reasoning line.
 
 Both scripts find the workspace and the open run themselves, so the prompt carries no file paths.
 
 Read each posting with this skill's `scripts/fetch-posting.sh --posting-id <posting_id_at_seen>
---source-url '<source_url>' --source <source>`. It finds the workspace and the open run itself, so
-it takes nothing else. It records the billable call the run is charged for, and it stores the
+--source-url '<source_url>' --source <source>`. It records the billable call the run is charged for, and it stores the
 posting's text so a later run can judge it again against a changed brief instead of paying to read
-it twice. Record what `evaluate-job-fit` returned with this skill's `scripts/record-judgment.sh`,
-which finds the workspace and the open run itself: `--detail-read true`, `--relevant` as `true` or
+it twice. Record what `evaluate-job-fit` returned with this skill's
+`scripts/record-judgment.sh`: `--detail-read true`, `--relevant` as `true` or
 `false`, `--match` as `strong`, `moderate` or `weak` on a relevant posting and no `--match` on one
 that is not, `--needs-human-check true` when the judgment leaves the user a question,
 `--dealbreakers` and `--unknowns` as semicolon-separated lists, and `--reasoning` as the line the
@@ -147,9 +135,7 @@ than taking them from you. Two more flags cover what a row left open: `--posted-
 <date>` when the row carried no date and the description states one, and `--same-role-as
 <source>:<source_id>` on a posting `dedup.sh --near` left out, naming the row that was read and
 carrying its judgment with `--detail-read false`. Each of those two flags is the only thing that
-writes its field, so a judgment recorded without them carries neither. `--detail-read true` needs
-the posting's text already stored, which `fetch-posting.sh` does; a judgment claiming a read with
-nothing stored is refused.
+writes its field, so a judgment recorded without them carries neither.
 
 This skill's `templates/jobs-event.example.json` holds one line of each of the five event types a
 run writes — `call`, `surfaced`, `queued`, `detail`, `evaluated` — each in the shape and field order
@@ -157,9 +143,7 @@ the script that writes it produces. Read it to see what a line in the log holds;
 write every line a run appends, and none is filled in by hand.
 
 Every posting this run surfaced ends the run with a judgment — the one from its detail read, or the
-one the scan settled from its row. `close-run.sh` refuses a `complete` close while any is still
-unjudged and says how many, so a pass that ends that way closes `interrupted`, its digest saying how
-many are left.
+one the scan settled from its row.
 
 ## Digest
 
@@ -175,8 +159,7 @@ source_url, needs_human_check, posted_at, reasoning, also_posted — strong firs
 weak, and the ones judged not relevant. Both write one line to stderr as well, opening with how many
 lines of the log name this run: `0 of <n> lines … name run` means the run id is wrong, and every
 number below it would be a zero copied into the digest. `run-matches.sh` carries its per-band tally
-on that line — strong, moderate, weak, filtered, and the postings that are the same opening as
-another and got no row. Render each section from the lines carrying its band and take how many it
+on that line. Render each section from the lines carrying its band and take how many it
 holds from that tally rather than counting the rows yourself, so a heading that says three strong is
 followed by the three lines whose band is strong.
 
@@ -230,24 +213,16 @@ links and a source lost partway.
 
 ## Close
 
-Close is the runbook's step 4, in the order it gives: `close-run.sh`, then this digest, then
-`clear-run.sh`, then the plugin's
-`skills/job-search-runbook/scripts/validate-workspace.sh <workspace> --post-close <run_id>`, fixing
-whatever it prints on stdout. A close with nothing wrong prints nothing there and writes one line to
-stderr — `checked <workspace> and run <run_id> — no broken rule found` — which is the answer, not
-a finding to act on. Three values on the `close-run.sh` command line are yours to decide and nothing
-else in the record is. `--trigger` is `manual` for a run the user asked for and `scheduled` for one
-a scheduler started, including the verification run after a schedule change; `--scheduler-id` names
-that job; `--close-state` is the runbook's `complete`, `blocked` or `interrupted`.
-`--brief-revision`, `--sources` and `--queries` come off the open and off this run.
+Close is the runbook's step 4, in the order it gives. `--trigger` is `manual` for a run the user
+asked for and `scheduled` for one a scheduler started, including the verification run after a
+schedule change; `--scheduler-id` names that job; `--close-state` is the runbook's `complete`,
+`blocked` or `interrupted`.
 
 The script fills the rest of the record from `run-counts.sh` and one clock read, so the record and
 the digest are built from the same log and cannot disagree — this skill's
 `templates/run-record.example.json` shows the fields it writes. It works out `run_health` as well,
-and prints it as `run_health=healthy` or `run_health=degraded`: a run reads `degraded` when it
-closed anything but `complete`, left a posting unjudged, had a search that never returned after its
-retries, or judged a posting relevant without a band. Finish by saying what the run found and where
-the digest is, in plain language.
+and prints it as `run_health=healthy` or `run_health=degraded`. Finish by saying what the run found
+and where the digest is, in plain language.
 
 ## When a call or a run stops early
 

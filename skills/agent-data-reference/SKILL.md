@@ -21,12 +21,10 @@ before spending one. Route shapes here were read from `agent-data docs` on 2026-
 | `agent-data docs <listing-id>` | the live route list, every parameter, every response field | free |
 | `agent-data init --api-key <KEY> -y` | writes the key to `~/.agent-data/config.json` | local, free |
 
-These three are the only agent-data commands to call directly, and none of them spends a metered
-call. The listing id is `f9a6ec16-0bfd-44d8-b3ee-073776745ee7`, and it serves all four sources.
+The listing id is `f9a6ec16-0bfd-44d8-b3ee-073776745ee7`.
 
-`agent-data docs <listing-id>` is the authority on which routes exist, what each parameter is
-called, and which fields come back. It is free, so read it once per run and take the shapes from
-that output rather than from memory.
+`agent-data docs <listing-id>` is the authority: read it once per run and take the shapes from that
+output rather than from memory.
 
 ## Searching and reading postings — use the wrappers
 
@@ -40,11 +38,9 @@ unchecked, so the run under-reports what it spent and closes degraded.
 
 The wrappers change nothing about what the routes are sent. One search still reaches one source,
 named by `--source`, and the run still does its own fan-out, merge, and duplicate check, so one
-query across three enabled sources is three calls. Every route parameter still comes from
-`agent-data docs`: `search-jobs.sh` passes everything after `--` to the route unchanged, one flag
-per parameter, and `fetch-posting.sh` takes its three values off one queued row. How to invoke
-each script — flags, quoting, what it prints — is in the `job-search-run` skill and in the header
-comment at the top of each script.
+query across three enabled sources is three calls. How to invoke each script — flags, quoting,
+what it prints — is in the `job-search-run` skill and in the header comment at the top of each
+script.
 
 ## Quirks that change a call
 
@@ -53,7 +49,6 @@ comment at the top of each script.
 | The route docs list `Remote` as a location value, and for LinkedIn that string goes to LinkedIn's own filter — a US remote search run that way came back with all-India rows | Put `remote` among the `--keywords`, keep `--location` for a real geography or omit it, and keep the rows whose `location_display` names the geography the user asked for |
 | `is_remote` and `workplace_type` come back null on every LinkedIn row | Read remoteness from `location_display` and the description text |
 | ashby, greenhouse, and lever match relaxed full text — all terms rank first, then progressively fewer down to a floor of half the terms — so off-topic rows are ordinary output | Judge each row from its title and company first, and spend a detail read only on the survivors |
-| `keywords` is the one required search parameter; it takes up to 8 terms, and a trailing `*` makes a term a prefix | Send the terms the user's brief names, and let `--limit` (default 20, max 100) size the page |
 | A row's `id` and `source_url` work only as the pair they arrived in — `id` is a short-lived pairing token, while `source_id` is the value that stays stable within its source — and a mismatched pair returns a non-retryable 400 | Copy both from the same row exactly as they arrived; a rejected pair falls back to judging that posting from its summary row |
 | Paging works through `--cursor` on ashby, greenhouse, and lever, and LinkedIn rejects a cursor with a non-retryable 400 | When a run pages: take the next page from `data.pagination.next_cursor` while `has_more` is true, replaying every other flag exactly as sent. LinkedIn returns one page, so there is no next page to fetch |
 | An older service deployment ignores `--source` and answers as linkedin, so a search aimed at another source comes back holding linkedin rows | After every search, compare the echoed `data.query.source` against the source you asked for (an absent echo counts as linkedin); when the two differ, file the returned rows under the source that actually answered, and skip the rest of that source's queries this run |
@@ -67,12 +62,6 @@ comment at the top of each script.
 | The route docs offer `--fields` on both routes to trim the response, and `record-api-response.sh` refuses a body whose rows or posting are missing `source` or `source_id` — a trimmed search page loses every row of a metered call, and a trimmed posting is read again, and billed again. Trimming saves little: measured 2026-08-12, `--fields id,title,company_name` returned 214 bytes against 7,645 for the same posting unfiltered, and nearly all of a posting's bytes are the description and the salary text, which a reader needs | VERY IMPORTANT: DO NOT send `--fields`, on either route, through the wrappers or without them |
 
 ## When a call fails
-
-A failed call exits non-zero with the error body on stderr and nothing on stdout, and `retryable`,
-`code` and `param` are only in that body. The wrappers capture both streams into
-`runs/.scratch/<run_id>/` themselves: a failed `search-jobs.sh` or `fetch-posting.sh` exits 1 and
-puts the body on its own stderr, and the `call` event is written either way, because a failed call
-was still charged.
 
 On a success the request id is at `meta.request_id`, and on a failure it is at `error.request_id`;
 neither response carries one at the top level. `error.source` names what rejected the call — it
@@ -94,8 +83,7 @@ others going; for detail reads, judge that source's remaining postings from thei
 
 ## What a run spends
 
-The free tier includes 100 metered calls a month at no charge. Past that, agent-data's rates as
-verified on 2026-07-15 — live account data wins wherever it is available:
+Past the free tier, agent-data's rates as verified on 2026-07-15:
 
 | Plan | Included metered calls | Effective rate |
 |---|---|---|
@@ -107,9 +95,8 @@ verified on 2026-07-15 — live account data wins wherever it is available:
 Count calls. Multiplying a call count by one of these rates produces an estimate; what the user
 was actually billed comes from live account data.
 
-`B = enabled queries × enabled sources` is the first-page cost of one run, because each enabled
-query reaches each enabled source once: three queries across two sources is six calls. B is the
-floor — continuation pages, detail reads, and metered failures and retries land on top of it.
+`B = enabled queries × enabled sources` is the first-page cost of one run. B is the floor —
+continuation pages, detail reads, and metered failures and retries land on top of it.
 
 Before the first metered call of a session, tell the user in your own words, in a sentence or two:
 how many calls this run opens with (B), that agent-data includes 100 calls a month at no charge,
@@ -125,9 +112,8 @@ gets its new B and the size of the increase stated before it is saved.
 ## Appendix — if the wrappers fail
 
 Call `search-jobs` or `get-posting` yourself only when the wrapper scripts cannot run at all — the
-script file is missing, or the host executes commands without a POSIX sh. A wrapper that ran and refused is not
-that case: an exit 2 named a bad argument or the absent open run, and an exit 1 recorded the call
-it made. Read the message and act on it.
+script file is missing, or the host executes commands without a POSIX sh. A wrapper that ran and
+refused is not that case.
 
 IMPORTANT: A call made without the wrappers is still charged, appears in no count, and its response was never
 checked. Keep your own count of these calls and put it in the run's summary, so the digest carries
@@ -148,9 +134,6 @@ cuts the command at the first `&`: the shortened call still runs and is still bi
 goes to the terminal instead of `posting.json`, and `--source` never reaches the route. Measured
 2026-08-12 on a LinkedIn row — exit 127, `posting.json` 0 bytes, and the billed call came back as
 `req_7882fee3f9774771b42049db`.
-
-`posting_id` and `source_url` are both required. `--source` is optional, and passing the row's own
-value removes an inference step.
 
 Running one search is the same command with the `search-jobs` slug and the parameters
 `agent-data docs` names, every value single-quoted. Omit `--source` and the search runs against

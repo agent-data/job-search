@@ -23,10 +23,8 @@ first_run=false
 ```
 
 It writes one more line to stderr, naming the registry path and saying what it found there, so a
-terminal or a tool result that merges the two streams shows four lines. That line says whether there
-is a file at that path at all — or that it could not tell — and whether a non-empty
-`active_workspace` string came out of it. Read it together with the parse-check rule at the end of
-this section.
+terminal or a tool result that merges the two streams shows four lines. Read it together with the
+parse-check rule at the end of this section.
 
 `first_run=true` means that path has no `config.yaml` yet and setup creates it. `source=legacy` means
 the workspace sits at the older visible path: keep using it, and record it in the registry as
@@ -48,11 +46,8 @@ First match decides:
 4. Neither exists — first run, workspace `$H/.job-search`, which setup creates.
 
 A registry file that exists but does not parse as JSON stops the run: report that the file at that
-path cannot be read, rather than picking a workspace it might not name. The script reads the file
-with `grep`, so its stderr line tells you whether there is a file at that path but never whether
-that file is JSON — parse-check it yourself. A registry the script could not look at stops the run
-the same way: its line says a directory on the way to that path cannot be searched, so nothing there
-was read and no file there was ruled out, and the workspace on stdout came from the rules below
+path cannot be read, rather than picking a workspace it might not name. A registry the script could
+not look at stops the run the same way, and the workspace on stdout came from the rules below
 rather than from the registry.
 
 ## What each file holds
@@ -86,37 +81,25 @@ rather than from the registry.
    printed — and something is wrong that this run cannot fix: read stdout after the three lines for
    the findings about the workspace files, and stderr for the case where the brief's revision could
    not be taken. Report whichever you got in plain language and close the run `blocked`. Exit 2
-   means the run did not open and nothing was written, and stderr says which of five things
-   happened: there is no such workspace; there is no `config.yaml`, which is the one that means
-   setup has not run; `runs/` could not be made or the marker could not be written into it; another
-   run is already open in this workspace; or this `run_id` is already taken because another run
-   opened in the same second. The last two both name a marker and they take opposite handling. A
-   taken `run_id` means the marker belongs to the run that just opened, not to a run that stopped —
-   leave it alone, do not treat it as the leftover marker of step 1, and run
-   `skills/job-search-runbook/scripts/open-run.sh` again a second later. A run already open means an
-   earlier run's marker is still in `runs/`, so opening again gives the same refusal every time: go
-   back to step 1, close and clear that run, then open this one. The refusal names the run id both
-   commands take.
+   means the run did not open and nothing was written; stderr says why. A run already open means an
+   earlier run's marker is still in `runs/`: go back to step 1, which says what to tell the user,
+   then open this one.
 3. **Do the run's work**, recording events as you go.
 4. **Close, in this order.** First
    `skills/job-search-runbook/scripts/close-run.sh <workspace> <run_id> --trigger … --close-state …`,
    with `--brief-revision` from step 2, `--sources` and `--queries` from the run, and
-   `--scheduler-id` when a scheduler started it. It writes `runs/<run_id>.json`, works out
-   `run_health` and prints it, and refuses a `complete` close while any posting is still unjudged,
-   saying how many. Then the digest, which the run skill defines. Then
+   `--scheduler-id` when a scheduler started it. It works out `run_health` and prints it. Then the
+   digest, which the run skill defines. Then
    `skills/job-search-runbook/scripts/clear-run.sh <workspace> <run_id>`, which deletes the marker
    and the scratch directory. Then
    `skills/job-search-runbook/scripts/validate-workspace.sh <workspace> --post-close <run_id>`,
-   fixing whatever it prints on stdout. A close with nothing wrong prints nothing there and writes
-   one line to stderr — `checked <workspace> and run <run_id> — no broken rule found` — which is
-   the answer, not a finding to act on.
+   fixing whatever it prints on stdout.
 
 The digest is written between the record and the clearing because it carries `run_health` off the
 record and may still need the responses in the scratch directory.
 
-`trigger`, `scheduler_id` and `close_state` are the only values in the record you decide; the other
-three you pass come from step 2 and the run. Every count and both timestamps come from `jobs.jsonl`
-and the clock.
+`trigger`, `scheduler_id` and `close_state` are the only values in the record you decide. Every
+count and both timestamps come from `jobs.jsonl` and the clock.
 
 A run that has to stop early closes the same way: `close_state` is `blocked` when you can name what
 stopped it, and `interrupted` when it ends unfinished and its work cannot be reconstructed.
@@ -133,8 +116,7 @@ in the same shape: this pack's run skill, permission to write the workspace, cre
 ## Scratch
 
 A run's own working files go in `runs/.scratch/<run_id>/`: each search row as it arrived, `id` and
-`source_url` paired for the detail read. `skills/job-search-runbook/scripts/clear-run.sh`, in
-step 4, deletes the directory.
+`source_url` paired for the detail read.
 
 ## What stays off disk
 

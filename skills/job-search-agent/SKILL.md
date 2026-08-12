@@ -26,30 +26,26 @@ user arrives with.
 Every search setting is a field in the workspace's `config.yaml`: the `queries[]` entries with their
 keywords, location, limit and `enabled` flag, plus `search.sources` and `search.freshness`. Edit the
 file in place, keeping its comments and shape, then check it with the plugin's
-`skills/job-search-runbook/scripts/validate-workspace.sh <workspace>`. One line on stderr reading
-`checked <workspace> — no broken rule found` means the file is usable; one line per problem on
-stdout instead, each naming one file and one broken rule, means it is not. The change takes effect
+`skills/job-search-runbook/scripts/validate-workspace.sh <workspace>`. The change takes effect
 on the next run.
 
 A change that raises what a run opens with — one more query, one more source — gets its new cost
 stated before it is saved, per `agent-data-reference`'s cost recipe.
 
 Changing how often the search runs goes through the `job-search` skill, which composes the cadence,
-installs the recurring job, and canaries it. A new or changed job counts as running once a canary
-has left a run record whose `trigger` is `scheduled` and whose close is healthy.
+installs the recurring job, and canaries it.
 
 ## Explaining what a run spent
 
 Read the newest `runs/<run_id>.json` in the workspace and report its `agent_data_usage`: `searches`,
 `detail_reads`, `other`, and `total_metered`, which is the first three added together. That read is
 local and spends nothing. `close-run.sh` counts all four at close from the `call` events in
-`jobs.jsonl`, and the run wrote one of those events for every attempt it made, so every attempt is
-in them: `searches` counts every `call` event whose route is `search-jobs`, a retried one included,
-which is why it can come out above the `B` below.
+`jobs.jsonl`, and the run wrote one of those events for every attempt it made: `searches` counts
+every `call` event whose route is `search-jobs`, a retried one included, which is why it can come
+out above the `B` below.
 `agent-data-reference` carries the rest — how many calls a month are free, the per-call rates past
-that, and `B = enabled queries × enabled sources` as what one run opens with. A call count times a rate is an
-estimate; what the user was actually billed sits on their account at
-https://agent-data.motie.dev/settings/billing.
+that, and `B = enabled queries × enabled sources` as what one run opens with. What the user was
+actually billed sits on their account at https://agent-data.motie.dev/settings/billing.
 
 ## Symptom → fix
 
@@ -60,6 +56,5 @@ https://agent-data.motie.dev/settings/billing.
 | The run closed blocked and its digest names the monthly allowance | the free calls for the month are spent, so agent-data is refusing further calls | Check the account at https://agent-data.motie.dev/settings/billing; the matches already saved are unaffected |
 | The schedule stopped firing | the installed job was removed, or the machine it runs on was asleep | Read `scheduling` in the registry the runbook's file map names, look for that job in the host's own scheduler, and reinstall it through the `job-search` skill, which canaries it |
 | The home view keeps offering to refresh the brief | `preferences.md` has not been updated in a long time, and runs have happened since | Run `job-preference-interview`, which moves `updated_at` to today |
-| A run died mid-flight | it stopped before it could close, leaving its `runs/.started-*` marker behind | Say the last run did not finish, then close and clear it before running again: `skills/job-search-runbook/scripts/close-run.sh <workspace> <run_id> --trigger manual --close-state interrupted`, then `skills/job-search-runbook/scripts/clear-run.sh <workspace> <run_id>`, taking `<run_id>` off the marker's name — the first step of the runbook's run contract. Deleting the marker instead leaves nothing recording that the run happened, which is why `skills/job-search-runbook/scripts/clear-run.sh` refuses a run with no record |
+| A run died mid-flight | it stopped before it could close, leaving its `runs/.started-*` marker behind | Say the last run did not finish, then close and clear it before running again — the first step of the runbook's run contract, which gives both commands and where the `<run_id>` comes from |
 | The digest says the run left postings unjudged | it stopped before judging everything it found; `close-run.sh` refuses a `complete` close over unjudged postings, so that record reads `blocked` or `interrupted` | Its `postings_unreviewed` is how many; run the search again, which offers those postings once more because a posting carrying no judgment is not treated as one already seen |
-| A record reads `run_health: degraded` though its `close_state` is `complete` | the record's `degraded_reasons` names every check that failed, and `close-run.sh` printed the same lines on stderr when it closed | The plugin's `skills/job-search-run/scripts/run-counts.sh <workspace>/jobs.jsonl <run_id>` prints `searches_never_succeeded_ids` as `<source>:<query_id>`, the same list the digest footnotes; that search surfaced no postings, so no count in the record covers what it would have found and running the search again is what reaches them. An empty list means a lost search was not the reason; read `degraded_reasons` in the record, where each entry names the check that failed and what to do about it, and for the entry about a relevant posting with no band, `skills/job-search-runbook/scripts/validate-workspace.sh <workspace> --post-close <run_id>` names that record as well |

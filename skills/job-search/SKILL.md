@@ -17,13 +17,11 @@ more skills carry the mechanics — invoke each as you need it:
 
 Your first output is a message to the user, before any other work. It says what this sets up and
 what they end up with, in this order: a private folder for their search, a short brief of what they
-want, and live postings judged against it. Two sentences. Every noun in it is something the user
-owns or can see; name each idea in the plain words a person would use for it, the first time they
-meet it.
+want, and live postings judged against it. Two sentences.
 
 ## How to communicate
 
-These ten rules govern how you say things, in every mode below.
+These ten rules govern how you say things, in every message, including your first.
 
 1. Define each idea in plain words the first time the user meets it — the brief, a job source, the
    free monthly calls, the recurring job, the digest — in the sentence or offer that first uses it.
@@ -48,9 +46,8 @@ Find the workspace with the runbook's discovery step, silently, and go where it 
 
 - No `config.yaml` there yet → **First run**, below.
 - A workspace already set up → **Home**, below.
-- The registry file is there and JSON parsing fails on it → stop there, say the file at that path
-  cannot be read, and offer to rewrite it around the workspace you can see; on a yes, write it fresh
-  with that workspace as `active_workspace`.
+- The registry file is there and JSON parsing fails on it → offer to rewrite it around the
+  workspace you can see; on a yes, write it fresh with that workspace as `active_workspace`.
 
 Other intents leave: what they want in a job → `job-preference-interview`, a pasted posting →
 `evaluate-job-fit`, an unwatched pull → `job-search-run`, the agent itself → `job-search-agent`.
@@ -79,8 +76,8 @@ Other intents leave: what they want in a job → `job-preference-interview`, a p
    `agent-data-reference`'s LinkedIn row. Say which searches you derived and that they change on
    request.
 7. Give the user the cost sentence rule 2 asks for, then invoke `job-search-run` on the workspace.
-8. Render what came back: the strong matches, then the moderate ones, each with its reasoning line
-   and its link, plus any confirm note the digest carries. Where the run judged postings and few or
+8. Render what came back: the strong matches, then the moderate ones, plus any confirm note the
+   digest carries. Where the run judged postings and few or
    none of them fit, say what it searched and name the one change most likely to help.
 9. Then offer the recurring job below, and land them on the home view once that is settled.
 
@@ -94,8 +91,7 @@ with, that many again every day or week it fires, against the free monthly calls
 usual cadence; their yes starts the install, as does a request that already asks for it.
 
 1. Write today's date into `schedule.consented` in `config.yaml`, with `schedule.frequency` and
-   `schedule.time` holding the cadence they picked. That date is the standing yes a scheduled,
-   headless, or subagent run proceeds on.
+   `schedule.time` holding the cadence they picked.
 2. This skill's `scripts/schedule-line.sh <frequency> [HH:MM]` prints the cron time expression for
    that cadence. Wrap it in whatever your host schedules with — cron, launchd, or the host's own
    recurring-job command — running `job-search-run` against this workspace the way the runbook's
@@ -127,16 +123,14 @@ of `preferences.md` (`created_at` where that is the only one), and the newest `r
 and the digest it points at. For the match counts, run this skill's
 `scripts/posting-counts.sh <workspace>/jobs.jsonl` rather than reading that log yourself: it prints
 `relevant`, `to_confirm` and `filtered` on stdout, one `key=value` per line, and writes one line to
-stderr saying how many of the lines it read name an event, out of how many lines in all, how many
-postings carry a judgment, and how many of those are the same opening as another posting. Read the
+stderr. Read the
 judgment count, not the line count, before saying the search has found nothing: three zeroed counts
 over `0 postings carry a judgment` mean nothing in the log has been judged yet, and the same three
-over a judgment count above zero mean every posting judged is the same opening as another one —
-which the third count reports and the three keys leave out. `0 of 0 lines name an event` is an empty
+over a judgment count above zero mean every posting judged is the same opening as another one.
+`0 of 0 lines name an event` is an empty
 log, and a line count above zero with none of those lines naming an event is a file that is not this
-event log. The log only grows — every run appends to it and nothing shortens it. Exit 2 means there
-is no file at that path: no counts were printed, and stderr names the path. Leave the Matches block
-off the card and say the workspace holds no event log yet. Then render the card:
+event log. The log only grows — every run appends to it and nothing shortens it. On exit 2, leave
+the Matches block off the card and say the workspace holds no event log yet. Then render the card:
 
 ```
 Job search — <workspace path>
@@ -156,16 +150,16 @@ What next? Just tell me:
 
 Sources are the ones `search.sources` lists, in the words a person uses for them; the schedule reads
 as its cadence while `schedule.consented` holds a date and the registry's `scheduling` carries
-`installed` and `verified` both true, and off otherwise — an object missing either one is an install
-no canary proved. Last run is the newest record's `run_health`. In Matches, `<n>` is `relevant`,
+`installed` and `verified` both true, and off otherwise. Last run is the newest record's
+`run_health`. In Matches, `<n>` is `relevant`,
 `<k>` is `to_confirm` and `<f>` is `filtered`, each taken from the script's output rather than
 worked out; `<k>` counts among the relevant postings only, and a posting whose judgment names
 another one in `same_role_as` is in none of the three, because it is the same opening seen twice and
 the posting it names is counted on its own line. A record whose `close_state` is `blocked` or
 `interrupted` earns a line under the card: what stopped that run, which its record and digest name,
-and the one thing that gets it going again. `close-run.sh` refuses a `complete` close over postings
-nobody judged, so a record whose `postings_unreviewed` is not zero is in one of those two states too
-and already has that line; add to it how many postings that run found and never judged, and the
+and the one thing that gets it going again. A record whose `postings_unreviewed` is not zero is
+`blocked` or `interrupted` too and already has that line; add to it how many postings that run
+found and never judged, and the
 offer to run the search again, which reaches them because a posting carrying no judgment is not
 treated as one already seen. Before the first run, offer that search in place of the digest and
 Matches lines. A brief older than 30 days, where runs have happened since, earns one offer under the
