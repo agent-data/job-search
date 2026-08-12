@@ -25,10 +25,11 @@
 #         this run cannot fix, so close it blocked. Where the detail is depends on whose problem it
 #         is: findings about the workspace print on stdout after the three lines, and a failure of
 #         this script's own, such as no way to take the brief revision, prints on stderr.
-# Exit 2: the run did not open and nothing was written. Five causes, and the message on stderr says
-#         which one: no such workspace, no config.yaml, another run is already open in this
-#         workspace, the run_id is already taken by a run that opened this same second, or the
-#         started-marker could not be written.
+# Exit 2: the run did not open and nothing was written. Six causes: no such workspace, no
+#         config.yaml, runs/ could not be made, another run is already open in this workspace, the
+#         run_id is already taken by a run that opened this same second, or the started-marker
+#         could not be written. Each prints its own line on stderr except the runs/ case, where
+#         mkdir's own diagnostic is all there is.
 #
 # A missing operand is the exception the caller sees a shell-picked code for, the way
 # run-counts.sh's own header records — `grep -n 'missing operand'
@@ -61,14 +62,16 @@ mkdir -p "$ws/runs" || exit 2
 # The message prints both commands with every argument because neither script runs without values
 # the marker does not carry. clear-run.sh refuses a run with no record — `grep -n 'close the run
 # before clearing it' skills/job-search-runbook/scripts/clear-run.sh` — so the marker comes off only
-# after close-run.sh has written one, and close-run.sh exits 1 without --trigger or --close-state,
-# at close-run.sh:93 and :96.
+# after close-run.sh has written one, and close-run.sh exits 1 without --trigger or --close-state —
+# `grep -n 'must be manual or scheduled' skills/job-search-runbook/scripts/close-run.sh` prints the
+# check, and the --close-state one sits directly under it.
 #
 # --close-state is interrupted, the one of the three that fits a run that stopped part-way; the
 # other two are complete and blocked.
 #
 # --trigger is manual because nothing on disk records what started a run that never closed. trigger
-# is written in one place, runs/<run_id>.json at close-run.sh:338, and that file is the one an
+# is written in one place, runs/<run_id>.json — `grep -n 'jstr(trigger)'
+# skills/job-search-runbook/scripts/close-run.sh` prints the line that writes it — and that file is the one an
 # unclosed run does not have; the marker is empty, written with `printf ''` below, and no event in
 # jobs.jsonl carries the field. Of the two values close-run.sh accepts, scheduled is the one the
 # scheduling canary reads as proof the scheduler ran — `grep -n 'canary passes'
@@ -101,9 +104,17 @@ done
   # in it splits at the space: measured on `/…/a work space`, close-run.sh gets `/…/a` as the
   # workspace and `work` as the run id, then stops at `space` with `close-run: unknown option
   # space`, exit 1, under both sh and dash.
+  #
+  # An apostrophe in either value ends the single quote it sits in, so each one is rewritten as
+  # '\'' — the quote closes, the shell gets a literal apostrophe, the quote reopens. The run id
+  # needs no rewriting: resolve-run.sh's RUN_ID_GLOB admits digits, dashes, T and Z only. Measured
+  # 2026-08-12 on a workspace under `dana's laptop`: both printed commands ran exactly as printed,
+  # and without the rewrite both died at `unexpected EOF`.
   dir=$(cd "$here" 2>/dev/null && pwd) || dir=$here
-  close_cmd="'$dir/close-run.sh' '$ws' '$open_marker' --trigger manual --close-state interrupted"
-  clear_cmd="'$dir/clear-run.sh' '$ws' '$open_marker'"
+  sq() { printf "%s" "$1" | sed "s/'/'\\\\''/g"; }
+  qdir=$(sq "$dir") qws=$(sq "$ws")
+  close_cmd="'$qdir/close-run.sh' '$qws' '$open_marker' --trigger manual --close-state interrupted"
+  clear_cmd="'$qdir/clear-run.sh' '$qws' '$open_marker'"
   printf 'open-run.sh: run %s is already open in %s — close it with `%s`, then clear it with `%s`, before opening another\n' \
     "$open_marker" "$ws" "$close_cmd" "$clear_cmd" >&2
   exit 2
