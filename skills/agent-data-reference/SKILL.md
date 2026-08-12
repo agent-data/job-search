@@ -70,9 +70,12 @@ goes to the terminal instead of `posting.json`, and `--source` never reaches the
 
 `posting_id` and `source_url` are both required. `--source` is optional, and passing the row's own
 value removes an inference step. The route docs offer `--fields` to trim the response: VERY IMPORTANT DO NOT use
-`--fields`. Nearly all of a posting's bytes are the description and the salary text, which a reader needs,
-and a list that leaves out `source` or `source_id` is refused by `record-api-response.sh` — the
-posting is then read again, and billed again.
+`--fields`. The response comes back holding only the keys the list names: measured 2026-08-12,
+`--fields id,title,company_name` returned 214 bytes carrying those three keys and nothing else,
+against 7,645 bytes for the same posting unfiltered. Nearly all of a posting's bytes are the
+description and the salary text, which a reader needs, and a response with no `source` or
+`source_id` does not say which posting it is. In a run `record-api-response.sh` refuses that
+response, and the posting is then read again, and billed again.
 
 Inside a run, call agent-data through the `job-search-run` skill's scripts:
 `skills/job-search-run/scripts/search-jobs.sh` for a search,
@@ -84,9 +87,10 @@ commands in this skill are how `evaluate-job-fit` reads one posting when no run 
 ## When a call fails
 
 A failed call writes its body to stderr and exits non-zero, and stdout stays empty. Redirect both
-streams on every call — `agent-data call … > resp.json 2> resp.err` — because a call captured with
-`>` alone leaves an empty file and no copy of the error, and `retryable`, `code` and `param` are
-only in that body.
+streams on every call you make directly — `agent-data call … > resp.json 2> resp.err` — because a
+call captured with `>` alone leaves an empty file and no copy of the error, and `retryable`, `code`
+and `param` are only in that body. In a run, `search-jobs.sh` and `fetch-posting.sh` redirect both
+streams themselves.
 
 On a success the request id is at `meta.request_id`, and on a failure it is at `error.request_id`;
 neither response carries one at the top level. `error.source` names what rejected the call — it
