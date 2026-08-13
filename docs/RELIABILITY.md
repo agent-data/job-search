@@ -146,7 +146,7 @@ The two are independent on purpose: a run can finish all its work with a source 
 
 The important reliability property is *how* a blocked run reaches the user. It does **not** rely
 on the process exit code: a headless `claude -p` invocation returns `0` even when the run was
-blocked (a skill cannot set the host process's exit status), so a headless run's `$?` is not a
+blocked (a skill cannot set the harness process's exit status), so a headless run's `$?` is not a
 trustworthy signal and the docs never tell the user to check it. Instead, a blocked run surfaces
 three records-based ways:
 

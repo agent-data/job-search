@@ -49,7 +49,7 @@ your machine. **No schedule is ever written silently or without your explicit ye
 shown the exact line first.
 
 For reliability, the agent **advocates an unattended machine schedule** — a `cron` or `launchd` entry (or
-your host's own scheduler) that runs the search even when no session is open, so a pull you're expecting
+your harness's own scheduler) that runs the search even when no session is open, so a pull you're expecting
 actually happens. Because that writes to your machine, it lands **only on your explicit yes, with the exact
 line shown to you first** — never silent, never auto-installed, and always user-removable. If you'd rather
 install nothing, the **named fallback is an in-session loop** that re-runs the search only while a session is

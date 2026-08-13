@@ -2,15 +2,15 @@
 # schedule-line.sh — compose the five-field cron schedule expression for a cadence.
 #
 # config.yaml pins the cadence enum (schedule.frequency) and schedule.time (HH:MM, honored for
-# daily/weekly); the job-search-runbook skill's §Running it unattended has the invocation the host
-# wraps this line around. This is the deterministic, host-neutral core of that composition: the cron
+# daily/weekly); the job-search-runbook skill's §Running it unattended has the invocation the harness
+# wraps this line around. This is the deterministic, harness-neutral core of that composition: the cron
 # time expression (minute hour day-of-month month day-of-week) for a cadence —
 #   hourly         -> 0 * * * *
 #   every-2-hours  -> 0 */2 * * *
 #   every-6-hours  -> 0 */6 * * *
 #   daily  HH:MM   -> <m> <h> * * *      (default time 08:00)
 #   weekly HH:MM   -> <m> <h> * * 1      (default time 08:00; Monday)
-# matching the repo's established schedule-line cron mapping. A host wraps this expression with its
+# matching the repo's established schedule-line cron mapping. A harness wraps this expression with its
 # own command/launchd translation. This is the scripted form of a model-run prose contract; that
 # prose remains the no-runtime fallback.
 #

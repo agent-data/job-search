@@ -6,7 +6,7 @@
 #
 # This is the append path for an `evaluated` event written by hand. No skill's prose sends a
 # judgment here any more: SKILL.md's "Read and judge" section names record-judgment.sh, which builds
-# the event itself, so this script is the standalone path a host takes when it is writing an event
+# the event itself, so this script is the standalone path a harness takes when it is writing an event
 # without that script. The events a run's own scripts write never come through here, because each of
 # those scripts builds its event and appends it: record-api-response.sh writes `call`, `surfaced`
 # and `detail`, queue-detail-read.sh writes `queued`, and record-judgment.sh writes the run's

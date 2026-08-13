@@ -2,7 +2,7 @@
 
 Job Search turns **an agent harness** into a private, local-first **job-search operating system**: a plugin
 of seven skills — five the user reaches and two more holding the mechanics those five read — whose pinned
-contracts the host agent executes natively (no bundled runtime — no Python), and a pytest + fake-shim + eval harness. It searches LinkedIn, Ashby, Greenhouse, and Lever company-board postings through the agent-data
+contracts the harness executes natively (no bundled runtime — no Python), and a pytest + fake-shim + eval harness. It searches LinkedIn, Ashby, Greenhouse, and Lever company-board postings through the agent-data
 marketplace, judges each one qualitatively against your prose preferences brief, and writes human digests
 into a workspace that never touches source control.
 
@@ -20,12 +20,12 @@ The product framing is an operating system whose userland is your job search:
 
 | OS concept | In Job Search |
 |---|---|
-| Kernel / shell | the host agent (e.g. Claude Code, Codex) — runs the skills, holds the conversation |
+| Kernel / shell | the harness (e.g. Claude Code, Codex) — runs the skills, holds the conversation |
 | Programs | the five skills a user reaches (the front door, the runner, the interview, the judge, the operator manual) |
-| Shared libraries | the `job-search-runbook` and `agent-data-reference` skills — the contracts and pinned procedures the host agent executes |
+| Shared libraries | the `job-search-runbook` and `agent-data-reference` skills — the contracts and pinned procedures the harness executes |
 | Filesystem | the private per-user workspace (default `~/.job-search/`), never committed |
 | System calls | the agent-data CLI — the one job source the runner shells out to |
-| Cron | the schedule — an unattended machine schedule (`cron`/`launchd`, or the host's own scheduler) the agent composes for its host and gates on consent; an in-session loop is the named fallback. See [job-search-runbook](skills/job-search-runbook/SKILL.md) → Running it unattended |
+| Cron | the schedule — an unattended machine schedule (`cron`/`launchd`, or the harness's own scheduler) the agent composes for its harness and gates on consent; an in-session loop is the named fallback. See [job-search-runbook](skills/job-search-runbook/SKILL.md) → Running it unattended |
 
 Where the OS state lives, how the workspace is discovered, and what each file in it holds are specified in
 [job-search-runbook](skills/job-search-runbook/SKILL.md); the exact shape of each file is carried by the
@@ -61,7 +61,7 @@ defined by the [evaluate-job-fit](skills/evaluate-job-fit/SKILL.md) skill that r
 
 ### workspace-state
 Persist everything durably and discoverably: the workspace, config, the append-only job-event log, run
-audit logs, and digests. The engines are pinned procedures executed natively by the host agent: the registry +
+audit logs, and digests. The engines are pinned procedures executed natively by the harness: the registry +
 workspace-discovery rules in [job-search-runbook](skills/job-search-runbook/SKILL.md), which also
 maps what each file holds, and the scripts under
 [skills/job-search-run/scripts/](skills/job-search-run/scripts/) that write every line a run appends —
@@ -69,7 +69,7 @@ maps what each file holds, and the scripts under
 `queued`, and `record-judgment.sh` for `evaluated`. Each builds its own event, so no run composes a log
 line by hand;
 [skills/job-search-run/scripts/event-log-append.sh](skills/job-search-run/scripts/event-log-append.sh)
-is the standalone path for a host writing one without those scripts, and it validates the line before it
+is the standalone path for a harness writing one without those scripts, and it validates the line before it
 appends. Reading back out is scripted too, so no number in a digest or a run record comes from an agent's
 memory of the run: `run-counts.sh` and `run-matches.sh` in the same directory produce one run's numbers and
 the postings its digest names, and
@@ -78,11 +78,11 @@ three the home view shows across every run.
 
 ### scheduling-consent
 Run on a cadence the user controls: the agent advocates an **unattended** machine schedule (`cron`/`launchd`
-or the host's own scheduler) it composes for its host — an in-session loop is the named fallback — never a
+or the harness's own scheduler) it composes for its harness — an in-session loop is the named fallback — never a
 SILENT or un-consented privileged write. The
 [job-search](skills/job-search/SKILL.md) skill offers setup from the pinned interval table and, once the
 config-time canary proves the schedule actually runs, records the schedule marker in the registry; the agent
-resolves the concrete mechanism for its own host (there is no per-host adapter). The consent-gated stance is
+resolves the concrete mechanism for its own harness (there is no per-harness adapter). The consent-gated stance is
 an instruction-level design rule carried by the `job-search` skill — the only one that installs a schedule —
 and by the `job-search-runbook` skill it reads for the unattended invocation
 ([docs/SECURITY.md](docs/SECURITY.md)), not a runtime control. The cadence options live in
@@ -93,7 +93,7 @@ and the cron line for each is composed by
 ### error-surfacing
 Make every failure named and visible — no silent failures. A run that stops early still closes: it writes a
 run record saying what stopped it and a digest the user reads, which are the two file-backed channels the
-home view surfaces, plus a capability-gated attention-pull alert (fires only when the host has such a
+home view surfaces, plus a capability-gated attention-pull alert (fires only when the harness has such a
 channel). Each skill names the failures its own flow can hit, in plain language next to the step that hits
 them — the `E-*` code catalog was retired on 2026-07-31. The API failures every flow shares — which
 responses can be retried, and when to stop spending calls on one — are in
@@ -110,7 +110,7 @@ rules, the workspace-discovery precedence, the scheduling marker, and the `jobs.
 [job-search-runbook](skills/job-search-runbook/SKILL.md) and as the POSIX shell scripts under
 [skills/job-search-runbook/scripts/](skills/job-search-runbook/scripts/),
 [skills/job-search-run/scripts/](skills/job-search-run/scripts/) and
-[skills/job-search/scripts/](skills/job-search/scripts/) — and the host agent runs them with its native tools.
+[skills/job-search/scripts/](skills/job-search/scripts/) — and the harness runs them with its native tools.
 
 ### shared-references
 The single source of truth for every runtime contract, in two files:
@@ -158,9 +158,9 @@ copies**, and no build step writes into `skills/`.
 
 **Distribution.** One `skills/` tree, read in place, ships to every harness via a per-harness manifest —
 `.claude-plugin/`, `.codex-plugin/`, `.cursor-plugin/`, `.factory-plugin/`, `gemini-extension.json`,
-`package.json`, and the root `plugin.yaml` + `__init__.py` (Hermes Agent). There is **no per-host adapter layer**: each host resolves its own tools, models, scheduler,
+`package.json`, and the root `plugin.yaml` + `__init__.py` (Hermes Agent). There is **no per-harness adapter layer**: each harness resolves its own tools, models, scheduler,
 and permissions from the neutral action-language in the pinned procedures, then verifies the result rather
-than looking up a host-specific recipe. Every supported host installs the whole pack tree, so
+than looking up a harness-specific recipe. Every supported harness installs the whole pack tree, so
 every skill can reach the two reference skills; the contracts are identical across all harnesses.
 Install steps are in [README.md](README.md).
 

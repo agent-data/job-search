@@ -11,4 +11,4 @@ Running the **job-search** skill on Copilot: the pack installs via the shared `.
 manifest; the skills use platform-neutral action vocabulary and the pinned contracts held by the
 `job-search-runbook` and `agent-data-reference` skills, at `skills/job-search-runbook/SKILL.md` and
 `skills/agent-data-reference/SKILL.md`. Copilot resolves its own tools, scheduler, headless
-invocation, and model at run time by self-selection — there is no per-host adapter file.
+invocation, and model at run time by self-selection — there is no per-harness adapter file.

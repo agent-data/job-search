@@ -29,7 +29,7 @@
 # set (every candidate is new). Blank candidate lines (a null source_id can't be deduped) are
 # skipped. record-api-response.sh now makes this same judged-posting check as it appends, so the
 # two-argument mode is redundant for a run that records its responses through that script, and is
-# kept for a host that runs it standalone. The --near mode above is separate and keeps its caller.
+# kept for a harness that runs it standalone. The --near mode above is separate and keeps its caller.
 # This is the scripted form of the model-run prose contract; that prose remains the no-runtime
 # fallback.
 #

@@ -113,7 +113,7 @@ gets its new B and the size of the increase stated before it is saved.
 ## Appendix — if the wrappers fail
 
 Call `search-jobs` or `get-posting` yourself only when the wrapper scripts cannot run at all — the
-script file is missing, or the host executes commands without a POSIX sh. A wrapper that ran and
+script file is missing, or the harness executes commands without a POSIX sh. A wrapper that ran and
 refused is not that case.
 
 IMPORTANT: A call made without the wrappers is still charged, appears in no count, and its response was never

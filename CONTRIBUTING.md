@@ -120,7 +120,7 @@ obvious.
 ## Versioning — bump it every release
 
 Releases are pulled by Claude Code from the plugin manifest. If you don't bump the version, **users won't get
-your update.** Seven manifests carry the version, one per supported host, and they must all say the same
+your update.** Seven manifests carry the version, one per supported harness, and they must all say the same
 thing: `.claude-plugin/plugin.json` (the primary), `.codex-plugin/plugin.json`,
 `.cursor-plugin/plugin.json`, `.factory-plugin/plugin.json`, `gemini-extension.json`, `package.json`, and
 `plugin.yaml`. Bump all seven, then check them:

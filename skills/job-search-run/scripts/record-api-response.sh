@@ -31,7 +31,7 @@
 # hands that file here.
 #
 # This is the scripted form of the model-run prose contract; that prose remains the no-runtime
-# fallback, and on a host with no shell the run says in its summary that the counts were worked
+# fallback, and on a harness with no shell the run says in its summary that the counts were worked
 # out by hand.
 #
 # Exit 0: the rows were appended, or the search legitimately returned none, or the posting was
@@ -93,7 +93,7 @@ reject_id() {
   case $2 in
     *[[:cntrl:]]*)
       printf 'record-api-response.sh: %s may hold no control character\n' "$1" >&2
-      printf 'record-api-response.sh:   awk takes a newline in a -v assignment on one host and refuses it on the next, and an escaped value is one no later lookup can grep for\n' >&2
+      printf 'record-api-response.sh:   awk takes a newline in a -v assignment on one machine and refuses it on the next, and an escaped value is one no later lookup can grep for\n' >&2
       exit 2 ;;
     *\\*)
       printf 'record-api-response.sh: %s may hold no backslash: %s\n' "$1" "$2" >&2

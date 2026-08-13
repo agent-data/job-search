@@ -19,18 +19,18 @@ it reports; a few checks are pure shell or visual.
 
 ### Automated lanes vs. the manual residual
 
-The terminal state (per the AAS-T-10 ruling) is **a structural gate + automated lanes + a shrinking, honestly-labeled manual residual** — not a manual cross-host ritual. What is now **automated** (⚙️, runs in `pytest` / a CLI, host-independent — no manual driving):
+The terminal state (per the AAS-T-10 ruling) is **a structural gate + automated lanes + a shrinking, honestly-labeled manual residual** — not a manual cross-harness ritual. What is now **automated** (⚙️, runs in `pytest` / a CLI, harness-independent — no manual driving):
 
 - **Scripted mechanics** — `tests/test_mechanics_scripts.py` (483 tests, `python3 -m pytest tests/test_mechanics_scripts.py -q --collect-only`; run them with `pytest -q tests/test_mechanics_scripts.py`): the deterministic state operations the skills call out to — opening and closing a run, workspace discovery, schedule-line composition, dedup, the jobs.jsonl event-line append, recording one agent-data response, queueing a detail read and listing the queue, recording a judgment, and reading a run's counts and its matches back out of the log — each driven through `sh` against a temp fixture. One case runs `sh -n` and strict `dash -n` over every bundled shell script, wherever its owning skill keeps it, so none of them is quietly bash-only: `ls skills/*/scripts/*.sh | wc -l` gives 15, and `ls skills/*/scripts/*.awk | wc -l` gives 9 more `awk` programs those scripts hand off to. `validate-workspace.sh` is syntax-checked here and behavior-tested in the next bullet.
 - **Workspace validator** — `tests/test_validate_workspace.py`: `skills/job-search-runbook/scripts/validate-workspace.sh` run against workspaces built per case. It checks config.yaml's required keys, `---` front matter with ISO `created_at`/`updated_at` in preferences.md, the run-record shape and UTC `Z` timestamps, and — with `--post-close` — that no started-marker or scratch directory survived the run. These file rules used to live only as prose in the skills; the script is now what enforces them.
-- **Hardened skill evals** — `python3 scripts/eval_harness.py --root .` validates every `skills/*/evals/evals.json` for structural coherence (contiguous ids, well-formed scenarios, a **discovery** scenario per skill for the four overlap pairs, **stochastic** scenarios carrying `reps ≥ 5` + a **no-guidance control** arm, and — on milestone/liveness scenarios — a **fixed-time fixture** (`fixed_time`: a deterministic reference clock with a valid ISO `now` and a `checks` subset of `milestone`/`liveness`) so those derivations never read the wall clock) and rejects the pinned pack-authored `gpt-5*` literal regression family. Legacy version-1 selectors may resolve through host tier roles; version-2 test and runtime setup injects an exact host-resolved identifier. Pack-authored fixtures and prose never hard-code that identifier. `tests/test_eval_harness.py` unit-tests the rep-aggregation (pass-rate + variance), the control-delta, the fixed-time-fixture validation, and the **unique run marker** enforcement — the off-CI artifact check (`scripts/eval_harness.py --check-artifacts`) accepts a per-run `run_marker` and, for any `run_marked` assertion, requires the artifact to carry it, so a stale artifact left in a reused workspace can never create a false pass.
+- **Hardened skill evals** — `python3 scripts/eval_harness.py --root .` validates every `skills/*/evals/evals.json` for structural coherence (contiguous ids, well-formed scenarios, a **discovery** scenario per skill for the four overlap pairs, **stochastic** scenarios carrying `reps ≥ 5` + a **no-guidance control** arm, and — on milestone/liveness scenarios — a **fixed-time fixture** (`fixed_time`: a deterministic reference clock with a valid ISO `now` and a `checks` subset of `milestone`/`liveness`) so those derivations never read the wall clock) and rejects the pinned pack-authored `gpt-5*` literal regression family. Legacy version-1 selectors may resolve through harness tier roles; version-2 test and runtime setup injects an exact harness-resolved identifier. Pack-authored fixtures and prose never hard-code that identifier. `tests/test_eval_harness.py` unit-tests the rep-aggregation (pass-rate + variance), the control-delta, the fixed-time-fixture validation, and the **unique run marker** enforcement — the off-CI artifact check (`scripts/eval_harness.py --check-artifacts`) accepts a per-run `run_marker` and, for any `run_marked` assertion, requires the artifact to carry it, so a stale artifact left in a reused workspace can never create a false pass.
 - **Release integrity** — `scripts/check_release_integrity.py`: version-sync across the 7 manifests (six JSON plus the Hermes `plugin.yaml`).
 
-Verifying a host-specific action such as scheduling is now a **runtime config-time canary** check, replacing the deleted per-host **structural adapter validation**.
+Verifying a harness-specific action such as scheduling is now a **runtime config-time canary** check, replacing the deleted per-harness **structural adapter validation**.
 
-How the skills *behave* is graded by live behavior evals the maintainer runs against the real Job Postings API before a release. They need an API key, cost money, and are not in this repository. No test asserts sentences of documentation prose; the suites that did were retired on 2026-07-30 in favor of the evals plus `validate-workspace.sh`. Two pytest files still open a reference file, and neither reads it for wording: `tests/test_reference_resolution.py` follows every path a SKILL.md names, from each host's install view, and fails on a dangling one, and `tests/test_usage_context_contract.py` checks that pricing and metering facts have exactly one owning file (the `agent-data-reference` skill).
+How the skills *behave* is graded by live behavior evals the maintainer runs against the real Job Postings API before a release. They need an API key, cost money, and are not in this repository. No test asserts sentences of documentation prose; the suites that did were retired on 2026-07-30 in favor of the evals plus `validate-workspace.sh`. Two pytest files still open a reference file, and neither reads it for wording: `tests/test_reference_resolution.py` follows every path a SKILL.md names, from each harness's install view, and fails on a dangling one, and `tests/test_usage_context_contract.py` checks that pricing and metering facts have exactly one owning file (the `agent-data-reference` skill).
 
-What stays a **labeled TRANSITIONAL residual** (👤/🤖, driven by hand): the **behavioral cross-host matrix** — actually running a skill end-to-end on each of the eight hosts that are **not installable on the CI runner** (Codex/Cursor/opencode/Gemini/Copilot/Droid/Pi/Hermes Agent), and the **N ≥ 5 stochastic eval reps** (the discovery/verdict/injection/merge scenarios run against the shim to record real pass-rate + variance + the control delta). These are the **off-CI live-harness step** — expected, not a gap: CI proves the scenarios are *well-formed*; the behavioral reps prove they *pass*, and shrink as hosts become installable. A green structural gate must never be read as a passed behavioral matrix.
+What stays a **labeled TRANSITIONAL residual** (👤/🤖, driven by hand): the **behavioral cross-harness matrix** — actually running a skill end-to-end on each of the eight harnesses that are **not installable on the CI runner** (Codex/Cursor/opencode/Gemini/Copilot/Droid/Pi/Hermes Agent), and the **N ≥ 5 stochastic eval reps** (the discovery/verdict/injection/merge scenarios run against the shim to record real pass-rate + variance + the control delta). These are the **off-CI live-harness step** — expected, not a gap: CI proves the scenarios are *well-formed*; the behavioral reps prove they *pass*, and shrink as harnesses become installable. A green structural gate must never be read as a passed behavioral matrix.
 
 ---
 
@@ -488,7 +488,7 @@ grades; where a row grades 1 and 2 only, check the leftovers by hand instead —
 `ls -a "$WS/runs/"` shows no `.started-*` and no `.scratch/`.
 
 Two things that are **not** pass conditions. The headless `claude -p` process returns **0** even on a
-blocked run (a skill cannot set the host process's exit status), so never assert on `$?`. And no exact
+blocked run (a skill cannot set the harness process's exit status), so never assert on `$?`. And no exact
 wording is required: two runs may explain the same block in different sentences and both pass, as long as
 the cause and the fix are there.
 
@@ -568,7 +568,7 @@ close" ends `close_state: blocked` / `run_health: degraded`; the rest complete.
 | T7.7 every source keeps failing | `stretch` | retries the 502 with backoff, then stops searching a source after two consecutive failed queries against it (the shim fails every source, so all stop). The digest reads `Run health: degraded` and names every source as unavailable. It does not crash | ⬜ |
 | T7.8 stale detail links | `invalid-pair` | no retry — a dead id/URL pair is not going to become live. Those postings are judged from their summaries with a "detail link expired" footnote and `detail_read:false`. The run **completes** (`close_state: complete`), exit 0 | ⬜ |
 | T7.9 flaky sources, run still finishes | `degraded` | the digest's health line reads `degraded` and names the flaky sources as what degraded the run, and notes that this run's results may be incomplete. Promising matches are still read in full — nothing caps detail reads here — and matches are still produced. `close_state` stays **`complete`**: the run finished its work | ⬜ |
-| T7.10 many promising postings | `many-promising` | every promising posting is evaluated; if the host hits a subagent or thread limit, it continues in rolling batches or falls back to working the list in order. Hitting that limit is not by itself a reason for `run_health: degraded` | ⬜ |
+| T7.10 many promising postings | `many-promising` | every promising posting is evaluated; if the harness hits a subagent or thread limit, it continues in rolling batches or falls back to working the list in order. Hitting that limit is not by itself a reason for `run_health: degraded` | ⬜ |
 | T7.11 zero results / all already seen | `zero-empty` | completes healthy: "Searches ran but returned 0 results — broaden keywords", exit 0. (All-known variant: pre-seed `jobs.jsonl` with the happy ids → "No new postings — you've already seen all N of these.") | ⬜ |
 
 ```bash
@@ -714,7 +714,7 @@ unchanged. (All tests used `$JSOS_TEST`/temp dirs + declined real scheduling.)
 ## 9. Scheduling (unattended-first; in-session `/loop` fallback)
 
 Scheduling is **unattended-first**: the advocated default is an **unattended wall-clock schedule**
-(`cron`/`launchd` where the host has one), with the in-session `/loop` as the **named fallback**. A
+(`cron`/`launchd` where the machine has one), with the in-session `/loop` as the **named fallback**. A
 **mandatory config-time canary** must prove the schedule actually fires before it is recorded active in the
 registry. The tests below exercise the **`/loop` fallback** path and the never-write-a-real-crontab consent
 guarantee; the config-time **canary is not yet exercised here** (it is the runtime canary check noted under
@@ -730,7 +730,7 @@ line?"** (or read it off the scheduling offers in T2.1/T4.3).
 **Result:** ⬜
 
 ### T9.3 `/loop` scheduling — nothing installed on the machine — 🤖 + 👤
-This drives the **in-session `/loop` fallback** — the path taken when the host has no unattended
+This drives the **in-session `/loop` fallback** — the path taken when the harness has no unattended
 scheduler or the user declines the machine change (the suite never writes a real crontab). When you
 decline the unattended schedule (or ask to keep it in-session), onboarding's scheduling step uses the
 in-session `/loop`. Say:
@@ -837,7 +837,7 @@ line, Strong/Moderate/Weak, Filtered-out, footnotes).
 
 ## 12. Full eval regression — 🤖 + ⚙️
 
-First, the **structural gate** (⚙️, host-independent) — every scenario is well-formed before any is driven:
+First, the **structural gate** (⚙️, harness-independent) — every scenario is well-formed before any is driven:
 ```bash
 cd "$JSOS" && python3 scripts/eval_harness.py --root .   # "Eval harness: eval scenarios coherent."
 ```

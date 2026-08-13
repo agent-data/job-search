@@ -28,7 +28,7 @@ These ten rules govern how you say things, in every message, including your firs
 2. Before metered work, say what it opens with, in your own words, per `agent-data-reference`'s
    cost recipe.
 3. Ask one question at a time, and only when the answer changes what you do; a closed choice goes
-   through your host's question interface (numbered prose without one), open questions stay prose.
+   through your harness's question interface (numbered prose without one), open questions stay prose.
 4. Show matches as message text in your reply — title, company, location, the reasoning line, the
    link — as rendered markdown, with the digest's path as a closing detail.
 5. Say what a posting states and name what it leaves unstated; the judgment arrives carrying both.
@@ -93,7 +93,7 @@ usual cadence; their yes starts the install, as does a request that already asks
 1. Write today's date into `schedule.consented` in `config.yaml`, with `schedule.frequency` and
    `schedule.time` holding the cadence they picked.
 2. This skill's `scripts/schedule-line.sh <frequency> [HH:MM]` prints the cron time expression for
-   that cadence. Wrap it in whatever your host schedules with — cron, launchd, or the host's own
+   that cadence. Wrap it in whatever your harness schedules with — cron, launchd, or the harness's own
    recurring-job command — running `job-search-run` against this workspace the way the runbook's
    unattended section shows. As you install it, show the user that line and where it lives; this
    changes their machine.
@@ -111,7 +111,7 @@ usual cadence; their yes starts the install, as does a request that already asks
    say what stopped the canary and what the next step is.
 
 To turn it off, undo the install the way it was made — that cron line deleted, that launchd job
-unloaded and its file removed, or the host's own removal command — then clear the registry's
+unloaded and its file removed, or the harness's own removal command — then clear the registry's
 `scheduling` marker (`installed: false` or the object dropped) and say what was removed. A user who
 leaves it off hears that it starts whenever they ask, and a search on demand is one sentence away.
 

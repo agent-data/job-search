@@ -138,14 +138,14 @@ the `job-search-runbook` skill.
 The scheduled pass is the headless `job-search-run` — the same search loop, run non-interactively
 by a schedule (the one-off "run a search now" is the same target invoked by hand). Users set
 scheduling up conversationally through the `/job-search` home view. The advocated default is an
-**unattended machine schedule** — a `cron`/`launchd` entry, or the host's own scheduler — that
-fires with no session open; the **in-session loop is the named fallback** when the host has no
+**unattended machine schedule** — a `cron`/`launchd` entry, or the harness's own scheduler — that
+fires with no session open; the **in-session loop is the named fallback** when the harness has no
 unattended scheduler or the user declines the machine change. Either way the schedule is
 consent-gated (the exact change is shown first and written only on an explicit yes) and is
 recorded as running only after a **config-time canary** proves the real invocation works.
 
-The OS state — the registry, the local jobs file, the schedule marker — is plain files the host
-agent reads and writes natively, following the pinned procedures in the `job-search-runbook` and
+The OS state — the registry, the local jobs file, the schedule marker — is plain files the harness
+reads and writes natively, following the pinned procedures in the `job-search-runbook` and
 `agent-data-reference` skills. None of
 it is user-facing; users never interact with those files directly.
 

@@ -98,13 +98,13 @@ which prints one tab-separated line per posting this run queued and has not judg
 `source_id`, `posting_id_at_seen`, `source_url`, `title`, `company_name`. It writes one line to
 stderr as well. Read that line every time no
 row comes back, because a queue worked all the way off and a mistyped run id both print nothing —
-`0 of <n> lines … name run` is the mistyped id. Where your host has subagents, give each subagent
+`0 of <n> lines … name run` is the mistyped id. Where your harness has subagents, give each subagent
 two or three postings, and start every subagent in one step, before any of them has returned. Each
 subagent judges its postings in its own fresh context,
 which leaves this session's context for coordinating the run. Starting some subagents and waiting
 for them to return before starting the rest makes the run take as long as the slowest subagent in
-each group, added up over the groups. Where your host has none, work the list in order. Both paths
-run on the host's own model.
+each group, added up over the groups. Where your harness has none, work the list in order. Both paths
+run on the harness's own model.
 
 A subagent cannot see this session, so its prompt is everything it gets. Write each prompt with
 these five parts, in this order:

@@ -61,7 +61,7 @@ rather than from the registry.
 | `runs/.started-<run_id>` — empty marker: this run is open | `skills/job-search-runbook/scripts/open-run.sh`, deleted by `skills/job-search-runbook/scripts/clear-run.sh` | the next run |
 | `reports/<date>-digest.md` — the digest the user reads | a run at close | the user, the home view |
 | `.gitignore` — copied from the plugin's `skills/job-search/templates/workspace.gitignore`; denies everything but itself | setup | git |
-| `~/.config/job-search/config.json` — the registry, which sits outside the workspace: `active_workspace`, plus `scheduling` holding the booleans `installed` and `verified` — both true only after a canary proved the job — and the strings `mechanism` (cron, launchd, or the host's own) and `scheduler_id` | setup, schedule changes | discovery, the home view |
+| `~/.config/job-search/config.json` — the registry, which sits outside the workspace: `active_workspace`, plus `scheduling` holding the booleans `installed` and `verified` — both true only after a canary proved the job — and the strings `mechanism` (cron, launchd, or the harness's own) and `scheduler_id` | setup, schedule changes | discovery, the home view |
 
 ## One run, start to close
 
@@ -106,12 +106,21 @@ stopped it, and `interrupted` when it ends unfinished and its work cannot be rec
 
 ## Running it unattended
 
-A scheduler starts a run the way a person does — on Claude Code, `claude -p /job-search:job-search-run`
-(the plugin namespace is part of that target), with `--permission-mode acceptEdits` and
-`--allowedTools Bash,Read,Write,Edit,Glob,Grep,Skill,Task` so the run can search and write its own
-workspace. A cron or launchd process has no login session, so the job's environment carries a token
-from `claude setup-token` as `CLAUDE_CODE_OAUTH_TOKEN`. Another host takes its own headless flags,
-in the same shape: this pack's run skill, permission to write the workspace, credentials in the job.
+A scheduler starts a run by invoking this pack's `job-search-run` skill
+through the harness's non-interactive command instead of a live session. Compose the command from what your harness documents: its
+non-interactive runner (the subcommand or flag that takes a prompt without a terminal), the
+permissions that let the run write the workspace and call the agent-data CLI with nobody watching,
+and the name your harness lists the `job-search-run` skill under — harnesses differ on whether the pack's
+name prefixes it. Write into the job's prompt that a scheduler started it and that job's id, so the
+record closes with `trigger: scheduled` and that `scheduler_id`. A harness with no non-interactive
+command has nothing for a schedule to start: say so, and an in-session loop is the fallback.
+
+A cron or launchd process has no login session, so the job authenticates the way your harness's
+documentation says a non-interactive run authenticates — an environment variable the job's
+definition carries, a stored token, or the same store the session uses. Put the credential where
+that documentation says it lives, and nowhere in the workspace. Whether the credentials actually reach a scheduled process is settled by
+the `job-search` skill's canary. Judge the scheduled run by its record rather
+than the process exit code: harnesses differ on whether that code reflects the run.
 
 ## Scratch
 

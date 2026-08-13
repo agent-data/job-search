@@ -38,7 +38,7 @@
 # at once.
 #
 # Whitespace. event-log-append.sh accepts an event with a space after any colon, and that is the
-# path a host writing a judgment by hand comes through, so such an event is in the log by design. A
+# path a harness writing a judgment by hand comes through, so such an event is in the log by design. A
 # chain of `grep -F` against the compact quoted text finds none of it, and finding no judgment is
 # what this script does when a posting has none. Measured on 2026-08-06, before this program
 # existed: with the recorded judgment written by hand with a space after each of its colons, a
