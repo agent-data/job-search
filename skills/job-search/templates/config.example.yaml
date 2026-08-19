@@ -3,8 +3,8 @@ workspace:
   preferences_path: "preferences.md"
   master_resume_path: "resumes/master.md"
 queries:
-  - { id: "ai-eng-remote",  keywords: "AI engineer",          location: "United States",         limit: 25, enabled: true }
-  - { id: "ml-platform-sf", keywords: "ML platform engineer", location: "San Francisco Bay Area", limit: 25, enabled: true }
+  - { id: "ai-eng-remote",  keywords: "AI engineer",          location: "United States",         limit: 10, enabled: true }
+  - { id: "ml-platform-sf", keywords: "ML platform engineer", location: "San Francisco Bay Area", limit: 10, enabled: true }
 search:
   sources: ["linkedin"]   # job sources each query runs against: linkedin | ashby | greenhouse | lever — add "ashby", "greenhouse" or "lever" to search company boards too
   freshness: "past-2-weeks"    # any | past-week | past-2-weeks | past-month — recency window (applied server-side)

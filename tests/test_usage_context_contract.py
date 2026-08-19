@@ -9,6 +9,7 @@ marked-block parses this file used to carry went with the references that held t
 from pathlib import Path
 import json
 import re
+import subprocess
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -92,6 +93,23 @@ def test_static_config_template_is_v2_but_never_invents_a_model_identifier():
     assert not re.search(r"(?m)^\s*detail_model\s*:", template)
     for selector in ("fast", "balanced", "high", "inherit"):
         assert not re.search(rf"\b{selector}\b", template.lower())
+
+
+def test_workspace_setup_limits_each_default_query_to_ten_postings(tmp_path):
+    """The real first-run setup copies the product template, so assert the generated workspace
+    rather than merely checking a source line in that template."""
+    workspace = tmp_path / "workspace"
+    subprocess.run(
+        [str(RUNNER_SETUP), str(workspace)],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    generated = (workspace / "config.yaml").read_text(encoding="utf-8")
+    limits = [int(value) for value in re.findall(r"\blimit:\s*(\d+)\b", generated)]
+    assert limits
+    assert max(limits) <= 10
 
 
 def test_runner_eval_fixture_pins_calls_first_context_and_a_validator_checked_close():

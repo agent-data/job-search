@@ -18,7 +18,7 @@
 # The event log grows past what a context window holds, which is why the home view runs this script
 # rather than reading the file itself. A run appends one `surfaced` line per NEW row a search
 # returns (record-api-response.sh:9) and one `evaluated` line per posting it judges, so a first run
-# of three searches at limit 25 leaves 150 lines before any `call`, `queued` or `detail` line, and
+# of three searches at limit 10 leaves 60 lines before any `call`, `queued` or `detail` line, and
 # every later run adds to the same file. There is
 # no live log in the repository to point at: `.gitignore` excludes `evals/results/`, so any figure
 # taken from a run on one machine cannot be re-run on another.
